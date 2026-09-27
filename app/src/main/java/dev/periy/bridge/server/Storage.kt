@@ -78,8 +78,18 @@ private class FdWriter(
 
     override fun write(buf: ByteArray, off: Int, len: Int) = out.write(buf, off, len)
 
+    /**
+     * Makes what was written durable. A failure here (EIO, ENOSPC) must not pass as success:
+     * the upload records its resume point only after a sync, so a swallowed error would let a
+     * resume skip bytes that never reached the disk. Thrown, it ends the request as a pause at
+     * the last point that did. Only a descriptor that cannot be synced at all is let through.
+     */
     override fun sync() {
-        runCatching { Os.fdatasync(fd) }
+        try {
+            Os.fdatasync(fd)
+        } catch (e: android.system.ErrnoException) {
+            if (e.errno != OsConstants.EINVAL && e.errno != OsConstants.ENOSYS) throw e
+        }
     }
 
     override fun close() {
@@ -170,8 +180,10 @@ class Storage(private val ctx: Context, private val prefs: Prefs) {
 
     /**
      * Re-evaluates the destination and picks a mode. Safe to call repeatedly; it does
-     * real I/O, so call it off the main thread.
+     * real I/O, so call it off the main thread. One at a time: the server and the screen
+     * both call it when they start, and two probes at once got in each other's way.
      */
+    @Synchronized
     fun refresh() {
         val tree = prefs.treeUri
         if (tree == null) {
@@ -202,13 +214,19 @@ class Storage(private val ctx: Context, private val prefs: Prefs) {
      * Creates a throwaway document, writes to it out of order, reads it back, deletes it.
      * The read-back matters: a provider can accept an lseek and then quietly ignore the
      * offset, which would look like success here and produce a shredded file at 9 GB.
+     *
+     * Each probe has a name of its own, and any a past probe left behind are cleared first.
+     * With one fixed name, every leftover took a numbered copy ("(1).bridge-seek-probe"...);
+     * after 32 of them the provider could make no new name, every probe failed, and every
+     * upload fell back to the staged copy for no reason.
      */
     private fun probeSeekable(): Boolean {
         val parent = treeDocUri() ?: return false
+        clearProbes(parent)
         var probe: Uri? = null
         return try {
             probe = DocumentsContract.createDocument(
-                resolver, parent, "application/octet-stream", ".bridge-seek-probe"
+                resolver, parent, "application/octet-stream", PROBE_NAME + "-" + System.nanoTime()
             ) ?: return false
 
             resolver.openFileDescriptor(probe, "rw").use { pfd ->
@@ -237,8 +255,31 @@ class Storage(private val ctx: Context, private val prefs: Prefs) {
             Log.w(TAG, "Seek probe failed, falling back to staged copy: ${t.message}")
             false
         } finally {
-            probe?.let { runCatching { DocumentsContract.deleteDocument(resolver, it) } }
+            probe?.let { p ->
+                runCatching { DocumentsContract.deleteDocument(resolver, p) }
+                    .onFailure { Log.w(TAG, "Could not delete the seek probe: ${it.message}") }
+            }
         }
+    }
+
+    /** Deletes seek probes left in the destination by earlier probes. */
+    private fun clearProbes(parent: Uri) {
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(parent, DocumentsContract.getDocumentId(parent))
+        val stale = mutableListOf<Uri>()
+        runCatching {
+            resolver.query(
+                children,
+                arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                null, null, null,
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    if (c.getString(1)?.contains(PROBE_NAME) == true) stale += DocumentsContract.buildDocumentUriUsingTree(parent, c.getString(0))
+                }
+            }
+        }
+        var cleared = 0
+        stale.forEach { if (runCatching { DocumentsContract.deleteDocument(resolver, it) }.getOrDefault(false)) cleared++ }
+        if (stale.isNotEmpty()) Log.i(TAG, "Cleared $cleared of ${stale.size} old seek probes")
     }
 
     // ---------------------------------------------------------------- slots
@@ -788,6 +829,8 @@ class Storage(private val ctx: Context, private val prefs: Prefs) {
     private companion object {
         const val INCOMPLETE_DIR = ".bridge-incomplete"
         const val MEDIASTORE_COPY_LIMIT = 256L * 1024 * 1024
+        /** The seek probe's name; each one adds a number of its own. */
+        private const val PROBE_NAME = ".bridge-seek-probe"
         val MARKER = byteArrayOf(0x41, 0x42, 0x43, 0x44)
     }
 }
