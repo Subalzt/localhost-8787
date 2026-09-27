@@ -229,7 +229,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val look: StateFlow<dev.periy.bridge.Look>
         get() = getApplication<Application>().container.look
 
-    fun setStyle(style: String) = getApplication<Application>().container.setLook(style = style)
 
     fun setAccent(accent: String) = getApplication<Application>().container.setLook(accent = accent)
 

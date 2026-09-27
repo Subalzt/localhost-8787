@@ -73,28 +73,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Localhost 8787's two styles, chosen in Settings and shared with every page:
- *
- *  - Studio, after Apple Music: white or black, one bold colour, heavy large titles,
- *    artwork-like cards with captions under them, plain lists with inset hairlines, and a
- *    mini player above the tab bar that is the app's own status.
- *  - Theatre, after the Apple TV app: an edge-to-edge hero with a white capsule button, shelves
- *    of wide cards, and the tabs as pills along the top.
- * Light or dark follows the phone unless chosen.
- * The colour is shared as well:
- * "auto" is the style's own palette, or one of
- * [ACCENTS] everywhere.
+ * Localhost 8787's look, after the Apple TV app: an edge-to-edge hero, shelves of cards, capsule
+ * buttons; with Apple Music's large titles over each screen and its square tiles. Light or dark
+ * follows the phone unless chosen. The colour is shared with every page: "auto" is the look's
+ * own black and white, or one of [ACCENTS] everywhere.
  */
-enum class Style { STUDIO, THEATRE;
-    companion object {
-        /** Also reads old names; removed styles fall back to Studio. */
-        fun of(s: String) = when (s) { "theatre", "tv" -> THEATRE; else -> STUDIO }
-    }
-}
 
 /** The colours on offer, as the phone's own system colours, in the order they are shown. */
 val ACCENTS: List<Pair<String, Color>> = listOf(
-    // Apple Music's pink-red, which was Studio's own before Automatic went black and white.
+    // Apple Music's pink-red.
     "red" to Color(0xFFFA2D48),
     "orange" to Color(0xFFFF9500),
     "yellow" to Color(0xFFFFCC00),
@@ -103,8 +90,6 @@ val ACCENTS: List<Pair<String, Color>> = listOf(
     "blue" to Color(0xFF0A84FF),
     "purple" to Color(0xFFAF52DE),
 )
-
-val LocalStyle = staticCompositionLocalOf { Style.STUDIO }
 
 @Immutable
 data class Palette(
@@ -137,17 +122,6 @@ private val iosLight = Palette(
     red = Color(0xFFFF3B30), pink = Color(0xFFFF2D55), teal = Color(0xFF30B0C7), indigo = Color(0xFF5856D6),
 )
 
-/** Studio, as Apple Music: plain white, grey wells, the pink-red. */
-val StudioLight = iosLight.copy(
-    bg = Color(0xFFFFFFFF), surface = Color(0xFFF4F4F7), surface2 = Color(0xFFE9E9EE),
-    accent = Color(0xFF1D1D1F), onAccent = Color.White,
-)
-val StudioDark = Palette(
-    dark = true, bg = Color(0xFF000000), surface = Color(0xFF161618), surface2 = Color(0xFF2A2A2D),
-    text = Color.White, muted = Color(0xFF8D8D93), faint = Color(0xFF48484A), outline = Color(0x3DFFFFFF),
-    accent = Color.White, onAccent = Color.Black,
-)
-
 /** Theatre, as Apple TV: near-black with lifted cards, white as the button colour; in light, Apple's greys. */
 val TheatreDark = Palette(
     dark = true, bg = Color(0xFF000000), surface = Color(0xFF17171A), surface2 = Color(0xFF2B2B2F),
@@ -159,31 +133,26 @@ val TheatreLight = iosLight.copy(
     muted = Color(0xFF6E6E73), outline = Color(0x1F000000), accent = Color(0xFF1D1D1F), onAccent = Color.White,
 )
 
-val LocalPalette = staticCompositionLocalOf { StudioDark }
+val LocalPalette = staticCompositionLocalOf { TheatreDark }
 
-fun paletteFor(style: Style, dark: Boolean, accent: String = "auto"): Palette {
-    val p = when (style) {
-        Style.STUDIO -> if (dark) StudioDark else StudioLight
-        Style.THEATRE -> if (dark) TheatreDark else TheatreLight
-    }
+fun paletteFor(dark: Boolean, accent: String = "auto"): Palette {
+    val p = if (dark) TheatreDark else TheatreLight
     val c = ACCENTS.firstOrNull { it.first == accent }?.second ?: return p
     // Yellow is the one colour white text cannot sit on.
     return p.copy(accent = c, onAccent = if (accent == "yellow") Color(0xFF1C1C1E) else Color.White)
 }
 
-/** Picks the palette from the shared settings: "system", "light" or "dark", the style and the colour. */
+/** Picks the palette from the shared settings: "system", "light" or "dark", and the colour. */
 @Composable
 fun BlazeTheme(theme: String, look: dev.periy.bridge.Look = dev.periy.bridge.Look(), content: @Composable () -> Unit) {
-    val style = Style.of(look.style)
     val dark = when (theme) {
         "dark" -> true
         "light" -> false
         else -> isSystemInDarkTheme()
     }
-    val p = paletteFor(style, dark, look.accent)
+    val p = paletteFor(dark, look.accent)
     CompositionLocalProvider(
         LocalPalette provides p,
-        LocalStyle provides style,
         LocalTextStyle provides TextStyle(color = p.text),
         content = content,
     )
@@ -191,7 +160,6 @@ fun BlazeTheme(theme: String, look: dev.periy.bridge.Look = dev.periy.bridge.Loo
 
 /** Shorthand for the current palette's roles, readable at any call site in a composable. */
 object Bridge {
-    val Style: dev.periy.bridge.ui.Style @Composable @ReadOnlyComposable get() = LocalStyle.current
     val Dark: Boolean @Composable @ReadOnlyComposable get() = LocalPalette.current.dark
     val Bg: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.bg
     val Surface: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.surface
@@ -212,27 +180,21 @@ object Bridge {
     val Indigo: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.indigo
 
     /**
-     * The colour for something that is on, in a list or a tile: Studio's chosen colour, or green
-     * where the colour is black and white (Automatic, and Theatre), since a black dot reads as off.
+     * The colour for something that is on, in a list or a tile: the colour chosen in Settings, or
+     * green where it is black and white (Automatic), since a black dot reads as off.
      */
     val Lit: Color @Composable @ReadOnlyComposable get() {
         val a = LocalPalette.current.accent
         val mono = a == Color.White || a == Color(0xFF1D1D1F)
-        return when (LocalStyle.current) {
-            dev.periy.bridge.ui.Style.STUDIO -> if (!mono) a else LocalPalette.current.green
-            else -> LocalPalette.current.green
-        }
+        return if (!mono) a else LocalPalette.current.green
     }
 }
 
 val CardShape = RoundedCornerShape(22.dp)
 val ButtonShape = RoundedCornerShape(50)
 
-/** The corner the current style gives cards: Studio a little tighter, like artwork. */
-val cardRadius: Dp @Composable @ReadOnlyComposable get() = when (LocalStyle.current) {
-    Style.STUDIO -> 14.dp
-    Style.THEATRE -> 16.dp
-}
+/** The corner cards take. */
+val cardRadius: Dp = 16.dp
 
 // ---------------------------------------------------------------------------- type
 
@@ -328,10 +290,7 @@ fun SectionBar(
             Modifier.weight(1f).then(if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(title, style = when (Bridge.Style) {
-                Style.THEATRE -> HeadlineStyle.copy(fontSize = 20.sp)
-                Style.STUDIO -> HeadlineStyle
-            }, color = Bridge.Text)
+            Text(title, style = HeadlineStyle.copy(fontSize = 20.sp), color = Bridge.Text)
             if (onOpen != null) {
                 Spacer(Modifier.width(4.dp))
                 Icon(BlazeIcons.Chevron, null, tint = Bridge.Muted, modifier = Modifier.size(20.dp))
@@ -341,18 +300,9 @@ fun SectionBar(
     }
 }
 
-/**
- * An icon that says what a row or a tile is about. Theatre: a rounded square of colour, like
- * Settings. Studio: the bare glyph in the accent, like the Library list.
- */
+/** An icon that says what a row or a tile is about: a rounded square of colour, like Settings. */
 @Composable
 fun AppIcon(icon: ImageVector, color: Color, modifier: Modifier = Modifier, size: Dp = 38.dp) {
-    if (Bridge.Style == Style.STUDIO) {
-        Box(modifier.size(size), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = if (color == Bridge.Faint) Bridge.Faint else Bridge.Accent, modifier = Modifier.size(size * 0.66f))
-        }
-        return
-    }
     val shape = RoundedCornerShape(size * 0.26f)
     Box(
         modifier.size(size).depth(color, shape, 4.dp).clip(shape)
@@ -392,7 +342,7 @@ fun Artwork(
     }
 }
 
-/** The main button. Studio: an accent slab; Theatre: a capsule. Both give when pressed. */
+/** The main button: a capsule that gives when pressed. */
 @Composable
 fun BridgeButton(
     label: String,
@@ -403,10 +353,7 @@ fun BridgeButton(
     icon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
-    val shape = when (Bridge.Style) {
-        Style.STUDIO -> RoundedCornerShape(12.dp)
-        Style.THEATRE -> ButtonShape
-    }
+    val shape = ButtonShape
     Row(
         modifier
             .heightIn(min = 48.dp)
@@ -424,22 +371,16 @@ fun BridgeButton(
     }
 }
 
-/**
- * Everything that is not the main action. Studio: the grey slab with the label in the accent,
- * as Play and Shuffle are drawn. Theatre: a quiet capsule.
- */
+/** Everything that is not the main action: a quiet capsule. */
 @Composable
 fun SoftButton(
     label: String,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
-    tint: Color = if (Bridge.Style == Style.THEATRE) Bridge.Text else Bridge.Accent,
+    tint: Color = Bridge.Text,
     onClick: () -> Unit,
 ) {
-    val shape = when (Bridge.Style) {
-        Style.STUDIO -> RoundedCornerShape(10.dp)
-        Style.THEATRE -> ButtonShape
-    }
+    val shape = ButtonShape
     Row(
         modifier
             .heightIn(min = 38.dp)
@@ -462,7 +403,7 @@ fun SoftButton(
 fun HeaderAction(
     icon: ImageVector,
     label: String,
-    tint: Color = if (Bridge.Style == Style.THEATRE) Bridge.Text else Bridge.Accent,
+    tint: Color = Bridge.Text,
     lit: Boolean = false,
     onClick: () -> Unit,
 ) {
@@ -503,10 +444,8 @@ fun NowPlayingBars(color: Color, modifier: Modifier = Modifier, height: Dp = 14.
 }
 
 /**
- * A quick action, drawn the style's way.
- *  - Studio: a square of artwork, glowing onto the page in its colour, with the title and a
- *    line under it, as a playlist on Home. When on, the bars play in the corner.
- *  - Theatre: a wide card with the caption under it, as a show on a shelf.
+ * A quick action: a square of artwork, glowing onto the page in its colour, with the title and
+ * a line under it, as a playlist on Home. When on, the bars play in the corner.
  */
 @Composable
 fun Tile(
@@ -518,25 +457,20 @@ fun Tile(
     active: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val theatre = Bridge.Style == Style.THEATRE
-    val shape = RoundedCornerShape(if (theatre) 14.dp else 12.dp)
+    val shape = RoundedCornerShape(14.dp)
     Column(modifier.pressable(scaleTo = 0.95f, onClick = onClick)) {
         Artwork(
             icon, color,
-            Modifier.fillMaxWidth().aspectRatio(if (theatre) 16f / 9f else 1f).depth(color, shape, if (Bridge.Dark) 14.dp else 10.dp),
-            radius = if (theatre) 14.dp else 12.dp, glyph = if (theatre) 32.dp else 36.dp,
+            Modifier.fillMaxWidth().aspectRatio(1f).depth(color, shape, if (Bridge.Dark) 14.dp else 10.dp),
+            radius = 14.dp, glyph = 34.dp,
         ) {
-            if (active && !theatre) Box(
+            if (active) Box(
                 Modifier.align(Alignment.TopEnd).padding(9.dp).clip(ButtonShape).background(Color.Black.copy(alpha = 0.35f))
                     .padding(horizontal = 7.dp, vertical = 5.dp),
             ) { NowPlayingBars(Color.White, height = 11.dp) }
-            if (active && theatre) Text(
-                "ON", style = KickerStyle.copy(fontSize = 10.5.sp), color = Color.Black,
-                modifier = Modifier.align(Alignment.TopEnd).padding(9.dp).clip(ButtonShape).background(Color.White).padding(horizontal = 8.dp, vertical = 3.dp),
-            )
         }
         Spacer(Modifier.height(9.dp))
-        Text(title, style = TextStyle(fontSize = 15.sp, fontWeight = if (theatre) FontWeight.SemiBold else FontWeight.Medium, letterSpacing = (-0.2).sp),
+        Text(title, style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
             color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(detail ?: " ", style = CaptionStyle, color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -574,7 +508,7 @@ fun BridgeTextField(
             onValueChange = onValueChange,
             singleLine = mono,
             textStyle = if (mono) MonoStyle.copy(color = text) else BodyStyle.copy(color = text, fontSize = 15.sp),
-            cursorBrush = SolidColor(if (Bridge.Style == Style.THEATRE) Bridge.Blue else Bridge.Accent),
+            cursorBrush = SolidColor(Bridge.Blue),
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -646,14 +580,10 @@ fun Toggle(on: Boolean, modifier: Modifier = Modifier, color: Color = Bridge.Goo
     }
 }
 
-/**
- * Rows that belong together. Studio: straight on the page, as a list in the Library.
- * Theatre: on one card.
- */
+/** Rows that belong together, on one card. */
 @Composable
 fun GroupCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    if (Bridge.Style == Style.STUDIO) Column(modifier.fillMaxWidth().padding(horizontal = 4.dp), content = content)
-    else Column(modifier.fillMaxWidth().panel(), content = content)
+    Column(modifier.fillMaxWidth().panel(), content = content)
 }
 
 /** One setting: optional icon, title, a line of detail, and a control on the right. */
@@ -668,7 +598,6 @@ fun SettingRow(
     onClick: (() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
-    val studio = Bridge.Style == Style.STUDIO
     val iconSize = 30.dp
     if (!first) Box(
         Modifier.fillMaxWidth().padding(start = if (icon != null) 16.dp + iconSize + 14.dp else 16.dp).height(0.5.dp).background(Bridge.Outline)
@@ -676,7 +605,7 @@ fun SettingRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = if (studio) 52.dp else 50.dp)
+            .heightIn(min = 50.dp)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -688,7 +617,7 @@ fun SettingRow(
         Column(Modifier.weight(1f)) {
             Text(
                 title,
-                style = TextStyle(fontSize = if (studio) 17.sp else 16.sp, fontWeight = FontWeight.Normal, letterSpacing = (-0.2).sp),
+                style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal, letterSpacing = (-0.2).sp),
                 color = titleColor, maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
             if (detail != null) Text(detail, style = CaptionStyle, color = Bridge.Muted)
@@ -710,52 +639,11 @@ fun SignalBars(level: Int, modifier: Modifier = Modifier) {
 }
 
 /**
- * Studio's tab bar along the bottom (Theatre puts its tabs at the top instead, see TopTabs):
- * the iOS bar, the tab you are on in the accent, its icon springing up a touch.
+ * The tabs: words in a floating capsule along the bottom, in reach of a thumb, the one you are
+ * on a filled pill that glides with a swipe.
  */
 @Composable
-fun TabBar(
-    items: List<Pair<String, ImageVector>>,
-    selected: Int,
-    bottomInset: Dp,
-    modifier: Modifier = Modifier,
-    /** Where the pages are, in tabs: the colour moves across as a swipe goes. */
-    position: Float = selected.toFloat(),
-    onSelect: (Int) -> Unit,
-) {
-    Column(modifier.fillMaxWidth().background(if (Bridge.Dark) Color(0xF5121214) else Color(0xF7FAFAFA))) {
-        Box(Modifier.fillMaxWidth().height(0.5.dp).background(Bridge.Outline))
-        Row(Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 6.dp + bottomInset, start = 8.dp, end = 8.dp)) {
-            items.forEachIndexed { i, (label, icon) ->
-                val lit = i == selected
-                // Follows the finger: part lit while the page is part way in.
-                val over = (1f - kotlin.math.abs(position - i)).coerceIn(0f, 1f)
-                val c = androidx.compose.ui.graphics.lerp(Bridge.Muted, Bridge.Accent, over)
-                val s = 1f + 0.1f * over
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Icon(icon, label, tint = c, modifier = Modifier.size(25.dp)
-                        .graphicsLayer { scaleX = s; scaleY = s })
-                    Spacer(Modifier.height(3.dp))
-                    Text(label, style = TextStyle(fontSize = 10.5.sp,
-                        fontWeight = if (lit) FontWeight.SemiBold else FontWeight.Medium,
-                        letterSpacing = 0.sp), color = c)
-                }
-            }
-        }
-    }
-}
-
-/**
- * The Theatre style's tabs: words in a row along the top, the one you are on a filled capsule,
- * as the Apple TV app lays out its sections.
- */
-@Composable
-fun TopTabs(
+fun PillTabs(
     items: List<Pair<String, ImageVector>>,
     selected: Int,
     modifier: Modifier = Modifier,
@@ -793,13 +681,13 @@ fun TopTabs(
                 val over = (1f - kotlin.math.abs(at - i)).coerceIn(0f, 1f)
                 Text(
                     label,
-                    style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+                    style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
                     color = androidx.compose.ui.graphics.lerp(Bridge.Text, Bridge.OnAccent, over),
                     modifier = Modifier
                         .onGloballyPositioned { c -> spans[i] = c.positionInParent().x to c.size.width.toFloat() }
                         .clip(ButtonShape)
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) }
-                        .padding(horizontal = 13.dp, vertical = 7.dp),
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                 )
             }
         }

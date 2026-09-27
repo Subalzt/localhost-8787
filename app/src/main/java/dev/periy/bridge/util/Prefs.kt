@@ -50,11 +50,11 @@ class Prefs(ctx: Context) {
         set(v) = sp.edit { putString(K_THEME, v) }
 
     /**
-     * The style, shared with every page: "studio" or "theatre" (older names are mapped by
+     * The style, shared with every page: "theatre", the only one (older names are mapped by
      * styleName in BridgeApp).
      */
     var style: String
-        get() = sp.getString(K_STYLE, null) ?: "studio"
+        get() = sp.getString(K_STYLE, null) ?: "theatre"
         set(v) = sp.edit { putString(K_STYLE, v) }
 
     /** The colour, shared with every page: "auto" (the style's own) or a system colour's name. */

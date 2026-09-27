@@ -38,8 +38,8 @@ data class StateDto(
     val uploadStreams: Int = 4,
     /** Shared appearance, "system", "light" or "dark": changing it anywhere changes all of them. */
     val theme: String = "system",
-    /** The style, "studio", "theatre" or "glass", and the colour; shared like the theme. */
-    val style: String = "studio",
+    /** The style (always "theatre" now) and the colour; shared like the theme. */
+    val style: String = "theatre",
     val accent: String = "auto",
     /** Clipboard follows between phone and laptop helper without pressing Send. */
     val clipSync: Boolean = true,

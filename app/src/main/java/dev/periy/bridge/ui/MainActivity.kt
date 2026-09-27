@@ -180,7 +180,6 @@ class MainActivity : ComponentActivity() {
         }
         // Debug builds: `--es style theatre` and `--es accent blue` switch the look, for screenshots.
         if (dev.periy.bridge.BuildConfig.DEBUG) {
-            intent.getStringExtra("style")?.let { vm.setStyle(it) }
             intent.getStringExtra("accent")?.let { vm.setAccent(it) }
             intent.getStringExtra("theme")?.let { vm.setTheme(it) }
             intent.getIntExtra("tab", -1).let { if (it >= 0) debugTab.value = it }
@@ -223,8 +222,11 @@ private val debugTab = kotlinx.coroutines.flow.MutableStateFlow(-1)
 private const val TAB_PHONES = 1
 private const val TAB_CONTROL = 2
 
-/** The Theatre style's header: the tabs as pills and the monitor switch, over the content. */
-private val TheatreHeaderHeight = 60.dp
+/** The header at the top of every screen: its large title and the monitor switch, over the content. */
+private val HeaderHeight = 60.dp
+
+/** The tabs along the bottom: the capsule, and the room around it. */
+private val TabsHeight = 74.dp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -273,16 +275,13 @@ private fun BlazeItUi(vm: MainViewModel) {
     var showMonitor by remember { mutableStateOf(ctx.container.prefs.showMonitor) }
     val setMonitor = { on: Boolean -> showMonitor = on; ctx.container.prefs.showMonitor = on }
 
-    val style = Bridge.Style
-    val tv = style == Style.THEATRE
-    val bottomTabs = style != Style.THEATRE
-    // The Theatre style's home runs its hero under the status bar, and the hero is always dark.
+    // Home runs its hero under the status bar and the title, and the hero is always dark.
     // By the page mostly on screen, so the header changes look halfway through a swipe, not at its start.
-    val heroUnderBar = tv && kotlin.math.round(pagePos).toInt() == TAB_HOME && !showOem
+    val heroUnderBar = kotlin.math.round(pagePos).toInt() == TAB_HOME && !showOem
     // The header is drawn for the dark hero only while the hero is still under it; scrolled
     // past, it takes the page's own colours, or its tabs would vanish on light cards.
     val headerBottom = with(androidx.compose.ui.platform.LocalDensity.current) {
-        (WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + TheatreHeaderHeight).toPx()
+        (WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + HeaderHeight).toPx()
     }
     val homeList = lists[TAB_HOME]
     val heroShowing by remember(headerBottom) {
@@ -363,23 +362,17 @@ private fun BlazeItUi(vm: MainViewModel) {
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val imeUp = WindowInsets.isImeVisible
-    // Studio: the tab bar is docked below the content, with the mini player on it; Theatre: the
-    // tabs are at the top.
-    val underBar = 0.dp
+    // The tabs float along the bottom; every page leaves room under it for them.
+    val underBar = if (imeUp) 0.dp else TabsHeight + bottomInset
     // Room for the monitor pill, so by default it covers nothing.
     val monitorRoom = if (showMonitor) 48.dp else 0.dp
-    val theatreTop = statusTop + TheatreHeaderHeight + monitorRoom
-    val contentTop = if (tv && !heroUnderBar) theatreTop else 0.dp
+    val headerTop = statusTop + HeaderHeight + monitorRoom
+    val contentTop = if (!heroUnderBar) headerTop else 0.dp
 
     Box(Modifier.fillMaxSize().background(Bridge.Bg)) {
         Box(Modifier.fillMaxSize()) {
             StyleBackground()
             Column(Modifier.fillMaxSize()) {
-                if (!tv) {
-                    Header(if (shown == TAB_HOME) "Localhost 8787" else TABS[shown].first, showMonitor) { setMonitor(!showMonitor) }
-                    if (showMonitor) Spacer(Modifier.height(48.dp))
-                }
-
                 Box(Modifier.weight(1f).imePadding()) {
                     if (showOem) OemScreen(oemSteps, Modifier.padding(top = contentTop), onOpen = { intent ->
                             runCatching { openSettings.launch(intent) }.onFailure {
@@ -396,7 +389,7 @@ private fun BlazeItUi(vm: MainViewModel) {
                             snapAnimationSpec = spring(dampingRatio = 0.86f, stiffness = 420f),
                         ),
                     ) { page ->
-                        val top = if (tv && page != TAB_HOME) theatreTop else 0.dp
+                        val top = if (page != TAB_HOME) headerTop else 0.dp
                         // A page on its way out sinks back a little and dims; the one coming in rises to meet you.
                         Box(Modifier.fillMaxSize().graphicsLayer {
                             val off = kotlin.math.abs((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
@@ -415,7 +408,7 @@ private fun BlazeItUi(vm: MainViewModel) {
                                 TAB_HOME -> homeTab(
                                     state, running, direct, laptopLink.mode, shared, clipStatus, requests, devices, live, vm,
                                     transfers, files, sendStatus,
-                                    heroTop = if (tv) theatreTop else 0.dp,
+                                    heroTop = headerTop,
                                     toggleDirect = toggleDirect,
                                     pickFiles = { pickFiles.launch(arrayOf("*/*")) },
                                     openTether = openHotspot,
@@ -455,13 +448,20 @@ private fun BlazeItUi(vm: MainViewModel) {
                         }
                     }
 
-                    if (tv) TheatreHeader(shown, pagePos, overHero = overHero, monitorOn = showMonitor, onMonitor = { setMonitor(!showMonitor) }) {
-                        tab = it; showOem = false
+                    AppHeader(if (shown == TAB_HOME) "Localhost 8787" else TABS[shown].first, overHero, showMonitor) { setMonitor(!showMonitor) }
+
+                    // The tabs, floating along the bottom over a fade of the page, in reach of a thumb.
+                    if (!imeUp && !showOem) Box(
+                        Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                            .background(Brush.verticalGradient(0f to Bridge.Bg.copy(alpha = 0f), 0.55f to Bridge.Bg.copy(alpha = 0.92f)))
+                            .padding(top = 16.dp, bottom = bottomInset + 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        PillTabs(TABS, shown, position = pagePos) { tab = it; showOem = false }
                     }
                 }
 
-                if (bottomTabs && !imeUp && !showOem) TabBar(TABS, shown, bottomInset, position = pagePos) { tab = it }
-                else if (!imeUp) Spacer(Modifier.height(bottomInset))
+                if (showOem && !imeUp) Spacer(Modifier.height(bottomInset))
             }
         }
 
@@ -476,31 +476,11 @@ private fun musicPermission(): String =
 
 // ---------------------------------------------------------------------- chrome
 
-/** A large title, as Apple's apps begin a screen, and on the right the live monitor switch. */
-@Composable
-private fun Header(title: String, monitorOn: Boolean, toggleMonitor: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(title, style = LargeTitleStyle, color = Bridge.Text, modifier = Modifier.weight(1f))
-        MonitorButton(monitorOn, toggleMonitor)
-    }
-}
-
 @Composable
 private fun MonitorButton(on: Boolean, toggle: () -> Unit) {
-    val music = Bridge.Style != Style.THEATRE
     IconChip(
         BlazeIcons.Pulse, if (on) "Hide monitor" else "Show monitor",
-        tint = when {
-            on -> Bridge.OnAccent
-            music -> Bridge.Accent
-            else -> Bridge.Text
-        },
+        tint = if (on) Bridge.OnAccent else Bridge.Text,
         bg = if (on) Bridge.Accent else Bridge.Chip,
         size = 36.dp,
         onClick = toggle,
@@ -508,12 +488,12 @@ private fun MonitorButton(on: Boolean, toggle: () -> Unit) {
 }
 
 /**
- * The Theatre style's header, floating over the top of the screen: the tabs as pills, the monitor
- * on the right. Over the home hero it is drawn in the dark palette, as the hero is dark; on
- * the other tabs it fades the content out under it.
+ * The top of every screen: its name in a large title, as Apple's apps begin a screen, and the
+ * monitor switch on the right. It floats over the content: over Home's hero it is drawn in the
+ * dark palette, as the hero is dark; on the other tabs the content fades out under it.
  */
 @Composable
-private fun TheatreHeader(tab: Int, position: Float, overHero: Boolean, monitorOn: Boolean, onMonitor: () -> Unit, onSelect: (Int) -> Unit) {
+private fun AppHeader(title: String, overHero: Boolean, monitorOn: Boolean, onMonitor: () -> Unit) {
     val palette = if (overHero) TheatreDark else LocalPalette.current
     CompositionLocalProvider(LocalPalette provides palette) {
         val bg = Bridge.Bg
@@ -521,16 +501,18 @@ private fun TheatreHeader(tab: Int, position: Float, overHero: Boolean, monitorO
             Modifier
                 .fillMaxWidth()
                 .background(
-                    if (overHero) Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent))
+                    if (overHero) Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent))
                     else Brush.verticalGradient(0.75f to bg, 1f to bg.copy(alpha = 0f))
                 )
                 .windowInsetsPadding(WindowInsets.statusBars)
-                .height(TheatreHeaderHeight)
-                .padding(horizontal = 14.dp),
+                .height(HeaderHeight)
+                .padding(start = 20.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TopTabs(TABS, tab, solid = !overHero, position = position, onSelect = onSelect)
-            Spacer(Modifier.weight(1f))
+            androidx.compose.animation.Crossfade(title, Modifier.weight(1f), animationSpec = tween(160), label = "title") { t ->
+                Text(t, style = LargeTitleStyle.copy(shadow = if (overHero) OnArt else null), color = Bridge.Text,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             MonitorButton(monitorOn, onMonitor)
         }
     }
@@ -645,20 +627,16 @@ private data class Quick(
     val onClick: () -> Unit,
 )
 
-/**
- * The four things done most, as a shelf drawn the style's way: square artwork (Studio) or wide
- * cards (Theatre), each glowing a little in its own colour.
- */
+/** The four things done most, as a shelf of small square tiles, each glowing a little in its own colour. */
 @Composable
 private fun QuickActions(quick: List<Quick>) {
-    val tv = Bridge.Style == Style.THEATRE
     SectionBar("Quick actions")
     LazyRow(
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(if (tv) 12.dp else 14.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(quick, key = { it.title }) { q ->
-            Tile(q.icon, q.color, q.title, q.detail, Modifier.width(if (tv) 208.dp else 128.dp), active = q.active, onClick = q.onClick)
+            Tile(q.icon, q.color, q.title, q.detail, Modifier.width(100.dp), active = q.active, onClick = q.onClick)
         }
     }
 }
@@ -788,7 +766,7 @@ private fun LinkPicker(options: List<LinkOption>, chosen: LinkOption?, note: Str
     Column(Modifier.padding(top = 14.dp)) {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                .background(if (Bridge.Style == Style.STUDIO) Color.Black.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.12f))
+                .background(Color.White.copy(alpha = 0.12f))
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -828,11 +806,9 @@ private fun LinkPicker(options: List<LinkOption>, chosen: LinkOption?, note: Str
 }
 
 /**
- * The app's state at the top of Home, drawn the style's way and kept short, so the clipboard
- * shows under it. Both lead with the switch, big, at the top right; the address in large
- * type; and under it the connection picker, fastest first.
- *  - Studio: a card of artwork glowing in the accent.
- *  - Theatre: a hero under the status bar, with a white capsule button.
+ * The app's state at the top of Home, edge to edge under the status bar and the title, and kept
+ * short, so the clipboard shows under it: the address in large type, the switch big on the
+ * right, and under them the connection picker, fastest first.
  */
 @Composable
 private fun Hero(
@@ -866,62 +842,35 @@ private fun Hero(
         else -> null
     }
     val pick = { o: LinkOption -> picked = o.kind.name }
-    when (Bridge.Style) {
-        Style.STUDIO -> Column(Modifier.fillMaxWidth().animateContentSize(tween(220))) {
-            // Automatic (black and white): the card takes Theatre's night blue rather than a flat black or white.
-            val night = Bridge.Accent == Color.White || Bridge.Accent == Color(0xFF1D1D1F)
-            val tint = if (!running) Color(0xFF8E8E93) else if (night) Color(0xFF15428C) else Bridge.Accent
-            val shape = RoundedCornerShape(18.dp)
-            Artwork(
-                BlazeIcons.Bolt, tint,
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp)
-                    .depth(tint, shape, if (Bridge.Dark) 26.dp else 18.dp),
-                radius = 18.dp, glyph = 0.dp,
-            ) {
-                Icon(
-                    BlazeIcons.Bolt, null, tint = Color.White.copy(alpha = 0.13f),
-                    modifier = Modifier.align(Alignment.CenterEnd).offset(x = 34.dp, y = 18.dp).size(170.dp),
-                )
-                Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 14.dp, top = 14.dp, bottom = 14.dp)) {
-                    HeroBody(h, kicker, running, onToggle, copy, showQr, { showQr = !showQr }, DisplayStyle.copy(fontSize = 27.sp, shadow = OnArt)) {
-                        LinkPicker(options, chosen, linkNote, pick)
-                    }
-                }
+    Column(Modifier.fillMaxWidth().animateContentSize(tween(220))) {
+        // Blue of its own; with a colour chosen in Settings, that colour instead.
+        val a = Bridge.Accent
+        val chosenColour = a != TheatreDark.accent && a != TheatreLight.accent
+        val art = if (running && chosenColour) listOf(lerp(a, Color.White, 0.08f), lerp(a, Color.Black, 0.6f), Color(0xFF05070D))
+        else if (running) listOf(Color(0xFF1E6BD6), Color(0xFF0B2F66), Color(0xFF05070D))
+        else listOf(Color(0xFF3A3A40), Color(0xFF1B1B1F), Color(0xFF060607))
+        Box(
+            Modifier.fillMaxWidth()
+                .background(Brush.linearGradient(art, start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(900f, 1200f)))
+        ) {
+            Icon(
+                BlazeIcons.Bolt, null, tint = Color.White.copy(alpha = 0.10f),
+                modifier = Modifier.align(Alignment.CenterEnd).offset(x = 44.dp, y = 26.dp).size(240.dp),
+            )
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.8f))))
+            Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = top + 10.dp, bottom = 18.dp)) {
+                HeroBody(
+                    h, kicker, running, onToggle, copy, showQr, { showQr = !showQr },
+                    TextStyle(fontSize = 29.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.8).sp, fontFeatureSettings = "tnum", shadow = OnArt),
+                ) { LinkPicker(options, chosen, linkNote, pick) }
             }
-            HeroExtras(state, running, h, showQr, openTether, Modifier.padding(horizontal = 20.dp))
         }
-
-        Style.THEATRE -> Column(Modifier.fillMaxWidth().animateContentSize(tween(220))) {
-            // Blue of its own; with a colour chosen in Settings, that colour instead.
-            val a = Bridge.Accent
-            val chosenColour = a != TheatreDark.accent && a != TheatreLight.accent
-            val art = if (running && chosenColour) listOf(lerp(a, Color.White, 0.08f), lerp(a, Color.Black, 0.6f), Color(0xFF05070D))
-            else if (running) listOf(Color(0xFF1E6BD6), Color(0xFF0B2F66), Color(0xFF05070D))
-            else listOf(Color(0xFF3A3A40), Color(0xFF1B1B1F), Color(0xFF060607))
-            Box(
-                Modifier.fillMaxWidth()
-                    .background(Brush.linearGradient(art, start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(900f, 1200f)))
-            ) {
-                Icon(
-                    BlazeIcons.Bolt, null, tint = Color.White.copy(alpha = 0.10f),
-                    modifier = Modifier.align(Alignment.CenterEnd).offset(x = 44.dp, y = 26.dp).size(240.dp),
-                )
-                Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.8f))))
-                Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = top + 10.dp, bottom = 18.dp)) {
-                    HeroBody(
-                        h, kicker, running, onToggle, copy, showQr, { showQr = !showQr },
-                        TextStyle(fontSize = 29.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.8).sp, fontFeatureSettings = "tnum", shadow = OnArt),
-                    ) { LinkPicker(options, chosen, linkNote, pick) }
-                }
-            }
-            HeroExtras(state, running, h, showQr, openTether, Modifier.padding(horizontal = 20.dp))
-        }
-
+        HeroExtras(state, running, h, showQr, openTether, Modifier.padding(horizontal = 20.dp))
     }
 }
 
 /**
- * What both heroes hold: the whole address large across the top, a tap copies it; under it
+ * What the hero holds: the whole address large across the top, a tap copies it; under it
  * copy, the QR code and the switch; then the connection picker.
  */
 @Composable
@@ -1114,7 +1063,7 @@ private fun LazyListScope.transfersSection(transfers: List<Transfer>) {
         SectionBar("Moving") {
             Text(
                 "Clear finished", style = LabelStyle.copy(fontSize = 15.sp),
-                color = if (Bridge.Style == Style.STUDIO) Bridge.Accent else Bridge.Blue,
+                color = Bridge.Blue,
                 modifier = Modifier.clip(ButtonShape).clickable { Transfers.clearFinished() }.padding(horizontal = 8.dp, vertical = 4.dp),
             )
         }
@@ -1193,13 +1142,13 @@ private fun ClipboardPanel(shared: String, status: String, vm: MainViewModel) {
                     }
                 }
             }
-            else -> Box(Modifier.fillMaxWidth().heightIn(min = 92.dp).padding(horizontal = 4.dp, vertical = 2.dp)) {
+            else -> Box(Modifier.fillMaxWidth().heightIn(min = 80.dp).padding(horizontal = 4.dp, vertical = 2.dp)) {
                 if (draft.isEmpty()) Text("Type or paste anything", style = BodyStyle.copy(fontSize = 16.sp), color = Bridge.Faint)
                 BasicTextField(
                     value = draft,
                     onValueChange = { draft = it; pending = true },
                     textStyle = BodyStyle.copy(fontSize = 16.sp, lineHeight = 22.sp, color = Bridge.Text),
-                    cursorBrush = SolidColor(if (Bridge.Style == Style.STUDIO) Bridge.Accent else Bridge.Blue),
+                    cursorBrush = SolidColor(Bridge.Blue),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -1452,7 +1401,7 @@ private fun TransferRow(t: Transfer, first: Boolean) {
                     TransferState.DONE -> Bridge.Good
                     TransferState.FAILED -> Bridge.Danger
                     TransferState.STALLED -> Bridge.Faint
-                    TransferState.ACTIVE -> if (Bridge.Style == Style.STUDIO) Bridge.Accent else Bridge.Text
+                    TransferState.ACTIVE -> Bridge.Text
                 },
             )
             Spacer(Modifier.height(4.dp))
@@ -1530,10 +1479,7 @@ private fun LazyListScope.settingsTab(
     showOem: () -> Unit,
 ) {
     item { SectionBar("Appearance") }
-    item {
-        // Shared with every open page.
-        StylePicker(Style.of(look.style)) { vm.setStyle(it) }
-    }
+    // Shared with every open page.
     item { ColourPicker(look.accent) { vm.setAccent(it) } }
     item {
         Box(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp)) {
@@ -1691,48 +1637,15 @@ private fun LazyListScope.settingsTab(
     }
 }
 
-/** A word on the right of a setting that does something: in the accent (Studio) or blue. */
+/** A word on the right of a setting that does something, in blue. */
 @Composable
 private fun Action(label: String) {
-    Text(label, style = TextStyle(fontSize = 16.sp), color = if (Bridge.Style == Style.THEATRE) Bridge.Blue else Bridge.Accent)
+    Text(label, style = TextStyle(fontSize = 16.sp), color = Bridge.Blue)
 }
 
 /**
- * The two styles side by side, each drawn as a small phone showing it, in the light or dark
- * of the moment, with a round check under the one in use: the way iOS picks Light or Dark.
- */
-@Composable
-private fun StylePicker(current: Style, onPick: (String) -> Unit) {
-    val dark = Bridge.Dark
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        listOf(Style.STUDIO to "Studio", Style.THEATRE to "Theatre").forEach { (s, label) ->
-            val on = s == current
-            Column(
-                Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
-                    .clickable { onPick(s.name.lowercase()) }.padding(vertical = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                val ring = if (on) (if (Bridge.Style == Style.THEATRE) Bridge.Blue else Bridge.Accent) else Bridge.Outline
-                Box(Modifier.fillMaxWidth().aspectRatio(0.56f).clip(RoundedCornerShape(16.dp)).border(if (on) 2.5.dp else 1.dp, ring, RoundedCornerShape(16.dp)).padding(if (on) 4.dp else 1.dp)) {
-                    StylePreview(s, dark)
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(label, style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Medium), color = Bridge.Text)
-                Spacer(Modifier.height(6.dp))
-                Box(
-                    Modifier.size(22.dp).clip(CircleShape)
-                        .background(if (on) ring else Color.Transparent)
-                        .border(1.5.dp, if (on) ring else Bridge.Faint, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) { if (on) Icon(BlazeIcons.Check, null, tint = Color.White, modifier = Modifier.size(14.dp)) }
-            }
-        }
-    }
-}
-
-/**
- * The colour: a row of round swatches, the one in use ringed. The first is the style's own
- * colour (Studio's pink-red, Theatre in black and white), drawn half and half.
+ * The colour: a row of round swatches, the one in use ringed. The first is Automatic, black and
+ * white, drawn half and half.
  */
 @Composable
 private fun ColourPicker(current: String, onPick: (String) -> Unit) {
@@ -1743,7 +1656,7 @@ private fun ColourPicker(current: String, onPick: (String) -> Unit) {
             Text(name, style = TextStyle(fontSize = 15.sp), color = Bridge.Muted)
         }
         Spacer(Modifier.height(10.dp))
-        // All on one line, sharing the width: Automatic (black and white, as Theatre), then the colours.
+        // All on one line, sharing the width: Automatic, then the colours.
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Swatch(
                 Brush.linearGradient(0.5f to Color.White, 0.5f to Color(0xFF1D1D1F)),
@@ -1777,76 +1690,6 @@ private fun Swatch(fill: androidx.compose.ui.graphics.Brush, description: String
     }
 }
 
-/** A tiny phone screen in a style: enough of its shapes to recognise it. */
-@Composable
-private fun StylePreview(style: Style, dark: Boolean) {
-    // The colour in use, read before this preview puts its own palette in place: Studio's card shows it.
-    val chosen = Bridge.Accent
-    val card = if (chosen == Color.White || chosen == Color(0xFF1D1D1F)) Color(0xFF15428C) else chosen
-    val p = paletteFor(style, dark)
-    CompositionLocalProvider(LocalPalette provides p, LocalStyle provides style) {
-        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp))) {
-            StyleBackground()
-            val bar = @Composable { w: Float, h: Dp, c: Color -> Box(Modifier.fillMaxWidth(w).height(h).clip(RoundedCornerShape(2.dp)).background(c)) }
-            when (style) {
-                Style.STUDIO -> Column(Modifier.fillMaxSize().padding(7.dp)) {
-                    Spacer(Modifier.height(6.dp))
-                    bar(0.55f, 7.dp, p.text)
-                    Spacer(Modifier.height(7.dp))
-                    Artwork(BlazeIcons.Bolt, card, Modifier.fillMaxWidth().weight(1f), radius = 5.dp, glyph = 0.dp)
-                    Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(4.dp)).background(Color(0xFF0A84FF)))
-                        Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(4.dp)).background(Color(0xFF30D158)))
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    bar(1f, 3.dp, p.surface2)
-                    Spacer(Modifier.height(4.dp))
-                    bar(0.8f, 3.dp, p.surface2)
-                    Spacer(Modifier.height(8.dp))
-                    Box(Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(4.dp)).background(p.surface)) {
-                        Box(Modifier.padding(3.dp).size(8.dp).clip(RoundedCornerShape(2.dp)).background(p.accent))
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        repeat(4) { i -> Box(Modifier.size(6.dp).clip(CircleShape).background(if (i == 0) p.accent else p.faint)) }
-                    }
-                }
-
-                Style.THEATRE -> Column(Modifier.fillMaxSize()) {
-                    Box(
-                        Modifier.fillMaxWidth().weight(1.1f)
-                            .background(Brush.linearGradient(listOf(Color(0xFF1E6BD6), Color(0xFF0B2F66), Color(0xFF05070D))))
-                    ) {
-                        Row(Modifier.padding(6.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Box(Modifier.width(16.dp).height(6.dp).clip(ButtonShape).background(Color.White))
-                            Box(Modifier.width(12.dp).height(6.dp).clip(ButtonShape).background(Color.White.copy(alpha = 0.25f)))
-                            Box(Modifier.width(12.dp).height(6.dp).clip(ButtonShape).background(Color.White.copy(alpha = 0.25f)))
-                        }
-                        Column(Modifier.align(Alignment.BottomStart).padding(7.dp)) {
-                            Box(Modifier.width(40.dp).height(6.dp).clip(RoundedCornerShape(2.dp)).background(Color.White))
-                            Spacer(Modifier.height(5.dp))
-                            Box(Modifier.width(26.dp).height(9.dp).clip(ButtonShape).background(Color.White))
-                        }
-                    }
-                    Column(Modifier.padding(7.dp).weight(1f)) {
-                        bar(0.4f, 4.dp, p.text)
-                        Spacer(Modifier.height(5.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Box(Modifier.weight(1f).aspectRatio(16f / 9f).clip(RoundedCornerShape(3.dp)).background(Color(0xFF0A84FF)))
-                            Box(Modifier.weight(0.5f).aspectRatio(8f / 9f).clip(RoundedCornerShape(3.dp)).background(Color(0xFF30D158)))
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        bar(0.4f, 4.dp, p.text)
-                        Spacer(Modifier.height(5.dp))
-                        bar(1f, 14.dp, p.surface)
-                    }
-                }
-
-            }
-        }
-    }
-}
 
 /**
  * The hotspot's name and password, as set in the phone's hotspot settings. Android keeps

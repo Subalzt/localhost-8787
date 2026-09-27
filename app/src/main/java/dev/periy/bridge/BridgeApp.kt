@@ -48,14 +48,14 @@ class Container(ctx: Context) {
         EventBus.emit("theme", v)
     }
 
-    private val _look = MutableStateFlow(Look(styleName(prefs.style) ?: "studio", prefs.accent.takeIf { it in ACCENT_NAMES } ?: "auto"))
+    private val _look = MutableStateFlow(Look(styleName(prefs.style) ?: "theatre", prefs.accent.takeIf { it in ACCENT_NAMES } ?: "auto"))
 
     init {
         // A removed style must not remain in preferences after the next app launch.
         if (prefs.style != _look.value.style) prefs.style = _look.value.style
     }
 
-    /** The style (Studio or Theatre) and the colour: shared like the theme. */
+    /** The look and the colour: shared like the theme. */
     val look: StateFlow<Look> = _look
 
     /** Either or both; an unknown value leaves that half as it is. */
@@ -109,24 +109,22 @@ class Container(ctx: Context) {
 val THEMES = setOf("system", "light", "dark")
 
 /**
- * The style, beyond light and dark: "studio" (artwork and one bold colour) or "theatre" (a big
- * dark hero, tabs as pills).
+ * The style, beyond light and dark. There is one now, "theatre"; pages and the laptop helper
+ * still read the name, so it is still sent.
  */
-val STYLES = setOf("studio", "theatre")
+val STYLES = setOf("theatre")
 
 /** "auto" is the style's own colour; the rest are the system colours (Theme.kt, ACCENTS). */
 /** Colours no longer offered (pink, indigo, graphite, black) fall back to "auto". */
 val ACCENT_NAMES = setOf("auto", "red", "orange", "yellow", "green", "mint", "blue", "purple")
 
-/** A style by its name, including names from before; removed styles fall back to Studio. */
+/** A style by its name: every one there has been (Studio, Glass, the first names) is now Theatre. */
 fun styleName(s: String): String? = when (s) {
-    "music", "glass", "signal" -> "studio"
-    "tv" -> "theatre"
-    in STYLES -> s
+    "studio", "music", "glass", "signal", "tv", "theatre" -> "theatre"
     else -> null
 }
 
-data class Look(val style: String = "studio", val accent: String = "auto") {
+data class Look(val style: String = "theatre", val accent: String = "auto") {
     fun json() = """{"style":"$style","accent":"$accent"}"""
 }
 
