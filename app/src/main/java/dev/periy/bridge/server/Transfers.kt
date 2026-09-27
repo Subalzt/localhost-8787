@@ -40,9 +40,14 @@ object Transfers {
     private val _flow = MutableStateFlow<List<Transfer>>(emptyList())
     val flow: StateFlow<List<Transfer>> = _flow
 
-    /** Non-zero exactly while something is in flight. The wake lock keys off this. */
+    /**
+     * Non-zero exactly while something is moving. The wake and Wi-Fi locks key off this. A
+     * stalled transfer does not count: one never resumed (the page closed) would otherwise
+     * hold the Wi-Fi lock for as long as the server runs. A resume makes it active again, and
+     * the locks' linger covers a short drop.
+     */
     val activeCount: kotlinx.coroutines.flow.Flow<Int> =
-        _flow.map { list -> list.count { it.state == TransferState.ACTIVE || it.state == TransferState.STALLED } }
+        _flow.map { list -> list.count { it.state == TransferState.ACTIVE } }
 
     fun begin(id: String, name: String, direction: Direction, total: Long, alreadyDone: Long = 0) {
         synchronized(lock) {

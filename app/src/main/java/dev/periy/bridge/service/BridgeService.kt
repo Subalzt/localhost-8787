@@ -271,7 +271,12 @@ class BridgeService : Service() {
 
     // ------------------------------------------------------------------ locks
 
+    /** Started once: every start command calls this, and each call used to add two more collectors. */
+    private var observingTransfers = false
+
     private fun observeTransfers() {
+        if (observingTransfers) return
+        observingTransfers = true
         scope.launch {
             Transfers.activeCount.distinctUntilChanged().collect { count ->
                 if (count > 0) acquireLocks() else scheduleRelease()
