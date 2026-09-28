@@ -87,11 +87,9 @@ private val PASSED_HEADERS = listOf(
 )
 
 /** How other phones and laptop helpers are named in the device list (see describeUserAgent). */
-private const val PHONE_PREFIX = "Phone: "
 
 /** An introduction for a direct send (a WebRTC offer or candidate) is a few kilobytes at most. */
 private const val SIGNAL_MAX = 64 * 1024
-private const val HELPER_PREFIX = "Laptop control on "
 
 /**
  * The HTTP server the PC talks to. The phone is the origin; there is nothing else in the
@@ -639,7 +637,13 @@ class BridgeServer(
                     }
                 }.awaitAll().flatten()
             }
-            call.respond(TargetsDto(config.deviceName, local + remote))
+            // Who this page's clipboard reaches: the computers live here, and the linked phones while
+            // the phone passes copies on to them.
+            val clipWith = clipboardReach(
+                devices.devices.value, devices.live.value, me,
+                if (peers.sharesClipboard) peers.peers.value.map { it.name } else emptyList(),
+            )
+            call.respond(TargetsDto(config.deviceName, local + remote, clipWith))
         }
 
         post("/api/pipe") {
@@ -928,12 +932,7 @@ class BridgeServer(
      * A computer as a person knows it: a page by its machine's name when that machine's helper
      * is paired from the same address, else by its browser ("Edge on Windows").
      */
-    private fun displayName(d: PairedDevice): String {
-        if (d.name.startsWith(PHONE_PREFIX)) return d.name.removePrefix(PHONE_PREFIX)
-        if (d.name.startsWith(HELPER_PREFIX)) return d.name.removePrefix(HELPER_PREFIX)
-        return devices.devices.value.firstOrNull { it.name.startsWith(HELPER_PREFIX) && it.lastIp == d.lastIp }
-            ?.name?.removePrefix(HELPER_PREFIX) ?: d.name
-    }
+    private fun displayName(d: PairedDevice): String = shownName(d, devices.devices.value)
 
     /** Wi-Fi Direct, being tried as a faster way to host the direct link. Debug builds only. */
     private val p2p by lazy { dev.periy.bridge.net.P2pLink(ctx) }

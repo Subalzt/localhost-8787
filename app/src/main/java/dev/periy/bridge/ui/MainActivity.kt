@@ -75,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -308,11 +309,10 @@ private fun BlazeItUi(vm: MainViewModel) {
         (ctx as? android.app.Activity)?.moveTaskToBack(true)
     }
 
-    // The computer this phone shares with right now: the laptop helper's machine name if it is
-    // live, else the first computer with the page open. Null when none is.
-    val computer = remember(devices, live) {
-        val on = devices.filter { (live[it.id] ?: 0) > 0 && !it.name.startsWith("Phone:") && !it.name.contains("Android", ignoreCase = true) }
-        on.firstOrNull { it.name.startsWith("Laptop control on ") }?.name?.removePrefix("Laptop control on ") ?: on.firstOrNull()?.name
+    // Who the clipboard reaches right now: every computer live here, once each (by its machine's
+    // name where the laptop helper gives one), and the linked phones while copies go on to them.
+    val sharedWith = remember(devices, live, paired) {
+        dev.periy.bridge.server.clipboardReach(devices, live, null, if (peers.sharesClipboard) paired.map { it.name } else emptyList())
     }
 
     // Home runs its hero under the status bar and the title, and the hero is always dark.
@@ -448,7 +448,7 @@ private fun BlazeItUi(vm: MainViewModel) {
                         else LazyColumn(Modifier.fillMaxSize(), state = lists[page], contentPadding = PaddingValues(top = top, bottom = 28.dp + underBar)) {
                             when (page) {
                                 TAB_HOME -> homeTab(
-                                    state, running, direct, laptopLink.mode, shared, clipStatus, requests, vm, computer,
+                                    state, running, direct, laptopLink.mode, shared, clipStatus, requests, vm, sharedWith,
                                     transfers, files, sendStatus,
                                     heroTop = statusTop,
                                     heroGap = monitorRoom,
@@ -585,7 +585,7 @@ private fun LazyListScope.homeTab(
     clipStatus: String,
     requests: List<PairRequest>,
     vm: MainViewModel,
-    computer: String?,
+    sharedWith: List<String>,
     transfers: List<Transfer>,
     files: List<FileEntry>,
     sendStatus: String,
@@ -606,7 +606,7 @@ private fun LazyListScope.homeTab(
     items(requests, key = { it.id }) { req -> RequestCard(req, vm) }
 
     // The clipboard is what Home is opened for most, so it sits right under the hero.
-    item(key = "clip") { Column { ClipboardPanel(shared, clipStatus, vm, computer) } }
+    item(key = "clip") { Column { ClipboardPanel(shared, clipStatus, vm, sharedWith) } }
 
     // Sending: the other half of what the app is for.
     item(key = "send") { SendCard(sendStatus, pickFiles, pickSendFolder) }
@@ -1154,6 +1154,16 @@ private fun decodeSampled(path: String, px: Int): android.graphics.Bitmap? = run
     android.graphics.BitmapFactory.decodeFile(path, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
 }.getOrNull()
 
+/** How long the clipboard's history stays open untouched before the clipboard comes back. */
+private const val HISTORY_IDLE_MS = 10_000L
+
+/** Names as a sentence says them: "A", "A and B", "A, B and C". */
+private fun namesInLine(names: List<String>): String = when (names.size) {
+    0 -> ""
+    1 -> names[0]
+    else -> names.dropLast(1).joinToString(", ") + " and " + names.last()
+}
+
 /**
  * The shared clipboard: one thing at a time, the same on the phone and the computer. Typing
  * here reaches the computer by itself a moment after you stop; a picture or file copied on
@@ -1163,11 +1173,31 @@ private fun decodeSampled(path: String, px: Int): android.graphics.Bitmap? = run
  */
 @Composable
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-private fun ClipboardPanel(shared: String, status: String, vm: MainViewModel, computer: String?) {
+private fun ClipboardPanel(shared: String, status: String, vm: MainViewModel, sharedWith: List<String>) {
     val meta by vm.clipMeta.collectAsStateWithLifecycle()
     val history by vm.clipHistory.collectAsStateWithLifecycle()
     var showHistory by remember { mutableStateOf(false) }
     androidx.activity.compose.BackHandler(enabled = showHistory) { showHistory = false }
+    // The history goes back to the clipboard by itself: once left untouched for a while, and as
+    // soon as it has nothing in it.
+    var historyTouched by remember { mutableIntStateOf(0) }
+    LaunchedEffect(showHistory, historyTouched) {
+        if (!showHistory) return@LaunchedEffect
+        kotlinx.coroutines.delay(HISTORY_IDLE_MS)
+        showHistory = false
+    }
+    LaunchedEffect(history.isEmpty()) { if (history.isEmpty()) showHistory = false }
+    // With nothing in it, the clock does not open an empty list: "Nothing to clear" shows in red
+    // beside it for a moment instead.
+    var nothingAt by remember { mutableIntStateOf(0) }
+    var nothingShown by remember { mutableStateOf(false) }
+    LaunchedEffect(nothingAt) {
+        if (nothingAt == 0) return@LaunchedEffect
+        nothingShown = true
+        kotlinx.coroutines.delay(1800)
+        nothingShown = false
+    }
+    val nothingAlpha by androidx.compose.animation.core.animateFloatAsState(if (nothingShown) 1f else 0f, tween(220), label = "nothing")
     var draft by remember { mutableStateOf(shared) }
     // True between a keystroke and the moment it is published; incoming text waits till then.
     var pending by remember { mutableStateOf(false) }
@@ -1195,17 +1225,30 @@ private fun ClipboardPanel(shared: String, status: String, vm: MainViewModel, co
             )
             Spacer(Modifier.width(4.dp))
         }
+        if (nothingAlpha > 0f) {
+            Text(
+                "Nothing to clear", style = LabelStyle.copy(fontWeight = FontWeight.SemiBold), color = Bridge.Danger,
+                modifier = Modifier.alpha(nothingAlpha).padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+        }
         IconChip(
             BlazeIcons.History, if (showHistory) "Hide history" else "History",
             tint = if (showHistory) Bridge.Text else Bridge.Muted, bg = if (showHistory) Bridge.Chip else Color.Transparent, size = 34.dp,
-        ) { showHistory = !showHistory }
+        ) {
+            when {
+                showHistory -> showHistory = false
+                history.isEmpty() -> nothingAt++
+                else -> showHistory = true
+            }
+        }
     }
     // Who it is shared with, live.
     Row(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp).offset(y = (-4).dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(7.dp).clip(CircleShape).background(if (computer != null) Bridge.Good else Bridge.Faint))
+        Box(Modifier.size(7.dp).clip(CircleShape).background(if (sharedWith.isNotEmpty()) Bridge.Good else Bridge.Faint))
         Spacer(Modifier.width(7.dp))
         Text(
-            if (computer != null) "Shared with $computer" else "No computer connected",
+            if (sharedWith.isNotEmpty()) "Shared with " + namesInLine(sharedWith) else "No computer connected",
             style = CaptionStyle, color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
@@ -1231,7 +1274,17 @@ private fun ClipboardPanel(shared: String, status: String, vm: MainViewModel, co
     val save = { askWhere(vm.clipFile(), meta.name, meta.mime) }
     Column(Modifier.fillMaxWidth().panel().padding(16.dp)) {
         if (showHistory) {
-            ClipHistory(history, current = meta.v, vm = vm) { m -> askWhere(vm.historyFile(m.v), m.name, m.mime) }
+            // Any touch in the history (a tap, a scroll) keeps it open a while longer.
+            Box(
+                Modifier.pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                            historyTouched++
+                        }
+                    }
+                },
+            ) { ClipHistory(history, current = meta.v, vm = vm) { m -> askWhere(vm.historyFile(m.v), m.name, m.mime) } }
             Spacer(Modifier.height(12.dp))
         }
         when (meta.kind) {

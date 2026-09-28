@@ -33,6 +33,43 @@ data class PairedDevice(
     val lastIp: String,
 )
 
+/** A linked phone in the device list: this, then its name. */
+const val PHONE_PREFIX = "Phone: "
+
+/** The laptop helper in the device list: this, then its machine's name. */
+const val HELPER_PREFIX = "Laptop control on "
+
+/**
+ * A device as a person knows it, by machine, never by browser: a phone or a laptop helper by its
+ * own name; a page by its machine's name when that machine's helper is paired from the same
+ * address and the page is on Windows too, as the helper is; else by its system alone ("Linux"
+ * for "Firefox on Linux"). A browser in WSL or a virtual machine reaches the phone from the same
+ * address as Windows but is another system, so it is "Linux", not the Windows machine.
+ */
+fun shownName(d: PairedDevice, all: Collection<PairedDevice>): String {
+    if (d.name.startsWith(PHONE_PREFIX)) return d.name.removePrefix(PHONE_PREFIX)
+    if (d.name.startsWith(HELPER_PREFIX)) return d.name.removePrefix(HELPER_PREFIX)
+    val system = d.name.substringAfterLast(" on ", d.name)
+    if (system != "Windows") return system
+    return all.firstOrNull { it.name.startsWith(HELPER_PREFIX) && it.lastIp == d.lastIp }?.name?.removePrefix(HELPER_PREFIX) ?: system
+}
+
+/**
+ * Who the shared clipboard reaches, for its "Shared with" line: every computer with the page or
+ * the helper open right now, once each by [shownName], then [phones]. Not [except]'s own machine,
+ * and not a browser on a phone (most likely the phone's own).
+ */
+fun clipboardReach(all: List<PairedDevice>, live: Map<String, Int>, except: PairedDevice?, phones: List<String>): List<String> {
+    val mine = except?.let { shownName(it, all) }
+    val computers = all.asSequence()
+        .filter { (live[it.id] ?: 0) > 0 && !it.name.startsWith(PHONE_PREFIX) && !it.name.contains("Android", ignoreCase = true) }
+        .map { shownName(it, all) }
+        .filter { it != mine }
+        .distinct()
+        .toList()
+    return computers + phones.filter { it !in computers }
+}
+
 /**
  * Every computer this phone has approved.
  *

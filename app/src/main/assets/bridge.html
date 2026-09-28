@@ -1232,6 +1232,10 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .link-danger { border: 0; background: none; color: var(--bad); font: inherit; font-size: 13.5px; font-weight: 650; padding: 6px 10px;
     border-radius: 999px; cursor: pointer; transition: background .15s; }
+  /* In red beside the clock for a moment, when the history has nothing in it. */
+  .clip-nothing { font-size: 13.5px; font-weight: 650; color: var(--bad); padding: 6px 10px; white-space: nowrap; }
+  .clip-nothing.go { animation: nothing-fade 1.9s ease forwards; }
+  @keyframes nothing-fade { 0% { opacity: 0; transform: translateX(6px); } 12%, 72% { opacity: 1; transform: none; } 100% { opacity: 0; } }
   .link-danger:hover { background: color-mix(in srgb, var(--bad) 12%, transparent); }
   .clip-history .h-row { transition: background .15s; }
 
@@ -1261,7 +1265,9 @@
   .beam-btn svg { width: 20px; height: 20px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
   /* The clipboard's live line: who it is shared with. */
   .sec-title { display: flex; flex-direction: column; min-width: 0; }
-  .live-with { display: inline-flex; align-items: center; gap: 6px; margin-top: 1px; font-size: 12.5px; color: var(--sub); white-space: nowrap; }
+  .live-with { display: inline-flex; align-items: center; gap: 6px; margin-top: 1px; font-size: 12.5px; color: var(--sub); white-space: nowrap;
+    max-width: 100%; min-width: 0; }
+  .live-with > span { overflow: hidden; text-overflow: ellipsis; }
   .live-with i { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--good); }
   .drop-veil { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; opacity: 0; transition: opacity .16s ease;
     background: color-mix(in srgb, var(--bg) 50%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3); }
@@ -1632,6 +1638,7 @@
       <div class="card clip-card">
         <div class="sec-head">
           <div class="sec-title"><h3>Clipboard</h3><span class="live-with"><i></i><span id="clip-with">Shared with the phone</span></span></div><span class="grow"></span>
+          <span class="clip-nothing" id="clip-nothing" hidden>Nothing to clear</span>
           <button class="link-danger" id="clip-clear-history" type="button" hidden title="Empties the history and the clipboard, here and on the phone">Clear history</button>
           <button class="icon-btn" id="clip-history-btn" type="button" title="History: put a recent item back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4.5v4h4"/><path d="M12 7.5V12l3 2"/></svg></button>
         </div>
@@ -2470,6 +2477,10 @@ function setupClipboard() {
   $("clip-note").textContent = viaHelper ? ""
     : "With the laptop helper (Settings), the Windows clipboard follows by itself.";
   $("clip-history-btn").addEventListener("click", toggleHistory);
+  // Any use of the open history keeps it open a while longer.
+  ["pointermove", "pointerdown", "wheel", "keydown"].forEach(function (ev) {
+    $("clip-history").addEventListener(ev, function () { if (!$("clip-history").hidden) historyIdle(); }, { passive: true });
+  });
 
   // Typing reaches the phone by itself, a moment after the last key or when you click away.
   $("clip").addEventListener("input", function () {
@@ -2484,6 +2495,8 @@ function setupClipboard() {
     clearTimeout(clipTimer); clipDirty = false;
     clip = { kind: "empty", text: "", v: clip.v }; $("clip").value = ""; renderClip();
     await api("/api/clipboard/history", { method: "DELETE" });
+    clipHist = [];
+    closeHistory();
     flash("Cleared");
   });
 
@@ -2514,12 +2527,40 @@ function setupClipboard() {
 
 var clipHist = [];
 
-function toggleHistory() {
-  var box = $("clip-history"), open = box.hidden;
-  box.hidden = !open;
-  $("clip-history-btn").classList.toggle("on", open);
-  $("clip-clear-history").hidden = !open || !clipHist.length;
-  if (open) loadHistory();
+/** How long the history stays open untouched before the clipboard comes back. */
+var HISTORY_IDLE_MS = 10000;
+var historyTimer = 0;
+
+function closeHistory() {
+  clearTimeout(historyTimer);
+  $("clip-history").hidden = true;
+  $("clip-history-btn").classList.remove("on");
+  $("clip-clear-history").hidden = true;
+}
+
+/** Left untouched for a while, the history goes back to the clipboard by itself. */
+function historyIdle() {
+  clearTimeout(historyTimer);
+  historyTimer = setTimeout(closeHistory, HISTORY_IDLE_MS);
+}
+
+/** Instead of an empty list: "Nothing to clear", in red beside the clock for a moment. */
+function nothingToClear() {
+  var n = $("clip-nothing");
+  n.hidden = false;
+  n.classList.remove("go"); void n.offsetWidth; n.classList.add("go");
+  clearTimeout(n.hideTimer);
+  n.hideTimer = setTimeout(function () { n.hidden = true; }, 1900);
+}
+
+async function toggleHistory() {
+  if (!$("clip-history").hidden) { closeHistory(); return; }
+  try { clipHist = await (await api("/api/clipboard/history")).json(); } catch (e) { return; }
+  if (!clipHist.length) { nothingToClear(); return; }
+  $("clip-history").hidden = false;
+  $("clip-history-btn").classList.add("on");
+  renderHistory();
+  historyIdle();
 }
 
 async function loadHistory() {
@@ -2540,8 +2581,9 @@ function renderHistory() {
   var box = $("clip-history");
   if (box.hidden) return;
   box.innerHTML = "";
-  $("clip-clear-history").hidden = !clipHist.length;
-  if (!clipHist.length) { box.innerHTML = '<p class="empty">Nothing copied yet.</p>'; return; }
+  // Emptied (here or elsewhere): back to the clipboard.
+  if (!clipHist.length) { closeHistory(); return; }
+  $("clip-clear-history").hidden = false;
   clipHist.forEach(function (m) {
     var row = document.createElement("div");
     row.className = "h-row" + (m.v === clip.v ? " now" : "");
@@ -2834,11 +2876,27 @@ var TO_CHECK = '<svg class="to-check" viewBox="0 0 24 24" aria-hidden="true"><pa
 
 var targetsTimer = null;
 function loadTargetsSoon() { clearTimeout(targetsTimer); targetsTimer = setTimeout(loadTargets, 400); }
+/** Names as a sentence says them: "A", "A and B", "A, B and C". */
+function namesInLine(names) {
+  return names.length < 2 ? (names[0] || "") : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+}
+
+/** Everyone else the clipboard reaches, as the phone counts them (computers live, linked phones). */
+var clipWith = [];
+
+function renderClipWith() {
+  var line = "Shared with " + namesInLine([state.device || "the phone"].concat(clipWith));
+  $("clip-with").textContent = line;
+  $("clip-with").title = line;
+}
+
 async function loadTargets() {
   try {
     var d = await (await api("/api/targets")).json();
     sendTargets = d.targets || [];
+    clipWith = d.clipWith || [];
   } catch (e) { return; }
+  renderClipWith();
   renderSendTo();
   if (!$("to-menu").hidden) fillToMenu();
 }
@@ -4458,7 +4516,7 @@ async function refreshState() {
   state.streams = saved ? parseInt(saved, 10) : (s.uploadStreams || 4);
 
   $("hero-title").textContent = state.device || "Phone";
-  $("clip-with").textContent = "Shared with " + (state.device || "the phone");
+  renderClipWith();
   $("status-device").textContent = state.device || "Phone";
   renderRoute();
   if (s.clip) { clip = s.clip; renderClip(); }

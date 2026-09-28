@@ -37,7 +37,7 @@ data class IncomingDto(val id: String, val name: String, val size: Long, val mim
 data class TargetDto(val id: String, val name: String, val kind: String, val via: String = "")
 
 @Serializable
-data class TargetsDto(val phone: String, val targets: List<TargetDto>)
+data class TargetsDto(val phone: String, val targets: List<TargetDto>, val clipWith: List<String> = emptyList())
 
 /**
  * Straight through: a file from one computer to another, handed on as it arrives and never

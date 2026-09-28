@@ -106,6 +106,9 @@ class PeerManager(
     private val clipSync: () -> Boolean,
 ) {
 
+    /** Copies here go on to the linked phones (the phone's Sync clipboard is on). */
+    val sharesClipboard: Boolean get() = clipSync()
+
     /** This phone's own side of a link: letting the other phone in, and shutting it out again. */
     interface Access {
         val port: Int
