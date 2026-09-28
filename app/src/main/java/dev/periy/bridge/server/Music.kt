@@ -193,6 +193,20 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
         return bytes.takeIf { it.isNotEmpty() }
     }
 
+    /**
+     * The album's cover at about [px] across, for the phone's own player, where the index or a
+     * song's embedded picture has one that large; else the cover the pages get. Not kept: the
+     * player keeps the few it shows.
+     */
+    fun artwork(albumId: Long, px: Int): Bitmap? {
+        val size = Size(px, px)
+        val first = tracks().firstOrNull { it.albumId == albumId.toString() }
+        return runCatching {
+            resolver.loadThumbnail(ContentUris.withAppendedId(MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, albumId), size, null)
+        }.getOrNull() ?: first?.let { t -> runCatching { resolver.loadThumbnail(uri(t.id), size, null) }.getOrNull() }
+            ?: cover(albumId)?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    }
+
     /** A song's own file, where All files access lets it be reached: for the lyrics kept beside it. */
     fun file(trackId: Long): java.io.File? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !android.os.Environment.isExternalStorageManager()) return null

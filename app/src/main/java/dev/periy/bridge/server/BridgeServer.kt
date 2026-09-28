@@ -120,6 +120,7 @@ class BridgeServer(
     private val music: MusicLibrary,
     private val direct: dev.periy.bridge.net.DirectLink,
     private val peers: PeerManager,
+    private val loudness: dev.periy.bridge.music.Loudness,
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val outbound = OutboundTracker()
@@ -323,6 +324,20 @@ class BridgeServer(
             }
             withContext(Dispatchers.IO) { lyrics.put(track, doc) }
             call.respond(ApiResult(true))
+        }
+
+        // How loud each moment of a song is (a byte per 50 ms), worked out here once: the page
+        // draws its seek bar from it and swells the cover with it, as the phone's player does.
+        get("/api/music/loudness/{id}") {
+            val track = call.parameters["id"]?.toLongOrNull()?.let { withContext(Dispatchers.IO) { music.find(it) } }
+            val bytes = track?.let { loudness.of(it.id) }
+            if (bytes == null) {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+            // The same song always sounds the same: kept for good.
+            call.response.header(HttpHeaders.CacheControl, "private, max-age=31536000, immutable")
+            call.respondBytes(bytes, ContentType.Application.OctetStream)
         }
 
         get("/api/music/art/{albumId}") {

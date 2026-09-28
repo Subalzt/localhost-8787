@@ -582,6 +582,8 @@ fun PillTabs(
     solid: Boolean = true,
     /** Where the pages are, in tabs (1.5 is halfway from the second to the third): the pill follows a swipe. */
     position: Float = selected.toFloat(),
+    /** The room either side of each word. */
+    itemPadding: Dp = 16.dp,
     onSelect: (Int) -> Unit,
 ) {
     // Each tab's left edge and width, so the pill can glide between them.
@@ -618,7 +620,7 @@ fun PillTabs(
                         .onGloballyPositioned { c -> spans[i] = c.positionInParent().x to c.size.width.toFloat() }
                         .clip(ButtonShape)
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .padding(horizontal = itemPadding, vertical = 10.dp),
                 )
             }
         }

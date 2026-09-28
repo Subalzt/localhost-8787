@@ -1477,6 +1477,111 @@
     .lyr-line { font-size: 27px; margin-bottom: 20px; }
     #pl-lyrics-m { display: grid; }
   }
+
+  /* ---------------------------------------------------------------- the player, full screen
+     After Namida's player, as the phone's is. The bar along the bottom grows into it: drag the
+     bar up (or click its cover) and its cover, title and buttons fly to their places in a player
+     the size of the window, the waveform and the rest coming in last; drag on up for the queue.
+     Sideways, the cover and title slide to the song before or after. The cover swells on the
+     loud moments, the seek bar is the song's own waveform, the colour is the cover's, and specks
+     drift behind it. Every piece is placed by the script from one number as it moves, so the
+     pieces here are laid out at their full size and only scaled on the way. */
+  .np { position: fixed; inset: 0; z-index: 44; pointer-events: none; color: var(--txt); --pl-tint: #48484F; }
+  .np-panel { position: absolute; left: 0; top: 0; overflow: hidden; pointer-events: auto; touch-action: none;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--pl-tint) 40%, var(--bg)) 0%, color-mix(in srgb, var(--pl-tint) 17%, var(--bg)) 55%,
+        color-mix(in srgb, var(--pl-tint) 6%, var(--bg)) 100%); }
+  .np-specks { position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; pointer-events: none; }
+  .np-slots { position: absolute; inset: 0; pointer-events: none; }
+  .np-el { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform, opacity; }
+  .np-art { overflow: hidden; background: var(--surface-2); pointer-events: auto; touch-action: none;
+    box-shadow: 0 30px 70px -30px color-mix(in srgb, var(--pl-tint) 85%, #000); }
+  .np-art img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; }
+  .np-art.gen { display: grid; place-items: center; color: #FFFFFF; font-weight: 900; letter-spacing: -.04em; }
+  .np-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.28; pointer-events: none; }
+  .np-line.t { font-weight: 700; letter-spacing: -.02em; }
+  .np-line.a { color: var(--sub); }
+  /* The bar says the album after the artist; the player does not: that part fades as it grows. */
+  .np-line.a i { font-style: normal; opacity: var(--more, 0); }
+  .np-hit { pointer-events: auto; }
+  .np-btn { width: 100%; height: 100%; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none;
+    color: var(--txt); cursor: pointer; transition: transform .25s cubic-bezier(.3,1.4,.5,1), background .15s; }
+  .np-btn:hover { background: color-mix(in srgb, var(--txt) 8%, transparent); }
+  .np-btn:active { transform: scale(.88); }
+  .np-btn svg { width: 46%; height: 46%; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .np-btn svg .fill { fill: currentColor; stroke: none; }
+  .np-btn.on { color: color-mix(in srgb, var(--pl-tint) 70%, var(--txt)); }
+  /* The play button: a disc in the cover's colour, lit from the top left, glowing onto the page. */
+  /* It starts as the bar's own button and turns into the disc as it grows (--k, 0 to 1), so the
+     hand-over from the bar is seamless both ways. */
+  .np-play .np-btn { position: relative; overflow: hidden; background: var(--txt);
+    color: color-mix(in srgb, #FFFFFF calc(var(--k, 1) * 100%), var(--surface));
+    box-shadow: 0 12px 28px -10px color-mix(in srgb, var(--pl-tint) calc(var(--k, 1) * 90%), transparent); }
+  .np-play .np-btn::before { content: ""; position: absolute; inset: 0; border-radius: 50%; opacity: var(--k, 1);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--pl-tint) 86%, #FFFFFF), var(--pl-tint) 55%, color-mix(in srgb, var(--pl-tint) 70%, #808080)); }
+  .np-play .np-btn:hover { background: var(--txt); filter: brightness(1.06); }
+  .np-play .np-btn svg { position: relative; width: 40%; height: 40%; }
+  .np-row { display: flex; align-items: center; gap: 6px; padding: 0 12px; pointer-events: auto; }
+  .np-row .np-sq { width: 44px; height: 44px; flex: 0 0 44px; }
+  .np-where { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 10px; border: 0;
+    border-radius: 14px; background: none; cursor: pointer; transition: background .15s; }
+  .np-where:hover { background: color-mix(in srgb, var(--txt) 7%, transparent); }
+  .np-where span { font-size: 12px; font-weight: 550; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .np-where b { max-width: 100%; font-size: 15.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .np-chip { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; padding: 7px 12px; border-radius: 999px;
+    background: color-mix(in srgb, var(--txt) 8%, transparent); color: var(--sub); font-size: 12.5px; font-weight: 650; letter-spacing: .03em; white-space: nowrap; }
+  .np-chip:empty { visibility: hidden; }
+  .np-chip svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  #np-repeat { position: relative; }
+  #np-repeat i { display: none; position: absolute; top: 6px; right: 6px; width: 13px; height: 13px; border-radius: 50%; font: 800 8.5px/13px system-ui;
+    font-style: normal; text-align: center; color: #FFFFFF; background: color-mix(in srgb, var(--pl-tint) 80%, var(--txt)); }
+  #np-repeat.one i { display: block; }
+  .np-wave { pointer-events: auto; touch-action: none; cursor: pointer; }
+  .np-wave canvas { width: 100%; height: 100%; display: block; }
+  .np-seek { display: block; text-align: center; font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; pointer-events: none; }
+  .np-times { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--sub); font-variant-numeric: tabular-nums; pointer-events: none; }
+  /* The queue: under the mini row at the top, every song in the order it will play. */
+  .np-queue { display: flex; flex-direction: column; overflow: hidden; border-radius: 26px 26px 0 0; background: var(--surface); pointer-events: auto;
+    box-shadow: 0 -20px 50px -30px rgba(0,0,0,.5); }
+  .np-qlist { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 10px 0 110px; scrollbar-width: thin; }
+  .np-qrow { position: relative; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto 34px 34px; align-items: center; gap: 12px;
+    height: 62px; padding: 0 10px 0 16px; cursor: pointer; background: var(--surface); transition: background .15s; user-select: none; }
+  .np-qrow:hover { background: color-mix(in srgb, var(--txt) 5%, var(--surface)); }
+  .np-qrow.now { background: color-mix(in srgb, var(--pl-tint) 16%, var(--surface)); }
+  .np-qrow.now b { color: color-mix(in srgb, var(--pl-tint) 65%, var(--txt)); }
+  .np-qrow.done { opacity: .55; }
+  .np-qrow.dragging { z-index: 2; box-shadow: var(--float-shadow); transition: none; }
+  .np-qrow .cover { position: relative; width: 46px; height: 46px; border-radius: 8px; overflow: hidden; font-size: 15px; }
+  .np-qrow .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .np-qrow .cover .eq { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 2px; padding: 14px 13px;
+    background: rgba(0,0,0,.45); }
+  .np-qrow .cover .eq b { flex: 1 1 0; height: 30%; border-radius: 1px; background: #FFFFFF; animation: np-eq .55s ease-in-out infinite alternate; }
+  .np-qrow .cover .eq b:nth-child(2) { animation-delay: -.2s; } .np-qrow .cover .eq b:nth-child(3) { animation-delay: -.38s; }
+  .np-qlist.paused .eq b { animation-play-state: paused; }
+  @keyframes np-eq { to { height: 100%; } }
+  .np-qrow .t { min-width: 0; display: flex; flex-direction: column; }
+  .np-qrow .t b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .np-qrow .t span { font-size: 13px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .np-qrow .d { font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .np-qx, .np-qh { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none;
+    color: var(--faint); cursor: pointer; }
+  .np-qx { opacity: 0; transition: opacity .15s, background .15s, color .15s; }
+  .np-qrow:hover .np-qx { opacity: 1; }
+  .np-qx:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+  .np-qh { cursor: grab; touch-action: none; }
+  .np-qh:active { cursor: grabbing; }
+  .np-qx svg, .np-qh svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .np-qlist.locked .np-qx, .np-qlist.locked .np-qh { display: none; }
+  .np-qbar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px;
+    padding: 5px 6px 5px 18px; border-radius: 999px; background: var(--surface); box-shadow: var(--float-shadow); white-space: nowrap; }
+  .np-qbar span { font-size: 13.5px; font-weight: 650; margin-right: 6px; }
+  .np-qbar .np-btn { width: 40px; height: 40px; }
+  /* While it is open, the bar's own cover, title and buttons are the ones flying. */
+  .player.np-hide #pl-art, .player.np-hide .pl-meta, .player.np-hide #pl-prev, .player.np-hide #pl-play, .player.np-hide #pl-next { visibility: hidden; }
+  .player { touch-action: none; }
+  body.np-open { overflow: hidden; }
+  .player .pl-left { cursor: pointer; }
+  @media (prefers-reduced-motion: reduce) { .np-specks { display: none; } }
   @media (prefers-reduced-motion: reduce) { .lyr-bg img { animation: none; } .lyr, .lyr-line { transition: none; } }
 
   /* ================================================================ one type scale
@@ -1860,7 +1965,7 @@
   <!-- The progress, along the bar's whole top edge: drag anywhere on it. -->
   <input id="pl-seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
   <div class="pl-left">
-    <div class="cover" id="pl-art" title="Show it in its album">&#9834;</div>
+    <div class="cover" id="pl-art" title="Open the player (or drag the bar up)">&#9834;</div>
     <div class="pl-meta">
       <div class="pl-title" id="pl-title"></div>
       <div class="pl-sub" id="pl-sub"></div>
@@ -1887,6 +1992,43 @@
   </div>
 </div>
 <audio id="audio" preload="auto"></audio>
+<!-- The player, full screen and on to the queue: the bar along the bottom grows into it (see "the player, full screen"). -->
+<div class="np" id="np" hidden>
+  <div class="np-panel" id="np-panel"><canvas class="np-specks" id="np-specks" aria-hidden="true"></canvas></div>
+  <div class="np-slots" id="np-slots">
+    <div class="np-el np-art" data-slot="-1" aria-hidden="true"></div>
+    <div class="np-el np-art" data-slot="1" aria-hidden="true"></div>
+    <div class="np-el np-art" data-slot="0" title="Play or pause"></div>
+    <div class="np-el np-line t" data-slot="-1"></div><div class="np-el np-line a" data-slot="-1"></div>
+    <div class="np-el np-line t" data-slot="1"></div><div class="np-el np-line a" data-slot="1"></div>
+    <div class="np-el np-line t" data-slot="0"></div><div class="np-el np-line a" data-slot="0"></div>
+  </div>
+  <div class="np-el np-wave" id="np-wave" title="Drag to go to a place in the song; drag up off it to cancel"><canvas id="np-wave-c"></canvas></div>
+  <span class="np-el np-seek" id="np-seek"></span>
+  <div class="np-el np-times" id="np-times"><span id="np-cur">0:00</span><span id="np-dur">0:00</span></div>
+  <div class="np-el np-hit" id="np-prev-w"><button class="np-btn" id="np-prev" type="button" title="Previous" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M18.5 6.2v11.6a.8.8 0 0 1-1.2.7L9 12.7a.8.8 0 0 1 0-1.4l8.3-5.8a.8.8 0 0 1 1.2.7Z"/><path d="M6 6v12"/></svg></button></div>
+  <div class="np-el np-hit np-play" id="np-play-w"><button class="np-btn" id="np-play" type="button" title="Play / pause (space)" aria-label="Play or pause"></button></div>
+  <div class="np-el np-hit" id="np-next-w"><button class="np-btn" id="np-next" type="button" title="Next" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M5.5 6.2v11.6a.8.8 0 0 0 1.2.7l8.3-5.8a.8.8 0 0 0 0-1.4L6.7 5.5a.8.8 0 0 0-1.2.7Z"/><path d="M18 6v12"/></svg></button></div>
+  <div class="np-el np-row" id="np-top">
+    <div class="np-sq"><button class="np-btn" id="np-close" type="button" title="Close (Esc)" aria-label="Close the player"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 9.5 12 16l6.5-6.5"/></svg></button></div>
+    <button class="np-where" id="np-where" type="button" title="Show it in its album"><span id="np-count"></span><b id="np-album"></b></button>
+    <div class="np-sq"><button class="np-btn" id="np-lyrics" type="button" title="Lyrics" aria-label="Lyrics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-7l-4.2 3.4v-3.4H5A1.5 1.5 0 0 1 3.5 15V6.5A1.5 1.5 0 0 1 5 5Z"/><path d="M8 9.5h8M8 12.5h5"/></svg></button></div>
+  </div>
+  <div class="np-el np-row" id="np-bottom">
+    <span class="np-chip" id="np-chip"></span>
+    <div class="np-sq"><button class="np-btn" id="np-shuffle" type="button" title="Shuffle" aria-label="Shuffle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c2.5 0 3.8 1.3 5.3 4.2l.4.6c1.5 2.9 2.8 4.2 5.3 4.2H21"/><path d="M3 17h3.5c1.4 0 2.4-.4 3.3-1.2M14.2 8.2C15.1 7.4 16.1 7 17.5 7H21"/><path d="m18.5 4.5 2.5 2.5-2.5 2.5M18.5 13.5l2.5 2.5-2.5 2.5"/></svg></button></div>
+    <div class="np-sq"><button class="np-btn" id="np-repeat" type="button" title="Repeat" aria-label="Repeat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3l3 3-3 3"/><path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H20"/><path d="M7 21l-3-3 3-3"/><path d="M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H4"/></svg><i>1</i></button></div>
+    <div class="np-sq"><button class="np-btn" id="np-sync" type="button" title="Play on other devices, in step" aria-label="Play in sync"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M8.3 15.7a5.3 5.3 0 0 1 0-7.4M15.7 8.3a5.3 5.3 0 0 1 0 7.4M5.5 18.5a9.2 9.2 0 0 1 0-13M18.5 5.5a9.2 9.2 0 0 1 0 13"/></svg></button></div>
+    <div class="np-sq"><button class="np-btn" id="np-queue-btn" type="button" title="Queue" aria-label="Queue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h12M4 11h12M4 16h7"/><path d="M16.5 20.5a2 2 0 1 1 0-4a2 2 0 1 1 0 4ZM18.5 18.5V11l2.5 1"/></svg></button></div>
+  </div>
+  <div class="np-el np-queue" id="np-queue">
+    <div class="np-qlist" id="np-qlist"></div>
+    <div class="np-qbar"><span id="np-qcount"></span>
+      <button class="np-btn" id="np-qshuffle" type="button" title="Shuffle" aria-label="Shuffle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c2.5 0 3.8 1.3 5.3 4.2l.4.6c1.5 2.9 2.8 4.2 5.3 4.2H21"/><path d="M3 17h3.5c1.4 0 2.4-.4 3.3-1.2M14.2 8.2C15.1 7.4 16.1 7 17.5 7H21"/><path d="m18.5 4.5 2.5 2.5-2.5 2.5M18.5 13.5l2.5 2.5-2.5 2.5"/></svg></button>
+      <button class="np-btn" id="np-qjump" type="button" title="Go to the song playing" aria-label="Go to the song playing"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/></svg></button>
+    </div>
+  </div>
+</div>
 <!-- Lyrics, full screen over the page, in time with the song; the player stays along the bottom. -->
 <div class="lyr" id="lyr" hidden role="dialog" aria-label="Lyrics">
   <div class="lyr-bg" id="lyr-bg" aria-hidden="true"></div>
@@ -2357,6 +2499,7 @@ function setupNav() {
   window.addEventListener("popstate", function (e) {
     var st = e.state || { tab: (location.hash || "#home").slice(1) };
     if (lyr.open && st.layer !== "lyrics") closeLyrics(true);
+    if (np.layered && st.layer !== "player") { np.layered = false; npCollapse(); }
     if (!$("viewer").hidden && st.layer !== "viewer") closeViewer(true);
     if (!$("mon-sheet").hidden && !document.body.classList.contains("mon-dock") && st.layer !== "monitor") $("mon-sheet").hidden = true;
     if (NAV_TABS.indexOf(st.tab) >= 0 && st.tab !== document.body.dataset.tab) selectTab(st.tab, true);
@@ -5470,14 +5613,21 @@ function showPlayerArt(t, fresh) {
   var art = $("pl-art");
   art.innerHTML = "";
   art.classList.remove("gen");
-  $("player").style.setProperty("--pl-tint", genCover(art, t.album));
+  setPlayerTint(genCover(art, t.album));
   var img = new Image();
   img.onload = function () {
     art.innerHTML = ""; art.classList.remove("gen"); art.style.background = ""; art.appendChild(img);
     var c = artTint(img);
-    if (c) $("player").style.setProperty("--pl-tint", c);
+    if (c) setPlayerTint(c);
   };
   img.src = artUrl(t.albumId) + (fresh ? "?v=" + Date.now() : "");
+}
+
+/** The cover's colour, on the bar and on the player full screen, which takes its colour from it too. */
+function setPlayerTint(c) {
+  $("player").style.setProperty("--pl-tint", c);
+  $("np").style.setProperty("--pl-tint", c);
+  np.tintRgb = npRgb(c, np.tintRgb);
 }
 
 /**
@@ -6094,6 +6244,7 @@ function showPlayer(t) {
       artwork: [{ src: location.origin + artUrl(t.albumId), sizes: "512x512", type: "image/jpeg" }],
     });
   }
+  npTrackChanged(t);
 }
 
 function playNext(auto) {
@@ -6119,6 +6270,7 @@ var PLAY_ICON = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path class=\"f
 var PAUSE_ICON = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect class=\"fill\" x=\"6.5\" y=\"5\" width=\"4\" height=\"14\" rx=\"1.2\"/><rect class=\"fill\" x=\"13.5\" y=\"5\" width=\"4\" height=\"14\" rx=\"1.2\"/></svg>";
 function setPlayIcon(playing) {
   $("pl-play").innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+  npPlayIcon(playing);
   var eq = $("tab-eq");
   if (eq && eq.hidden !== !playing) { eq.hidden = !playing; moveTabPill(); }
 }
@@ -6222,8 +6374,8 @@ function setupPlayer() {
     if (!currentTrack() && music.album !== null) playAlbum(music.album, false);
     else togglePlay();
   };
-  // The little cover in the bar, from any tab: Music, at the album playing, the song lit.
-  $("pl-art").onclick = revealPlaying;
+  // The little cover in the bar opens the player full screen (setupFullPlayer); showing the
+  // song in its album is the album's name at the top of it.
   $("pl-next").onclick = function () { playNext(false); };
   $("pl-prev").onclick = playPrev;
   $("pl-shuffle").onclick = function () {
@@ -6232,6 +6384,7 @@ function setupPlayer() {
     var cur = currentTrack();
     if (cur) { buildOrder(player.queue.indexOf(cur)); prefetchAhead(); }
     renderStage();
+    npText();
   };
   $("pl-repeat").onclick = function () {
     player.repeat = player.repeat === "off" ? "all" : player.repeat === "all" ? "one" : "off";
@@ -6239,6 +6392,7 @@ function setupPlayer() {
     this.classList.toggle("on", player.repeat !== "off");
     prefetchAhead();
     renderStage();
+    npText();
   };
 
   // Volume, remembered on this computer.
@@ -6315,6 +6469,922 @@ function setupPlayer() {
     b.onclick = function () { music.view = b.dataset.v; music.album = null; music.shown = MUSIC_PAGE; renderMusic(); keepPlace(); };
   });
   $("music-rescan").onclick = function () { musicLoad(true); };
+}
+
+// ------------------------------------------------------------------ the player, full screen
+//
+// After Namida's player (github.com/namidaco/namida), as the phone's own is (NowPlaying.kt):
+// written anew from how it moves; none of its code is used.
+//
+// One number, np.p, says where the player is: 0 is the bar along the bottom, 1 the player the
+// size of the window, 2 the queue. A drag moves it continuously and every piece is placed from
+// it at once: the panel grows from the bar to the window, the cover flies from the bar's corner
+// to its place and grows, the title follows and grows, the play button swells, and the
+// waveform, the times and the rows of buttons come in last. On to the queue, the same pieces
+// shrink into a row at the top while the queue rises under it. Let go, and it settles where the
+// speed and distance of the drag say, into the bar with a small bounce. np.s does the same
+// sideways, -1 to 1: the cover and title slide to the song before or after, the title a little
+// quicker than the cover. The cover swells with the loud moments of the song (how loud each
+// moment is comes from the phone, which works it out once), the seek bar is the song's own
+// waveform, the colour is the cover's (--pl-tint), and specks drift behind, quicker when loud.
+
+var NP_HEAD = 0.12, NP_ACT = 100, NP_FLICK = 500, NP_SWIPE_FLICK = 1000, NP_OVERSHOOT = 1.25;
+var np = {
+  p: 0, s: 0, bounceUp: false, frozen: null, g: null, shown: false, layered: false, dragged: 0,
+  vStop: null, sStop: null, startP: 0, sStart: 0, sOffset: 0, busy: 0,
+  track: null, env: {}, envOrder: [], grow: 0, pulse: 0, loud: 0, raf: 0, last: 0,
+  seek: null, specks: [], slotIds: {}, tintRgb: [72, 72, 80], txtRgb: [255, 255, 255], qShownFor: "",
+  still: window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false,
+};
+
+function npClamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+function npLerp(a, b, t) { return a + (b - a) * t; }
+
+/** A CSS cubic-bezier as a function of time, for the settling curves. */
+function npBezier(x1, y1, x2, y2) {
+  function at(a1, a2, t) { return ((1 - 3 * a2 + 3 * a1) * t + (3 * a2 - 6 * a1)) * t * t + 3 * a1 * t; }
+  function slope(a1, a2, t) { return 3 * (1 - 3 * a2 + 3 * a1) * t * t + 2 * (3 * a2 - 6 * a1) * t + 3 * a1; }
+  return function (x) {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    var t = x;
+    for (var i = 0; i < 8; i++) {
+      var d = at(x1, x2, t) - x, s = slope(x1, x2, t);
+      if (Math.abs(d) < 1e-5) break;
+      if (Math.abs(s) < 1e-6) break;
+      t -= d / s;
+    }
+    return at(y1, y2, npClamp(t, 0, 1));
+  };
+}
+/** Quick to leave, slow to arrive; into the bar with a little bounce; to the queue softly; between songs. */
+var NP_TO_FULL = npBezier(0.05, 0.7, 0.1, 1), NP_TO_MINI = npBezier(0.175, 0.885, 0.32, 1.125);
+var NP_TO_QUEUE = npBezier(0.15, 0.96, 0.28, 1.04), NP_TO_SONG = npBezier(0.18, 1, 0.04, 1);
+
+/** Runs [set] each frame from [from] to [to]; the returned function stops it. */
+function npTween(from, to, ms, ease, set, done) {
+  var t0 = performance.now(), stop = false;
+  np.busy++;
+  function step(now) {
+    if (stop) return;
+    var k = Math.min(1, (now - t0) / ms);
+    set(from + (to - from) * ease(k));
+    npRender();
+    if (k < 1) requestAnimationFrame(step);
+    else { np.busy--; stop = true; if (done) done(); }
+  }
+  requestAnimationFrame(step);
+  return function () { if (!stop) { stop = true; np.busy--; } };
+}
+
+/** A spring from [from] to [to]: it carries on a little past and comes back, as the phone's does. */
+function npSpring(from, to, set, done) {
+  var x = from, v = 0, stop = false, last = performance.now();
+  var k = 330, c = 2 * 0.74 * Math.sqrt(k);
+  np.busy++;
+  function step(now) {
+    if (stop) return;
+    var dt = Math.min(0.032, (now - last) / 1000);
+    last = now;
+    for (var i = 0; i < 4; i++) { var a = -k * (x - to) - c * v; v += a * dt / 4; x += v * dt / 4; }
+    if (Math.abs(x - to) < 0.0008 && Math.abs(v) < 0.01) x = to;
+    set(x);
+    npRender();
+    if (x !== to) requestAnimationFrame(step);
+    else { np.busy--; stop = true; if (done) done(); }
+  }
+  requestAnimationFrame(step);
+  return function () { if (!stop) { stop = true; np.busy--; } };
+}
+
+/** The track shown: the one playing here, or the group's. */
+function npTrack() { return np.track || currentTrack(); }
+
+/** Where the song is, in seconds, and how long it is. */
+function npPos() { return syncMember() ? syncPos() : ($("audio").currentTime || 0); }
+function npDur() {
+  if (syncMember() && sync.state) { var b = sync.eng.bufs[sync.state.trackId]; if (b && b.buf) return b.buf.duration; }
+  var a = $("audio"), t = npTrack();
+  return a.duration && isFinite(a.duration) ? a.duration : (t ? t.durationMs / 1000 : 0);
+}
+
+/** The songs either side of the one playing, where this page has the queue. */
+function npAround() {
+  var cur = npTrack();
+  if (!cur) return [null, null, null];
+  if (syncFollower() || currentTrack() !== cur) return [null, cur, null];
+  var n = player.order.length, p = player.pos;
+  var prev = p > 0 ? player.queue[player.order[p - 1]] : (player.repeat === "all" && n > 1 ? player.queue[player.order[n - 1]] : null);
+  return [prev || null, cur, trackAhead(1)];
+}
+
+// ---- how loud each moment is
+
+var NP_STEP_MS = 50;
+function npLoudness(id) {
+  if (np.env[id] || np.env[id] === null) return;
+  np.env[id] = null;
+  api("/api/music/loudness/" + id).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+    if (!buf) { delete np.env[id]; return; }
+    np.env[id] = new Uint8Array(buf);
+    np.envOrder.push(id);
+    while (np.envOrder.length > 12) delete np.env[np.envOrder.shift()];
+    var t = npTrack();
+    if (t && t.id === id) { np.grow = 0; npWake(); }
+  }).catch(function () { delete np.env[id]; });
+}
+
+function npLoudAt(env, ms) {
+  if (!env || !env.length) return 0;
+  var f = ms / NP_STEP_MS, i = npClamp(Math.floor(f), 0, env.length - 1), j = Math.min(i + 1, env.length - 1), k = npClamp(f - i, 0, 1);
+  return (env[i] * (1 - k) + env[j] * k) / 255;
+}
+
+function npBars(env, count) {
+  var out = new Float32Array(count);
+  if (!env || !env.length) return out;
+  for (var b = 0; b < count; b++) {
+    var from = Math.floor(b * env.length / count), to = Math.max(from + 1, Math.floor((b + 1) * env.length / count)), m = 0;
+    for (var k = from; k < to && k < env.length; k++) if (env[k] > m) m = env[k];
+    out[b] = m / 255;
+  }
+  return out;
+}
+
+// ---- where everything goes
+
+/** Reads a colour, in any form CSS takes, as [r, g, b]. */
+function npRgb(css, fallback) {
+  try {
+    var c = npRgb.c || (npRgb.c = document.createElement("canvas").getContext("2d"));
+    c.fillStyle = "#000"; c.fillStyle = css;
+    var v = c.fillStyle;
+    if (v.charAt(0) === "#") return [parseInt(v.substr(1, 2), 16), parseInt(v.substr(3, 2), 16), parseInt(v.substr(5, 2), 16)];
+    var m = v.match(/\d+(\.\d+)?/g);
+    return m ? [+m[0], +m[1], +m[2]] : fallback;
+  } catch (e) { return fallback; }
+}
+
+/**
+ * The measures every position is worked out from: the bar's pieces as they are now (the
+ * player starts exactly over them), the full player's for this window, and the row at the top
+ * the pieces shrink into over the queue.
+ */
+function npMeasure() {
+  // The layer itself: the window without its scrollbar.
+  var W = $("np").clientWidth || document.documentElement.clientWidth, H = $("np").clientHeight || window.innerHeight;
+  var bar = $("player").getBoundingClientRect();
+  function r(id) { var e = $(id); if (!e) return null; var b = e.getBoundingClientRect(); return b.width > 0 ? b : null; }
+  function c(b, fb) { return b ? { cx: b.left + b.width / 2, cy: b.top + b.height / 2, size: b.width } : fb; }
+  var art = r("pl-art") || { left: bar.left + 12, top: bar.top + (bar.height - 48) / 2, width: 48, right: bar.left + 60 };
+  var left = $("pl-art").parentNode.getBoundingClientRect();
+  var ti = r("pl-title"), su = r("pl-sub"), pl = r("pl-play");
+  var play = c(pl, { cx: bar.right - 40, cy: bar.top + bar.height / 2, size: 42 });
+  var fs = function (id, d) { var e = $(id); return e ? parseFloat(getComputedStyle(e).fontSize) || d : d; };
+  var mini = {
+    artX: art.left, artY: art.top, art: art.width, radius: parseFloat(getComputedStyle($("pl-art")).borderTopLeftRadius) || 10,
+    textX: ti ? ti.left : art.right + 12, textW: ti ? Math.max(40, ti.width) : 160,
+    titleTop: ti ? ti.top : art.top + 6, artistTop: su ? su.top : art.top + 28, title: fs("pl-title", 15), artist: fs("pl-sub", 13),
+    play: play, prev: c(r("pl-prev"), { cx: play.cx - 48, cy: play.cy, size: 36 }), next: c(r("pl-next"), { cx: play.cx + 48, cy: play.cy, size: 36 }),
+    clip: { l: left.left, t: bar.top, r: left.right, b: bar.bottom }, spacing: Math.max(left.width, art.width + 16),
+  };
+  var f, wide = W >= 900 && W / H > 1.2;
+  if (wide) {
+    // Side by side: the cover on the left; the title, the waveform and the controls beside it.
+    var sz = Math.max(160, Math.min(H - 190, W * 0.4, 640)), colW = Math.max(300, Math.min(540, W - sz - 64 - 96));
+    var x0 = (W - (sz + 64 + colW)) / 2, ay = (H - sz) / 2 + 14, cx0 = x0 + sz + 64;
+    var ft = 34, fa = 19, stack = ft * 1.28 + 4 + fa * 1.28 + 28 + 64 + 6 + 20 + 22 + 84 + 20 + 48;
+    var y = ay + (sz - stack) / 2;
+    f = { artX: x0, artY: ay, art: sz, textX: cx0, textW: colW, title: ft, artist: fa, titleTop: y, artistTop: y + ft * 1.28 + 4 };
+    y = f.artistTop + fa * 1.28 + 28;
+    f.waveX = cx0; f.waveW = colW; f.waveTop = y; f.waveH = 64; y += 64 + 6;
+    f.timesX = cx0; f.timesW = colW; f.timesY = y; y += 20 + 22;
+    var cy = y + 42;
+    f.play = { cx: cx0 + colW / 2, cy: cy, size: 80 };
+    f.prev = { cx: f.play.cx - 40 - 62, cy: cy, size: 60 }; f.next = { cx: f.play.cx + 40 + 62, cy: cy, size: 60 };
+    y += 84 + 20;
+    f.bottomX = cx0 - 12; f.bottomW = colW + 24; f.bottomTop = y; f.bottomH = 48;
+    f.topTop = 16; f.topH = 52;
+  } else {
+    var topT = 10, topH = 52, bottomH = 52, bottomTop = H - 14 - bottomH, big = 76;
+    var ctrlY = bottomTop - 22 - big / 2, waveH = 60, waveTop = ctrlY - big / 2 - 18 - waveH;
+    var tt = npClamp(W * 0.068, 20, 30), ta = tt * 0.66, textH = tt * 1.28 + ta * 1.28 + 2, textTop = waveTop - 20 - textH;
+    var areaTop = topT + topH + 12, areaBottom = textTop - 22;
+    var s2 = Math.max(120, Math.min(W - 56, areaBottom - areaTop, 620));
+    f = { artX: (W - s2) / 2, artY: areaTop + (areaBottom - areaTop - s2) / 2, art: s2, textX: 24, textW: W - 48, title: tt, artist: ta,
+      titleTop: textTop, artistTop: textTop + tt * 1.28 + 2, waveX: 20, waveW: W - 40, waveTop: waveTop, waveH: waveH,
+      timesX: 20, timesW: W - 40, timesY: ctrlY - 10,
+      play: { cx: W / 2, cy: ctrlY, size: big }, prev: { cx: W / 2 - big / 2 - 58, cy: ctrlY, size: 60 }, next: { cx: W / 2 + big / 2 + 58, cy: ctrlY, size: 60 },
+      bottomX: 0, bottomW: W, bottomTop: bottomTop, bottomH: bottomH, topTop: topT, topH: topH };
+  }
+  var qw = Math.min(W, 760), qx = (W - qw) / 2, qt = 14;
+  var q = {
+    artX: qx + 16, artY: qt, art: 54, textX: qx + 16 + 54 + 14, textW: Math.max(60, qw - (16 + 54 + 14) - 16 - 50 - 14),
+    titleTop: qt + 7, artistTop: qt + 30, title: 16, artist: 13.5, radius: 10,
+    play: { cx: qx + qw - 16 - 25, cy: qt + 27, size: 50 }, clip: { l: 0, t: 0, r: W, b: H }, spacing: W / 1.15,
+    x: qx, w: qw, listTop: qt + 54 + 16,
+  };
+  q.prev = q.play; q.next = q.play;
+  return { W: W, H: H, bar: bar, mini: mini, f: f, q: q };
+}
+
+/** Terms of np.p, as the phone splits it: towards full (c), towards the queue (q). */
+function npTerms() {
+  var p = np.p, bu = np.bounceUp;
+  var cp = npClamp(p, 0, 1), qp = bu ? 0 : npClamp(p, 1, 3) - 1, qcp = npClamp(qp, 0, 1);
+  var bcp = bu ? npClamp(p, 0, 1) : npClamp(p > 1 ? 2 - p : p, 0, 1);
+  return { cp: cp, qp: qp, qcp: qcp, bcp: bcp, over: bu ? Math.max(0, p - 1) : 0, under: Math.max(0, -p),
+    slow: npClamp(bcp * 4 - 3, 0, 1), mid: npClamp(bcp * 5 - 4, 0, 1), fast: npClamp(bcp * 10 - 9, 0, 1) };
+}
+
+function npPlace(el, x, y, scale, alpha) {
+  el.style.transform = "translate(" + x.toFixed(2) + "px," + y.toFixed(2) + "px)" + (scale !== 1 ? " scale(" + scale.toFixed(4) + ")" : "");
+  el.style.opacity = alpha >= 0.999 ? "" : alpha.toFixed(3);
+  el.style.visibility = alpha <= 0.002 ? "hidden" : "";
+}
+
+/** Places every piece from np.p and np.s, and draws what moves. */
+function npRender() {
+  var g = np.g;
+  if (!g || !np.shown) return;
+  var t = npTerms(), f = g.f, row = t.qp > 0 ? g.q : g.mini, root = $("np");
+  var dip = t.under * 240, lift = t.over * g.H * 0.35, slide = (1 - t.cp) * 60 - lift;
+  root.style.opacity = t.under > 0.04 ? npClamp(1 - (t.under - 0.04) * 9, 0, 1).toFixed(3) : "";
+
+  // The panel: from the bar to the window, its colour coming up over the bar.
+  var pl = $("np-panel");
+  var L = npLerp(g.bar.left, 0, t.cp), T = npLerp(g.bar.top, 0, t.cp) + dip, R = npLerp(g.bar.right, g.W, t.cp), B = npLerp(g.bar.bottom, g.H, t.cp) + dip;
+  pl.style.left = L + "px"; pl.style.top = T + "px"; pl.style.width = (R - L) + "px"; pl.style.height = Math.max(0, B - T) + "px";
+  pl.style.borderRadius = (20 * (1 - t.cp)).toFixed(1) + "px " + (20 * (1 - t.cp)).toFixed(1) + "px 0 0";
+  pl.style.opacity = Math.min(1, t.cp * 4).toFixed(3);
+  $("np-specks").style.transform = "translate(" + (-L) + "px," + (-T) + "px)";
+
+  // The covers and the titles slide within the bar's own corner at first, the whole window once open.
+  var cl = row.clip, W = g.W, H = g.H;
+  var cL = npLerp(cl.l, 0, t.cp), cT = npLerp(cl.t, 0, t.cp) + dip, cR = npLerp(cl.r, W, t.cp), cB = npLerp(cl.b, H, t.cp) + dip;
+  $("np-slots").style.clipPath = "inset(" + cT.toFixed(1) + "px " + (W - cR).toFixed(1) + "px " + (H - cB).toFixed(1) + "px " + cL.toFixed(1) + "px)";
+  var aX = npLerp(row.artX, f.artX, t.bcp), aY = npLerp(row.artY + dip, f.artY - lift, t.bcp), aS = npLerp(row.art, f.art, t.bcp);
+  var spacing = npLerp(row.spacing, Math.max(W / 1.15, aS + 16), t.cp), s = np.s;
+  var alphaOf = function (slot) { return slot === 0 ? 1 - Math.abs(s) : slot < 0 ? npClamp(-s, 0, 1) : npClamp(s, 0, 1); };
+  var radius = npLerp(row.radius, 16, t.bcp);
+  Array.prototype.forEach.call(document.querySelectorAll("#np-slots .np-art"), function (el) {
+    var slot = +el.dataset.slot, swell = slot === 0 && !np.still ? 1 + np.pulse * npLerp(0.045, 0.07, t.bcp) : 1, size = aS * swell;
+    el.style.width = f.art + "px"; el.style.height = f.art + "px";
+    el.style.borderRadius = (radius * f.art / Math.max(1, size)).toFixed(2) + "px";
+    npPlace(el, aX - (size - aS) / 2 - s * spacing + slot * spacing, aY - (size - aS) / 2, size / f.art, el.dataset.has ? alphaOf(slot) : 0);
+  });
+  var tS = npLerp(row.title / f.title, 1, t.bcp), aSc = npLerp(row.artist / f.artist, 1, t.bcp);
+  var tx = npLerp(row.textX, f.textX, t.bcp), tw = npLerp(row.textW, f.textW, t.bcp), tsp = spacing * 1.15;
+  var ty = npLerp(row.titleTop + dip, f.titleTop - lift, t.bcp), ay = npLerp(row.artistTop + dip, f.artistTop - lift, t.bcp);
+  $("np-slots").style.setProperty("--more", t.qp > 0 ? "0" : npClamp(1 - t.bcp * 3, 0, 1).toFixed(3));
+  Array.prototype.forEach.call(document.querySelectorAll("#np-slots .np-line"), function (el) {
+    var slot = +el.dataset.slot, title = el.classList.contains("t"), k = title ? tS : aSc;
+    el.style.fontSize = (title ? f.title : f.artist) + "px";
+    el.style.width = (tw / k).toFixed(1) + "px";
+    npPlace(el, tx - s * tsp + slot * tsp, title ? ty : ay, k, el.dataset.has ? alphaOf(slot) : 0);
+  });
+
+  // Previous, play, next: from the bar's buttons to the middle; in the queue, only play stays.
+  function ctrl(id, a, b, laid, alpha) {
+    var el = $(id), size = npLerp(a.size, b.size, t.bcp);
+    el.style.width = laid + "px"; el.style.height = laid + "px";
+    npPlace(el, npLerp(a.cx, b.cx, t.bcp) - size / 2, npLerp(a.cy + dip, b.cy + slide, t.bcp) - size / 2, size / laid, alpha);
+    el.style.pointerEvents = alpha > 0.3 ? "" : "none";
+  }
+  ctrl("np-play-w", row.play, f.play, f.play.size, 1);
+  $("np-play-w").style.setProperty("--k", t.qp > 0 ? "1" : npClamp(t.bcp * 3, 0, 1).toFixed(3));
+  ctrl("np-prev-w", row.prev, f.prev, 60, 1 - t.qcp);
+  ctrl("np-next-w", row.next, f.next, 60, 1 - t.qcp);
+
+  // What comes in last: the waveform, the times, the rows along the top and bottom.
+  var wv = $("np-wave");
+  wv.style.width = f.waveW + "px"; wv.style.height = f.waveH + "px";
+  npPlace(wv, f.waveX, f.waveTop + slide, 1, t.slow);
+  wv.style.pointerEvents = t.slow > 0.5 ? "" : "none";
+  var sk = $("np-seek");
+  sk.style.width = f.waveW + "px";
+  npPlace(sk, f.waveX, f.waveTop - 24 + slide, 1, np.seek !== null ? t.slow : 0);
+  var tm = $("np-times");
+  tm.style.width = f.timesW + "px";
+  npPlace(tm, f.timesX, f.timesY + slide, 1, t.fast);
+  var top = $("np-top");
+  top.style.width = W + "px"; top.style.height = f.topH + "px";
+  npPlace(top, 0, f.topTop + (1 - t.bcp) * -100 - t.qp * 40, 1, t.bcp * (1 - t.qcp));
+  top.style.pointerEvents = t.bcp * (1 - t.qcp) > 0.5 ? "" : "none";
+  var bt = $("np-bottom");
+  bt.style.width = f.bottomW + "px"; bt.style.height = f.bottomH + "px";
+  npPlace(bt, f.bottomX, f.bottomTop + (1 - t.cp) * 100 + slide, 1, t.mid);
+  bt.style.pointerEvents = t.mid > 0.5 ? "" : "none";
+
+  // The queue, rising under the row at the top.
+  var qu = $("np-queue");
+  qu.style.width = g.q.w + "px"; qu.style.height = (H - g.q.listTop) + "px";
+  npPlace(qu, g.q.x, g.q.listTop + (1 - t.qp) * (H - g.q.listTop), 1, t.qp > 0 ? 1 : 0);
+
+  npDrawSpecks(t);
+  npDrawWave();
+  var pos = npPos(), dur = npDur();
+  $("np-cur").textContent = fmtTime(np.seek !== null ? np.seek : pos);
+  $("np-dur").textContent = fmtTime(dur);
+  if (np.seek !== null) {
+    var diff = np.seek - pos;
+    sk.textContent = (diff >= 0 ? "+" : "−") + fmtTime(Math.abs(diff));
+  }
+}
+
+// ---- drawing: the waveform and the specks
+
+function npCanvas(c, w, h) {
+  var dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  var x = c.getContext("2d");
+  x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  x.clearRect(0, 0, w, h);
+  return x;
+}
+
+function npDrawWave() {
+  var wv = $("np-wave"), c = $("np-wave-c"), w = np.g.f.waveW, h = np.g.f.waveH;
+  if (wv.style.visibility === "hidden") return;
+  var x = npCanvas(c, w, h), t = npTrack(), env = t ? np.env[t.id] : null;
+  var bw = 3, gap = 2.4, n = Math.max(8, Math.floor((w + gap) / (bw + gap)));
+  if (np.barsFor !== (t && t.id) + ":" + n + ":" + !!env) { np.bars = npBars(env, n); np.barsFor = (t && t.id) + ":" + n + ":" + !!env; }
+  var bars = np.bars, step = n > 1 ? (w - bw) / (n - 1) : 0, minH = 3, cy = h / 2, grow = np.grow;
+  var dur = npDur(), at = np.seek !== null ? np.seek : npPos(), played = dur > 0 ? npClamp(at / dur, 0, 1) * w : 0;
+  function draw(style) {
+    x.fillStyle = style;
+    x.beginPath();
+    for (var i = 0; i < n; i++) {
+      var bh = minH + (h - minH) * Math.pow(bars[i], 1.25) * grow, bx = i * step;
+      if (x.roundRect) x.roundRect(bx, cy - bh / 2, bw, bh, bw / 2); else x.rect(bx, cy - bh / 2, bw, bh);
+    }
+    x.fill();
+  }
+  var tx = np.txtRgb, tn = np.tintRgb;
+  draw("rgba(" + tx[0] + "," + tx[1] + "," + tx[2] + ",.17)");
+  if (played > 0) {
+    x.save();
+    x.beginPath(); x.rect(0, 0, played, h); x.clip();
+    var light = tn.map(function (v) { return Math.round(v + (255 - v) * 0.35); });
+    var gr = x.createLinearGradient(0, 0, Math.max(1, played), 0);
+    gr.addColorStop(0, "rgb(" + light.join(",") + ")");
+    gr.addColorStop(1, "rgb(" + tn.join(",") + ")");
+    draw(gr);
+    x.restore();
+  }
+}
+
+function npDrawSpecks(t) {
+  if (np.still) return;
+  var c = $("np-specks"), W = np.g.W, H = np.g.H;
+  var playing = isPlaying(), now = performance.now(), dt = np.speckAt ? Math.min(0.064, (now - np.speckAt) / 1000) : 0;
+  np.speckAt = now;
+  np.speckFade = npClamp((np.speckFade || 0) + (playing ? dt : -dt), 0, 1);
+  var a = t.cp * (1 - t.qcp * 0.6) * np.speckFade;
+  var x = npCanvas(c, W, H);
+  if (a <= 0.005) return;
+  if (!np.specks.length) for (var i = 0; i < 46; i++) {
+    var ang = Math.random() * Math.PI * 2, v = 0.006 + Math.random() * 0.02;
+    np.specks.push({ x: Math.random(), y: Math.random(), vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 0.004, r: 1.2 + Math.random() * 2.2, a: 0.3 + Math.random() * 0.7 });
+  }
+  var speed = 1 + np.loud * 5, tn = np.tintRgb.map(function (v) { return Math.round(v + (255 - v) * 0.45); });
+  np.specks.forEach(function (sp) {
+    sp.x = (sp.x + sp.vx * dt * speed + 1) % 1;
+    sp.y = (sp.y + sp.vy * dt * speed + 1) % 1;
+    x.fillStyle = "rgba(" + tn.join(",") + "," + (sp.a * a * 0.5).toFixed(3) + ")";
+    x.beginPath(); x.arc(sp.x * W, sp.y * H, sp.r, 0, Math.PI * 2); x.fill();
+  });
+}
+
+// ---- every frame: the swell, the waveform and the specks
+
+function npWake() { if (!np.raf) np.raf = requestAnimationFrame(npTick); }
+
+function npTick(now) {
+  np.raf = 0;
+  var dt = np.last ? Math.min(64, now - np.last) : 16;
+  np.last = now;
+  var t = npTrack(), env = t ? np.env[t.id] : null, playing = isPlaying();
+  var v = playing && env && !np.still ? npLoudAt(env, npPos() * 1000) : 0, k = 1 - Math.exp(-dt / 70);
+  np.loud += (v - np.loud) * k;
+  np.pulse += (Math.pow(v, 2.4) - np.pulse) * k;
+  if (env && np.grow < 1) np.grow = Math.min(1, np.grow + dt / 700);
+  if (np.shown) { if (!np.busy) npRender(); }
+  else { var art = $("pl-art"); if (art) art.style.scale = np.pulse > 0.002 ? (1 + np.pulse * 0.05).toFixed(4) : ""; }
+  var more = playing || np.pulse > 0.002 || (np.shown && (np.grow < 1 || (np.speckFade || 0) > 0 || np.seek !== null));
+  if (more) np.raf = requestAnimationFrame(npTick); else np.last = 0;
+}
+
+// ---- the songs in the slots
+
+/** Puts the songs either side (or the frozen ones, while a swipe settles) into the three slots. */
+function npFill() {
+  var trio = np.frozen || npAround();
+  [-1, 0, 1].forEach(function (slot, i) {
+    var tr = trio[i], key = tr ? tr.id + ":" + tr.albumId : "";
+    var art = document.querySelector('#np-slots .np-art[data-slot="' + slot + '"]');
+    var ti = document.querySelector('#np-slots .np-line.t[data-slot="' + slot + '"]');
+    var ar = document.querySelector('#np-slots .np-line.a[data-slot="' + slot + '"]');
+    if (np.slotIds[slot] === key) return;
+    np.slotIds[slot] = key;
+    if (!tr) { art.dataset.has = ""; ti.dataset.has = ""; ar.dataset.has = ""; return; }
+    art.dataset.has = ti.dataset.has = ar.dataset.has = "1";
+    ti.textContent = tr.title;
+    ar.textContent = tr.artist;
+    var more = document.createElement("i");
+    more.textContent = " \u00b7 " + tr.album;
+    ar.appendChild(more);
+    art.innerHTML = ""; art.classList.remove("gen"); art.style.background = "";
+    art.dataset.coverAlbum = tr.albumId;
+    genCover(art, tr.album);
+    art.style.fontSize = (np.g ? np.g.f.art * 0.3 : 120) + "px";
+    var img = new Image();
+    img.alt = ""; img.decoding = "async"; img.draggable = false;
+    img.onload = function () { if (np.slotIds[slot] !== key) return; art.innerHTML = ""; art.classList.remove("gen"); art.style.background = ""; art.appendChild(img); };
+    img.src = artUrl(tr.albumId);
+  });
+}
+
+/** Everything about the song playing that is text: where in the queue, the album, the kind of file. */
+function npText() {
+  var t = npTrack();
+  if (!t) return;
+  var n = player.order.length;
+  $("np-count").textContent = !syncFollower() && currentTrack() === t && n ? (player.pos + 1) + " of " + n : "Playing";
+  $("np-album").textContent = t.album;
+  var chip = [formatBadge(t.mime), t.year > 0 ? String(t.year) : ""].filter(Boolean).join(" · ");
+  $("np-chip").innerHTML = chip ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>' : "";
+  if (chip) $("np-chip").appendChild(document.createTextNode(chip));
+  $("np-shuffle").classList.toggle("on", player.shuffle);
+  $("np-qshuffle").classList.toggle("on", player.shuffle);
+  $("np-repeat").classList.toggle("on", player.repeat !== "off");
+  $("np-repeat").classList.toggle("one", player.repeat === "one");
+  $("np-sync").classList.toggle("on", syncMember());
+}
+
+/** Called for every song the player shows (showPlayer). */
+function npTrackChanged(t) {
+  np.track = t;
+  np.grow = np.env[t.id] ? 1 : 0;
+  npLoudness(t.id);
+  var nx = !syncFollower() && currentTrack() === t ? trackAhead(1) : null;
+  if (nx) npLoudness(nx.id);
+  np.tintRgb = npRgb(getComputedStyle($("player")).getPropertyValue("--pl-tint").trim() || "#48484F", np.tintRgb);
+  if (!np.frozen) npFill();
+  npText();
+  if (np.shown && npTerms().qp > 0) npQueueRender();
+  npWake();
+}
+
+/** The play button's icon follows the player. */
+function npPlayIcon(playing) {
+  var b = $("np-play");
+  if (b) b.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+  var q = $("np-qlist");
+  if (q) q.classList.toggle("paused", !playing);
+  npWake();
+}
+
+// ---- opening and closing
+
+function npShow() {
+  if (np.shown) return true;
+  var pl = $("player");
+  if (pl.hidden || !npTrack()) return false;
+  clearTimeout(np.hideTimer);
+  $("np").style.transition = "";
+  $("np").style.opacity = "";
+  $("np").hidden = false;
+  document.body.classList.add("np-open");
+  np.g = npMeasure();
+  np.slotIds = {};
+  np.txtRgb = npRgb(getComputedStyle(document.body).color, np.txtRgb);
+  np.tintRgb = npRgb(getComputedStyle(pl).getPropertyValue("--pl-tint").trim() || "#48484F", np.tintRgb);
+  $("np").style.setProperty("--pl-tint", getComputedStyle(pl).getPropertyValue("--pl-tint").trim() || "#48484F");
+  npFill();
+  npText();
+  npPlayIcon(isPlaying());
+  pl.classList.add("np-hide");
+  np.shown = true;
+  npRender();
+  npWake();
+  return true;
+}
+
+function npHide() {
+  if (!np.shown) return;
+  np.shown = false;
+  // The bar's own pieces are under the player's, in the same places: the player fades off them.
+  var el = $("np");
+  $("player").classList.remove("np-hide");
+  document.body.classList.remove("np-open");
+  el.style.transition = "opacity .14s ease";
+  el.style.opacity = "0";
+  clearTimeout(np.hideTimer);
+  np.hideTimer = setTimeout(function () { if (!np.shown) { el.hidden = true; el.style.transition = ""; el.style.opacity = ""; } }, 160);
+  if (np.layered) { np.layered = false; if (navReady && navState().layer === "player") history.back(); }
+}
+
+/** Settles at [target] (0 bar, 1 full, 2 queue), the way the phone's player settles. */
+function npGo(target) {
+  var from = np.p;
+  if (np.vStop) np.vStop();
+  np.startP = target;
+  var set = function (v) { np.p = v; };
+  var done = function () {
+    np.vStop = null;
+    np.bounceUp = false;
+    if (np.p <= 0) { np.p = 0; npHide(); }
+    else if (!np.layered) { np.layered = true; navLayer("player"); }
+    npRender();
+  };
+  if (target >= 2 && from < 1.6) { npQueueRender(); npQueueToCurrent(); }
+  if (target === 1 && from < 1) { np.bounceUp = true; np.vStop = npSpring(from, 1, set, done); }
+  else {
+    np.bounceUp = false;
+    np.vStop = npTween(from, target, target <= 0 ? 380 : 360, target <= 0 ? NP_TO_MINI : target >= 2 ? NP_TO_QUEUE : NP_TO_FULL, set, done);
+  }
+}
+
+function npExpand() { if (npShow()) npGo(1); }
+function npCollapse() { if (np.shown) npGo(0); }
+function npToQueue() { if (npShow()) npGo(2); }
+
+// ---- up and down
+
+function npDragStart() {
+  if (!npShow()) return false;
+  if (np.vStop) { np.vStop(); np.vStop = null; }
+  np.startP = np.p;
+  np.bounceUp = false;
+  return true;
+}
+
+function npDragBy(dy) {
+  np.p = npClamp(np.p + dy / np.g.H, -NP_HEAD, 2);
+  npRender();
+}
+
+/** Let go moving at [vy] pixels a second (down positive): where it started and how far and fast it went decide. */
+function npRelease(vy) {
+  var moved = (np.startP - np.p) * np.g.H, s = np.startP;
+  if (s < 0.5 && np.p <= -NP_HEAD * 0.8) { npDismiss(); return; }
+  if (s > 1) npGo(vy > NP_FLICK || moved > NP_ACT ? 1 : 2);
+  else if (s > 0.5) npGo(vy > NP_FLICK || moved > NP_ACT ? 0 : (-vy > NP_FLICK || -moved > NP_ACT ? 2 : 1));
+  else npGo(-vy > NP_FLICK || -moved > NP_ACT ? 1 : 0);
+}
+
+/**
+ * Pulled down under the bar: the music stops, as it does on the phone. The page keeps its bar
+ * (the song stays there, to play again), so the bar springs back into place rather than going.
+ */
+function npDismiss() {
+  if (syncMember()) syncSetPlaying(false); else $("audio").pause();
+  npGo(0);
+}
+
+// ---- sideways
+
+function npSwipeStart() {
+  if (!npShow()) return false;
+  if (np.sStop || np.frozen) { if (np.sStop) np.sStop(); npSettleNow(); }
+  np.sStart = np.sOffset;
+  return true;
+}
+
+function npSwipeBy(dx) {
+  np.sOffset = npClamp(np.sOffset - dx, -np.g.W, np.g.W);
+  np.s = npClamp(np.sOffset / np.g.W * NP_OVERSHOOT, -1, 1);
+  npRender();
+}
+
+function npSwipeRelease(vx) {
+  var moved = np.sOffset - np.sStart, far = NP_ACT * 1.5;
+  if (vx > NP_SWIPE_FLICK || -moved > far) npToSong(-1);
+  else if (-vx > NP_SWIPE_FLICK || moved > far) npToSong(1);
+  else npSettle();
+}
+
+function npSettleNow() {
+  np.sStop = null;
+  np.frozen = null;
+  np.s = 0;
+  np.sOffset = 0;
+  npFill();
+  npRender();
+  if (np.p <= 0 && !np.vStop) npHide();
+}
+
+function npSettle() {
+  if (np.sStop) np.sStop();
+  np.sStop = npTween(np.s, 0, 520, NP_TO_SONG, function (v) { np.s = v; }, npSettleNow);
+}
+
+/**
+ * Slides to the song before (-1) or after (1). The player changes song at once; the old and new
+ * covers finish sliding while the songs shown stay frozen, then let go in the same frame as the
+ * slide resets, so nothing jumps.
+ */
+function npToSong(dir) {
+  var trio = npAround();
+  if (dir < 0 && (npPos() > 3 || !trio[0])) { npSettle(); playPrev(); return; }
+  if (dir > 0 && !trio[2]) { npSettle(); if (syncFollower()) syncCmd("next"); return; }
+  if (syncFollower()) { npSettle(); syncCmd(dir > 0 ? "next" : "prev"); return; }
+  if (!npShow()) { if (dir > 0) playNext(false); else playPrev(); return; }
+  if (np.sStop) np.sStop();
+  if (np.frozen) np.frozen = null;
+  np.frozen = trio;
+  npFill();
+  if (dir > 0) playNext(false); else playPrev();
+  np.sStop = npTween(np.s, dir, 560, NP_TO_SONG, function (v) { np.s = v; }, npSettleNow);
+}
+
+// ---- the queue
+
+function npQueueRender() {
+  var host = $("np-qlist"), locked = syncFollower() || !currentTrack();
+  host.classList.toggle("locked", locked);
+  host.innerHTML = "";
+  var frag = document.createDocumentFragment(), total = 0;
+  var X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>';
+  var HANDLE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9h12M6 12h12M6 15h12"/></svg>';
+  player.order.forEach(function (qi, i) {
+    var t = player.queue[qi];
+    if (!t) return;
+    total += t.durationMs || 0;
+    var row = document.createElement("div");
+    row.className = "np-qrow" + (i === player.pos ? " now" : i < player.pos ? " done" : "");
+    row.dataset.i = i;
+    var cv = coverEl("cover", (music.albumByKey[t.ak] || {}).coverId || t.albumId, t.album);
+    if (i === player.pos) cv.insertAdjacentHTML("beforeend", '<span class="eq"><b></b><b></b><b></b></span>');
+    row.appendChild(cv);
+    var tx = document.createElement("div");
+    tx.className = "t";
+    tx.innerHTML = "<b></b><span></span>";
+    tx.firstChild.textContent = t.title;
+    tx.lastChild.textContent = t.artist;
+    row.appendChild(tx);
+    var d = document.createElement("span");
+    d.className = "d";
+    d.textContent = fmtTime(t.durationMs / 1000);
+    row.appendChild(d);
+    var x = document.createElement("button");
+    x.type = "button"; x.className = "np-qx"; x.title = "Take it off the queue"; x.innerHTML = X;
+    x.onclick = function (e) { e.stopPropagation(); npRemove(+row.dataset.i); };
+    row.appendChild(x);
+    var h = document.createElement("span");
+    h.className = "np-qh"; h.title = "Drag to move it"; h.innerHTML = HANDLE;
+    h.addEventListener("pointerdown", function (e) { npQueueDrag(e, row); });
+    row.appendChild(h);
+    row.onclick = function () {
+      if (locked) return;
+      player.pos = +row.dataset.i;
+      playCurrent();
+    };
+    frag.appendChild(row);
+  });
+  host.appendChild(frag);
+  host.classList.toggle("paused", !isPlaying());
+  var min = Math.round(total / 60000);
+  $("np-qcount").textContent = player.order.length + (player.order.length === 1 ? " song" : " songs") + " · " + (min >= 60 ? Math.floor(min / 60) + " h " + (min % 60) + " min" : min + " min");
+}
+
+/** The list at the song playing, a couple of songs down from the top. */
+function npQueueToCurrent(smooth) {
+  var host = $("np-qlist"), y = Math.max(0, (player.pos - 2) * 62);
+  if (smooth && host.scrollTo) host.scrollTo({ top: y, behavior: "smooth" }); else host.scrollTop = y;
+}
+
+/** The queue changed here: what follows is fetched again, and everything showing the queue follows. */
+function npQueueChanged() {
+  clearTimeout(player.prefetchTimer);
+  player.prefetchTimer = setTimeout(prefetchAhead, 600);
+  deckNext();
+  renderStage();
+  npText();
+  if (!np.frozen) npFill();
+  npQueueRender();
+}
+
+function npRemove(i) {
+  if (syncFollower() || player.order.length < 2 || i < 0 || i >= player.order.length) return;
+  var wasCur = i === player.pos;
+  player.order.splice(i, 1);
+  if (i < player.pos) player.pos--;
+  else if (wasCur) {
+    if (player.pos >= player.order.length) player.pos = player.repeat === "all" ? 0 : player.order.length - 1;
+    playCurrent();
+  }
+  npQueueChanged();
+}
+
+function npMove(from, to) {
+  if (from === to) return;
+  var x = player.order.splice(from, 1)[0];
+  player.order.splice(to, 0, x);
+  if (player.pos === from) player.pos = to;
+  else if (from < player.pos && to >= player.pos) player.pos--;
+  else if (from > player.pos && to <= player.pos) player.pos++;
+}
+
+/** A song dragged by its handle: it follows the pointer, and the others make room as it passes them. */
+function npQueueDrag(e, row) {
+  if (syncFollower()) return;
+  e.preventDefault();
+  e.stopPropagation();
+  var h = e.currentTarget, y0 = e.clientY, off = 0, rowH = row.offsetHeight || 62, moved = false;
+  h.setPointerCapture(e.pointerId);
+  row.classList.add("dragging");
+  function move(ev) {
+    off = ev.clientY - y0;
+    var i = +row.dataset.i;
+    if (off > rowH / 2 && row.nextSibling) {
+      var n = row.nextSibling;
+      row.parentNode.insertBefore(n, row);
+      npMove(i, i + 1); row.dataset.i = i + 1; n.dataset.i = i; y0 += rowH; off -= rowH; moved = true;
+    } else if (off < -rowH / 2 && row.previousSibling) {
+      var p = row.previousSibling;
+      row.parentNode.insertBefore(row, p);
+      npMove(i, i - 1); row.dataset.i = i - 1; p.dataset.i = i; y0 -= rowH; off += rowH; moved = true;
+    }
+    row.style.transform = "translateY(" + off + "px)";
+  }
+  function up() {
+    h.removeEventListener("pointermove", move);
+    h.removeEventListener("pointerup", up);
+    h.removeEventListener("pointercancel", up);
+    row.classList.remove("dragging");
+    row.style.transform = "";
+    if (moved) npQueueChanged();
+  }
+  h.addEventListener("pointermove", move);
+  h.addEventListener("pointerup", up);
+  h.addEventListener("pointercancel", up);
+}
+
+// ---- gestures: a drag on the bar or the player, sideways or up and down
+
+/**
+ * Up and down moves the player between the bar, full and the queue; sideways (not in the
+ * queue) swipes to the song before or after. A press that does not move is left to what was
+ * pressed.
+ */
+function npGesture(e, from) {
+  if (e.button !== 0 || !e.isPrimary) return;
+  var id = e.pointerId, el = e.currentTarget, x0 = e.clientX, y0 = e.clientY, lx = x0, ly = y0, dir = 0;
+  var samples = [[e.timeStamp, x0, y0]];
+  function move(ev) {
+    if (ev.pointerId !== id) return;
+    samples.push([ev.timeStamp, ev.clientX, ev.clientY]);
+    while (samples.length > 2 && ev.timeStamp - samples[0][0] > 100) samples.shift();
+    if (!dir) {
+      var dx = ev.clientX - x0, dy = ev.clientY - y0;
+      if (Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx)) { if (!npDragStart()) return end(); dir = 1; }
+      else if (Math.abs(dx) > 8 && np.p <= 1.02) { if (!npSwipeStart()) return end(); dir = 2; }
+      else return;
+      try { el.setPointerCapture(id); } catch (err) {}
+      lx = ev.clientX; ly = ev.clientY;
+    }
+    var mx = ev.clientX - lx, my = ev.clientY - ly;
+    lx = ev.clientX; ly = ev.clientY;
+    if (dir === 1) npDragBy(-my); else npSwipeBy(mx);
+    ev.preventDefault();
+  }
+  function end() {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+  }
+  function up(ev) {
+    if (ev.pointerId !== id) return;
+    end();
+    if (!dir) return;
+    np.dragged = performance.now();
+    var a = samples[0], b = samples[samples.length - 1], dt = Math.max(1, b[0] - a[0]) / 1000;
+    var vx = (b[1] - a[1]) / dt, vy = (b[2] - a[2]) / dt;
+    if (dir === 1) npRelease(vy); else npSwipeRelease(vx);
+  }
+  window.addEventListener("pointermove", move, { passive: false });
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", up);
+}
+
+/** The waveform: press and drag to choose a place, let go to go there; drag up off it to take it back. */
+function npWaveGesture(e) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  var wv = $("np-wave"), rect = wv.getBoundingClientRect(), dur = npDur(), y0 = e.clientY, cancelled = false;
+  if (dur <= 0) return;
+  wv.setPointerCapture(e.pointerId);
+  function at(x) { return npClamp((x - rect.left) / rect.width, 0, 1) * dur; }
+  np.seek = at(e.clientX);
+  npWake(); npRender();
+  function move(ev) {
+    if (cancelled) return;
+    if (y0 - ev.clientY > 52) { cancelled = true; np.seek = null; if (navigator.vibrate) navigator.vibrate(12); }
+    else np.seek = at(ev.clientX);
+    npRender();
+  }
+  function up() {
+    wv.removeEventListener("pointermove", move);
+    wv.removeEventListener("pointerup", up);
+    wv.removeEventListener("pointercancel", cancel);
+    var to = np.seek;
+    np.seek = null;
+    if (!cancelled && to !== null) npSeekTo(to);
+    npRender();
+  }
+  function cancel() { cancelled = true; up(); }
+  wv.addEventListener("pointermove", move);
+  wv.addEventListener("pointerup", up);
+  wv.addEventListener("pointercancel", cancel);
+}
+
+function npSeekTo(sec) {
+  if (syncMember()) { syncSeek(sec); return; }
+  var a = $("audio");
+  if (player.parked) { player.parkedAt = sec; resume(); return; }
+  try { a.currentTime = sec; } catch (e) {}
+}
+
+function setupFullPlayer() {
+  var bar = $("player");
+  // The bar: dragged up it opens; a click on its cover or title opens it too.
+  bar.addEventListener("pointerdown", function (e) {
+    if (e.target.closest("button, input, a, .sync-pop")) return;
+    npGesture(e, "bar");
+  });
+  var openFromBar = function () { if (performance.now() - np.dragged > 350) npExpand(); };
+  $("pl-art").onclick = openFromBar;
+  $("pl-title").parentNode.addEventListener("click", openFromBar);
+  // The player: dragged anywhere that is not a button, the waveform or the queue.
+  var surface = function (e) {
+    if (e.target.closest("button, .np-wave, .np-queue .np-qlist")) return;
+    npGesture(e, "full");
+  };
+  $("np-panel").addEventListener("pointerdown", surface);
+  $("np-slots").addEventListener("pointerdown", surface);
+  $("np-top").addEventListener("pointerdown", surface);
+  $("np-bottom").addEventListener("pointerdown", surface);
+  $("np-queue").addEventListener("pointerdown", function (e) { if (e.target === this || e.target.closest(".np-qbar") && !e.target.closest("button")) npGesture(e, "full"); });
+  // The queue, scrolled to its top and pulled down further: the player comes down with it.
+  var ql = $("np-qlist"), pull = null;
+  ql.addEventListener("pointerdown", function (e) {
+    if (e.target.closest("button, .np-qh") || e.pointerType === "mouse") return;
+    pull = { id: e.pointerId, y: e.clientY, on: false, samples: [[e.timeStamp, e.clientY]] };
+  });
+  ql.addEventListener("pointermove", function (e) {
+    if (!pull || e.pointerId !== pull.id) return;
+    var dy = e.clientY - pull.y;
+    pull.samples.push([e.timeStamp, e.clientY]);
+    while (pull.samples.length > 2 && e.timeStamp - pull.samples[0][0] > 100) pull.samples.shift();
+    if (!pull.on && ql.scrollTop <= 0 && dy > 10) { pull.on = npDragStart(); pull.y = e.clientY; try { ql.setPointerCapture(e.pointerId); } catch (err) {} }
+    if (pull.on) { npDragBy(-(e.clientY - pull.y)); pull.y = e.clientY; e.preventDefault(); }
+  });
+  var pullEnd = function (e) {
+    if (!pull || e.pointerId !== pull.id) return;
+    if (pull.on) {
+      var a = pull.samples[0], b = pull.samples[pull.samples.length - 1];
+      npRelease((b[1] - a[1]) / Math.max(0.001, (b[0] - a[0]) / 1000));
+    }
+    pull = null;
+  };
+  ql.addEventListener("pointerup", pullEnd);
+  ql.addEventListener("pointercancel", pullEnd);
+  // A tap on the big cover plays or pauses, as the phone's does.
+  document.querySelector('#np-slots .np-art[data-slot="0"]').addEventListener("click", function () {
+    if (performance.now() - np.dragged > 350 && np.p >= 0.95 && np.p <= 1.05) togglePlay();
+  });
+  $("np-wave").addEventListener("pointerdown", npWaveGesture);
+  $("np-play").onclick = togglePlay;
+  $("np-prev").onclick = function () { npToSong(-1); };
+  $("np-next").onclick = function () { npToSong(1); };
+  $("np-close").onclick = npCollapse;
+  $("np-where").onclick = function () { npCollapse(); revealPlaying(); };
+  $("np-lyrics").onclick = function () {
+    // The lyrics take the window, with the bar along the bottom as always.
+    np.layered = false;
+    npGo(0);
+    openLyrics();
+  };
+  $("np-shuffle").onclick = $("np-qshuffle").onclick = function () { $("pl-shuffle").click(); npQueueChanged(); };
+  $("np-repeat").onclick = function () { $("pl-repeat").click(); npText(); if (!np.frozen) npFill(); };
+  $("np-sync").onclick = function (e) { e.stopPropagation(); $("pl-sync").click(); };
+  $("np-queue-btn").onclick = npToQueue;
+  $("np-qjump").onclick = function () { npQueueToCurrent(true); };
+  $("audio").addEventListener("play", npWake);
+  window.addEventListener("resize", function () {
+    if (!np.shown) return;
+    np.g = npMeasure();
+    Array.prototype.forEach.call(document.querySelectorAll("#np-slots .np-art"), function (a) { a.style.fontSize = np.g.f.art * 0.3 + "px"; });
+    npRender();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape" || !np.shown || lyr.open || !$("viewer").hidden) return;
+    e.preventDefault();
+    if (np.p > 1.5) npGo(1); else npCollapse();
+  });
 }
 
 // ------------------------------------------------------------------ playing together
@@ -6776,6 +7846,7 @@ function showApp() {
     setupSendTo();
     setupDock();
     setupPlayer();
+    setupFullPlayer();
     setupLyrics();
     setupBarTuck();
     setupTopBar();

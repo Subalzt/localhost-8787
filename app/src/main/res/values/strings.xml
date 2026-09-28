@@ -2,4 +2,6 @@
     <string name="app_name">Localhost 8787</string>
     <string name="channel_server_name">Localhost 8787 server</string>
     <string name="channel_server_desc">Shows the address while Localhost 8787 is running.</string>
+    <string name="channel_music_name">Music playing</string>
+    <string name="channel_music_desc">What is playing on the phone, with its controls.</string>
 </resources>

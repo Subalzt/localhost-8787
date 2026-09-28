@@ -348,12 +348,49 @@ else starts at once, and skipping is instant. Media keys and the Windows media o
 - **The banner** shows what is playing: its album, and the next three songs with their covers and
   file type, marked *Ready* once loaded. Click one to play it now. **Go to album** opens the album.
 - While a song plays, a small note sits beside *Music* in the tabs.
+- **The player, full screen**, moves as [Namida](https://github.com/namidaco/namida)'s does. Drag
+  the bar along the bottom up (or click its cover) and it grows into a player the size of the
+  window: the cover flies from the bar's corner to its place, the title and the play button follow,
+  and the waveform and the buttons come in last. Drag on up for the queue: every song in the order
+  it will play, to play from, drag into a new order by its handle, or take off. Let go anywhere and
+  it settles by how far and how fast you dragged, back into the bar with a small bounce. Swipe the
+  cover or the bar sideways for the song before or after: the cover and title slide, the title a
+  little quicker. The cover swells with the loud moments, the seek bar is the song's own waveform
+  (drag along it to choose a place, drag up off it to take the seek back), the colour is the
+  cover's, and faint specks drift behind, quicker when the music is loud. `Esc` or Back steps
+  back down.
 
 | Your albums | Playing, with what is next |
 | --- | --- |
 | <img src="docs/images/web-music.png" width="420"> | <img src="docs/images/web-album.png" width="420"> |
 
-### 6. Lyrics, found and saved by themselves
+### 6. Music on the phone itself
+
+The phone's own **Music** tab (between Devices and Control) plays the same library on the phone:
+its speaker, headphones or a car, with Localhost 8787 in the background, the controls in the
+notification and on the lock screen, and a headset's buttons working. *Albums* or *Songs* with a
+search, as on the page; tap an album for its songs, with **Play** and **Shuffle**.
+
+What is playing floats over the tabs as a mini player, the same player as the page's, after
+Namida's:
+
+- **One continuous drag.** Up from the mini player to full screen, and on up to the queue; down
+  again the same way. Everything follows the finger at once and settles where the drag says, the
+  mini player with a small bounce. The tabs sink away under it as it opens. Back steps down.
+- **Swipe sideways** on the mini player or the cover for the song before or after, with a tick
+  under the finger when it changes.
+- **The cover swells** with the song's loud moments and **the seek bar is its waveform**, worked
+  out once on the phone and kept (the page gets the same, from the phone).
+- **Colours from the cover**, and specks drifting behind the full player.
+- **The queue**: tap a song to play it, drag it by its handle to move it, swipe it away to take it
+  off. Pull the list down from its top and the player comes back down with it.
+- Pull the mini player down under itself to stop and put it away. The queue is kept for next time,
+  paused where it stopped.
+
+Albums run on from one song to the next without a gap. The phone's speaker leaves a sync group
+when it starts playing on its own, and a call or another app's sound pauses it.
+
+### 7. Lyrics, found and saved by themselves
 
 Press the lyrics button in the player: the words scroll with the song, the line being sung in
 white, the rest waiting in grey. Click a line to jump there. With word timing, each word fills as
@@ -373,14 +410,14 @@ it is sung; in a long instrumental gap, three dots swell until the singing start
 | --- | --- |
 | <img src="docs/images/web-lyrics.png" width="520"> | <img src="docs/images/web-lyrics-phone.png" width="200"> |
 
-### 7. Play in sync on several devices
+### 8. Play in sync on several devices
 
 The **Sync** button in the player lists the phone's speaker and every other computer with the
 page open. Switch them on and they all play the same song at the same moment: pause, skip or seek
 on any one and the rest follow. In tests the laptops stay within 0.1 ms of each other and the
 phone within a few milliseconds.
 
-### 8. The phone's notifications on the laptop
+### 9. The phone's notifications on the laptop
 
 The page's **Alerts** tab shows the phone's notifications. Reply to a message, press their
 buttons (*Mark as read*), or clear them, and it happens on the phone. Ongoing ones (music,
@@ -388,26 +425,26 @@ downloads) sit apart and never pop up. Needs *Notification access* on the phone.
 
 <img src="docs/images/web-alerts.png" width="620" alt="Alerts">
 
-### 9. The phone as trackpad and keyboard
+### 10. The phone as trackpad and keyboard
 
 The phone's **Control** tab is a trackpad for the laptop, with Windows gestures (two fingers to
 scroll, three for Task View, four to switch desktops), the phone's keyboard typing into the
 laptop, and the laptop's volume and play/pause/next keys. It opens **locked**: tap once to use it,
 so a swipe across it changes tab instead. It locks again when you leave.
 
-### 10. The phone's screen on the laptop
+### 11. The phone's screen on the laptop
 
 *Phone screen* on the page opens the phone in a window on the laptop, to use with the mouse and
 keyboard, sound included (via [scrcpy](https://github.com/Genymobile/scrcpy); the phone needs USB
 debugging on). It uses the cable when one is plugged in.
 
-### 11. The phone as a second screen
+### 12. The phone as a second screen
 
 *Use as a second screen* on the Control tab shows the laptop's desktop on the phone; taps on it
 click there. With a virtual-display driver on the laptop it is a real extra monitor. Protected
 video (Netflix, Prime Video) shows black, as it does for any screen capture.
 
-### 12. A live monitor
+### 13. A live monitor
 
 The pulse button shows a small floating pill: speed each way, ping and signal, over any screen.
 Tap it for the full picture: the last minute, how full the link is and with what, and the
@@ -420,21 +457,21 @@ session's peak and total. On the laptop, *Monitor* docks it down the right side.
 The laptop downloading from the phone over shared Wi-Fi (both on channel 36, so every byte crosses
 the air twice) at about 10 MB/s: 57% of what that link carries.
 
-### 13. Measure the connection
+### 14. Measure the connection
 
 *Settings → Measure* on the page tests the connection alone for five seconds each way. Compare it
 with a real transfer: close means the network is the limit, far below means storage is.
 
-### 14. Back works as in an app
+### 15. Back works as in an app
 
-- **On the phone**, Back closes whatever is open (a linked phone's files, the clipboard's
-  history), then returns to Home; at Home it sends the app to the background, as Home does. It
+- **On the phone**, Back closes whatever is open (the player a step at a time, an album, a
+  linked phone's files, the clipboard's history), then returns to Home; at Home it sends the app to the background, as Home does. It
   never closes the app, and the server keeps running.
-- **On the laptop**, the browser's Back steps back through the page: it closes the lyrics, a file
-  being viewed or the monitor, then returns to the tab before. It leaves the page only from where
+- **On the laptop**, the browser's Back steps back through the page: it closes the player, the
+  lyrics, a file being viewed or the monitor, then returns to the tab before. It leaves the page only from where
   you opened it. Each tab has its own address (`#music`), so a reload or a bookmark opens it.
 
-### 15. Any browser, any computer
+### 16. Any browser, any computer
 
 The page is one file with no dependencies and works in Chrome, Edge, Brave, Opera, Firefox and
 Safari, on Windows, macOS, Linux, ChromeOS, Android and iPad. It is checked in Edge and Firefox,
@@ -443,7 +480,7 @@ there the page falls back by itself (copying still works, a direct laptop-to-lap
 held in memory or goes through the phone). Only the laptop helper is Windows-only; everything
 else needs just a browser.
 
-### 16. The look
+### 17. The look
 
 After the Apple TV app, the same on the phone and the laptop: the app's own icon, a night-blue banner, large titles,
 capsule buttons, and on the phone the tabs float along the bottom within reach of a thumb.
@@ -498,6 +535,13 @@ For hotspot mode, checked on 26 September 2026:
   introductions along the pipe and answers STUN on UDP 3478.
 - Lyrics come from [LRCLIB](https://lrclib.net), fetched by the browser (the phone may have no
   internet) and stored on the phone with a `.lrc` file beside the song.
+- The phone's own player is Android's MediaPlayer, with the next song prepared and chained on for
+  a gapless handover, in a media-playback service with a MediaSession. How loud each 50 ms of a
+  song is gets decoded once, at low priority, and kept (a few kilobytes a song); the phone's player
+  and the page (`/api/music/loudness/{id}`) both draw from it.
+- The player's motion is after [Namida](https://github.com/namidaco/namida)'s: one number from 0
+  (mini) through 1 (full) to 2 (queue) that every piece is placed from, and the same settling rules
+  and curves. It is written anew for Compose and for the page; none of Namida's code is used.
 - Only computers and phones you allow get in: each gets a signed session you can revoke on the
   phone. Everything stays on the local network: no cloud, no account. Traffic is plain HTTP, so
   treat it like a file share on your own Wi-Fi.
@@ -517,8 +561,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 Kotlin and Jetpack Compose on the phone (Android 10+), Ktor 3 for the server; the page has no
 build step and no dependencies. The code lives in `app/src/main/`: `assets/bridge.html` (the
 page), `assets/blazeit-pc.bat` (the helper), and `java/dev/periy/bridge/` (`server/` for the
-routes, uploads, music, lyrics, linked phones, pipes and notifications, `ui/` for the app's
-screens, `net/` for addresses, the direct link and STUN).
+routes, uploads, music, lyrics, linked phones, pipes and notifications, `music/` for the phone's
+own player, `ui/` for the app's screens, `net/` for addresses, the direct link and STUN).
 
 ## Known limits
 

@@ -233,6 +233,64 @@ object BlazeIcons {
         "M14.5 4.5h3a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1Z",
     )
     val Plus: ImageVector = stroked("plus", "M12 5v14", "M5 12h14")
+
+    /** Two notes on a beam: music. */
+    val Music: ImageVector = stroked(
+        "music",
+        "M9 18V5.5l11-2V16",
+        "M6.5 15.5a2.5 2.5 0 1 1 0 5a2.5 2.5 0 1 1 0-5Z",
+        "M17.5 13.5a2.5 2.5 0 1 1 0 5a2.5 2.5 0 1 1 0-5Z",
+    )
+
+    /** A magnifying glass: search. */
+    val Search: ImageVector = stroked("search", "M10.5 4a6.5 6.5 0 1 1 0 13a6.5 6.5 0 1 1 0-13Z", "M15.5 15.5 20 20")
+
+    /** Two crossing arrows: shuffle. */
+    val Shuffle: ImageVector = stroked(
+        "shuffle",
+        "M3 7h3.5c2.5 0 3.8 1.3 5.3 4.2l.4.6c1.5 2.9 2.8 4.2 5.3 4.2H21",
+        "M3 17h3.5c1.4 0 2.4-.4 3.3-1.2M14.2 8.2C15.1 7.4 16.1 7 17.5 7H21",
+        "M18.5 4.5 21 7l-2.5 2.5", "M18.5 13.5 21 16l-2.5 2.5",
+    )
+
+    /** Arrows going round: repeat. */
+    val Repeat: ImageVector = stroked(
+        "repeat",
+        "M17 3l3 3-3 3", "M4 11V9.5A3.5 3.5 0 0 1 7.5 6H20",
+        "M7 21l-3-3 3-3", "M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H4",
+    )
+
+    /** Lines of a list with a note: the queue. */
+    val Queue: ImageVector = stroked(
+        "queue",
+        "M4 6h12", "M4 11h12", "M4 16h7",
+        "M16.5 20.5a2 2 0 1 1 0-4a2 2 0 1 1 0 4Z", "M18.5 18.5V11l2.5 1",
+    )
+
+    /** A chevron pointing down: close what came up. */
+    val ChevronDown: ImageVector = stroked("chevron-down", "M5.5 9.5 12 16l6.5-6.5")
+
+    /** A chevron pointing back. */
+    val Back: ImageVector = stroked("back", "M14.5 5.5 8 12l6.5 6.5")
+
+    /** An arrow going round: look again. */
+    val Refresh: ImageVector = stroked("refresh", "M19.5 12a7.5 7.5 0 1 1-2.2-5.3", "M19.5 4.5v4h-4")
+
+    /** Three short lines: a handle to drag by. */
+    val Handle: ImageVector = stroked("handle", "M6 9h12", "M6 12h12", "M6 15h12")
+
+    /** A disc: the album. */
+    val Album: ImageVector = stroked(
+        "album",
+        "M12 3.5a8.5 8.5 0 1 1 0 17a8.5 8.5 0 1 1 0-17Z",
+        "M12 10a2 2 0 1 1 0 4a2 2 0 1 1 0-4Z",
+    )
+
+    /** A pointer to where you are: the song playing, in a long list. */
+    val Locate: ImageVector = stroked(
+        "locate",
+        "M12 7a5 5 0 1 1 0 10a5 5 0 1 1 0-10Z", "M12 3v2.5", "M12 18.5V21", "M3 12h2.5", "M18.5 12H21",
+    )
     val More: ImageVector = filled(
         "more",
         "M5 10.3a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4Z",

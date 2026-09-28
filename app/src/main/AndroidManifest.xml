@@ -26,6 +26,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Declared as a fallback so a build switched to dataSync still starts. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- The Music tab's player keeps playing with the app in the background (MusicService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <!-- API 33+. Requested at runtime; the persistent notification is the only way to
          see the address, and where connection requests arrive. -->
@@ -217,6 +219,13 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Localhost 8787 hosts a local HTTP server on this device so a computer on the same network can transfer files and clipboard text to and from the phone. The service must remain running while the browser page is open, because the phone is the server." />
         </service>
+
+        <!-- Music playing on the phone from the Music tab: the notification, the lock screen and a
+             headset's buttons, with the app in the background. Only while there is a queue. -->
+        <service
+            android:name=".music.MusicService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <!-- Hands the picture or file on the shared clipboard to other apps that paste it.
              Only the clipboard folder, read-only (see res/xml/clip_paths.xml). -->

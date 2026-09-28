@@ -169,6 +169,8 @@ class MainActivity : ComponentActivity() {
      */
     private fun handleShare(intent: Intent?) {
         if (intent == null) return
+        // Tapping the music notification opens the player.
+        if (intent.action == dev.periy.bridge.music.MusicService.ACTION_OPEN_PLAYER) { openPlayer.value = true; intent.action = null; return }
         // Debug builds: `adb shell am start ... --ez serve true` starts the server for testing.
         if (dev.periy.bridge.BuildConfig.DEBUG && intent.getBooleanExtra("serve", false)) BridgeService.start(this)
         // Debug builds: `--el synctest <trackId>` runs the phone's synced player silently from the
@@ -233,22 +235,30 @@ class MainActivity : ComponentActivity() {
 private val TABS = listOf(
     "Home" to BlazeIcons.Home,
     "Devices" to BlazeIcons.Phones,
+    "Music" to BlazeIcons.Music,
     "Control" to BlazeIcons.Trackpad,
     "Settings" to BlazeIcons.Sliders,
 )
 private const val TAB_HOME = 0
 private val debugTab = kotlinx.coroutines.flow.MutableStateFlow(-1)
 
+/** The music notification was tapped: the player opens. */
+private val openPlayer = kotlinx.coroutines.flow.MutableStateFlow(false)
+
 /** Debug builds: a linked phone whose files to open (`--es peerbrowse <name>`). */
 private val debugBrowse = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 private const val TAB_DEVICES = 1
-private const val TAB_CONTROL = 2
+private const val TAB_MUSIC = 2
+private const val TAB_CONTROL = 3
 
 /** The header at the top of every screen: its large title and the monitor switch, over the content. */
 private val HeaderHeight = 60.dp
 
 /** The tabs along the bottom: the capsule, and the room around it. */
 private val TabsHeight = 74.dp
+
+/** The mini player, and the gap over it: what every page leaves free at its foot while music is queued. */
+private val MiniRoom = 64.dp + 10.dp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -274,6 +284,12 @@ private fun BlazeItUi(vm: MainViewModel) {
     val paired by peers.peers.collectAsStateWithLifecycle()
     val peerStatus by peers.status.collectAsStateWithLifecycle()
     val routes by peers.route.collectAsStateWithLifecycle()
+    // The phone's own music: the library as the Music tab shows it, and the player.
+    val player = ctx.container.player
+    val now by player.state.collectAsStateWithLifecycle()
+    val motion = rememberPlayerMotion()
+    val shelf = rememberMusicShelf()
+    val playerOpen by remember { derivedStateOf { motion.p > 0.5f } }
 
     var tab by remember { mutableIntStateOf(TAB_HOME) }
     // Swiping moves between the tabs. Each tab's list keeps its place while it is off screen.
@@ -308,6 +324,11 @@ private fun BlazeItUi(vm: MainViewModel) {
     androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && tab == TAB_HOME) {
         (ctx as? android.app.Activity)?.moveTaskToBack(true)
     }
+    // An album open in Music goes back to the albums; the player, open, goes back down a step.
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && tab == TAB_MUSIC && shelf.open != null) { shelf.open = null }
+    androidx.activity.compose.BackHandler(enabled = now.current != null && playerOpen) {
+        if (motion.p > 1.5f) motion.expand() else motion.collapse()
+    }
 
     // Who the clipboard reaches right now: every computer live here, once each (by its machine's
     // name where the laptop helper gives one), and the linked phones while copies go on to them.
@@ -330,7 +351,7 @@ private fun BlazeItUi(vm: MainViewModel) {
             first == null || (first.key == "hero" && first.offset + first.size > headerBottom)
         }
     }
-    val overHero = heroUnderBar && heroShowing
+    val overHero = heroUnderBar && heroShowing && !(now.current != null && playerOpen)
 
     // Status and navigation bar icons follow the palette, whichever way it was chosen.
     val dark = Bridge.Dark
@@ -348,6 +369,11 @@ private fun BlazeItUi(vm: MainViewModel) {
     // Debug builds: `--ei tab 0` opens that tab, for screenshots without touching the screen.
     LaunchedEffect(Unit) { debugTab.collect { if (it >= 0) { goTo(it); debugTab.value = -1 } } }
     LaunchedEffect(Unit) { debugBrowse.collect { n -> if (n != null) { browsePeer = peers.find(n); debugBrowse.value = null } } }
+    LaunchedEffect(Unit) { openPlayer.collect { if (it) { showOem = false; browsePeer = null; motion.expand(); openPlayer.value = false } } }
+    // The library loads once it can be read (the queue from last time comes back with it), and
+    // covers the catalogue finds later are drawn when they arrive.
+    LoadMusicOnce(shelf, ctx.container.music, open = tab == TAB_MUSIC, granted = state.musicGranted) { player.restore(it) }
+    LaunchedEffect(Unit) { dev.periy.bridge.server.EventBus.events.collect { if (it.name == "cover") Covers.forget(it.data) } }
 
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         vm.offerPickedFiles(uris)
@@ -404,8 +430,10 @@ private fun BlazeItUi(vm: MainViewModel) {
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val imeUp = WindowInsets.isImeVisible
-    // The tabs float along the bottom; every page leaves room under it for them.
-    val underBar = if (imeUp) 0.dp else TabsHeight + bottomInset
+    // The tabs float along the bottom; every page leaves room under it for them, and for the
+    // mini player over them while music is queued.
+    val hasPlayer = now.current != null && !showOem && !imeUp
+    val underBar = (if (imeUp) 0.dp else TabsHeight + bottomInset) + if (hasPlayer) MiniRoom else 0.dp
     // Room for the monitor pill, so by default it covers nothing.
     val monitorRoom = if (showMonitor) 48.dp else 0.dp
     val headerTop = statusTop + HeaderHeight + monitorRoom
@@ -444,6 +472,12 @@ private fun BlazeItUi(vm: MainViewModel) {
                             onStart = { BridgeService.start(ctx) },
                             modifier = Modifier.fillMaxSize().padding(top = top, bottom = underBar),
                             active = tab == TAB_CONTROL,
+                        )
+                        else if (page == TAB_MUSIC) MusicPane(
+                            shelf, ctx.container.music, now, lists[page], top, underBar,
+                            requestMusic = { requestMusic.launch(musicPermission()) },
+                            onPlay = { list, start, shuffle -> player.play(list, start, shuffle) },
+                            onRescan = { navScope.launch { shelf.load(ctx.container.music, refresh = true) } },
                         )
                         else LazyColumn(Modifier.fillMaxSize(), state = lists[page], contentPadding = PaddingValues(top = top, bottom = 28.dp + underBar)) {
                             when (page) {
@@ -496,19 +530,37 @@ private fun BlazeItUi(vm: MainViewModel) {
                     }
 
                     // The tabs, floating along the bottom over a fade of the page, in reach of a thumb.
-                    if (!imeUp && !showOem) Box(
+                    // As the player opens they sink away under it, and come back as it closes.
+                    if (!imeUp && !showOem) androidx.compose.foundation.layout.BoxWithConstraints(
                         Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                            .graphicsLayer {
+                                if (now.current == null) return@graphicsLayer
+                                val cp = motion.p.coerceIn(0f, 1f)
+                                translationY = cp * size.height
+                                alpha = 1f - cp
+                            }
                             .background(Brush.verticalGradient(0f to Bridge.Bg.copy(alpha = 0f), 0.55f to Bridge.Bg.copy(alpha = 0.92f)))
                             .padding(top = 16.dp, bottom = bottomInset + 12.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        PillTabs(TABS, shown, position = pagePos) { goTo(it); showOem = false }
+                        // Five tabs fit a narrow phone with a little less room around each word.
+                        PillTabs(TABS, shown, position = pagePos, itemPadding = if (maxWidth < 400.dp) 10.dp else 13.dp) { goTo(it); showOem = false }
                     }
                 }
 
                 if (showOem && !imeUp) Spacer(Modifier.height(bottomInset))
             }
         }
+
+        // What is playing: the mini player over the tabs, dragged up to full screen and on to the queue.
+        if (hasPlayer) NowPlaying(
+            player, now, motion, ctx.container.loudness,
+            statusTop = statusTop, navBottom = bottomInset, lift = bottomInset + 66.dp,
+            onOpenAlbum = { t ->
+                shelf.albumOf[t.id]?.let { shelf.view = 0; shelf.open = it }
+                goTo(TAB_MUSIC)
+            },
+        )
 
         // A linked phone's files slide in over the app, as a folder does in Files.
         androidx.compose.animation.AnimatedVisibility(
