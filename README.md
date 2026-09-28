@@ -390,11 +390,13 @@ buttons working.
   of file it is (a small FLAC, MP3, OPUS... label, lossless ones in the song's colour), how long
   it is, a heart, and a menu (play next, play last, go to its album). Shuffle and play all at the
   top. The song playing is lit.
-- **Albums**: three to a row, each cover with its year in a corner and a play button in the other,
-  and how many songs and how long under it.
+- **Albums**: three to a row, each cover with its year frosted into a corner (the cover seen
+  blurred through it, as Namida's) and a play button in the other, and how many songs and how long
+  under it.
 - **An album**: its cover in a frame with its name, who it is by and its year, **shuffle** and
-  **Play Last**; then its songs, each marked with its number, in the order you choose (disc
-  number, title, duration or artist, either way round).
+  **Play Last**; then its songs, each cover marked with its number in a frosted corner, in the
+  order you choose (disc number, title, duration or artist, either way round). An album on more
+  than one disc has a header before each disc.
 - **Search** at the top right filters the page you are on (or the album open) as you type; the
   box grows out of its icon.
 - **Namida's transitions**: an album opens as a page pushed in from the right (the one under it
@@ -530,6 +532,13 @@ capsule buttons, and on the phone the tabs float along the bottom within reach o
 **Swipe left or right** to move between tabs. **Colour** (*Settings → Appearance*, shared by the
 phone and every open page): Automatic (black and white) or red, orange, yellow, green, mint, blue
 or purple. **Light, dark or automatic** sits underneath.
+
+**Namida style** (the switch under them, shared the same way) gives everything outside Music a
+light touch of [Namida](https://github.com/namidaco/namida), in the colour you picked (Namida's
+own lilac for Automatic): its tinted grounds and cards, rounded 20 with a soft shadow; its faint
+washed buttons, small switch and pill indicators; row icons on round discs; its font, Lexend
+Deca; and its Iconsax icons. Layouts and text colours stay as they are, and Music, which is
+Namida's always, is untouched.
 
 ---
 

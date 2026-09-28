@@ -1773,6 +1773,47 @@
   .fs-card .crumbs button { font-weight: 600; }
   #fs-list .row { gap: 14px; }
   #fs-list .row .sr-action { flex: 0 0 auto; }
+
+  /* ================================================================ Namida's look (the shared switch)
+     Over everything but Music: the grounds, cards and lit colour are Namida's, set from the chosen
+     colour by applyNamida(); here, its shapes (cards rounded 20 with a soft shadow), its faint washed
+     buttons, its small switch, its pill indicator, round icon discs and Lexend Deca. Most rules sit
+     under :where(), so a place that dresses its buttons its own way (the banner, sign-in, the viewer)
+     still does. Music and the player bar keep Theatre's surfaces and type: they take its values back
+     from --th-* (on the page's own ground, so their sticky bars match it). */
+  :root[data-namida] body { font-family: "Lexend Deca", system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif; }
+  :root[data-namida] :is([data-panel="music"], #player, .lyr) {
+    --surface: var(--th-surface); --surface-2: var(--th-surface-2); --surface-3: var(--th-surface-3);
+    --line: var(--th-line); --accent: var(--th-accent); --on-accent: var(--th-on-accent);
+    font-family: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "MiSans", sans-serif;
+  }
+  :where(:root[data-namida]) .card, :where(:root[data-namida]) .set-group { border-radius: 20px; box-shadow: 0 2px 10px 1px var(--nx-shadow); }
+  :where(:root[data-namida]) .btn { border-radius: 20px; background: color-mix(in srgb, var(--nx-primary) 22%, transparent); color: var(--nx-btn-fg);
+    box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--nx-primary) 48%, transparent); }
+  :where(:root[data-namida]) .btn:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--nx-primary) 30%, transparent); }
+  :where(:root[data-namida]) .btn.ghost { background: color-mix(in srgb, var(--nx-primary) 8%, transparent); color: var(--txt);
+    box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--nx-primary) 22%, transparent); }
+  :where(:root[data-namida]) .btn.ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--nx-primary) 14%, transparent); }
+  :where(:root[data-namida]) :is(.icon-btn, .beam-btn) { border-radius: 20px; }
+  :where(:root[data-namida]) .appicon { border-radius: 50%; }
+  :where(:root[data-namida]) :is(textarea, input[type=text]) { border-radius: 16px; }
+  :where(:root[data-namida]) .field { border-radius: 16px; }
+  :where(:root[data-namida]) .tab-pill { background: var(--nx-indicator); }
+  :root[data-namida] .tabs button.on { color: var(--nx-on-sec); }
+  :root[data-namida] .tabs:not(.ready) button.on { background: var(--nx-indicator); }
+  :root[data-namida] .seg button.on { background: var(--nx-indicator); color: var(--nx-on-sec); box-shadow: none; }
+  :root[data-namida] .sq { border-radius: 50%; background: var(--nx-sec); color: var(--nx-on-sec); }
+  :root[data-namida] .sq svg, :root[data-namida] svg[data-ix] { stroke-width: 1.5; }
+  /* Namida's switch: a small capsule, tinted and glowing when on, its thumb a third of it. */
+  :root[data-namida] .toggle { width: 40px; height: 21px; border-radius: 30px; background: var(--nx-off); transition: background .3s, box-shadow .3s; }
+  :root[data-namida] .toggle i { left: 4px; top: 3.5px; width: 13px; height: 14px; border-radius: 30px; background: rgba(255,255,255,.87); box-shadow: none;
+    transition: transform .3s cubic-bezier(.2,.8,.2,1); }
+  :root[data-namida] .toggle.on { background: var(--nx-on); box-shadow: 0 2px 8px var(--nx-glow); }
+  :root[data-namida] .toggle.on i { transform: translateX(19px); }
+  :root[data-namida] .switch { width: 40px; height: 21px; border-radius: 30px; }
+  :root[data-namida] .switch::after { width: 13px; height: 14px; top: 3.5px; left: 4px; border-radius: 30px; box-shadow: none; }
+  :root[data-namida] .mon-toggle.on .switch { background: var(--nx-on); }
+  :root[data-namida] .mon-toggle.on .switch::after { left: 23px; }
 </style>
 </head>
 <body>
@@ -1811,7 +1852,7 @@
     <nav class="tabs" id="tabs"></nav>
     <div class="side-foot">
       <button class="side-item mon-toggle" id="mon-toggle" title="Monitor: live speed, ping and the Wi-Fi link">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h4l3-7 5 14 3-9 2 2h3"/></svg><span>Monitor</span><i class="switch"></i>
+        <svg viewBox="0 0 24 24" aria-hidden="true" data-ix="activity"><path d="M2 12h4l3-7 5 14 3-9 2 2h3"/></svg><span>Monitor</span><i class="switch"></i>
       </button>
       <div class="status" id="status" title="The phone this page is connected to">
         <span class="dot" id="dot"></span>
@@ -1842,7 +1883,7 @@
           <div class="sec-title"><h3>Clipboard</h3><span class="live-with"><i></i><span id="clip-with">Shared with the phone</span></span></div><span class="grow"></span>
           <span class="clip-nothing" id="clip-nothing" hidden>Nothing to clear</span>
           <button class="link-danger" id="clip-clear-history" type="button" hidden title="Empties the history and the clipboard, here and on the phone">Clear history</button>
-          <button class="icon-btn" id="clip-history-btn" type="button" title="History: put a recent item back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4.5v4h4"/><path d="M12 7.5V12l3 2"/></svg></button>
+          <button class="icon-btn" id="clip-history-btn" type="button" title="History: put a recent item back"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="clock"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4.5v4h4"/><path d="M12 7.5V12l3 2"/></svg></button>
         </div>
         <div class="clip-history" id="clip-history" hidden></div>
         <div class="clip-field">
@@ -1858,13 +1899,13 @@
         <div class="beam-head">
           <div><b class="beam-title">Send files</b><span class="beam-hint">or drag files here</span></div>
           <!-- Where they go: this phone unless another is picked. Shown once there is somewhere else. -->
-          <button class="beam-to" id="beam-to" type="button" hidden aria-haspopup="menu" title="Where the files go"><span id="beam-to-name">to the phone</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></svg></button>
+          <button class="beam-to" id="beam-to" type="button" hidden aria-haspopup="menu" title="Where the files go"><span id="beam-to-name">to the phone</span><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="down"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></svg></button>
           <!-- Where Send files goes: this phone, a linked phone, or a computer, straight. -->
           <div class="to-menu" id="to-menu" role="menu" hidden></div>
         </div>
         <div class="beam-actions">
-          <button class="beam-btn primary" id="pick-files" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg><span>Choose files</span></button>
-          <button class="beam-btn" id="pick-folder" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17Z"/></svg><span>Choose a folder</span></button>
+          <button class="beam-btn primary" id="pick-files" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="export"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg><span>Choose files</span></button>
+          <button class="beam-btn" id="pick-folder" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="folder"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17Z"/></svg><span>Choose a folder</span></button>
         </div>
       </div>
     </div>
@@ -1872,7 +1913,7 @@
     <input id="file-input" type="file" multiple hidden>
     <input id="folder-input" type="file" webkitdirectory multiple hidden>
     <!-- Files dragged over the page: it blurs, and says where they go. -->
-    <div class="drop-veil" id="drop" hidden><div><span class="send-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span><b>Drop to send</b><span id="drop-to">to the phone</span></div></div>
+    <div class="drop-veil" id="drop" hidden><div><span class="send-ic"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="export"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span><b>Drop to send</b><span id="drop-to">to the phone</span></div></div>
 
     <div class="bar">On the phone</div>
     <div class="card" id="files"><p class="empty">Nothing yet</p></div>
@@ -1885,7 +1926,7 @@
     <div class="card fs-card">
       <div class="fs-head">
         <div class="crumbs" id="fs-crumbs"></div>
-        <button class="icon-btn" id="fs-up" type="button" title="Up a folder" aria-label="Up a folder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>
+        <button class="icon-btn" id="fs-up" type="button" title="Up a folder" aria-label="Up a folder"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="arrowUp"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>
         <button class="sr-action" id="fs-zip" type="button" title="The whole folder, subfolders included, as one zip">Download folder</button>
       </div>
       <div id="fs-list"><p class="empty">Loading...</p></div>
@@ -1896,7 +1937,7 @@
   <section data-panel="alerts" hidden>
     <div class="set-group">
       <div class="set-row">
-        <span class="sq red"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg></span>
+        <span class="sq red"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="notification"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg></span>
         <div class="sr-text"><b>Pop-ups</b><span id="notif-sub">New alerts show on this computer</span></div>
         <button class="toggle" id="notif-pop" type="button" role="switch" aria-checked="true" aria-label="Pop-ups"><i></i></button>
       </div>
@@ -1961,13 +2002,13 @@
     <h2 class="set-title">Appearance</h2>
     <div class="set-group">
       <div class="set-row">
-        <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.9 1.8-1.8 0-1.2-1-1.6-1-2.7 0-1 .8-1.7 1.8-1.7h2.2a3.7 3.7 0 0 0 3.7-3.7C20.5 7 16.7 3.5 12 3.5Z"/><circle cx="7.8" cy="11" r="1.1"/><circle cx="10.5" cy="7.6" r="1.1"/><circle cx="15" cy="7.8" r="1.1"/></svg></span>
+        <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="colour"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.9 1.8-1.8 0-1.2-1-1.6-1-2.7 0-1 .8-1.7 1.8-1.7h2.2a3.7 3.7 0 0 0 3.7-3.7C20.5 7 16.7 3.5 12 3.5Z"/><circle cx="7.8" cy="11" r="1.1"/><circle cx="10.5" cy="7.6" r="1.1"/><circle cx="15" cy="7.8" r="1.1"/></svg></span>
         <div class="sr-text"><b>Colour</b></div>
         <span class="sr-value" id="accent-name">Automatic</span>
       </div>
       <div class="set-row sr-block"><div class="swatches" id="accent-pick"></div></div>
       <div class="set-row">
-        <span class="sq grey"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.5A8 8 0 1 1 9.5 4.5a6.5 6.5 0 0 0 10 10Z"/></svg></span>
+        <span class="sq grey"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="moon"><path d="M19.5 14.5A8 8 0 1 1 9.5 4.5a6.5 6.5 0 0 0 10 10Z"/></svg></span>
         <div class="sr-text"><b>Light or dark</b></div>
       </div>
       <div class="set-row sr-block">
@@ -1977,12 +2018,17 @@
           <button data-theme-choice="dark">Dark</button>
         </div>
       </div>
+      <div class="set-row">
+        <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="music"><path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg></span>
+        <div class="sr-text"><b>Namida style</b><span>Its surfaces, font and icons everywhere, in your colour</span></div>
+        <button class="toggle" id="namida-toggle" type="button" role="switch" aria-checked="false" aria-label="Namida style"><i></i></button>
+      </div>
     </div>
 
     <h2 class="set-title">Laptop helper</h2>
     <div class="set-group">
       <div class="set-row">
-        <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V16h-15V6.5a1 1 0 0 1 1-1Z"/><path d="M2.5 18.5h19"/></svg></span>
+        <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="monitor"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V16h-15V6.5a1 1 0 0 1 1-1Z"/><path d="M2.5 18.5h19"/></svg></span>
         <div class="sr-text"><b>blazeit-pc.bat</b><span id="helper-state"></span></div>
         <a class="sr-action" href="/blazeit-pc.bat" download="blazeit-pc.bat">Download</a>
       </div>
@@ -1996,12 +2042,12 @@
         <div class="sr-text"><b>USB-C cable</b><span>The fastest link. On the phone: <b>Settings &rarr; USB-C cable &rarr; Set up</b>, then turn on USB tethering and open the cable's address from Home.</span></div>
       </div>
       <div class="set-row">
-        <span class="sq green"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>
+        <span class="sq green"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="rows"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>
         <div class="sr-text"><b>Connections per file</b><span>Four suits most links; one or two on a cable</span></div>
         <div class="seg" id="streams-seg"></div>
       </div>
       <div class="set-row">
-        <span class="sq orange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h4l3-7 5 14 3-9 2 2h3"/></svg></span>
+        <span class="sq orange"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="activity"><path d="M2 12h4l3-7 5 14 3-9 2 2h3"/></svg></span>
         <div class="sr-text"><b>Measure the link</b><span id="bench-result">Five seconds each way, storage left out</span></div>
         <button class="sr-action" id="measure" type="button">Measure</button>
       </div>
@@ -2172,9 +2218,9 @@
     <button class="btn sm ghost" id="viewer-close" title="Close (Esc)">Close</button>
   </div>
   <div class="viewer-main">
-    <button class="viewer-nav" id="viewer-prev" title="Previous (&larr;)" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>
+    <button class="viewer-nav" id="viewer-prev" title="Previous (&larr;)" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="back"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>
     <div class="viewer-stage" id="viewer-stage"></div>
-    <button class="viewer-nav" id="viewer-next" title="Next (&rarr;)" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg></button>
+    <button class="viewer-nav" id="viewer-next" title="Next (&rarr;)" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="chevron"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg></button>
   </div>
   <p class="viewer-note" id="viewer-note" hidden></p>
   <span class="viewer-count" id="viewer-count" hidden></span>
@@ -2200,11 +2246,11 @@ var transfers = [];
 var events = null;
 var ticker = null;
 var TABS = [
-  { id: "home", label: "Home", icon: "<path d=\"M3.5 10.5 12 3.5l8.5 7\"/><path d=\"M5.5 9v10a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9\"/><path d=\"M10 20.5V15a2 2 0 0 1 4 0v5.5\"/>" },
-  { id: "phone", label: "Phone", icon: "<path d=\"M9 2.5h6A2.5 2.5 0 0 1 17.5 5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 19V5A2.5 2.5 0 0 1 9 2.5Z\"/><path d=\"M11 18.5h2\"/>" },
-  { id: "music", label: "Music", icon: "<path d=\"M9 18V5.5l11-2V16\"/><circle cx=\"6.5\" cy=\"18\" r=\"2.5\"/><circle cx=\"17.5\" cy=\"16\" r=\"2.5\"/>" },
-  { id: "alerts", label: "Alerts", icon: "<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z\"/><path d=\"M10 20.5a2 2 0 0 0 4 0\"/>" },
-  { id: "settings", label: "Settings", icon: "<path d=\"M3.5 7.5H13M18 7.5h2.5M3.5 16.5H6M11 16.5h9.5\"/><circle cx=\"15.5\" cy=\"7.5\" r=\"2.5\"/><circle cx=\"8.5\" cy=\"16.5\" r=\"2.5\"/>" },
+  { id: "home", ix: "home2", label: "Home", icon: "<path d=\"M3.5 10.5 12 3.5l8.5 7\"/><path d=\"M5.5 9v10a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9\"/><path d=\"M10 20.5V15a2 2 0 0 1 4 0v5.5\"/>" },
+  { id: "phone", ix: "mobile", label: "Phone", icon: "<path d=\"M9 2.5h6A2.5 2.5 0 0 1 17.5 5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 19V5A2.5 2.5 0 0 1 9 2.5Z\"/><path d=\"M11 18.5h2\"/>" },
+  { id: "music", ix: "music", label: "Music", icon: "<path d=\"M9 18V5.5l11-2V16\"/><circle cx=\"6.5\" cy=\"18\" r=\"2.5\"/><circle cx=\"17.5\" cy=\"16\" r=\"2.5\"/>" },
+  { id: "alerts", ix: "notification", label: "Alerts", icon: "<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z\"/><path d=\"M10 20.5a2 2 0 0 0 4 0\"/>" },
+  { id: "settings", ix: "configure", label: "Settings", icon: "<path d=\"M3.5 7.5H13M18 7.5h2.5M3.5 16.5H6M11 16.5h9.5\"/><circle cx=\"15.5\" cy=\"7.5\" r=\"2.5\"/><circle cx=\"8.5\" cy=\"16.5\" r=\"2.5\"/>" },
 ];
 
 function $(id) { return document.getElementById(id); }
@@ -2304,7 +2350,7 @@ function buildTabs() {
   host.innerHTML = '<i class="tab-pill" id="tab-pill" aria-hidden="true"></i>';
   TABS.forEach(function (t, i) {
     var b = document.createElement("button");
-    b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + t.icon + '</svg><span>' + t.label + '</span>' +
+    b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" data-ix="' + t.ix + '">' + t.icon + '</svg><span>' + t.label + '</span>' +
       (t.id === "music" ? '<i class="tab-note" id="tab-eq" aria-label="Playing" hidden></i>' : "") +
       (t.id === "home" ? '<i class="count" id="tab-count" hidden></i>' : "") +
       (t.id === "alerts" ? '<i class="count" id="alerts-count" hidden></i>' : "");
@@ -4766,7 +4812,7 @@ async function refreshState() {
   state.files = s.files || [];
   state.device = s.deviceName || "";
   applyTheme(s.theme || "system");
-  applyLook({ style: s.style, accent: s.accent });
+  applyLook({ style: s.style, accent: s.accent, namida: !!s.namida });
   state.parallelThreshold = s.parallelThreshold || state.parallelThreshold;
 
   var saved = null;
@@ -4799,6 +4845,8 @@ function applyTheme(theme) {
   try { localStorage.setItem("blazeit.theme", theme); } catch (e) {}
   if (!$("mon-sheet").hidden) pollMonitor();
   if (typeof npNamidaColours === "function") npNamidaColours();
+  // Namida's look is worked out for light or dark.
+  if (look.namida) applyLook(look);
 }
 
 /**
@@ -4820,7 +4868,7 @@ function applyLook(l) {
   var hex = null;
   ACCENTS.forEach(function (a) { if (a[0] === accent) hex = a[1]; });
   if (!hex) accent = "auto";
-  look = { style: style, accent: accent };
+  look = { style: style, accent: accent, namida: l.namida === undefined ? !!look.namida : !!l.namida };
   var root = document.documentElement;
   root.setAttribute("data-style", style);
   root.setAttribute("data-accent", accent);
@@ -4842,8 +4890,82 @@ function applyLook(l) {
   });
   var label = $("accent-name");
   if (label) label.textContent = accent === "auto" ? "Automatic" : accent.charAt(0).toUpperCase() + accent.slice(1);
+  applyNamida(hex);
   setPlayerSpace();
   try { localStorage.setItem("blazeit.look", JSON.stringify(look)); } catch (e) {}
+}
+
+// ---- Namida's look over the page (the shared switch; Music and its player are Namida's either way)
+
+/** Namida's colour for Automatic: its own lilac. */
+var NAMIDA_DEFAULT_RGB = [156, 153, 193];
+var NAMIDA_KEYS = ["--bg", "--surface", "--surface-2", "--surface-3", "--line", "--side-bg"];
+
+/**
+ * Namida's colours from a colour, as the phone's (NamidaStyle.kt): its hue at 40% lightness for
+ * what is lit, grounds and cards tinted by it, and the Material roles for chips and the bar.
+ */
+function namidaSet(rgb, dark) {
+  var hsl = npHsl(rgb), h = hsl[0], s = Math.min(1, hsl[1]), white = [255, 255, 255];
+  function tone(k, l) { return npRgbOf(h, Math.min(1, s * k), l); }
+  var base = npRgbOf(h, s, 0.4), ground = dark ? [35, 35, 35] : white;
+  var primary = dark ? tone(1, 0.78) : tone(1, 0.36), sec = dark ? tone(0.35, 0.26) : tone(0.45, 0.88);
+  return {
+    base: base, primary: primary, sec: sec, onSec: dark ? tone(0.4, 0.88) : tone(0.4, 0.12),
+    bg: dark ? tone(0.18, 0.065) : npOver(base, 60 / 255, white), card: npOver(base, 36 / 255, ground),
+    bar: dark ? tone(0.18, 0.115) : tone(0.3, 0.93), indicator: npOver(primary, 20 / 255, sec),
+    onSurface: dark ? tone(0.1, 0.9) : tone(0.1, 0.1), icon: dark ? [233, 233, 233] : [40, 40, 40],
+  };
+}
+
+/**
+ * With Namida's look on: the page's grounds, cards, wells and lit colour are Namida's, worked out
+ * from the chosen colour; the Theatre values are kept aside (--th-*) for Music and the player bar,
+ * which keep their own look. Icons with a twin ([data-ix]) turn into Iconsax's.
+ */
+function applyNamida(hex) {
+  var root = document.documentElement, on = !!look.namida;
+  NAMIDA_KEYS.forEach(function (k) { root.style.removeProperty(k); });
+  root.toggleAttribute("data-namida", on);
+  var tg = $("namida-toggle");
+  if (tg) { tg.classList.toggle("on", on); tg.setAttribute("aria-checked", on ? "true" : "false"); }
+  ixApply(on);
+  if (!on) return;
+  var cs = getComputedStyle(root);
+  NAMIDA_KEYS.concat(["--accent", "--on-accent"]).forEach(function (k) { root.style.setProperty("--th-" + k.slice(2), cs.getPropertyValue(k).trim()); });
+  var dark = npIsDark(), rgb = hex ? npRgb(hex, NAMIDA_DEFAULT_RGB) : NAMIDA_DEFAULT_RGB, n = namidaSet(rgb, dark);
+  function css(c, a) { return a == null ? "rgb(" + c.join(",") + ")" : "rgba(" + c.join(",") + "," + a.toFixed(3) + ")"; }
+  var set = function (k, v) { root.style.setProperty(k, v); };
+  set("--bg", css(n.bg));
+  set("--surface", css(n.card));
+  set("--surface-2", css(npOver(n.sec, 0.6, n.card)));
+  set("--surface-3", css(npOver(n.sec, 0.85, n.card)));
+  set("--line", css(n.onSurface, 0.1));
+  set("--side-bg", css(n.bar));
+  set("--accent", css(n.primary));
+  set("--on-accent", dark ? "#1C1C1E" : "#FFFFFF");
+  set("--nx-primary", css(n.primary));
+  set("--nx-sec", css(n.sec));
+  set("--nx-on-sec", css(n.onSec));
+  set("--nx-indicator", css(n.indicator));
+  set("--nx-bar", css(n.bar, 0.96));
+  set("--nx-btn-fg", css(npOver(n.primary, 0.2, n.icon)));
+  set("--nx-shadow", dark ? "rgba(10,10,10,.24)" : "rgba(100,100,100,.24)");
+  var disabled = npOver(dark ? [255, 255, 255] : [0, 0, 0], 0.38, n.card);
+  set("--nx-off", css(npOver(n.bg, 60 / 255, disabled)));
+  // Namida lights its switch with the colour itself, not its darker working tone.
+  set("--nx-on", css(npOver(rgb, 180 / 255, n.card), 140 / 255));
+  set("--nx-glow", css(npOver(rgb, 180 / 255, n.card), 0.8));
+}
+
+/** Icons with a twin in Iconsax, swapped to it (and back), as the phone's are. */
+var IX_ORIGINAL = new WeakMap();
+function ixApply(on) {
+  Array.prototype.forEach.call(document.querySelectorAll("svg[data-ix]"), function (el) {
+    if (!IX_ORIGINAL.has(el)) IX_ORIGINAL.set(el, el.innerHTML);
+    var twin = NX[el.dataset.ix];
+    el.innerHTML = on && twin ? twin : IX_ORIGINAL.get(el);
+  });
 }
 
 /** The colour swatches in Settings: Automatic first, then the system colours. */
@@ -4863,7 +4985,7 @@ function buildSwatches() {
 }
 
 async function setLook(change) {
-  applyLook({ accent: change.accent || look.accent });
+  applyLook(Object.assign({}, look, change));
   try {
     await api("/api/look", {
       method: "POST",
@@ -7230,7 +7352,24 @@ var NX = {
   add: '<path d="M12 16V8M14.99 12H16M8 12h3.81M12 16V8M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85" stroke-linecap="round" stroke-linejoin="round"/>',
   arrowUp: '<path d="M18.07 9.57L12 3.5 5.93 9.57M12 12V3.67M12 20.5v-4.53" stroke-linecap="round" stroke-linejoin="round"/>',
   arrowDown: '<path d="M18.07 14.43L12 20.5l-6.07-6.07M12 12v8.33M12 3.5v4.53" stroke-linecap="round" stroke-linejoin="round"/>',
-  cd: '<path d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85" stroke-linecap="round" stroke-linejoin="round"/>'
+  cd: '<path d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85" stroke-linecap="round" stroke-linejoin="round"/>',
+  // Twins for the page's own icons, in Namida's look.
+  home2: '<path d="M22 10.498c0-1.21-.81-2.76-1.8-3.45l-6.18-4.33c-1.4-.98-3.65-.93-5 .12l-5.39 4.2c-.9.7-1.63 2.19-1.63 3.32v7.41c0 2.32 1.89 4.22 4.21 4.22h11.58c2.32 0 4.21-1.9 4.21-4.21v-3.1M12 17.988v-3" stroke-linecap="round" stroke-linejoin="round"/>',
+  activity: '<path d="M2 12.96V15c0 5 2 7 7 7h6c5 0 7-2 7-7V9c0-5-2-7-7-7H9C4 2 2 4 2 9" stroke-linecap="round" stroke-linejoin="round"/><path d="m7.33 14.492 2.38-3.09c.34-.44.97-.52 1.41-.18l1.83 1.44c.44.34 1.07.26 1.41-.17l2.31-2.98" stroke-linecap="round" stroke-linejoin="round"/>',
+  export: '<path d="M17.52 18.01C16.16 19.25 14.29 20 12 20c-5 0-8-3.58-8-8M20 12c0 1.05-.17 2.05-.49 2.97M9.44 6.47L12 3.91l2.56 2.56M12 9.15V3.98M12 14.15v-1.96" stroke-linecap="round" stroke-linejoin="round"/>',
+  import: '<path d="M9.44 11.68L12 14.24l2.56-2.56M12 9v5.17M12 4v1.96M17.52 18.01C16.16 19.25 14.29 20 12 20c-5 0-8-3.58-8-8M20 12c0 1.05-.17 2.05-.49 2.97" stroke-linecap="round" stroke-linejoin="round"/>',
+  chevron: '<path d="M12.9 7.94l2.62 2.62c.77.77.77 2.03 0 2.8L9 19.87M9 4.04l1.04 1.04" stroke-linecap="round" stroke-linejoin="round"/>',
+  flash: '<path d="M14.82 7.02v-3.5c0-1.68-.91-2.02-2.02-.76l-7.57 8.6c-.93 1.05-.54 1.92.87 1.92h3.09v7.2c0 1.68.91 2.02 2.02.76l7.57-8.6c.93-1.05.54-1.92-.87-1.92h-3.09" stroke-linecap="round" stroke-linejoin="round"/>',
+  lock: '<path d="M6 10V8c0-3.31 1-6 6-6s6 2.69 6 6v2M22 17v-2c0-4-1-5-5-5H7c-4 0-5 1-5 5v2c0 4 1 5 5 5h10c1.76 0 2.94-.19 3.71-.75" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.995 16h.008M11.995 16h.009M7.995 16h.008" stroke-linecap="round" stroke-linejoin="round"/>',
+  monitor: '<path d="M22 10.63v2.15c0 3.56-.89 4.44-4.44 4.44H6.44c-3.55 0-4.44-.89-4.44-4.44V6.44C2 2.89 2.89 2 6.44 2h11.11C21.11 2 22 2.89 22 6.44M12 17.219v4.78M2 13h20M7.5 22h9" stroke-linecap="round" stroke-linejoin="round"/>',
+  folder: '<path d="M8 2h9c2 0 3 1 3 3v1.38" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13.02V7c0-4 1-5 5-5h1.5c1.5 0 1.83.44 2.4 1.2l1.5 2c.38.5.6.8 1.6.8h3c4 0 5 1 5 5M22 14.988v2.01c0 4-1 5-5 5H7c-4 0-5-1-5-5" stroke-linecap="round" stroke-linejoin="round"/>',
+  clock: '<path d="m15.71 15.182-3.1-1.85c-.54-.32-.98-1.09-.98-1.72v-4.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85" stroke-linecap="round" stroke-linejoin="round"/>',
+  music: '<path d="M6.28 22.002a3.12 3.12 0 1 0 0-6.24 3.12 3.12 0 0 0 0 6.24Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.838 7.96V4.6c0-2.6-1.63-2.96-3.28-2.51l-6.24 1.7c-1.14.31-1.92 1.21-1.92 2.51v12.57M20.84 16.8V12M17.722 19.92a3.12 3.12 0 1 0 0-6.24 3.12 3.12 0 0 0 0 6.24ZM9.398 9.518l11.44-3.12" stroke-linecap="round" stroke-linejoin="round"/>',
+  moon: '<path d="M4.18 5.38a10.146 10.146 0 0 0-2.15 7.04c.36 5.15 4.73 9.34 9.96 9.57 3.69.16 6.99-1.56 8.97-4.27.82-1.11.38-1.85-.99-1.6-.67.12-1.36.17-2.08.14C13 16.06 9 11.97 8.98 7.14c-.01-1.3.26-2.53.75-3.65.54-1.24-.11-1.83-1.36-1.3" stroke-linecap="round" stroke-linejoin="round"/>',
+  mobile: '<path d="M20 11.03V17c0 4-1 5-5 5H9c-4 0-5-1-5-5V7c0-4 1-5 5-5h6c4 0 5 1 5 5M14 5.5h-4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 19.1a1.55 1.55 0 1 0 0-3.1 1.55 1.55 0 0 0 0 3.1Z" stroke-linecap="round" stroke-linejoin="round"/>',
+  notification: '<path d="M19 2c-1.66 0-3 1.34-3 3s1.34 3 3 3a2.996 2.996 0 0 0 2.83-3.99M2 14.97V15c0 5 2 7 7 7h6c5 0 7-2 7-7v-5M14 2H9C4 2 2 4 2 9v2" stroke-linecap="round" stroke-linejoin="round"/>',
+  colour: '<path d="M2 4.5C2 3 3 2 4.5 2h3C9 2 10 3 10 4.5V18c0 1.08-.44 2.07-1.14 2.79l-.04.04c-.09.09-.19.18-.28.25-.3.26-.64.46-.99.6-.11.05-.22.09-.33.13-.39.13-.81.19-1.22.19-.27 0-.54-.03-.8-.08-.13-.03-.26-.06-.39-.1-.16-.05-.31-.1-.46-.17 0-.01 0-.01-.01 0-.28-.14-.55-.3-.8-.49l-.01-.01c-.13-.1-.25-.2-.36-.32-.11-.12-.22-.24-.33-.37-.19-.25-.35-.52-.49-.8.01-.01.01-.01 0-.01 0 0 0-.01-.01-.02-.06-.14-.11-.29-.16-.44a5.58 5.58 0 0 1-.1-.39c-.05-.26-.08-.53-.08-.8V8.57" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 16.5v3c0 1.5-1 2.5-2.5 2.5H6c.41 0 .83-.06 1.22-.19.11-.04.22-.08.33-.13.35-.14.69-.34.99-.6.09-.07.19-.16.28-.25l.04-.04 6.8-6.79h3.84c1.5 0 2.5 1 2.5 2.5ZM4.81 21.821c-.6-.18-1.17-.51-1.64-.99-.48-.47-.81-1.04-.99-1.64a4.02 4.02 0 0 0 2.63 2.63Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.37 11.29 15.66 14l-6.8 6.79C9.56 20.07 10 19.08 10 18V8.34l2.71-2.71c1.06-1.06 2.48-1.06 3.54 0l2.12 2.12c1.06 1.06 1.06 2.48 0 3.54ZM6 19a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" stroke-linecap="round" stroke-linejoin="round"/>',
+  rows: '<path d="M2 19.77C2 21.36 2.6 22 4.1 22h15.8c1.5 0 2.1-.64 2.1-2.23v-4.04c0-1.59-.6-2.23-2.1-2.23H4.1c-1.5 0-2.1.64-2.1 2.23M22 4.23C22 2.64 21.4 2 19.9 2H4.1C2.6 2 2 2.64 2 4.23v4.04c0 1.59.6 2.23 2.1 2.23h15.8c1.5 0 2.1-.64 2.1-2.23" stroke-linecap="round" stroke-linejoin="round"/>'
 };
 function nx(name) { return NX[name] ? '<svg viewBox="0 0 24 24" aria-hidden="true">' + NX[name] + "</svg>" : ""; }
 /** Puts each [data-nx] element's icon into it. */
@@ -7856,7 +7995,7 @@ function setupFullPlayer() {
   $("np-qlist").addEventListener("scroll", npJumpIcon, { passive: true });
   if (window.matchMedia) {
     var scheme = window.matchMedia("(prefers-color-scheme: dark)");
-    var recolour = function () { npNamidaColours(); if (np.shown) npRender(); };
+    var recolour = function () { npNamidaColours(); if (look.namida) applyLook(look); if (np.shown) npRender(); };
     if (scheme.addEventListener) scheme.addEventListener("change", recolour); else if (scheme.addListener) scheme.addListener(recolour);
   }
   nxFill(document);
@@ -7948,6 +8087,7 @@ function showApp() {
       b.addEventListener("click", function () { setTheme(b.dataset.themeChoice); });
     });
     buildSwatches();
+    $("namida-toggle").addEventListener("click", function () { setLook({ namida: !look.namida }); });
     applyLook(look);
     renderPending();
   } else setMonitor(monitorWanted());

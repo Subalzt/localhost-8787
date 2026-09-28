@@ -600,7 +600,8 @@ fun Toggle(on: Boolean, modifier: Modifier = Modifier, color: Color = Bridge.Goo
 private fun NamidaSwitch(on: Boolean, modifier: Modifier, color: Color?, onChange: (Boolean) -> Unit) {
     val nc = LocalNamida.current
     val p = LocalPalette.current
-    val lit = (color ?: nc.main).copy(alpha = 180 / 255f).compositeOver(p.surface)
+    // Lit with the colour itself, as Namida's (not its darker working tone).
+    val lit = (color ?: nc.tint).copy(alpha = 180 / 255f).compositeOver(p.surface)
     val off = nc.bg.copy(alpha = 60 / 255f).compositeOver(if (nc.dark) Color(0x61FFFFFF) else Color(0x61000000))
     val track by animateColorAsState(if (on) lit.copy(alpha = 140 / 255f) else off, tween(300), label = "track")
     val at by animateFloatAsState(if (on) 1f else 0f, tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "thumb")
