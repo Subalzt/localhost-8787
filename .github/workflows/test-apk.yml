@@ -1,0 +1,61 @@
+# A test build of the app on every push to the working branch: the debug APK, attached to the
+# "test-build" pre-release (replaced each time), so it can be downloaded straight onto a phone:
+# https://github.com/Subalzt/localhost-8787/releases/download/test-build/localhost-8787-test.apk
+#
+# Signed with the fixed test key in .github/test-signing.keystore (the usual debug-key passwords),
+# so each new build installs over the last. It installs beside a release build, as
+# dev.periy.bridge.debug.
+name: Test APK
+
+on:
+  push:
+    branches: [claude/music-player-namida-327cnw]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: test-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Use the fixed test signing key
+        run: |
+          mkdir -p ~/.android
+          cp .github/test-signing.keystore ~/.android/debug.keystore
+
+      - name: Build the debug APK
+        run: |
+          chmod +x gradlew
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          ./gradlew :app:assembleDebug --stacktrace
+          cp app/build/outputs/apk/debug/*.apk localhost-8787-test.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: localhost-8787-test
+          path: localhost-8787-test.apk
+
+      - name: Publish as the test-build pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete test-build --cleanup-tag --yes || true
+          gh release create test-build localhost-8787-test.apk \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "Test build ($(git rev-parse --short HEAD))" \
+            --notes "Debug build of $(git rev-parse --short HEAD) on ${GITHUB_REF_NAME}. Installs as dev.periy.bridge.debug, over the last test build."

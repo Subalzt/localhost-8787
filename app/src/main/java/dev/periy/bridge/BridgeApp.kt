@@ -17,6 +17,7 @@ import dev.periy.bridge.server.ServerConfig
 import dev.periy.bridge.server.Storage
 import dev.periy.bridge.server.TusStore
 import dev.periy.bridge.util.Prefs
+import dev.periy.bridge.ui.hex
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -90,11 +91,33 @@ class Container(ctx: Context) {
         EventBus.emit("theme", v)
     }
 
-    private val _look = MutableStateFlow(Look(styleName(prefs.style) ?: "theatre", prefs.accent.takeIf { it in ACCENT_NAMES } ?: "auto", prefs.namidaUi))
+    init {
+        // The Material look became the default: an install still on Theatre from before moves to
+        // it once; choosing Theatre after that sticks.
+        if (!prefs.materialDefaulted) { prefs.style = "material"; prefs.materialDefaulted = true }
+    }
+
+    private val _look = MutableStateFlow(
+        Look(styleName(prefs.style) ?: "material", prefs.accent.takeIf { it in ACCENT_NAMES } ?: "auto", prefs.namidaUi).let { it.copy(seed = seedFor(it.accent)) },
+    )
 
     init {
         // A removed style must not remain in preferences after the next app launch.
         if (prefs.style != _look.value.style) prefs.style = _look.value.style
+    }
+
+    /**
+     * The colour the Material look is built from, for every page to match the phone: the colour
+     * chosen; for Automatic, the wallpaper's (Android 12 and later), else Material's baseline.
+     */
+    private fun seedFor(accent: String): String =
+        dev.periy.bridge.ui.ACCENTS.firstOrNull { it.first == accent }?.second?.hex()
+            ?: dev.periy.bridge.ui.wallpaperSeed(app) ?: "#6750A4"
+
+    /** The wallpaper may have changed while away: the pages follow it. */
+    fun refreshSeed() {
+        val seed = seedFor(_look.value.accent)
+        if (seed != _look.value.seed) { _look.value = _look.value.copy(seed = seed); EventBus.emit("look", _look.value.json()) }
     }
 
     /** The look and the colour: shared like the theme. */
@@ -106,7 +129,7 @@ class Container(ctx: Context) {
             style?.let(::styleName) ?: _look.value.style,
             accent?.takeIf { it in ACCENT_NAMES } ?: _look.value.accent,
             namida ?: _look.value.namida,
-        )
+        ).let { it.copy(seed = seedFor(it.accent)) }
         prefs.style = v.style
         prefs.accent = v.accent
         prefs.namidaUi = v.namida
@@ -155,17 +178,18 @@ private const val LYRICS_AFTER_MS = 1500L
 val THEMES = setOf("system", "light", "dark")
 
 /**
- * The style, beyond light and dark. There is one now, "theatre"; pages and the laptop helper
- * still read the name, so it is still sent.
+ * The style, beyond light and dark: "material" (Android's own design, the default) or "theatre"
+ * (after the Apple TV app). Pages read it too.
  */
-val STYLES = setOf("theatre")
+val STYLES = setOf("material", "theatre")
 
 /** "auto" is the style's own colour; the rest are the system colours (Theme.kt, ACCENTS). */
 /** Colours no longer offered (pink, indigo, graphite, black) fall back to "auto". */
 val ACCENT_NAMES = setOf("auto", "red", "orange", "yellow", "green", "mint", "blue", "purple")
 
-/** A style by its name: every one there has been (Studio, Glass, the first names) is now Theatre. */
+/** A style by its name: Material, or Theatre (which every older one there has been now is). */
 fun styleName(s: String): String? = when (s) {
+    "material" -> "material"
     "studio", "music", "glass", "signal", "tv", "theatre" -> "theatre"
     else -> null
 }
@@ -174,8 +198,8 @@ fun styleName(s: String): String? = when (s) {
  * The shared look: the style, the colour, and [namida], Namida's surfaces, shapes, font and icons
  * over everything outside Music (which is Namida's always).
  */
-data class Look(val style: String = "theatre", val accent: String = "auto", val namida: Boolean = false) {
-    fun json() = """{"style":"$style","accent":"$accent","namida":$namida}"""
+data class Look(val style: String = "material", val accent: String = "auto", val namida: Boolean = false, val seed: String = "#6750A4") {
+    fun json() = """{"style":"$style","accent":"$accent","namida":$namida,"seed":"$seed"}"""
 }
 
 class BridgeApp : Application() {

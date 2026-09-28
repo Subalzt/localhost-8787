@@ -40,7 +40,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -72,10 +74,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Localhost 8787's look, after the Apple TV app: an edge-to-edge hero, shelves of cards, capsule
- * buttons; with Apple Music's large titles over each screen and its square tiles. Light or dark
- * follows the phone unless chosen. The colour is shared with every page: "auto" is the look's
- * own black and white, or one of [ACCENTS] everywhere.
+ * Localhost 8787's looks. Material (the default) is Android's own design: Material 3's colour
+ * roles from the wallpaper or the colour chosen, filled cards, list rows with plain icons, a
+ * docked navigation bar. Theatre is after the Apple TV app: an edge-to-edge hero, shelves of
+ * cards, capsule buttons, large titles. Each shared piece below draws itself in the look chosen
+ * (Namida's, where its switch is on, goes over either). Light or dark follows the phone unless
+ * chosen. The colour is shared with every page: "auto" is the look's own, or one of [ACCENTS].
  */
 
 /** The colours on offer, as the phone's own system colours, in the order they are shown. */
@@ -158,7 +162,20 @@ fun paletteFor(dark: Boolean, accent: String = "auto", namida: Boolean = false):
     return p.copy(accent = c, onAccent = if (accent == "yellow") Color(0xFF1C1C1E) else Color.White)
 }
 
-/** Picks the palette from the shared settings: "system", "light" or "dark", and the colour. */
+/** The style drawn: "material" or "theatre" (the shared look's). */
+val LocalStyle = staticCompositionLocalOf { "theatre" }
+
+/** Material's pieces are drawn here: its style is chosen, and Namida's look, which wins where both have a say, is off. */
+val inMaterial: Boolean @Composable @ReadOnlyComposable get() = LocalStyle.current == "material" && !LocalNamidaUi.current
+
+/** The Material look's palette: the app's roles laid on Material's, so every screen follows without asking. */
+fun paletteOf(r: M3Roles): Palette = (if (r.dark) TheatreDark else TheatreLight).copy(
+    bg = r.surface, surface = r.container, surface2 = r.containerHighest,
+    text = r.onSurface, muted = r.onSurfaceVariant, faint = r.outline, outline = r.outlineVariant,
+    accent = r.primary, onAccent = r.onPrimary, red = r.error,
+)
+
+/** Picks the palette from the shared settings: "system", "light" or "dark", the style and the colour. */
 @Composable
 fun BlazeTheme(theme: String, look: dev.periy.bridge.Look = dev.periy.bridge.Look(), content: @Composable () -> Unit) {
     val dark = when (theme) {
@@ -166,15 +183,34 @@ fun BlazeTheme(theme: String, look: dev.periy.bridge.Look = dev.periy.bridge.Loo
         "light" -> false
         else -> isSystemInDarkTheme()
     }
-    val p = paletteFor(dark, look.accent, look.namida)
-    CompositionLocalProvider(
-        LocalPalette provides p,
-        LocalNamidaUi provides look.namida,
-        // The app's own Namida colours (Music provides the song's over its screens).
-        LocalNamida provides remember(look.accent, dark) { namidaColors(namidaTintFor(look.accent), dark) },
-        LocalTextStyle provides TextStyle(color = p.text, fontFamily = if (look.namida) LexendDeca else null),
-        content = content,
-    )
+    val material = look.style == "material"
+    // Material's colours: the wallpaper's while the colour is Automatic (Android 12 and later), else
+    // worked out from the colour chosen (Namida's tint with its look on) or the shared seed.
+    val wallpaper = if (material && look.accent == "auto" && !look.namida) wallpaperRoles(dark) else null
+    val worked = remember(look.accent, look.namida, look.seed, dark) {
+        val seed = if (look.namida) namidaTintFor(look.accent)
+        else ACCENTS.firstOrNull { it.first == look.accent }?.second ?: colorOfHex(look.seed) ?: M3Baseline
+        m3RolesFrom(seed, dark)
+    }
+    val roles = if (!material) null else wallpaper ?: worked
+    val p = if (roles != null && !look.namida) paletteOf(roles) else paletteFor(dark, look.accent, look.namida)
+    val body: @Composable () -> Unit = {
+        CompositionLocalProvider(
+            LocalPalette provides p,
+            LocalStyle provides if (material) "material" else "theatre",
+            LocalM3 provides (roles ?: LocalM3.current),
+            LocalNamidaUi provides look.namida,
+            // The app's own Namida colours (Music provides the song's over its screens).
+            LocalNamida provides remember(look.accent, dark) { namidaColors(namidaTintFor(look.accent), dark) },
+            // Inside Material's theme, which sets its own: the app's text, as before.
+            LocalTextStyle provides TextStyle(color = p.text, fontFamily = if (look.namida) LexendDeca else null),
+            content = content,
+        )
+    }
+    // Material's own components (the switch) and its ripples take their colours from its theme.
+    if (roles != null) MaterialTheme(colorScheme = roles.toColorScheme()) {
+        CompositionLocalProvider(LocalContentColor provides p.text, content = body)
+    } else body()
 }
 
 /** Shorthand for the current palette's roles, readable at any call site in a composable. */
@@ -215,6 +251,15 @@ val ButtonShape = RoundedCornerShape(50)
 /** The corner cards take. */
 val cardRadius: Dp = 16.dp
 
+/** Material 3 Expressive's larger card corner. */
+val MaterialCardRadius: Dp = 24.dp
+
+/** Between the tiles of a Material group: a line of the page showing through. */
+@Composable
+private fun MaterialTileGap() {
+    Box(Modifier.fillMaxWidth().height(2.dp).background(Bridge.Bg))
+}
+
 // ---------------------------------------------------------------------------- type
 
 /** Apple's large title: heavy, tight. */
@@ -239,11 +284,16 @@ val OnArt = Shadow(Color(0x66000000), Offset(0f, 3f), 14f)
  * Namida's look, Namida's settings card: rounded 20, with its soft shadow and no edge.
  */
 @Composable
-fun Modifier.card(shape: Shape = RoundedCornerShape(if (LocalNamidaUi.current) 20.dp else cardRadius), color: Color = Bridge.Surface): Modifier {
+fun Modifier.card(
+    shape: Shape = RoundedCornerShape(if (LocalNamidaUi.current) 20.dp else if (inMaterial) MaterialCardRadius else cardRadius),
+    color: Color = Bridge.Surface,
+): Modifier {
     if (LocalNamidaUi.current) {
         val sh = LocalNamida.current.shadow.copy(alpha = 60 / 255f)
         return this.shadow(5.dp, shape, ambientColor = sh, spotColor = sh).clip(shape).background(color)
     }
+    // Material's filled card: flat on its container colour, no edge, no shadow.
+    if (inMaterial) return this.clip(shape).background(color)
     val base = this.clip(shape).background(color)
     return if (Bridge.Dark) base.border(0.5.dp, Color.White.copy(alpha = 0.07f), shape) else base
 }
@@ -259,6 +309,9 @@ fun Modifier.floating(shape: Shape = ButtonShape): Modifier {
         val nc = LocalNamida.current
         return this.shadow(14.dp, shape, ambientColor = nc.shadow, spotColor = nc.shadow).clip(shape).background(nc.card)
     }
+    // Material: the high container, lifted a little (its level 3).
+    if (inMaterial) return this.shadow(6.dp, shape, ambientColor = Color(0x33000000), spotColor = Color(0x4D000000))
+        .clip(shape).background(LocalM3.current.containerHigh)
     return this.shadow(if (Bridge.Dark) 18.dp else 14.dp,
         shape, ambientColor = Color(0x40000000), spotColor = Color(0x59000000))
         .clip(shape)
@@ -313,6 +366,23 @@ fun SectionBar(
     onOpen: (() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
+    // Material: a list's section label, small and in the colour, in line with the cards' content.
+    if (inMaterial) {
+        Row(
+            modifier.fillMaxWidth().heightIn(min = 52.dp).padding(start = 32.dp, end = 20.dp, top = 18.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                Modifier.weight(1f).then(if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(title, style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.1.sp), color = Bridge.Accent)
+                if (onOpen != null) Icon(BlazeIcons.Chevron, null, tint = Bridge.Accent, modifier = Modifier.padding(start = 2.dp).size(18.dp))
+            }
+            trailing()
+        }
+        return
+    }
     Row(
         modifier.fillMaxWidth().heightIn(min = 34.dp + 26.dp).padding(start = 20.dp, end = 16.dp, top = 22.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -339,6 +409,14 @@ fun AppIcon(icon: ImageVector, color: Color, modifier: Modifier = Modifier, size
         val nc = LocalNamida.current
         Box(modifier.size(size).clip(CircleShape).background(nc.secondaryContainer), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = nc.onSecondaryContainer, modifier = Modifier.size(size * 0.56f))
+        }
+        return
+    }
+    // Material: a tonal cookie, one colour for all.
+    if (inMaterial) {
+        val m = LocalM3.current
+        Box(modifier.size(size).clip(Cookie9).background(m.secondaryContainer), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = m.onSecondaryContainer, modifier = Modifier.size(size * 0.55f))
         }
         return
     }
@@ -394,6 +472,7 @@ fun BridgeButton(
 ) {
     val shape = ButtonShape
     if (LocalNamidaUi.current) { NamidaMainButton(label, modifier, enabled, color, icon, onClick); return }
+    if (inMaterial) { MaterialButton(label, modifier, enabled, color, textColor, icon, onClick); return }
     Row(
         modifier
             .heightIn(min = 48.dp)
@@ -439,7 +518,47 @@ private fun NamidaMainButton(label: String, modifier: Modifier, enabled: Boolean
     }
 }
 
-/** Everything that is not the main action: a quiet capsule (in Namida's look, Namida's faint button). */
+/** Material's buttons' words. */
+private val MaterialLabel = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.1.sp)
+
+/**
+ * A Material button, 40 high and fully round: filled in [bg] (the main button in the primary
+ * colour, a red one in the error colour), or tonal for the quiet one; greyed while it cannot be
+ * used. As Material 3 Expressive's, its corners square off under the finger and spring back.
+ */
+@Composable
+fun MaterialButton(label: String, modifier: Modifier, enabled: Boolean, bg: Color, fg: Color, icon: ImageVector?, onClick: () -> Unit) {
+    val m = LocalM3.current
+    val fill = if (enabled) bg else m.onSurface.copy(alpha = 0.12f)
+    val ink = when {
+        !enabled -> m.onSurface.copy(alpha = 0.38f)
+        bg == m.primary -> m.onPrimary
+        bg == m.error -> m.onError
+        else -> fg
+    }
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val corner by animateDpAsState(if (pressed) 10.dp else 20.dp, spring(dampingRatio = 0.6f, stiffness = 900f), label = "morph")
+    val shape = RoundedCornerShape(corner)
+    Row(
+        modifier
+            .heightIn(min = 40.dp)
+            .clip(shape)
+            .clickable(interactionSource = source, indication = ripple(), enabled = enabled, onClick = onClick)
+            .background(fill)
+            .padding(start = if (icon != null) 16.dp else 24.dp, end = 24.dp, top = 10.dp, bottom = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(icon, null, tint = ink, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(label, style = MaterialLabel, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Everything that is not the main action: a quiet capsule (in Namida's look, Namida's faint button; in Material's, its tonal one). */
 @Composable
 fun SoftButton(
     label: String,
@@ -448,6 +567,11 @@ fun SoftButton(
     tint: Color = Bridge.Text,
     onClick: () -> Unit,
 ) {
+    if (inMaterial) {
+        val m = LocalM3.current
+        MaterialButton(label, modifier, true, m.secondaryContainer, if (tint == Bridge.Text) m.onSecondaryContainer else tint, icon, onClick)
+        return
+    }
     val namida = LocalNamidaUi.current
     val shape = if (namida) RoundedCornerShape(20.dp) else ButtonShape
     val wash = LocalNamida.current.primary
@@ -474,8 +598,18 @@ fun IconChip(icon: ImageVector, description: String, tint: Color = Bridge.Text, 
     // In Namida's look, the plain chip is its secondary colour, as its round buttons are.
     val namida = LocalNamidaUi.current && bg == Bridge.Chip
     val nc = LocalNamida.current
+    // In Material's: a tonal icon button; one in a quieter colour is a plain one, with no circle.
+    if (inMaterial && bg == Bridge.Chip) {
+        val m = LocalM3.current
+        val tonal = tint == Bridge.Text
+        Box(
+            Modifier.size(size).pressable(CircleShape, scaleTo = 1f, onClick = onClick).background(if (tonal) m.secondaryContainer else Color.Transparent),
+            contentAlignment = Alignment.Center,
+        ) { Icon(icon, description, tint = if (tonal) m.onSecondaryContainer else tint, modifier = Modifier.size(size * 0.5f)) }
+        return
+    }
     Box(
-        Modifier.size(size).pressable(CircleShape, scaleTo = 0.9f, onClick = onClick).background(if (namida) nc.secondaryContainer else bg),
+        Modifier.size(size).pressable(CircleShape, scaleTo = if (inMaterial) 1f else 0.9f, onClick = onClick).background(if (namida) nc.secondaryContainer else bg),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, description, tint = if (namida && tint == Bridge.Text) nc.onSecondaryContainer else tint, modifier = Modifier.size(size * 0.5f)) }
 }
@@ -513,7 +647,7 @@ fun BridgeTextField(
             onValueChange = onValueChange,
             singleLine = mono,
             textStyle = if (mono) MonoStyle.copy(color = text) else BodyStyle.copy(color = text, fontSize = 15.sp, fontFamily = font),
-            cursorBrush = SolidColor(Bridge.Blue),
+            cursorBrush = SolidColor(if (inMaterial) Bridge.Accent else Bridge.Blue),
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -522,8 +656,12 @@ fun BridgeTextField(
 /** A thin progress bar, as a song's scrubber. */
 @Composable
 fun BlockProgress(fraction: Float, modifier: Modifier = Modifier, color: Color = Bridge.Text, height: Dp = 5.dp) {
-    Box(modifier.fillMaxWidth().height(height).clip(ButtonShape).background(Bridge.Chip)) {
-        Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight().clip(ButtonShape).background(color))
+    // Material's: the primary colour on its tonal track.
+    val material = inMaterial
+    val bar = if (material && color == Bridge.Text) Bridge.Accent else color
+    val track = if (material) LocalM3.current.secondaryContainer else Bridge.Chip
+    Box(modifier.fillMaxWidth().height(if (material) 4.dp else height).clip(ButtonShape).background(track)) {
+        Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight().clip(ButtonShape).background(bar))
     }
 }
 
@@ -536,6 +674,7 @@ fun SegmentedRow(
     onSelect: (Int) -> Unit,
 ) {
     val sel = selectedIndex.coerceIn(-1, options.lastIndex)
+    if (inMaterial) { MaterialSegmented(options, sel, modifier, onSelect); return }
     // In Namida's look: a pill, the chosen part on Namida's indicator colour.
     val namida = LocalNamidaUi.current
     val nc = LocalNamida.current
@@ -572,10 +711,46 @@ fun SegmentedRow(
     }
 }
 
-/** An iOS switch: green when on (or the accent passed in); the knob springs across. In Namida's look, Namida's switch. */
+/**
+ * Material 3 Expressive's connected button group: a button each, 2 apart, the ends of the row
+ * round and the inner corners tight; the chosen one fills with the colour and rounds fully,
+ * springing into shape.
+ */
+@Composable
+private fun MaterialSegmented(options: List<String>, sel: Int, modifier: Modifier, onSelect: (Int) -> Unit) {
+    val m = LocalM3.current
+    Row(modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        options.forEachIndexed { i, label ->
+            val on = i == sel
+            val bounce = spring<Dp>(dampingRatio = 0.55f, stiffness = 700f)
+            val start by animateDpAsState(if (on || i == 0) 20.dp else 8.dp, bounce, label = "start")
+            val end by animateDpAsState(if (on || i == options.lastIndex) 20.dp else 8.dp, bounce, label = "end")
+            val shape = RoundedCornerShape(topStart = start, bottomStart = start, topEnd = end, bottomEnd = end)
+            val bg by animateColorAsState(if (on) m.primary else m.containerHighest, tween(180), label = "seg")
+            val ink by animateColorAsState(if (on) m.onPrimary else m.onSurfaceVariant, tween(180), label = "ink")
+            Box(
+                Modifier.weight(1f).fillMaxHeight().clip(shape).background(bg).clickable { onSelect(i) }.padding(horizontal = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text(label, style = MaterialLabel, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
+    }
+}
+
+/**
+ * An iOS switch: green when on (or the accent passed in); the knob springs across. In Namida's
+ * look, Namida's switch; in Material's, Material's own.
+ */
 @Composable
 fun Toggle(on: Boolean, modifier: Modifier = Modifier, color: Color = Bridge.Good, onChange: (Boolean) -> Unit) {
     if (LocalNamidaUi.current) { NamidaSwitch(on, modifier, if (color == Bridge.Good) null else color, onChange); return }
+    if (inMaterial) {
+        androidx.compose.material3.Switch(
+            checked = on, onCheckedChange = onChange, modifier = modifier,
+            colors = if (color == Bridge.Good) androidx.compose.material3.SwitchDefaults.colors()
+            else androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = color, checkedBorderColor = color),
+        )
+        return
+    }
     val track by animateColorAsState(if (on) color else Bridge.Faint.copy(alpha = 0.5f), tween(180), label = "track")
     val x by animateDpAsState(if (on) 20.dp else 0.dp, spring(dampingRatio = 0.62f, stiffness = 600f), label = "knob")
     Box(
@@ -625,6 +800,7 @@ private fun NamidaSwitch(on: Boolean, modifier: Modifier, color: Color?, onChang
 /** Rows that belong together, on one card. */
 @Composable
 fun GroupCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    // In Material's look each row is a tile of its own, the page showing through between them.
     Column(modifier.fillMaxWidth().panel(), content = content)
 }
 
@@ -640,6 +816,30 @@ fun SettingRow(
     onClick: (() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
+    // Material's list item, as a tile of its group: a plain icon, the title and a line under it, 56 high (72 with the line).
+    if (inMaterial) {
+        val m = LocalM3.current
+        if (!first) MaterialTileGap()
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = if (detail != null) 72.dp else 56.dp)
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) {
+                Icon(icon, null, tint = if (titleColor != Bridge.Text) titleColor else m.onSurfaceVariant, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(16.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(title, style = TextStyle(fontSize = 16.sp, lineHeight = 22.sp), color = titleColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (detail != null) Text(detail, style = TextStyle(fontSize = 14.sp, lineHeight = 20.sp), color = m.onSurfaceVariant)
+            }
+            Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically, content = trailing)
+        }
+        return
+    }
     val iconSize = 30.dp
     if (!first) Box(
         Modifier.fillMaxWidth().padding(start = if (icon != null) 16.dp + iconSize + 14.dp else 16.dp).height(0.5.dp).background(Bridge.Outline)
@@ -760,6 +960,29 @@ fun MediaRow(
     below: @Composable ColumnScope.() -> Unit = {},
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
+    // Material's: a tile, with a tonal avatar in the row's own hue (grey while dimmed), shaped by what it is.
+    if (inMaterial) {
+        val m = LocalM3.current
+        val (face, ink) = if (dim) m.containerHighest to m.onSurfaceVariant else tonalPair(color, m.dark)
+        if (!first) MaterialTileGap()
+        Row(
+            modifier.fillMaxWidth().heightIn(min = 56.dp).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(40.dp).clip(avatarShape(icon)).background(face), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = ink, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = TextStyle(fontSize = 16.sp, lineHeight = 22.sp), color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (!subtitle.isNullOrEmpty()) Text(subtitle, style = TextStyle(fontSize = 14.sp, lineHeight = 20.sp), color = m.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                below()
+            }
+            trailing()
+        }
+        return
+    }
     val thumb = 48.dp
     val tint = if (dim) Color(0xFF8E8E93) else color
     if (!first) Box(Modifier.fillMaxWidth().padding(start = 16.dp + thumb + 12.dp).height(0.5.dp).background(Bridge.Outline))

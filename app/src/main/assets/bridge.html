@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-style="theatre">
+<html lang="en" data-style="material">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1814,6 +1814,237 @@
   :root[data-namida] .switch::after { width: 13px; height: 14px; top: 3.5px; left: 4px; border-radius: 30px; box-shadow: none; }
   :root[data-namida] .mon-toggle.on .switch { background: var(--nx-on); }
   :root[data-namida] .mon-toggle.on .switch::after { left: 23px; }
+
+  /* ================================================================ Material (the default style)
+     Android's own design, as the phone's Material look, on the foundation above (the drawer down
+     the side, a bar along the bottom on a narrow screen). The colours are Material 3's roles (--m-*),
+     worked out by applyMaterial() from the phone's colour: its wallpaper's, or the one chosen. On
+     them, Material 3 Expressive: a pill on the tab you are on, big-cornered filled cards, settings
+     as tiles with the page showing between them, joined button groups whose chosen button fills
+     and rounds, buttons whose corners square off under the pointer, icons in scalloped shapes, and
+     Home's two jobs each in a colour of their own. With Namida's look on, its skins win (the rules
+     marked :not([data-namida])); the layout stays Material's. Music and the player keep Theatre's
+     surfaces and type, as under Namida's look; ":not(:where(<music> *))" keeps a rule off them. */
+  :root[data-style="material"] { --side: 280px; --r-card: 24px; --r: 16px; --r-btn: 20px; --spring: cubic-bezier(.34, 1.4, .64, 1); }
+  :root[data-style="material"] body { font-family: "Google Sans Text", "Google Sans", Roboto, system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", sans-serif; }
+  :root[data-style="material"][data-namida] body { font-family: "Lexend Deca", system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif; }
+  :root[data-style="material"] :is([data-panel="music"], #player, .lyr) {
+    --surface: var(--th-surface); --surface-2: var(--th-surface-2); --surface-3: var(--th-surface-3);
+    --line: var(--th-line); --accent: var(--th-accent); --on-accent: var(--th-on-accent);
+    font-family: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "MiSans", sans-serif; }
+  /* Music and the player keep Theatre's type scale too. */
+  :root[data-style="material"] .stage-title { font-size: var(--t-display); }
+  :root[data-style="material"] .stage-title.long { font-size: var(--t-large); }
+  :root[data-style="material"] .stage-artist, :root[data-style="material"] .strip .gs-name { font-size: var(--t-head); }
+  :root[data-style="material"] .trk .tl b, :root[data-style="material"] .album .cap .t, :root[data-style="material"] .pl-title,
+  :root[data-style="material"] .sq-row .txt b { font-size: var(--t-body); }
+  :root[data-style="material"] .trk .who, :root[data-style="material"] .trk .al, :root[data-style="material"] .trk .d, :root[data-style="material"] .trk .no,
+  :root[data-style="material"] .album .cap .a, :root[data-style="material"] .pl-sub, :root[data-style="material"] .pl-times,
+  :root[data-style="material"] .sq-row .txt span, :root[data-style="material"] .sq-end, :root[data-style="material"] .strip .gs-meta,
+  :root[data-style="material"] .stage-album { font-size: var(--t-sub); }
+  :root[data-style="material"] .stage-kicker, :root[data-style="material"] .sq-label, :root[data-style="material"] .sq-row .rt i,
+  :root[data-style="material"] .sq-row .rt em { font-size: var(--t-kick); }
+
+  /* ---------------------------------------------------------------- the drawer, and the bar on a narrow screen */
+  :root[data-style="material"] .side { background: var(--m-c-low); border-right: 0; padding: 20px 12px 16px; }
+  :root[data-style="material"] .logo { padding: 6px 16px 22px; font-size: 20px; font-weight: 500; letter-spacing: 0; }
+  :root[data-style="material"] .tabs { gap: 2px; }
+  :root[data-style="material"] .tabs button, :root[data-style="material"] .side-item {
+    min-height: 56px; padding: 0 16px; gap: 12px; border-radius: 28px; color: var(--m-on-surface-v); font-size: 14px; font-weight: 500; letter-spacing: .1px; }
+  :root[data-style="material"] .tabs button svg, :root[data-style="material"] .side-item svg { width: 24px; height: 24px; flex: 0 0 24px; color: inherit; }
+  :root[data-style="material"] .tabs button:hover, :root[data-style="material"] .side-item:hover { background: color-mix(in srgb, var(--m-on-surface) 8%, transparent); color: var(--m-on-surface); }
+  :root[data-style="material"] .tabs button:active { transform: none; }
+  :root[data-style="material"] .tabs button.on { background: var(--m-sc); color: var(--m-on-sc); font-weight: 700; }
+  :root[data-style="material"] .tabs button.on svg { color: var(--m-on-sc); }
+  /* The pill glides between the tabs with a spring (the foundation's), in the secondary container. */
+  :root[data-style="material"] .tabs.ready button.on { background: none; }
+  :root[data-style="material"] .tab-pill { background: var(--m-sc); }
+  :root[data-style="material"] .tabs.ready .tab-pill { transition: transform .5s var(--spring), width .5s var(--spring), height .5s var(--spring), background .2s; }
+  :root[data-style="material"] .tabs .count { background: var(--m-primary); color: var(--m-on-primary); }
+  :root[data-style="material"] .status { border: 0; border-radius: 20px; background: var(--m-c-high); }
+  :root[data-style="material"] .dot.on { background: var(--m-primary); }
+  :root[data-style="material"] .mon-toggle.on { color: var(--m-on-surface); }
+  :root[data-style="material"]:not([data-namida]) .switch { width: 36px; height: 20px; border-radius: 10px; background: var(--m-c-highest); box-shadow: inset 0 0 0 1.5px var(--m-outline); }
+  :root[data-style="material"]:not([data-namida]) .switch::after { left: 5px; top: 5px; width: 10px; height: 10px; background: var(--m-outline); box-shadow: none;
+    transition: left .3s var(--spring), top .2s, width .2s, height .2s, background .2s; }
+  :root[data-style="material"]:not([data-namida]) .mon-toggle.on .switch { background: var(--m-primary); box-shadow: none; }
+  :root[data-style="material"]:not([data-namida]) .mon-toggle.on .switch::after { left: 19px; top: 3px; width: 14px; height: 14px; background: var(--m-on-primary); }
+  @media (max-width: 900px) {
+    /* Material's navigation bar: each tab's icon in a pill that opens out when it is picked, its name under it. */
+    :root[data-style="material"] .side { background: var(--m-c); border-top: 0; align-items: flex-start; padding: 12px 8px calc(14px + env(safe-area-inset-bottom, 0px)); }
+    :root[data-style="material"] .tabs button, :root[data-style="material"] .side-item { min-height: 0; height: auto; padding: 0 2px; gap: 4px; border-radius: 0;
+      font-size: 12px; font-weight: 500; letter-spacing: .4px; color: var(--m-on-surface-v); }
+    :root[data-style="material"] .tabs button:hover, :root[data-style="material"] .side-item:hover { background: none; }
+    :root[data-style="material"] .tab-pill { display: none; }
+    :root[data-style="material"] .tabs button svg, :root[data-style="material"] .side-item svg { box-sizing: content-box; width: 24px; height: 24px; flex: 0 0 auto;
+      padding: 4px 16px; border-radius: 16px; transition: background .2s; }
+    :root[data-style="material"] .tabs button:hover svg, :root[data-style="material"] .side-item:hover svg { background: color-mix(in srgb, var(--m-on-surface) 8%, transparent); }
+    :root[data-style="material"] .tabs button.on, :root[data-style="material"] .tabs.ready button.on { background: none; color: var(--m-on-surface); font-weight: 700; }
+    :root[data-style="material"] .tabs button.on svg { background: var(--m-sc); color: var(--m-on-sc); animation: m-indicator .45s var(--spring); }
+    :root[data-style="material"] .tabs { flex: 1 1 auto; min-width: 0; }
+    :root[data-style="material"] .tabs button { min-width: 0; }
+    /* The monitor is a switch, not a place: an icon button at the top right, as in the app's top bar. */
+    :root[data-style="material"] .side-foot { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; flex: none; width: auto; margin: 0; }
+    :root[data-style="material"] .side-foot .side-item { width: 48px; height: 48px; padding: 0; justify-content: center; border-radius: 24px; color: var(--m-on-surface-v); }
+    :root[data-style="material"] .side-foot .side-item span { display: none; }
+    :root[data-style="material"] .side-foot .side-item svg, :root[data-style="material"] .side-foot .side-item:hover svg { padding: 0; background: none; }
+    :root[data-style="material"] .side-foot .side-item:hover { background: color-mix(in srgb, var(--m-on-surface) 8%, transparent); }
+    :root[data-style="material"] .side-foot .mon-toggle.on { background: var(--m-primary); color: var(--m-on-primary); }
+    :root[data-style="material"] .side-foot .mon-toggle.on svg { background: none; color: inherit; }
+    :root[data-style="material"] .main { padding: 16px 16px calc(var(--player-h, 0px) + 112px); }
+    :root[data-style="material"] .dock { bottom: calc(var(--player-h, 0px) + 100px); }
+  }
+  @keyframes m-indicator { from { padding-left: 4px; padding-right: 4px; } }
+
+  /* ---------------------------------------------------------------- type, titles and cards */
+  :root[data-style="material"] .main { padding-top: 28px; }
+  :root[data-style="material"] .page-head h1 { font-size: 32px; font-weight: 500; letter-spacing: -.2px; line-height: 40px; }
+  :root[data-style="material"] .page-head p { font-size: 14px; color: var(--m-on-surface-v); }
+  :root[data-style="material"] .bar, :root[data-style="material"] .set-title { margin: 28px 16px 8px; font-size: 14px; font-weight: 500; letter-spacing: .1px; line-height: 20px; color: var(--m-primary); }
+  :root[data-style="material"] .set-title:first-child { margin-top: 4px; }
+  :root[data-style="material"] .bar .act { font-size: 14px; font-weight: 500; color: var(--m-primary); }
+  :root[data-style="material"] .card-title h3, :root[data-style="material"] .sec-head h3 { font-size: 22px; font-weight: 500; letter-spacing: 0; line-height: 28px; }
+  :root[data-style="material"] .card-title p, :root[data-style="material"] .note, :root[data-style="material"] .meta { font-size: 14px; }
+  :root[data-style="material"] a:not(:where([data-panel="music"], #player, .lyr) *), :root[data-style="material"] .sr-action { color: var(--m-primary); }
+  :root[data-style="material"]:not([data-namida]) .card, :root[data-style="material"]:not([data-namida]) .calm { border-radius: 24px; box-shadow: none; }
+  :root[data-style="material"] .card { padding: 20px 24px; }
+
+  /* ---------------------------------------------------------------- buttons */
+  :root[data-style="material"]:not([data-namida]) .btn:not(:where([data-panel="music"], #player, .lyr) *) {
+    height: 40px; padding: 0 24px; border-radius: 20px; background: var(--m-primary); color: var(--m-on-primary);
+    font-size: 14px; font-weight: 500; letter-spacing: .1px; box-shadow: none;
+    transition: border-radius .4s var(--spring), background .15s, box-shadow .15s; }
+  :root[data-style="material"]:not([data-namida]) .btn:not(:where([data-panel="music"], #player, .lyr) *):hover:not(:disabled) {
+    filter: none; background: color-mix(in srgb, var(--m-on-primary) 8%, var(--m-primary)); box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.15); }
+  /* Under the pointer the corners square off, and spring back when let go. */
+  :root[data-style="material"]:not([data-namida]) .btn:not(:where([data-panel="music"], #player, .lyr) *):active:not(:disabled) { transform: none; border-radius: 10px; }
+  :root[data-style="material"]:not([data-namida]) .btn.ghost:not(:where([data-panel="music"], #player, .lyr) *) { background: var(--m-sc); color: var(--m-on-sc); }
+  :root[data-style="material"]:not([data-namida]) .btn.ghost:not(:where([data-panel="music"], #player, .lyr) *):hover:not(:disabled) {
+    background: color-mix(in srgb, var(--m-on-sc) 8%, var(--m-sc)); box-shadow: none; }
+  :root[data-style="material"]:not([data-namida]) .btn.blue { background: var(--m-primary); color: var(--m-on-primary); }
+  :root[data-style="material"]:not([data-namida]) .btn.danger { color: var(--m-error); }
+  :root[data-style="material"]:not([data-namida]) .btn.ghost.danger { background: var(--m-ec); color: var(--m-on-ec); }
+  :root[data-style="material"]:not([data-namida]) .btn.sm:not(:where([data-panel="music"], #player, .lyr) *) { height: 32px; padding: 0 16px; border-radius: 16px; }
+  :root[data-style="material"]:not([data-namida]) .btn.sm:not(:where([data-panel="music"], #player, .lyr) *):active:not(:disabled) { border-radius: 8px; }
+  :root[data-style="material"]:not([data-namida]) .btn:not(:where([data-panel="music"], #player, .lyr) *):disabled {
+    opacity: 1; background: color-mix(in srgb, var(--m-on-surface) 12%, transparent); color: color-mix(in srgb, var(--m-on-surface) 38%, transparent); }
+  :root[data-style="material"]:not([data-namida]) .icon-btn:not(:where([data-panel="music"], #player, .lyr) *) { width: 40px; height: 40px; flex-basis: 40px; color: var(--m-on-surface-v);
+    transition: background .15s, color .15s, border-radius .4s var(--spring); }
+  :root[data-style="material"]:not([data-namida]) .icon-btn:not(:where([data-panel="music"], #player, .lyr) *):hover { background: color-mix(in srgb, var(--m-on-surface) 8%, transparent); color: var(--m-on-surface); }
+  :root[data-style="material"]:not([data-namida]) .icon-btn.on:not(:where([data-panel="music"], #player, .lyr) *) { background: var(--m-sc); color: var(--m-on-sc); }
+  :root[data-style="material"]:not([data-namida]) .icon-btn:not(:where([data-panel="music"], #player, .lyr) *):active { transform: none; border-radius: 12px; }
+  :root[data-style="material"] .link-danger { color: var(--m-error); }
+
+  /* ---------------------------------------------------------------- joined button groups, the switch, fields */
+  :root[data-style="material"]:not([data-namida]) .seg:not(:where([data-panel="music"], #player, .lyr) *) { gap: 2px; padding: 0; border-radius: 0; background: none; }
+  :root[data-style="material"]:not([data-namida]) .seg:not(:where([data-panel="music"], #player, .lyr) *) button {
+    height: 40px; padding: 0 16px; border-radius: 8px; background: var(--m-c-highest); color: var(--m-on-surface-v);
+    font-size: 14px; font-weight: 500; letter-spacing: .1px; box-shadow: none; transition: border-radius .45s var(--spring), background .2s, color .2s; }
+  :root[data-style="material"]:not([data-namida]) .seg:not(:where([data-panel="music"], #player, .lyr) *) button:first-child { border-radius: 20px 8px 8px 20px; }
+  :root[data-style="material"]:not([data-namida]) .seg:not(:where([data-panel="music"], #player, .lyr) *) button:last-child { border-radius: 8px 20px 20px 8px; }
+  :root[data-style="material"]:not([data-namida]) .seg:not(:where([data-panel="music"], #player, .lyr) *) button:hover { color: var(--m-on-surface);
+    background: color-mix(in srgb, var(--m-on-surface) 8%, var(--m-c-highest)); }
+  :root[data-style="material"]:not([data-namida]) .seg:not(:where([data-panel="music"], #player, .lyr) *) button.on { border-radius: 20px; background: var(--m-primary); color: var(--m-on-primary); }
+  /* Material's switch: an outlined track and a small thumb, which fills with the colour and grows when on, a tick on it; it grows again under the pointer. */
+  :root[data-style="material"]:not([data-namida]) .toggle { width: 52px; height: 32px; border-radius: 16px; background: var(--m-c-highest);
+    box-shadow: inset 0 0 0 2px var(--m-outline); transition: background .2s, box-shadow .2s; }
+  :root[data-style="material"]:not([data-namida]) .toggle i { left: 8px; top: 8px; width: 16px; height: 16px; background: var(--m-outline); box-shadow: none;
+    transition: transform .35s var(--spring), left .2s, top .2s, width .2s, height .2s, background .2s; }
+  :root[data-style="material"]:not([data-namida]) .toggle:active i { left: 2px; top: 2px; width: 28px; height: 28px; }
+  :root[data-style="material"]:not([data-namida]) .toggle.on { background: var(--m-primary); box-shadow: none; }
+  :root[data-style="material"]:not([data-namida]) .toggle.on i { left: 4px; top: 4px; width: 24px; height: 24px; background: var(--m-on-primary); transform: translateX(20px); }
+  :root[data-style="material"]:not([data-namida]) .toggle.on:active i { left: 2px; top: 2px; width: 28px; height: 28px; }
+  :root[data-style="material"]:not([data-namida]) .toggle.on i::after { content: ""; position: absolute; inset: 5px; background: var(--m-primary);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5 10 17.5 19 7' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5 10 17.5 19 7' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; }
+  :root[data-style="material"]:not([data-namida]) :is(textarea, input[type=text]):not(:where([data-panel="music"], #player, .lyr) *) { border-radius: 16px; background: var(--m-c-highest); }
+  :root[data-style="material"]:not([data-namida]) :is(textarea, input[type=text]):not(:where([data-panel="music"], #player, .lyr) *):focus { box-shadow: inset 0 0 0 2px var(--m-primary); }
+  :root[data-style="material"]:not([data-namida]) .field { border-radius: 16px; background: var(--m-c-high); }
+  :root[data-style="material"]:not([data-namida]) .field:hover { background: var(--m-c-highest); }
+  :root[data-style="material"] .track:not(:where([data-panel="music"], #player, .lyr) *) { height: 4px; border-radius: 2px; background: var(--m-sc); }
+  :root[data-style="material"] .swatch.auto { background: var(--m-seed, #6750A4); box-shadow: none; }
+  :root[data-style="material"] .swatch.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4.5px var(--m-primary); }
+
+  /* ---------------------------------------------------------------- settings: tiles, plain icons */
+  :root[data-style="material"]:not([data-namida]) .set-group { display: flex; flex-direction: column; gap: 2px; overflow: visible; border-radius: 0; background: none; box-shadow: none; }
+  :root[data-style="material"]:not([data-namida]) .set-group > * { background: var(--surface); border-radius: 4px; }
+  :root[data-style="material"]:not([data-namida]) .set-group > :first-child { border-top-left-radius: 24px; border-top-right-radius: 24px; }
+  :root[data-style="material"]:not([data-namida]) .set-group > :last-child { border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; }
+  /* What goes with the row above it (its choices, a note) is part of that row's tile. */
+  :root[data-style="material"]:not([data-namida]) .set-group > :is(.sr-block, .sr-note) { margin-top: -2px; border-top-left-radius: 0; border-top-right-radius: 0; }
+  :root[data-style="material"]:not([data-namida]) .set-group > :has(+ :is(.sr-block, .sr-note)) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  :root[data-style="material"]:not([data-namida]) .set-row + .set-row::before { display: none; }
+  :root[data-style="material"] .set-row { gap: 16px; min-height: 56px; padding: 12px 16px; }
+  :root[data-style="material"] .set-row.sr-block { min-height: 0; padding: 2px 16px 16px 56px; }
+  :root[data-style="material"] .set-row.sr-note { min-height: 0; padding: 0 16px 14px 56px; font-size: 14px; }
+  :root[data-style="material"] details.sr-more summary { padding-left: 40px; font-size: 16px; }
+  :root[data-style="material"] details.sr-more > :not(summary), :root[data-style="material"] details.sr-more .note { margin-left: 40px; }
+  :root[data-style="material"]:not([data-namida]) .sq { width: 24px; height: 24px; flex-basis: 24px; border-radius: 0; background: none; color: var(--m-on-surface-v); }
+  :root[data-style="material"]:not([data-namida]) .sq svg { width: 24px; height: 24px; stroke-width: 1.8; }
+  :root[data-style="material"] .sr-text > b { font-size: 16px; font-weight: 400; }
+  :root[data-style="material"] .sr-text > span { font-size: 14px; color: var(--m-on-surface-v); }
+  :root[data-style="material"] .sr-value { font-size: 14px; color: var(--m-on-surface-v); }
+  :root[data-style="material"] .sr-action { font-size: 14px; font-weight: 500; }
+  :root[data-style="material"]:not([data-namida]) section[data-panel="settings"] .card-title .appicon { background: none; box-shadow: none; color: var(--m-on-surface-v); }
+  @media (max-width: 700px) { :root[data-style="material"] .set-row > .seg { margin-left: 40px; } }
+
+  /* ---------------------------------------------------------------- icons in Material 3 Expressive's shapes */
+  :root[data-style="material"]:not([data-namida]) .appicon:not(.card-title .appicon) { border-radius: 0;
+    color: color-mix(in srgb, var(--tint, var(--m-primary)) 70%, var(--txt)); background: color-mix(in srgb, var(--tint, var(--m-primary)) 22%, var(--surface));
+    -webkit-mask: var(--m-cookie) center / 100% 100% no-repeat; mask: var(--m-cookie) center / 100% 100% no-repeat; }
+  :root[data-style="material"]:not([data-namida]) :is(.ficon, .ficon-dir):not(:where([data-panel="music"], #player, .lyr) *) { border-radius: 0;
+    color: color-mix(in srgb, var(--tint, var(--m-primary)) 70%, var(--txt)); background: color-mix(in srgb, var(--tint, var(--m-primary)) 22%, var(--surface));
+    -webkit-mask: var(--m-clover) center / 100% 100% no-repeat; mask: var(--m-clover) center / 100% 100% no-repeat; }
+  :root[data-style="material"]:not([data-namida]) .ficon-dir { --tint: var(--m-primary); }
+  :root[data-style="material"]:not([data-namida]) .ficon b { color: inherit; }
+  :root[data-style="material"] .calm-ic { border-radius: 0; background: var(--m-ec); color: var(--m-on-ec); box-shadow: none;
+    -webkit-mask: var(--m-cookie12) center / 100% 100% no-repeat; mask: var(--m-cookie12) center / 100% 100% no-repeat; }
+  :root[data-style="material"] .calm-ic svg path { stroke: currentColor; }
+  :root[data-style="material"] .drop { border: 2px dashed var(--m-outline-v); border-radius: 24px; }
+  :root[data-style="material"] .drop:hover, :root[data-style="material"] .drop.over { transform: none; border-color: var(--m-primary); background: color-mix(in srgb, var(--m-primary) 8%, transparent); }
+  :root[data-style="material"] .drop:hover .appicon, :root[data-style="material"] .drop.over .appicon { color: var(--m-primary); }
+  :root[data-style="material"] .live-with i { background: var(--m-primary); }
+
+  /* ---------------------------------------------------------------- Home: the status in the primary colour, sending in the tertiary */
+  :root[data-style="material"] .status-line { --hero-txt: var(--m-on-pc); --hero-sub: color-mix(in srgb, var(--m-on-pc) 78%, transparent);
+    min-height: 0; padding: 28px 28px 22px; margin-bottom: 16px; border-radius: 32px; background: var(--m-pc); box-shadow: none; }
+  /* A soft burst of the colour behind it, in place of Theatre's bolt, turning slowly. */
+  :root[data-style="material"] .status-line::before { right: -34px; top: 50%; width: 230px; height: 230px; margin-top: -115px; background: var(--m-primary); opacity: .12;
+    -webkit-mask: var(--m-burst) center / 100% 100% no-repeat; mask: var(--m-burst) center / 100% 100% no-repeat; animation: m-turn 60s linear infinite; }
+  @keyframes m-turn { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { :root[data-style="material"] .status-line::before { animation: none; } }
+  :root[data-style="material"] .status-line .who b { font-size: clamp(30px, 3vw, 44px); font-weight: 600; letter-spacing: -.02em; text-shadow: none; }
+  :root[data-style="material"] .status-line .who span, :root[data-style="material"] .status-line::after { font-size: 15px; text-shadow: none; }
+  :root[data-style="material"] .status-line .rate b { font-weight: 600; text-shadow: none; }
+  :root[data-style="material"] .status-line .btn { background: var(--m-primary); color: var(--m-on-primary); }
+  :root[data-style="material"] .status-line .btn.ghost { background: color-mix(in srgb, var(--m-on-pc) 10%, transparent); color: var(--m-on-pc); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  :root[data-style="material"] .status-line .btn.ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--m-on-pc) 16%, transparent); }
+  :root[data-style="material"] #route-badge { color: var(--m-on-pc); background: color-mix(in srgb, var(--m-on-pc) 10%, transparent); box-shadow: none; font-size: 14px; font-weight: 500; }
+  :root[data-style="material"] #route-badge.fast { color: var(--m-on-primary); background: var(--m-primary); box-shadow: none; }
+  :root[data-style="material"] .beam-card { isolation: isolate; overflow: hidden; border-radius: 32px; color: var(--m-on-tc); background: var(--m-tc); box-shadow: none; }
+  /* A clover of the colour behind its buttons. */
+  :root[data-style="material"] .beam-card::after { content: ""; position: absolute; z-index: -1; right: -24px; top: -24px; width: 150px; height: 150px; pointer-events: none;
+    background: var(--m-tertiary); opacity: .14; transform: rotate(20deg);
+    -webkit-mask: var(--m-flower) center / 100% 100% no-repeat; mask: var(--m-flower) center / 100% 100% no-repeat; }
+  :root[data-style="material"] .beam-card.over { transform: none; box-shadow: inset 0 0 0 3px var(--m-tertiary); }
+  :root[data-style="material"] .beam-title { font-size: 32px; font-weight: 600; letter-spacing: -.02em; text-shadow: none; }
+  :root[data-style="material"] .beam-hint { font-weight: 500; }
+  :root[data-style="material"] .beam-btn { height: 48px; border-radius: 24px; font-size: 15px; font-weight: 500; color: var(--m-on-tc);
+    background: color-mix(in srgb, var(--m-on-tc) 10%, transparent); box-shadow: none; transition: border-radius .4s var(--spring), background .15s, box-shadow .15s; }
+  :root[data-style="material"] .beam-btn:hover { background: color-mix(in srgb, var(--m-on-tc) 16%, transparent); }
+  :root[data-style="material"] .beam-btn.primary { color: var(--m-on-tertiary); background: var(--m-tertiary); box-shadow: none; }
+  :root[data-style="material"] .beam-btn.primary:hover { transform: none; box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.15); }
+  :root[data-style="material"] .beam-btn:active { transform: none; border-radius: 12px; }
+  :root[data-style="material"] .route-hint { border-radius: 16px; background: var(--m-tc); color: var(--m-on-tc); }
+  :root[data-style="material"] .route-hint a { color: inherit; text-decoration: underline; }
+  :root[data-style="material"] .banner { border-radius: 16px; background: var(--m-sc); color: var(--m-on-sc); }
+  :root[data-style="material"] .banner.bad { background: var(--m-ec); color: var(--m-on-ec); }
+  :root[data-style="material"] .drop-veil .send-ic { background: var(--m-tertiary); color: var(--m-on-tertiary); border-radius: 0;
+    -webkit-mask: var(--m-cookie) center / 100% 100% no-repeat; mask: var(--m-cookie) center / 100% 100% no-repeat; }
+
+  /* ---------------------------------------------------------------- floating: the monitor, the transfers */
+  :root[data-style="material"] .mon-pill { border-radius: 28px; background: var(--m-c-high); box-shadow: 0 1px 3px rgba(0,0,0,.2), 0 4px 12px 2px rgba(0,0,0,.12); }
+  :root[data-style="material"] .mon-sheet, :root[data-style="material"] .dock { border-radius: 28px; background: var(--m-c-high); }
 </style>
 </head>
 <body>
@@ -2002,6 +2233,16 @@
     <h2 class="set-title">Appearance</h2>
     <div class="set-group">
       <div class="set-row">
+        <span class="sq blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 3.5 8 12 12.5 20.5 8 12 3.5Z"/><path d="m3.5 12 8.5 4.5 8.5-4.5"/><path d="m3.5 16 8.5 4.5 8.5-4.5"/></svg></span>
+        <div class="sr-text"><b>Style</b></div>
+      </div>
+      <div class="set-row sr-block">
+        <div class="seg" id="style-seg">
+          <button data-style-choice="material">Material</button>
+          <button data-style-choice="theatre">Theatre</button>
+        </div>
+      </div>
+      <div class="set-row">
         <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="colour"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.9 1.8-1.8 0-1.2-1-1.6-1-2.7 0-1 .8-1.7 1.8-1.7h2.2a3.7 3.7 0 0 0 3.7-3.7C20.5 7 16.7 3.5 12 3.5Z"/><circle cx="7.8" cy="11" r="1.1"/><circle cx="10.5" cy="7.6" r="1.1"/><circle cx="15" cy="7.8" r="1.1"/></svg></span>
         <div class="sr-text"><b>Colour</b></div>
         <span class="sr-value" id="accent-name">Automatic</span>
@@ -2020,7 +2261,7 @@
       </div>
       <div class="set-row">
         <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="music"><path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg></span>
-        <div class="sr-text"><b>Namida style</b><span>Its surfaces, font and icons everywhere, in your colour</span></div>
+        <div class="sr-text"><b>Namida style</b></div>
         <button class="toggle" id="namida-toggle" type="button" role="switch" aria-checked="false" aria-label="Namida style"><i></i></button>
       </div>
     </div>
@@ -2032,7 +2273,7 @@
         <div class="sr-text"><b>blazeit-pc.bat</b><span id="helper-state"></span></div>
         <a class="sr-action" href="/blazeit-pc.bat" download="blazeit-pc.bat">Download</a>
       </div>
-      <div class="set-row sr-note">Full speed, the fastest link, and the phone as a trackpad. Nothing is installed; close its window to stop it.</div>
+      <div class="set-row sr-note">Full speed and the phone as a trackpad. Nothing to install; close its window to stop.</div>
     </div>
 
     <h2 class="set-title">Speed</h2>
@@ -2043,7 +2284,7 @@
       </div>
       <div class="set-row">
         <span class="sq green"><svg viewBox="0 0 24 24" aria-hidden="true" data-ix="rows"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>
-        <div class="sr-text"><b>Connections per file</b><span>Four suits most links; one or two on a cable</span></div>
+        <div class="sr-text"><b>Connections per file</b><span>Four for most links, one or two on a cable</span></div>
         <div class="seg" id="streams-seg"></div>
       </div>
       <div class="set-row">
@@ -4812,7 +5053,7 @@ async function refreshState() {
   state.files = s.files || [];
   state.device = s.deviceName || "";
   applyTheme(s.theme || "system");
-  applyLook({ style: s.style, accent: s.accent, namida: !!s.namida });
+  applyLook({ style: s.style, accent: s.accent, namida: !!s.namida, seed: s.seed });
   state.parallelThreshold = s.parallelThreshold || state.parallelThreshold;
 
   var saved = null;
@@ -4845,30 +5086,41 @@ function applyTheme(theme) {
   try { localStorage.setItem("blazeit.theme", theme); } catch (e) {}
   if (!$("mon-sheet").hidden) pollMonitor();
   if (typeof npNamidaColours === "function") npNamidaColours();
-  // Namida's look is worked out for light or dark.
-  if (look.namida) applyLook(look);
+  // Namida's look and Material's are worked out for light or dark.
+  if (look.namida || look.style === "material") applyLook(look);
 }
 
 /**
- * The colour, shared with the phone like the theme: "auto" (black and white, with a night-blue
- * banner) or one of the system colours below, which then stands in for the accent everywhere.
- * There is one look, Theatre; the phone still says so in the look it shares.
+ * The look, shared with the phone like the theme. The style: Material (Android's own, the
+ * default) or Theatre (every older style is Theatre now). The colour: "auto" (in Material the
+ * phone's wallpaper colour, which the phone sends as the seed; in Theatre black and white with a
+ * night-blue banner) or one of the system colours below, which then stands in for the accent.
  */
 var ACCENTS = [
   // Apple Music's pink-red as Red.
   ["red", "#FA2D48"], ["orange", "#FF9500"], ["yellow", "#FFCC00"], ["green", "#34C759"], ["mint", "#00C7BE"],
   ["blue", "#0A84FF"], ["purple", "#AF52DE"],
 ];
-var look = { style: "theatre", accent: "auto" };
+/** Material's own baseline colour, the seed when the phone has no wallpaper colour to give. */
+var M3_BASELINE = "#6750A4";
+var look = { style: "material", accent: "auto", namida: false, seed: M3_BASELINE };
+/** The wallpaper's colour, as last seen while the colour was Automatic, for its swatch. */
+var wallSeed = null;
+try { wallSeed = localStorage.getItem("blazeit.wall"); } catch (e) {}
 
 function applyLook(l) {
   if (!l) return;
-  var style = "theatre";
+  var style = l.style === undefined ? look.style : l.style === "material" ? "material" : "theatre";
   var accent = l.accent || "auto";
   var hex = null;
   ACCENTS.forEach(function (a) { if (a[0] === accent) hex = a[1]; });
   if (!hex) accent = "auto";
-  look = { style: style, accent: accent, namida: l.namida === undefined ? !!look.namida : !!l.namida };
+  var seed = /^#[0-9a-fA-F]{6}$/.test(l.seed || "") ? l.seed : look.seed || M3_BASELINE;
+  look = { style: style, accent: accent, namida: l.namida === undefined ? !!look.namida : !!l.namida, seed: seed };
+  if (accent === "auto" && l.seed) {
+    wallSeed = seed;
+    try { localStorage.setItem("blazeit.wall", seed); } catch (e) {}
+  }
   var root = document.documentElement;
   root.setAttribute("data-style", style);
   root.setAttribute("data-accent", accent);
@@ -4888,11 +5140,114 @@ function applyLook(l) {
   Array.prototype.forEach.call(document.querySelectorAll("[data-accent-choice]"), function (b) {
     b.classList.toggle("on", b.dataset.accentChoice === accent);
   });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-style-choice]"), function (b) {
+    b.classList.toggle("on", b.dataset.styleChoice === style);
+  });
+  // Material's Automatic is the wallpaper's colour, once the phone has given one.
+  var wall = style === "material" && (wallSeed || "").toLowerCase() !== M3_BASELINE.toLowerCase() && !!wallSeed;
   var label = $("accent-name");
-  if (label) label.textContent = accent === "auto" ? "Automatic" : accent.charAt(0).toUpperCase() + accent.slice(1);
+  if (label) label.textContent = accent === "auto" ? (wall ? "Wallpaper" : "Automatic") : accent.charAt(0).toUpperCase() + accent.slice(1);
+  var autoSw = document.querySelector(".swatch.auto");
+  if (autoSw) autoSw.title = style === "material" ? (wall ? "Wallpaper colour" : "Automatic") : "Automatic: black and white";
+  clearMaterial();
   applyNamida(hex);
+  applyMaterial(hex);
   setPlayerSpace();
+  // The tabs move between a drawer and a row along the top as the style changes; the pill follows.
+  if (typeof moveTabPill === "function") setTimeout(moveTabPill, 0);
   try { localStorage.setItem("blazeit.look", JSON.stringify(look)); } catch (e) {}
+}
+
+// ---- Material (the default style): Material 3's colour roles, as the phone's Material look
+
+/** Light or dark as chosen, or as this computer is (not read off the page, which this recolours). */
+function pageDark() {
+  var t = document.documentElement.getAttribute("data-theme");
+  return t === "dark" || (t !== "light" && !!window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+
+/**
+ * Material 3's roles from one colour, as the phone works them out (MaterialColors.kt): Material's
+ * tones laid on the colour's hue as lightness (primary at 40, 80 in the dark; containers at 90 and
+ * 30), the secondary quieter, the tertiary a sixth of the way round, the neutral surfaces barely tinted.
+ */
+function m3Roles(rgb, dark) {
+  var hsl = npHsl(rgb), s = Math.max(0, Math.min(1, hsl[1]));
+  // A grey has no hue of its own: Material's baseline one stands in.
+  var h = hsl[1] < 0.04 ? 256 : hsl[0];
+  function p(t) { return npRgbOf(h, Math.min(0.9, Math.max(s, 0.36)), t / 100); }
+  function sec(t) { return npRgbOf(h, Math.min(0.35, Math.max(s, 0.36) * 0.4), t / 100); }
+  function ter(t) { return npRgbOf((h + 60) % 360, Math.min(0.5, Math.max(s, 0.3) * 0.55), t / 100); }
+  function n(t) { return npRgbOf(h, Math.min(0.06, s * 0.06), t / 100); }
+  function nv(t) { return npRgbOf(h, Math.min(0.12, s * 0.12), t / 100); }
+  return dark ? {
+    primary: p(80), "on-primary": p(20), pc: p(30), "on-pc": p(90),
+    sc: sec(30), "on-sc": sec(90), tertiary: ter(80), "on-tertiary": ter(20), tc: ter(30), "on-tc": ter(90),
+    error: [242, 184, 181], "on-error": [96, 20, 16], ec: [140, 29, 24], "on-ec": [249, 222, 220],
+    surface: n(6), "on-surface": n(90), "on-surface-v": nv(80), outline: nv(60), "outline-v": nv(30),
+    "c-lowest": n(4), "c-low": n(10), c: n(12), "c-high": n(17), "c-highest": n(22),
+  } : {
+    primary: p(40), "on-primary": p(100), pc: p(90), "on-pc": p(10),
+    sc: sec(90), "on-sc": sec(10), tertiary: ter(40), "on-tertiary": ter(100), tc: ter(90), "on-tc": ter(10),
+    error: [179, 38, 30], "on-error": [255, 255, 255], ec: [249, 222, 220], "on-ec": [65, 14, 11],
+    surface: n(98), "on-surface": n(10), "on-surface-v": nv(30), outline: nv(50), "outline-v": nv(80),
+    "c-lowest": n(100), "c-low": n(96), c: n(94), "c-high": n(92), "c-highest": n(90),
+  };
+}
+
+/**
+ * Material 3 Expressive's rounded polygons as masks (the phone's CookieShape): a scalloped cookie
+ * of soft points for icons, and the deeper four-lobed clover for files.
+ */
+var M_SHAPES = null;
+function mShapes() {
+  if (M_SHAPES) return M_SHAPES;
+  function shape(lobes, depth) {
+    var steps = lobes * 24, d = "";
+    for (var i = 0; i <= steps; i++) {
+      var t = i * 2 * Math.PI / steps, r = 50 * (1 - depth + depth * Math.cos(lobes * t));
+      d += (i ? "L" : "M") + (50 + r * Math.cos(t - Math.PI / 2)).toFixed(2) + " " + (50 + r * Math.sin(t - Math.PI / 2)).toFixed(2);
+    }
+    return 'url("data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="' + d + 'Z"/></svg>') + '")';
+  }
+  // The deeper burst and flower are for the large shapes behind Home's cards, where shallow points would not show.
+  return (M_SHAPES = { cookie: shape(9, 0.05), cookie12: shape(12, 0.035), clover: shape(4, 0.1), burst: shape(10, 0.07), flower: shape(4, 0.16) });
+}
+
+/** What the Material look sets on the page (and takes off again for Theatre). */
+var M_KEYS = ["--bg", "--surface", "--surface-2", "--surface-3", "--txt", "--sub", "--faint", "--line", "--side-bg", "--bad"];
+function clearMaterial() {
+  var st = document.documentElement.style;
+  for (var i = st.length - 1; i >= 0; i--) if (st[i].indexOf("--m-") === 0) st.removeProperty(st[i]);
+  M_KEYS.forEach(function (k) { st.removeProperty(k); });
+}
+
+/**
+ * The Material look's colours: its roles (--m-*) from the colour chosen, else the phone's seed
+ * (the wallpaper's), or with Namida's look on from Namida's colour, which then keeps the grounds
+ * and cards its own. The page's own tokens are laid on the roles, so every part follows; Music and
+ * the player keep Theatre's surfaces (--th-*), as they do under Namida's look.
+ */
+function applyMaterial(hex) {
+  if (look.style !== "material") return;
+  var root = document.documentElement, dark = pageDark();
+  var from = look.namida ? (hex ? npRgb(hex, NAMIDA_DEFAULT_RGB) : NAMIDA_DEFAULT_RGB) : npRgb(hex || look.seed, [103, 80, 164]);
+  var r = m3Roles(from, dark), shapes = mShapes();
+  function css(c) { return "rgb(" + c.join(",") + ")"; }
+  function set(k, v) { root.style.setProperty(k, v); }
+  Object.keys(r).forEach(function (k) { set("--m-" + k, css(r[k])); });
+  set("--m-seed", wallSeed || M3_BASELINE);
+  set("--m-cookie", shapes.cookie); set("--m-cookie12", shapes.cookie12); set("--m-clover", shapes.clover);
+  set("--m-burst", shapes.burst); set("--m-flower", shapes.flower);
+  var onHex = look.accent === "yellow" ? "#1C1C1E" : "#FFFFFF";
+  var th = dark
+    ? { surface: "#1A1A1C", "surface-2": "#2B2B2F", "surface-3": "#3A3A3F", line: "rgba(255,255,255,.09)", accent: hex || "#FFFFFF", "on-accent": hex ? onHex : "#000000" }
+    : { surface: "#FFFFFF", "surface-2": "#E8E8ED", "surface-3": "#DADADF", line: "rgba(0,0,0,.08)", accent: hex || "#1D1D1F", "on-accent": hex ? onHex : "#FFFFFF" };
+  Object.keys(th).forEach(function (k) { set("--th-" + k, th[k]); });
+  if (look.namida) return;
+  set("--bg", css(r.surface)); set("--surface", css(r.c)); set("--surface-2", css(r["c-high"])); set("--surface-3", css(r["c-highest"]));
+  set("--txt", css(r["on-surface"])); set("--sub", css(r["on-surface-v"])); set("--faint", css(r.outline)); set("--line", css(r["outline-v"]));
+  set("--side-bg", css(r["c-low"])); set("--accent", css(r.primary)); set("--on-accent", css(r["on-primary"])); set("--bad", css(r.error));
 }
 
 // ---- Namida's look over the page (the shared switch; Music and its player are Namida's either way)
@@ -7995,7 +8350,7 @@ function setupFullPlayer() {
   $("np-qlist").addEventListener("scroll", npJumpIcon, { passive: true });
   if (window.matchMedia) {
     var scheme = window.matchMedia("(prefers-color-scheme: dark)");
-    var recolour = function () { npNamidaColours(); if (look.namida) applyLook(look); if (np.shown) npRender(); };
+    var recolour = function () { npNamidaColours(); if (look.namida || look.style === "material") applyLook(look); if (np.shown) npRender(); };
     if (scheme.addEventListener) scheme.addEventListener("change", recolour); else if (scheme.addListener) scheme.addListener(recolour);
   }
   nxFill(document);
@@ -8087,6 +8442,9 @@ function showApp() {
       b.addEventListener("click", function () { setTheme(b.dataset.themeChoice); });
     });
     buildSwatches();
+    Array.prototype.forEach.call(document.querySelectorAll("[data-style-choice]"), function (b) {
+      b.addEventListener("click", function () { setLook({ style: b.dataset.styleChoice }); });
+    });
     $("namida-toggle").addEventListener("click", function () { setLook({ namida: !look.namida }); });
     applyLook(look);
     renderPending();
@@ -8222,7 +8580,7 @@ $("pair-cancel").addEventListener("click", pairReset);
   var saved = "system";
   try { saved = localStorage.getItem("blazeit.theme") || "system"; } catch (e) {}
   applyTheme(saved);
-  try { applyLook(JSON.parse(localStorage.getItem("blazeit.look") || "null")); } catch (e) {}
+  try { applyLook(JSON.parse(localStorage.getItem("blazeit.look") || "null") || look); } catch (e) { applyLook(look); }
   try {
     var res = await fetch("/api/ping", { credentials: "same-origin" });
     var info = await res.json();

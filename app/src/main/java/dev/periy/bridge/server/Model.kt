@@ -43,6 +43,8 @@ data class StateDto(
     val accent: String = "auto",
     /** Namida's look over the whole page, not only its music. */
     val namida: Boolean = false,
+    /** The colour the Material look is built from (the wallpaper's, for Automatic). */
+    val seed: String = "#6750A4",
     /** Clipboard follows between phone and laptop helper without pressing Send. */
     val clipSync: Boolean = true,
     /** What the shared clipboard holds: text, a picture, a file, or nothing. */

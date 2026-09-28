@@ -129,12 +129,11 @@ fun ControlPane(running: Boolean, onStart: () -> Unit, modifier: Modifier = Modi
         if (!running || laptops.isEmpty()) {
             Column(Modifier.fillMaxWidth().panel().padding(14.dp)) {
                 if (!running) {
-                    Text("Start Localhost 8787, then run the helper on the laptop.", style = BodyStyle, color = Bridge.Text)
+                    Text("Start the app, then the laptop helper.", style = BodyStyle, color = Bridge.Text)
                     BridgeButton("Start", Modifier.padding(top = 10.dp), onClick = onStart)
                 } else {
                     Text(
-                        "On the laptop, run blazeit-pc.bat (the Localhost 8787 page has it under Laptop control). " +
-                            "It finds this phone by itself and asks you to allow it here once.",
+                        "Run blazeit-pc.bat on the laptop (the page's Laptop control has it), then allow it here once.",
                         style = BodyStyle, color = Bridge.Text,
                     )
                 }

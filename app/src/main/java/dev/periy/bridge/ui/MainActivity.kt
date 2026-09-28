@@ -145,6 +145,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         vm.refresh()
+        // The wallpaper's colours may have changed: the Material look follows them.
+        container.refreshSeed()
         // On screen now, so Android can ask (once) to let Localhost 8787 read the log the watch needs.
         if (BridgeService.running.value) dev.periy.bridge.server.ClipWatch.ensure(this, container.prefs.clipSync)
     }
@@ -335,9 +337,11 @@ private fun BlazeItUi(vm: MainViewModel) {
         dev.periy.bridge.server.clipboardReach(devices, live, null, if (peers.sharesClipboard) paired.map { it.name } else emptyList())
     }
 
-    // Home runs its hero under the status bar and the title, and the hero is always dark.
+    // Material's look: a top app bar and a docked navigation bar; Theatre's: a floating title and tabs.
+    val material = LocalStyle.current == "material"
+    // Theatre's Home runs its hero under the status bar and the title, and the hero is always dark.
     // By the page mostly on screen, so the header changes look halfway through a swipe, not at its start.
-    val heroUnderBar = kotlin.math.round(pagePos).toInt() == TAB_HOME && !showOem
+    val heroUnderBar = !material && kotlin.math.round(pagePos).toInt() == TAB_HOME && !showOem
     // The header is drawn for the dark hero only while the hero is still under it; scrolled
     // past, it takes the page's own colours, or its tabs would vanish on light cards.
     val headerBottom = with(androidx.compose.ui.platform.LocalDensity.current) {
@@ -434,11 +438,15 @@ private fun BlazeItUi(vm: MainViewModel) {
     // The tabs float along the bottom; every page leaves room under it for them, and for the
     // mini player over them while music is queued.
     val hasPlayer = now.current != null && !showOem && !imeUp
-    val underBar = (if (imeUp) 0.dp else TabsHeight + bottomInset) + if (hasPlayer) MiniRoom else 0.dp
+    val underBar = (if (imeUp) 0.dp else (if (material) MaterialNavHeight else TabsHeight) + bottomInset) + if (hasPlayer) MiniRoom else 0.dp
     // Room for the monitor pill, so by default it covers nothing.
     val monitorRoom = if (showMonitor) 48.dp else 0.dp
-    val headerTop = statusTop + HeaderHeight + monitorRoom
+    val headerTop = statusTop + (if (material) MaterialTopHeight else HeaderHeight) + monitorRoom
     val contentTop = if (!heroUnderBar) headerTop else 0.dp
+    // Material's top bar takes its container colour once the page under it has scrolled.
+    val scrolled by remember {
+        derivedStateOf { lists[pager.currentPage].let { it.firstVisibleItemIndex > 0 || it.firstVisibleItemScrollOffset > 0 } }
+    }
 
     Box(Modifier.fillMaxSize().background(Bridge.Bg)) {
         Box(Modifier.fillMaxSize()) {
@@ -460,7 +468,7 @@ private fun BlazeItUi(vm: MainViewModel) {
                             snapAnimationSpec = spring(dampingRatio = 0.86f, stiffness = 420f),
                         ),
                     ) { page ->
-                        val top = if (page != TAB_HOME) headerTop else 0.dp
+                        val top = if (page != TAB_HOME || material) headerTop else 0.dp
                         // A page on its way out sinks back a little and dims; the one coming in rises to meet you.
                         Box(Modifier.fillMaxSize().graphicsLayer {
                             val off = kotlin.math.abs((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
@@ -515,8 +523,10 @@ private fun BlazeItUi(vm: MainViewModel) {
                         }
                     }
 
+                    val title = if (showOem) "Keep running" else if (shown == TAB_HOME) "Localhost 8787" else PAGES[shown].first
+                    if (material) MaterialTopBar(title, statusTop, scrolled && !showOem) { MonitorButton(showMonitor) { setMonitor(!showMonitor) } }
                     // Over Home's hero the hero carries the title itself; the header comes in once it has gone.
-                    androidx.compose.animation.AnimatedVisibility(
+                    else androidx.compose.animation.AnimatedVisibility(
                         !overHero,
                         enter = androidx.compose.animation.fadeIn(tween(160)),
                         exit = androidx.compose.animation.fadeOut(tween(120)),
@@ -524,9 +534,20 @@ private fun BlazeItUi(vm: MainViewModel) {
                         AppHeader(if (shown == TAB_HOME) "Localhost 8787" else PAGES[shown].first, false, showMonitor) { setMonitor(!showMonitor) }
                     }
 
+                    // Material's navigation bar, docked along the bottom; it sinks away as the player opens.
+                    if (material && !imeUp && !showOem) MaterialNavBar(
+                        TABS, pillOfPage(shown.toFloat()).toInt(), pillOfPage(pagePos), bottomInset,
+                        Modifier.align(Alignment.BottomCenter).graphicsLayer {
+                            if (now.current == null) return@graphicsLayer
+                            val cp = motion.p.coerceIn(0f, 1f)
+                            translationY = cp * size.height
+                            alpha = 1f - cp
+                        },
+                    ) { onPill(it); showOem = false }
+
                     // The tabs, floating along the bottom over a fade of the page, in reach of a thumb.
                     // As the player opens they sink away under it, and come back as it closes.
-                    if (!imeUp && !showOem) androidx.compose.foundation.layout.BoxWithConstraints(
+                    if (!material && !imeUp && !showOem) androidx.compose.foundation.layout.BoxWithConstraints(
                         Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                             .graphicsLayer {
                                 if (now.current == null) return@graphicsLayer
@@ -563,7 +584,9 @@ private fun BlazeItUi(vm: MainViewModel) {
         // What is playing: the mini player over the tabs, or 12 above Namida's bar in Music (it
         // glides between the two), dragged up to full screen and on to the queue.
         val miniLift by androidx.compose.animation.core.animateDpAsState(
-            if (shelf.showing) bottomInset + MusicBarHeight + 12.dp else bottomInset + 66.dp, tween(320), label = "lift",
+            if (shelf.showing) bottomInset + MusicBarHeight + 12.dp
+            else if (material) bottomInset + MaterialNavHeight + 8.dp else bottomInset + 66.dp,
+            tween(320), label = "lift",
         )
         if (hasPlayer) NowPlaying(
             player, now, motion, ctx.container.loudness,
@@ -596,11 +619,13 @@ private fun musicPermission(): String =
 
 @Composable
 private fun MonitorButton(on: Boolean, toggle: () -> Unit) {
+    // In Material's top bar, an icon toggle: a plain icon, filled in the colour while on.
+    val material = inMaterial
     IconChip(
         BlazeIcons.Pulse, if (on) "Hide monitor" else "Show monitor",
-        tint = if (on) Bridge.OnAccent else Bridge.Text,
+        tint = if (on) Bridge.OnAccent else if (material) Bridge.Muted else Bridge.Text,
         bg = if (on) Bridge.Accent else Bridge.Chip,
-        size = 36.dp,
+        size = if (material) 40.dp else 36.dp,
         onClick = toggle,
     )
 }
@@ -746,9 +771,9 @@ private class HeroText(state: UiState, running: Boolean, val url: String?) {
         else -> "Open on your computer"
     }
     val note: String? = when {
-        !running -> "Switch it on to reach this phone from a computer or another phone."
+        !running -> "Turn on to connect a computer or phone."
         state.storageMode == Storage.Mode.NO_DESTINATION -> "Set it in Settings, Receiving."
-        url == null -> "Plug in a USB cable, join Wi-Fi, or start the hotspot."
+        url == null -> "Connect USB, Wi-Fi or the hotspot."
         state.onlyCellular -> "Mobile data can't be reached. Use USB or the hotspot."
         else -> null
     }
@@ -831,23 +856,26 @@ private fun PowerSwitch(on: Boolean, onToggle: () -> Unit) {
  */
 @Composable
 private fun LinkPicker(options: List<LinkOption>, chosen: LinkOption?, note: String?, onPick: (LinkOption) -> Unit) {
+    // Theatre's: white on the dark hero. Material's: the card's ink, the picked one in the primary colour.
+    val hi = LocalHeroInk.current
+    val ink = hi.ink
     Column(Modifier.padding(top = 14.dp)) {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                .background(Color.White.copy(alpha = 0.12f))
+                .background(ink.copy(alpha = if (hi.shadow != null) 0.12f else 0.08f))
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             options.forEach { o ->
                 val on = o === chosen
                 val up = o.url != null
-                val bg by androidx.compose.animation.animateColorAsState(if (on) Color.White
+                val bg by androidx.compose.animation.animateColorAsState(if (on) hi.lit
                     else Color.Transparent, tween(160), label = "seg")
-                val fg = if (on) Color(0xFF111114)
-                    else Color.White.copy(alpha = if (up) 1f else 0.5f)
+                val fg = if (on) hi.onLit
+                    else ink.copy(alpha = if (up) 1f else 0.5f)
                 Column(
                     Modifier.weight(1f)
-                        .pressable(RoundedCornerShape(12.dp), scaleTo = 0.96f) { if (up) onPick(o) else o.setUp() }
+                        .pressable(RoundedCornerShape(12.dp), scaleTo = if (hi.shadow != null) 0.96f else 1f) { if (up) onPick(o) else o.setUp() }
                         .background(bg)
                         .padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -860,14 +888,14 @@ private fun LinkPicker(options: List<LinkOption>, chosen: LinkOption?, note: Str
                     Text(
                         if (up) o.speed else "Off",
                         style = TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"),
-                        color = if (on) fg.copy(alpha = 0.66f) else Color.White.copy(alpha = if (up) 0.7f else 0.4f),
+                        color = if (on) fg.copy(alpha = 0.66f) else ink.copy(alpha = if (up) 0.7f else 0.4f),
                         maxLines = 1,
                     )
                 }
             }
         }
         if (note != null) Text(
-            note, style = BodyStyle.copy(fontSize = 13.sp, shadow = OnArt), color = Color.White.copy(alpha = 0.85f),
+            note, style = BodyStyle.copy(fontSize = 13.sp, shadow = hi.shadow), color = ink.copy(alpha = 0.85f),
             modifier = Modifier.padding(top = 8.dp, start = 4.dp),
         )
     }
@@ -911,6 +939,19 @@ private fun Hero(
         else -> null
     }
     val pick = { o: LinkOption -> picked = o.kind.name }
+    // Material: the same, on a card under the top bar.
+    if (LocalStyle.current == "material") {
+        Column(Modifier.fillMaxWidth().padding(top = 8.dp).animateContentSize(tween(220))) {
+            MaterialStatusCard(running, label = if (!running) "Off" else "Live" + (chosen?.let { " · " + it.name } ?: "")) {
+                HeroBody(
+                    h, kicker, running, onToggle, copy, showQr, { showQr = !showQr },
+                    TextStyle(fontSize = 36.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.6).sp, fontFeatureSettings = "tnum"),
+                ) { LinkPicker(options, chosen, linkNote, pick) }
+            }
+            HeroExtras(state, running, h, showQr, openTether, Modifier.padding(horizontal = 20.dp))
+        }
+        return
+    }
     Column(Modifier.fillMaxWidth().animateContentSize(tween(220))) {
         // Blue of its own; with a colour chosen in Settings, that colour instead.
         val a = Bridge.Accent
@@ -955,6 +996,7 @@ private fun Hero(
  */
 @Composable
 private fun SendCard(status: String, onFiles: () -> Unit, onFolder: () -> Unit) {
+    if (LocalStyle.current == "material") { MaterialSendCard(status, onFiles, onFolder); return }
     val shape = RoundedCornerShape(22.dp)
     val density = androidx.compose.ui.platform.LocalDensity.current
     Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 22.dp, top = 20.dp, bottom = 8.dp)) {
@@ -1014,33 +1056,38 @@ private fun HeroBody(
     h: HeroText, kicker: String, running: Boolean, onToggle: () -> Unit, copy: () -> Unit,
     showQr: Boolean, toggleQr: () -> Unit, big: TextStyle, picker: @Composable () -> Unit,
 ) {
+    // White on Theatre's hero; the card's own ink on Material's.
+    val hi = LocalHeroInk.current
+    val ink = hi.ink
     if (h.showAddress) {
         val host = h.address!!.substringBeforeLast(':')
         val port = h.address.substringAfterLast(':', "")
         FitText(
             androidx.compose.ui.text.buildAnnotatedString {
                 append(host)
-                if (port.isNotEmpty()) { pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White.copy(alpha = 0.72f))); append(":$port"); pop() }
+                if (port.isNotEmpty()) { pushStyle(androidx.compose.ui.text.SpanStyle(color = ink.copy(alpha = 0.72f))); append(":$port"); pop() }
             },
-            big.copy(color = Color.White), max = 40.sp, min = 20.sp,
+            big.copy(color = ink), max = 40.sp, min = 20.sp,
             Modifier.fillMaxWidth().clickable(onClickLabel = "Copy the address", onClick = copy),
+            hard = hi.shadow != null,
         )
     } else {
-        Text(h.headline, style = big, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        h.note?.let { Text(it, style = BodyStyle.copy(fontSize = 14.sp, shadow = OnArt), color = Color.White.copy(alpha = 0.8f), maxLines = 3) }
+        Text(h.headline, style = big, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        h.note?.let { Text(it, style = BodyStyle.copy(fontSize = 14.sp, shadow = hi.shadow), color = ink.copy(alpha = 0.8f), maxLines = 3) }
     }
     Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (h.showAddress) {
-            val chip = Color.White.copy(alpha = 0.16f)
-            IconChip(BlazeIcons.Copy, "Copy the address", tint = Color.White, bg = chip, size = 42.dp, onClick = copy)
+            val chip = ink.copy(alpha = if (hi.shadow != null) 0.16f else 0.10f)
+            IconChip(BlazeIcons.Copy, "Copy the address", tint = ink, bg = chip, size = if (hi.shadow != null) 42.dp else 40.dp, onClick = copy)
             Spacer(Modifier.width(10.dp))
             IconChip(
-                BlazeIcons.Qr, if (showQr) "Hide code" else "QR code", tint = Color.White,
-                bg = if (showQr) Color.White.copy(alpha = 0.35f) else chip, size = 42.dp, onClick = toggleQr,
+                BlazeIcons.Qr, if (showQr) "Hide code" else "QR code", tint = if (showQr && hi.shadow == null) hi.onLit else ink,
+                bg = if (!showQr) chip else if (hi.shadow == null) hi.lit else ink.copy(alpha = 0.35f),
+                size = if (hi.shadow != null) 42.dp else 40.dp, onClick = toggleQr,
             )
         }
         Spacer(Modifier.weight(1f))
-        PowerSwitch(running, onToggle)
+        if (hi.shadow == null) MaterialPowerSwitch(running, onToggle) else PowerSwitch(running, onToggle)
     }
     if (running) picker()
 }
@@ -1050,7 +1097,12 @@ private fun HeroBody(
  * music page's hard shadow: offset, unblurred, like a lit sleeve's lettering.
  */
 @Composable
-private fun FitText(text: androidx.compose.ui.text.AnnotatedString, style: TextStyle, max: androidx.compose.ui.unit.TextUnit, min: androidx.compose.ui.unit.TextUnit, modifier: Modifier = Modifier) {
+private fun FitText(
+    text: androidx.compose.ui.text.AnnotatedString, style: TextStyle, max: androidx.compose.ui.unit.TextUnit, min: androidx.compose.ui.unit.TextUnit,
+    modifier: Modifier = Modifier,
+    /** The hard shadow (Theatre's hero), or none (Material's card). */
+    hard: Boolean = true,
+) {
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val density = androidx.compose.ui.platform.LocalDensity.current
     androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
@@ -1067,7 +1119,7 @@ private fun FitText(text: androidx.compose.ui.text.AnnotatedString, style: TextS
             text,
             style = style.copy(
                 fontSize = size.sp,
-                shadow = androidx.compose.ui.graphics.Shadow(
+                shadow = if (!hard) null else androidx.compose.ui.graphics.Shadow(
                     Color.Black.copy(alpha = 0.42f), androidx.compose.ui.geometry.Offset(px * 0.055f, px * 0.075f), 0f),
             ),
             maxLines = 1, softWrap = false,
@@ -1089,7 +1141,7 @@ private fun HeroExtras(state: UiState, running: Boolean, h: HeroText, showQr: Bo
         // The cable is in, but it carries nothing until USB tethering is on; Android lets only
         // the phone's own settings switch that.
         if (state.cableNoTether) {
-            RowNote("Cable connected. Turn on USB tethering for full speed.", Bridge.Text)
+            RowNote("Cable in. Turn on USB tethering for full speed.", Bridge.Text)
             Spacer(Modifier.height(8.dp))
             SoftButton("USB tethering", icon = BlazeIcons.Bolt, onClick = openTether)
         }
@@ -1602,7 +1654,7 @@ private fun LazyListScope.devicesTab(
     item { SectionBar("Pairing") }
     item {
         GroupCard {
-            SettingRow("Unpair everything", "Every computer and phone signs in again", first = true, titleColor = Bridge.Danger, onClick = { vm.unpairAll() })
+            SettingRow("Sign out all devices", first = true, titleColor = Bridge.Danger, onClick = { vm.unpairAll() })
         }
     }
 }
@@ -1729,10 +1781,10 @@ private fun DirectRow(direct: DirectLink.State, hotspotOn: Boolean, toggle: () -
             else -> "Direct link off"
         },
         when {
-            blocked -> "The phone's hotspot is on. Turn it off first: Android runs one at a time."
+            blocked -> "Turn the phone's hotspot off first"
             direct is DirectLink.State.Failed -> direct.reason
-            direct is DirectLink.State.On -> direct.info.ssid + " · the laptop helper joins by itself"
-            else -> "The laptop helper joins it by itself; the laptop is offline meanwhile"
+            direct is DirectLink.State.On -> direct.info.ssid + " · the laptop joins by itself"
+            else -> "The laptop joins by itself, offline meanwhile"
         },
         titleColor = if (direct is DirectLink.State.On) Bridge.Lit else Bridge.Text,
         onClick = if (blocked) openHotspot else toggle,
@@ -1764,8 +1816,14 @@ private fun LazyListScope.settingsTab(
     showOem: () -> Unit,
 ) {
     item { SectionBar("Appearance") }
-    // Shared with every open page.
-    item { ColourPicker(look.accent) { vm.setAccent(it) } }
+    // Shared with every open page: the style, the colour, light or dark, and Namida's look.
+    item {
+        Box(Modifier.padding(horizontal = 16.dp).padding(top = 4.dp)) {
+            val styles = listOf("material", "theatre")
+            SegmentedRow(listOf("Material", "Theatre"), styles.indexOf(look.style)) { vm.setStyle(styles[it]) }
+        }
+    }
+    item { ColourPicker(look) { vm.setAccent(it) } }
     item {
         Box(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp)) {
             val themes = listOf("system", "light", "dark")
@@ -1775,7 +1833,7 @@ private fun LazyListScope.settingsTab(
     // Namida's look over the whole app and every page (Music has it always); shared like the colour.
     item {
         GroupCard(Modifier.padding(top = 16.dp)) {
-            SettingRow("Namida style", "Its surfaces, font and icons everywhere, in your colour", first = true, icon = BlazeIcons.Music, iconColor = Bridge.Purple) {
+            SettingRow("Namida style", first = true, icon = BlazeIcons.Music, iconColor = Bridge.Purple) {
                 Toggle(look.namida) { vm.setNamida(it) }
             }
         }
@@ -1794,7 +1852,7 @@ private fun LazyListScope.settingsTab(
                 first = true, icon = BlazeIcons.File, iconColor = Bridge.Orange,
                 onClick = pickFolder,
             ) { Action("Change") }
-            SettingRow("Always stage in app storage", "Slower; only if files arrive damaged") {
+            SettingRow("Stage in app storage", "Only if files arrive damaged") {
                 Toggle(state.forceStagedCopy) { vm.setForceStagedCopy(it) }
             }
         }
@@ -1894,7 +1952,7 @@ private fun LazyListScope.settingsTab(
             // album and artist names are sent.
             val prefs = LocalContext.current.container.prefs
             var lookup by remember { mutableStateOf(prefs.coverLookup) }
-            SettingRow("Find missing covers", "Looks up album and artist in Apple's catalogue", icon = BlazeIcons.Image, iconColor = Bridge.Purple) {
+            SettingRow("Find missing album art", "From Apple's catalogue", icon = BlazeIcons.Image, iconColor = Bridge.Purple) {
                 Toggle(lookup) { lookup = it; prefs.coverLookup = it }
             }
         }
@@ -1912,7 +1970,7 @@ private fun LazyListScope.settingsTab(
                 "Battery optimisation", if (state.batteryExempt) "Off" else "Tap to turn off",
                 onClick = if (!state.batteryExempt) ({ vm.batteryOptimizationIntent()?.let(openSettings) ?: showOem() }) else null,
             ) { Check(state.batteryExempt) }
-            SettingRow("Manufacturer settings", "If Localhost 8787 gets stopped", onClick = showOem) {
+            SettingRow("Manufacturer settings", "If the app gets stopped", onClick = showOem) {
                 Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp))
             }
         }
@@ -1923,16 +1981,21 @@ private fun LazyListScope.settingsTab(
 /** A word on the right of a setting that does something, in blue. */
 @Composable
 private fun Action(label: String) {
-    Text(label, style = TextStyle(fontSize = 16.sp), color = Bridge.Blue)
+    if (inMaterial) Text(label, style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.1.sp), color = Bridge.Accent)
+    else Text(label, style = TextStyle(fontSize = 16.sp), color = Bridge.Blue)
 }
 
 /**
- * The colour: a row of round swatches, the one in use ringed. The first is Automatic, black and
- * white, drawn half and half.
+ * The colour: a row of round swatches, the one in use ringed. The first is Automatic: in
+ * Material's look the wallpaper's colour (Android 12 and later), in Theatre's black and white,
+ * drawn half and half.
  */
 @Composable
-private fun ColourPicker(current: String, onPick: (String) -> Unit) {
-    val name = if (current == "auto") "Automatic" else current.replaceFirstChar { it.uppercase() }
+private fun ColourPicker(look: dev.periy.bridge.Look, onPick: (String) -> Unit) {
+    val current = look.accent
+    val material = look.style == "material"
+    val auto = if (material && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Wallpaper" else "Automatic"
+    val name = if (current == "auto") auto else current.replaceFirstChar { it.uppercase() }
     Column(Modifier.fillMaxWidth().padding(top = 18.dp)) {
         Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Colour", style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text, modifier = Modifier.weight(1f))
@@ -1941,8 +2004,11 @@ private fun ColourPicker(current: String, onPick: (String) -> Unit) {
         Spacer(Modifier.height(10.dp))
         // All on one line, sharing the width: Automatic, then the colours.
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Material's Automatic is the colour it is built from while Automatic (the wallpaper's).
+            val ctx = LocalContext.current
+            val seed = if (material) remember(ctx) { colorOfHex(wallpaperSeed(ctx)) ?: M3Baseline } else null
             Swatch(
-                Brush.linearGradient(0.5f to Color.White, 0.5f to Color(0xFF1D1D1F)),
+                if (seed != null) SolidColor(seed) else Brush.linearGradient(0.5f to Color.White, 0.5f to Color(0xFF1D1D1F)),
                 "Automatic", current == "auto", Modifier.weight(1f),
             ) { onPick("auto") }
             ACCENTS.forEach { (id, c) ->
