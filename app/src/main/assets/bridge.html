@@ -340,22 +340,17 @@
     stroke-width: 1.2; stroke-linejoin: round; transform: rotate(8deg); }
   .lg-card { position: relative; width: min(440px, 100%); text-align: center; animation: lg-in .6s cubic-bezier(.2,.8,.2,1); }
   @keyframes lg-in { from { opacity: 0; transform: translateY(18px) scale(.98); } }
-  .lg-radar { position: relative; width: 112px; height: 112px; margin: 0 auto 26px; display: grid; place-items: center; }
-  .lg-radar i { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.55); opacity: 0;
-    animation: lg-ping 3.2s cubic-bezier(.2,.6,.3,1) infinite; }
-  .lg-radar i:nth-child(2) { animation-delay: 1.07s; } .lg-radar i:nth-child(3) { animation-delay: 2.13s; }
-  #login.waiting .lg-radar i { animation-duration: 1.6s; }
-  #login.waiting .lg-radar i:nth-child(2) { animation-delay: .53s; } #login.waiting .lg-radar i:nth-child(3) { animation-delay: 1.07s; }
-  @keyframes lg-ping { 0% { transform: scale(.55); opacity: .9; } 100% { transform: scale(1.9); opacity: 0; } }
-  .lg-mark { position: relative; width: 76px; height: 76px; display: grid; place-items: center; border-radius: 24px; background: #FFFFFF;
-    box-shadow: 7px 8px 0 rgba(0,0,0,.28), 0 20px 50px -12px color-mix(in srgb, var(--hero-glow, #3D8BFF) 90%, transparent); }
-  .lg-mark svg { width: 42px; height: 42px; fill: #0B2F66; }
+  .lg-radar { position: relative; width: 76px; height: 76px; margin: 0 auto 30px; display: grid; place-items: center; }
+  /* The app's own icon, lit by its gold, as in the header. */
+  .lg-mark { position: relative; width: 76px; height: 76px; display: block; border-radius: 20px; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.16), 7px 8px 0 rgba(0,0,0,.28), 0 18px 46px -10px rgba(255,176,0,.6); }
+  .lg-mark svg { width: 100%; height: 100%; display: block; }
   #login.waiting .lg-mark { animation: lg-beat 1.6s ease-in-out infinite; }
   @keyframes lg-beat { 50% { transform: scale(1.06); } }
   .lg-brand { font-size: 13px; font-weight: 800; letter-spacing: 2.4px; text-transform: uppercase; opacity: .72; }
   #login h1 { margin: 10px 0 0; font-size: clamp(38px, 9vw, 54px); font-weight: 900; line-height: 1.02; letter-spacing: -.045em;
     text-shadow: .035em .05em 0 rgba(0,0,0,.35); }
-  #login p { margin: 14px auto 0; max-width: 34ch; font-size: 16px; color: rgba(255,255,255,.8); }
+  #login p { margin: 14px auto 0; max-width: 34ch; font-size: 16px; color: rgba(255,255,255,.8); text-wrap: balance; }
   #login .pad { margin-top: 30px; }
   #login .actions { justify-content: center; margin: 0; }
   #login .btn.lg-go { height: 56px; padding: 0 30px; gap: 10px; border-radius: 28px; font-size: 17px; font-weight: 750; background: #FFFFFF; color: #0B1B33;
@@ -379,12 +374,11 @@
   @keyframes lg-flip { from { opacity: 0; transform: rotateX(-90deg) translateY(10px); } }
   #login .meta { color: rgba(255,255,255,.7); font-size: 14px; margin-bottom: 18px; }
   #login .banner { margin-bottom: 16px; background: rgba(255,159,10,.2); color: #FFFFFF; }
-  .lg-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 36px; }
-  .lg-chips span { padding: 6px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 650; color: rgba(255,255,255,.82);
-    background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+  .lg-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 30px; }
+  .lg-chips span { font-size: 13px; font-weight: 500; color: rgba(255,255,255,.66); }
+  .lg-chips span + span::before { content: "\00B7"; margin-right: 8px; color: rgba(255,255,255,.4); }
   @media (prefers-reduced-motion: reduce) {
-    .lg-glow, .lg-radar i, #login.waiting .lg-mark, #login .btn.lg-go::after, .code span, .lg-card { animation: none; }
-    .lg-radar i { opacity: .25; }
+    .lg-glow, #login.waiting .lg-mark, #login .btn.lg-go::after, .code span, .lg-card { animation: none; }
   }
 
   /* ---------------------------------------------------------------- phone storage */
@@ -1582,7 +1576,7 @@
     <svg class="lg-bolt" viewBox="0 0 24 24"><path d="M13.5 2.5 5 13.5h6.5l-1 8 8.5-11h-6.5l1-8Z"/></svg>
   </div>
   <div class="lg-card">
-    <div class="lg-radar" aria-hidden="true"><i></i><i></i><i></i><span class="lg-mark"><svg viewBox="0 0 24 24"><path d="M13.5 2.5 5 13.5h6.5l-1 8 8.5-11h-6.5l1-8Z"/></svg></span></div>
+    <div class="lg-radar" aria-hidden="true"><span class="lg-mark"><svg aria-hidden="true" viewBox="0 0 108 108"><defs><linearGradient id="lga" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A2270"/><stop offset=".55" stop-color="#0C0C18"/><stop offset="1" stop-color="#08080E"/></linearGradient><radialGradient id="lgc" cx="98" cy="18" r="48" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#64D2FF" stop-opacity=".44"/><stop offset="1" stop-color="#64D2FF" stop-opacity="0"/></radialGradient><radialGradient id="lgd" cx="30" cy="100" r="56" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFB000" stop-opacity=".4"/><stop offset="1" stop-color="#FFB000" stop-opacity="0"/></radialGradient><radialGradient id="lge" cx="104" cy="104" r="50" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#BF5AF2" stop-opacity=".4"/><stop offset="1" stop-color="#BF5AF2" stop-opacity="0"/></radialGradient><linearGradient id="lgb" x1="330" y1="272" x2="520" y2="586" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFF4A8"/><stop offset=".42" stop-color="#FFD60A"/><stop offset="1" stop-color="#FF9F0A"/></linearGradient></defs><rect width="108" height="108" rx="0" fill="url(#lga)"/><rect width="108" height="108" rx="0" fill="url(#lgc)"/><rect width="108" height="108" rx="0" fill="url(#lgd)"/><rect width="108" height="108" rx="0" fill="url(#lge)"/><path transform="translate(54 54) scale(.2) translate(-438.5 -429)" d="M295,272 H371 V358 A127.5,127.5 0 1 1 371,551 V586 H295 V484 H433 V527 L527,458 L433,386 V430 H295 Z" fill="url(#lgb)"/></svg></span></div>
     <div class="lg-brand">Localhost 8787</div>
     <h1>Connect this<br>computer</h1>
     <p id="login-device">The phone will ask you to allow it.</p>
@@ -6878,7 +6872,7 @@ $("pair-cancel").addEventListener("click", pairReset);
     var res = await fetch("/api/ping", { credentials: "same-origin" });
     var info = await res.json();
     $("login-device").textContent =
-      (info.device || "The phone") + " will ask you to allow it. You only do this once.";
+      (info.device || "The phone") + " will ask you to allow it.";
     info.paired ? showApp() : showLogin();
   } catch (e) { showLogin(); }
 })();
