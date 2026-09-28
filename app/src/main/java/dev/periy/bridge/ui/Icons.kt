@@ -157,6 +157,12 @@ object BlazeIcons {
         "M2.5 18.5h19",
     )
 
+    /** A folder. */
+    val Folder: ImageVector = stroked(
+        "folder",
+        "M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17Z",
+    )
+
     /** A document: a file on the phone. */
     val File: ImageVector = stroked(
         "file",

@@ -62,11 +62,6 @@ class Prefs(ctx: Context) {
         get() = sp.getString(K_ACCENT, null) ?: "auto"
         set(v) = sp.edit { putString(K_ACCENT, v) }
 
-    /** Sends to another phone set up a direct link first (Android asks once per send). */
-    var phoneDirect: Boolean
-        get() = sp.getBoolean(K_PHONE_DIRECT, true)
-        set(v) = sp.edit { putBoolean(K_PHONE_DIRECT, v) }
-
     /**
      * How the laptop reaches the phone at speed: "direct" (the phone's own offline network,
      * fastest, the laptop has no internet while on it) or "hotspot" (the phone's ordinary
@@ -142,7 +137,6 @@ class Prefs(ctx: Context) {
         const val K_STYLE = "style"
         const val K_ACCENT = "accent"
         const val K_THEME = "theme"
-        const val K_PHONE_DIRECT = "phone_direct"
         const val K_LAPTOP_LINK = "laptop_link"
         const val K_CLIP_SYNC = "clip_sync"
         const val K_SHOT_CLIP = "screenshot_clip"

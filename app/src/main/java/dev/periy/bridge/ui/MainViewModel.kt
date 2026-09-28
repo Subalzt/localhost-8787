@@ -244,14 +244,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun stopDirect() = getApplication<Application>().container.direct.stop()
 
-    private val _phoneDirect = MutableStateFlow(app.container.prefs.phoneDirect)
-    /** Sends to other phones go over a direct link between the two. */
-    val phoneDirect: StateFlow<Boolean> = _phoneDirect
-
-    fun setPhoneDirect(on: Boolean) {
-        getApplication<Application>().container.prefs.phoneDirect = on
-        _phoneDirect.value = on
-    }
 
     // ------------------------------------------------------------------ laptop link mode
 
@@ -294,6 +286,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun unpairAll() {
         val app = getApplication<Application>()
+        // Linked phones are told first, while this phone can still reach them.
+        app.container.peers.forgetAll()
         app.container.devices.clear()
         app.container.prefs.rotateSessionKey()
         refresh()
@@ -422,6 +416,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * A whole folder picked to send: every file in it, every level down, is offered as it is
+     * (read in place, not copied), the way picked files are.
+     */
+    fun offerPickedFolder(tree: Uri?) {
+        if (tree == null) return
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            var added = 0
+            var folder = ""
+            withContext(Dispatchers.IO) {
+                runCatching { app.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                val resolver = app.contentResolver
+                val cols = arrayOf(
+                    android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE,
+                    android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                )
+                val rootId = android.provider.DocumentsContract.getTreeDocumentId(tree)
+                folder = rootId.substringAfterLast('/').substringAfterLast(':')
+                fun walk(docId: String, depth: Int) {
+                    if (depth > 16) return
+                    val children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId)
+                    runCatching {
+                        resolver.query(children, cols, null, null, null)?.use { c ->
+                            while (c.moveToNext()) {
+                                val id = c.getString(0)
+                                if (c.getString(1) == android.provider.DocumentsContract.Document.MIME_TYPE_DIR) walk(id, depth + 1)
+                                else runCatching {
+                                    val doc = android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, id)
+                                    app.container.index.add(app.container.storage.adopt(doc))
+                                    added++
+                                }
+                            }
+                        }
+                    }
+                }
+                walk(rootId, 0)
+            }
+            _sendStatus.value = when {
+                added == 0 -> "Nothing to send in that folder"
+                else -> "$added file${if (added == 1) "" else "s"} from ${folder.ifEmpty { "the folder" }} ready on the computer"
+            }
+            clearSendStatusLater()
+        }
+    }
+
+    /**
      * Takes files handed over by another app through the share sheet.
      *
      * These have to be copied, unlike picked files. A share grant is scoped to the task
@@ -507,7 +548,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (wasCurrent) SystemClipboard.clear(app)
     }
 
-    fun forgetAllClips() = getApplication<Application>().container.clipboard.forgetAll()
+    /** Empties the history and the clipboard, here, on the phone's own and on the computer. */
+    fun forgetAllClips() {
+        val app = getApplication<Application>()
+        app.container.clipboard.forgetAll()
+        SystemClipboard.clear(app)
+        flashClip("Cleared")
+    }
+
+    /** A copied picture or file, written where the Save as picker was pointed. */
+    fun saveClipTo(file: java.io.File, target: android.net.Uri) {
+        val app = getApplication<Application>()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val ok = runCatching {
+                app.contentResolver.openOutputStream(target, "w")!!.use { out -> file.inputStream().use { it.copyTo(out, 256 * 1024) } }
+            }.isSuccess
+            flashClip(if (ok) "Saved" else "Could not save it there")
+        }
+    }
 
     /** The picture or file on the shared clipboard, for the panel's preview. */
     fun clipFile(): java.io.File? = getApplication<Application>().container.clipboard.blob()

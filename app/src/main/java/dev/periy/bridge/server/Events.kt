@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/** One server-sent event. `name` maps to the SSE `event:` field. */
-data class BridgeEvent(val name: String, val data: String)
+/** One server-sent event. `name` maps to the SSE `event:` field; [to], when set, is the one computer it is for. */
+data class BridgeEvent(val name: String, val data: String, val to: String? = null)
 
 object EventBus {
     private val _events = MutableSharedFlow<BridgeEvent>(
@@ -23,6 +23,11 @@ object EventBus {
 
     fun emit(name: String, data: String) {
         _events.tryEmit(BridgeEvent(name, data))
+    }
+
+    /** An event for one computer only, by its id in the device list. */
+    fun emitTo(deviceId: String, name: String, data: String) {
+        _events.tryEmit(BridgeEvent(name, data, deviceId))
     }
 }
 
@@ -105,15 +110,15 @@ class ClipboardStore(ctx: Context) {
 
     /** Text; "" clears. Returns false when the text was rejected for size. */
     @Synchronized
-    fun set(value: String): Boolean {
+    fun set(value: String, at: Long = now()): Boolean {
         if (value.length > MAX_CHARS) return false
         val m = _meta.value
         if (value.isEmpty()) {
-            if (m.kind != "empty") publish(ClipMeta(v = nextV(), at = now()))
+            if (m.kind != "empty") publish(ClipMeta(v = nextV(), at = at))
             return true
         }
         if (m.kind == "text" && m.text == value) return true
-        publish(ClipMeta("text", value, v = nextV(), at = now()))
+        publish(ClipMeta("text", value, v = nextV(), at = at))
         return true
     }
 
@@ -122,7 +127,7 @@ class ClipboardStore(ctx: Context) {
      * or null when it was too big (nothing changes then).
      */
     @Synchronized
-    fun setBlob(name: String, mime: String, input: java.io.InputStream): ClipMeta? {
+    fun setBlob(name: String, mime: String, input: java.io.InputStream, at: Long = now()): ClipMeta? {
         val v = nextV()
         val kind = if (mime.startsWith("image/")) "image" else "file"
         val clean = name.substringAfterLast('/').substringAfterLast('\\').take(120).ifBlank { if (kind == "image") "Picture" else "File" }
@@ -142,7 +147,7 @@ class ClipboardStore(ctx: Context) {
             }
         }
         if (!tmp.renameTo(dest)) { tmp.delete(); return null }
-        return ClipMeta(kind, name = clean, mime = type, size = size, v = v, at = now()).also { publish(it) }
+        return ClipMeta(kind, name = clean, mime = type, size = size, v = v, at = at).also { publish(it) }
     }
 
     /** Puts an item from the history back on the clipboard, as the newest. Null if it is gone. */
@@ -164,10 +169,11 @@ class ClipboardStore(ctx: Context) {
         saveHistory(_history.value.filter { it.v != v })
     }
 
-    /** Empties the history; what is on the clipboard now stays. */
+    /** Empties the history and the clipboard with it: the one way to clear it, everywhere. */
     @Synchronized
     fun forgetAll() {
-        saveHistory(_history.value.filter { it.v == _meta.value.v })
+        if (_meta.value.kind != "empty") publish(ClipMeta(v = nextV(), at = now()), record = false)
+        saveHistory(emptyList())
     }
 
     private fun publish(m: ClipMeta, record: Boolean = true) {

@@ -107,8 +107,10 @@ fun ControlPane(running: Boolean, onStart: () -> Unit, modifier: Modifier = Modi
     val pad = remember { PadState(ctx) }
 
     // While this screen is open: keep the display on, and ask Wi-Fi for low latency --
-    // power-save naps in the radio are what make a remote pointer feel sticky.
-    DisposableEffect(Unit) {
+    // power-save naps in the radio are what make a remote pointer feel sticky. Only while it is
+    // the tab: a slide between two other tabs passes through it, and should cost nothing.
+    DisposableEffect(active) {
+        if (!active) return@DisposableEffect onDispose {}
         view.keepScreenOn = true
         Control.inUse = true
         @Suppress("DEPRECATION")

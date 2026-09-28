@@ -21,6 +21,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -64,6 +65,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -187,6 +190,21 @@ class MainActivity : ComponentActivity() {
             if (intent.hasExtra("directtest")) (application as dev.periy.bridge.BridgeApp).container.direct.let {
                 if (intent.getBooleanExtra("directtest", false)) it.start(8787, laptop = false) else it.stop()
             }
+            // Phone to phone without touching the screen: `--es peerconnect 127.0.0.1` links (this phone
+            // to itself, for a test), `--ez approvepairs true` says Allow to every request waiting,
+            // `--es peerbrowse <name>` opens that phone's files, `--ez forgetpeers true` unlinks them all.
+            val c = (application as dev.periy.bridge.BridgeApp).container
+            intent.getStringExtra("peerconnect")?.let { a ->
+                val host = a.substringBefore(':')
+                c.peers.connect(dev.periy.bridge.server.NearbyPhone(host, host, a.substringAfter(':', "").toIntOrNull() ?: c.prefs.port))
+            }
+            if (intent.getBooleanExtra("approvepairs", false)) c.pairing.pending.value.forEach { c.pairing.approve(it.id) }
+            intent.getStringExtra("peerbrowse")?.let { debugBrowse.value = it }
+            if (intent.getBooleanExtra("forgetpeers", false)) {
+                c.peers.forgetAll()
+                // A test link to itself leaves its own way in behind; other phones' are left alone.
+                c.devices.devices.value.filter { it.name == "Phone: " + c.deviceName() }.forEach { c.devices.remove(it.id) }
+            }
         }
         when (intent.action) {
             Intent.ACTION_SEND -> {
@@ -213,13 +231,16 @@ class MainActivity : ComponentActivity() {
 
 private val TABS = listOf(
     "Home" to BlazeIcons.Home,
-    "Phones" to BlazeIcons.Phones,
+    "Devices" to BlazeIcons.Phones,
     "Control" to BlazeIcons.Trackpad,
     "Settings" to BlazeIcons.Sliders,
 )
 private const val TAB_HOME = 0
 private val debugTab = kotlinx.coroutines.flow.MutableStateFlow(-1)
-private const val TAB_PHONES = 1
+
+/** Debug builds: a linked phone whose files to open (`--es peerbrowse <name>`). */
+private val debugBrowse = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+private const val TAB_DEVICES = 1
 private const val TAB_CONTROL = 2
 
 /** The header at the top of every screen: its large title and the monitor switch, over the content. */
@@ -247,7 +268,6 @@ private fun BlazeItUi(vm: MainViewModel) {
     val theme by vm.theme.collectAsStateWithLifecycle()
     val look by vm.look.collectAsStateWithLifecycle()
     val direct by vm.direct.collectAsStateWithLifecycle()
-    val phoneDirect by vm.phoneDirect.collectAsStateWithLifecycle()
     val laptopLink by vm.laptopLink.collectAsStateWithLifecycle()
     val nearby by peers.nearby.collectAsStateWithLifecycle()
     val paired by peers.peers.collectAsStateWithLifecycle()
@@ -258,11 +278,13 @@ private fun BlazeItUi(vm: MainViewModel) {
     // Swiping moves between the tabs. Each tab's list keeps its place while it is off screen.
     val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = TAB_HOME) { TABS.size }
     val lists = List(TABS.size) { androidx.compose.foundation.lazy.rememberLazyListState() }
-    // A tap on a tab slides there; a swipe that settles on a page makes it the tab.
-    // Only a tap slides the pages: while a swipe is moving them, its own landing makes the tab.
-    LaunchedEffect(tab) {
-        if (!pager.isScrollInProgress && pager.settledPage != tab)
-            pager.animateScrollToPage(tab, animationSpec = spring(dampingRatio = 0.9f, stiffness = 380f))
+    // A tap on a tab slides there, from wherever the pages are: it takes over a slide still
+    // moving or a swipe still settling, so a tap is never lost and the pages never stop halfway.
+    // (A slide waited on before would refuse a tap made during one, and cancel itself.)
+    val navScope = rememberCoroutineScope()
+    val goTo: (Int) -> Unit = { i ->
+        tab = i
+        navScope.launch { pager.animateScrollToPage(i, animationSpec = spring(dampingRatio = 0.95f, stiffness = 650f)) }
     }
     // Where the pages are right now, in tabs, for the bars to follow a swipe.
     val pagePos by remember { derivedStateOf { pager.currentPage + pager.currentPageOffsetFraction } }
@@ -272,8 +294,26 @@ private fun BlazeItUi(vm: MainViewModel) {
     var showOem by remember { mutableStateOf(false) }
     val oemSteps = remember { OemBatterySetup.steps(ctx) }
     var sendTarget by remember { mutableStateOf<Peer?>(null) }
+    // A linked phone whose files are open, over everything else.
+    var browsePeer by remember { mutableStateOf<Peer?>(null) }
     var showMonitor by remember { mutableStateOf(ctx.container.prefs.showMonitor) }
     val setMonitor = { on: Boolean -> showMonitor = on; ctx.container.prefs.showMonitor = on }
+
+    // Back: whatever is open closes first (a linked phone's files and the clipboard's history
+    // take their own), then any tab goes back to Home. At Home the app goes to the background,
+    // as Home does for any app; it is never closed, and the server keeps running either way.
+    androidx.activity.compose.BackHandler(enabled = showOem) { showOem = false }
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && tab != TAB_HOME) { goTo(TAB_HOME) }
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && tab == TAB_HOME) {
+        (ctx as? android.app.Activity)?.moveTaskToBack(true)
+    }
+
+    // The computer this phone shares with right now: the laptop helper's machine name if it is
+    // live, else the first computer with the page open. Null when none is.
+    val computer = remember(devices, live) {
+        val on = devices.filter { (live[it.id] ?: 0) > 0 && !it.name.startsWith("Phone:") && !it.name.contains("Android", ignoreCase = true) }
+        on.firstOrNull { it.name.startsWith("Laptop control on ") }?.name?.removePrefix("Laptop control on ") ?: on.firstOrNull()?.name
+    }
 
     // Home runs its hero under the status bar and the title, and the hero is always dark.
     // By the page mostly on screen, so the header changes look halfway through a swipe, not at its start.
@@ -304,9 +344,10 @@ private fun BlazeItUi(vm: MainViewModel) {
     }
 
     // A computer asking to connect is waiting on you, so jump to where the answer is.
-    LaunchedEffect(requests.size) { if (requests.isNotEmpty()) { tab = TAB_HOME; showOem = false } }
+    LaunchedEffect(requests.size) { if (requests.isNotEmpty()) { goTo(TAB_HOME); showOem = false } }
     // Debug builds: `--ei tab 0` opens that tab, for screenshots without touching the screen.
-    LaunchedEffect(Unit) { debugTab.collect { if (it >= 0) { tab = it; debugTab.value = -1 } } }
+    LaunchedEffect(Unit) { debugTab.collect { if (it >= 0) { goTo(it); debugTab.value = -1 } } }
+    LaunchedEffect(Unit) { debugBrowse.collect { n -> if (n != null) { browsePeer = peers.find(n); debugBrowse.value = null } } }
 
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         vm.offerPickedFiles(uris)
@@ -318,6 +359,7 @@ private fun BlazeItUi(vm: MainViewModel) {
             Toast.makeText(ctx, "Sending ${uris.size} to ${to.name}", Toast.LENGTH_SHORT).show()
         }
     }
+    val pickSendFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { vm.offerPickedFolder(it) }
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let(vm::setDestination)
     }
@@ -352,7 +394,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     val toggleServer = { if (running) BridgeService.stop(ctx) else BridgeService.start(ctx) }
 
     // Other phones are looked for only while the Phones tab is open.
-    if (tab == TAB_PHONES) {
+    if (tab == TAB_DEVICES) {
         DisposableEffect(Unit) {
             peers.startDiscovery()
             onDispose { peers.stopDiscovery() }
@@ -406,28 +448,24 @@ private fun BlazeItUi(vm: MainViewModel) {
                         else LazyColumn(Modifier.fillMaxSize(), state = lists[page], contentPadding = PaddingValues(top = top, bottom = 28.dp + underBar)) {
                             when (page) {
                                 TAB_HOME -> homeTab(
-                                    state, running, direct, laptopLink.mode, shared, clipStatus, requests, devices, live, vm,
+                                    state, running, direct, laptopLink.mode, shared, clipStatus, requests, vm, computer,
                                     transfers, files, sendStatus,
-                                    heroTop = headerTop,
+                                    heroTop = statusTop,
+                                    heroGap = monitorRoom,
+                                    monitorOn = showMonitor,
+                                    onMonitor = { setMonitor(!showMonitor) },
                                     toggleDirect = toggleDirect,
                                     pickFiles = { pickFiles.launch(arrayOf("*/*")) },
+                                    pickSendFolder = { pickSendFolder.launch(null) },
                                     openTether = openHotspot,
-                                    goTab = { tab = it },
                                     onToggle = toggleServer,
                                 )
-                                TAB_PHONES -> phonesTab(
-                                    running, transfers, nearby, paired, peerStatus, routes, phoneDirect,
-                                    setPhoneDirect = vm::setPhoneDirect,
+                                TAB_DEVICES -> devicesTab(
+                                    running, transfers, nearby, paired, peerStatus, routes, devices, live, vm,
                                     connect = peers::connect,
                                     forget = peers::forget,
                                     sendFilesTo = { sendTarget = it; pickForPhone.launch(arrayOf("*/*")) },
-                                    sendTextTo = { p ->
-                                        if (shared.isBlank()) {
-                                            Toast.makeText(ctx, "Type something in Clipboard on Home first", Toast.LENGTH_SHORT).show()
-                                        } else peers.sendText(p, shared) { ok ->
-                                            Toast.makeText(ctx, if (ok) "Sent to ${p.name}" else "Could not reach ${p.name}", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
+                                    browse = { browsePeer = it },
                                 )
                                 else -> settingsTab(
                                     state, vm, theme, look, laptopLink, direct, toggleDirect,
@@ -448,7 +486,14 @@ private fun BlazeItUi(vm: MainViewModel) {
                         }
                     }
 
-                    AppHeader(if (shown == TAB_HOME) "Localhost 8787" else TABS[shown].first, overHero, showMonitor) { setMonitor(!showMonitor) }
+                    // Over Home's hero the hero carries the title itself; the header comes in once it has gone.
+                    androidx.compose.animation.AnimatedVisibility(
+                        !overHero,
+                        enter = androidx.compose.animation.fadeIn(tween(160)),
+                        exit = androidx.compose.animation.fadeOut(tween(120)),
+                    ) {
+                        AppHeader(if (shown == TAB_HOME) "Localhost 8787" else TABS[shown].first, false, showMonitor) { setMonitor(!showMonitor) }
+                    }
 
                     // The tabs, floating along the bottom over a fade of the page, in reach of a thumb.
                     if (!imeUp && !showOem) Box(
@@ -457,12 +502,23 @@ private fun BlazeItUi(vm: MainViewModel) {
                             .padding(top = 16.dp, bottom = bottomInset + 12.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        PillTabs(TABS, shown, position = pagePos) { tab = it; showOem = false }
+                        PillTabs(TABS, shown, position = pagePos) { goTo(it); showOem = false }
                     }
                 }
 
                 if (showOem && !imeUp) Spacer(Modifier.height(bottomInset))
             }
+        }
+
+        // A linked phone's files slide in over the app, as a folder does in Files.
+        androidx.compose.animation.AnimatedVisibility(
+            browsePeer != null,
+            enter = androidx.compose.animation.slideInHorizontally(tween(300)) { it } + androidx.compose.animation.fadeIn(tween(200)),
+            exit = androidx.compose.animation.slideOutHorizontally(tween(260)) { it } + androidx.compose.animation.fadeOut(tween(200)),
+        ) {
+            // Kept while it slides out, after browsePeer has gone.
+            val shownPeer = remember { browsePeer }
+            (browsePeer ?: shownPeer)?.let { PeerFilesScreen(it) { browsePeer = null } }
         }
 
         if (showMonitor) MonitorOverlay(monitor, running) { setMonitor(false) }
@@ -528,37 +584,33 @@ private fun LazyListScope.homeTab(
     shared: String,
     clipStatus: String,
     requests: List<PairRequest>,
-    devices: List<PairedDevice>,
-    live: Map<String, Int>,
     vm: MainViewModel,
+    computer: String?,
     transfers: List<Transfer>,
     files: List<FileEntry>,
     sendStatus: String,
     heroTop: Dp,
+    heroGap: Dp,
+    monitorOn: Boolean,
+    onMonitor: () -> Unit,
     toggleDirect: () -> Unit,
     pickFiles: () -> Unit,
+    pickSendFolder: () -> Unit,
     openTether: () -> Unit,
-    goTab: (Int) -> Unit,
     onToggle: () -> Unit,
 ) {
     // The Theatre hero comes first whatever happens: it is the top of the screen.
-    item(key = "hero") { Hero(state, running, heroTop, onToggle, openTether, linkMode, direct, toggleDirect) }
+    item(key = "hero") { Hero(state, running, heroTop, heroGap, monitorOn, onMonitor, onToggle, openTether, linkMode, direct, toggleDirect) }
 
     // Someone is asking to connect. It goes first: it is the one thing waiting on you.
     items(requests, key = { it.id }) { req -> RequestCard(req, vm) }
 
     // The clipboard is what Home is opened for most, so it sits right under the hero.
-    item(key = "clip") { Column { ClipboardPanel(shared, clipStatus, vm) } }
+    item(key = "clip") { Column { ClipboardPanel(shared, clipStatus, vm, computer) } }
 
-    item(key = "quick") {
-        QuickActions(
-            listOf(
-                Quick(BlazeIcons.Upload, Color(0xFF30D158), "Send files", sendStatus.ifEmpty { "To the laptop" }, false, pickFiles),
-                Quick(BlazeIcons.Phones, Color(0xFFFF9F0A), "Phones", "Send to a phone nearby", false) { goTab(TAB_PHONES) },
-                Quick(BlazeIcons.Trackpad, Color(0xFF5E5CE6), "Control", "Trackpad and keys", false) { goTab(TAB_CONTROL) },
-            )
-        )
-    }
+    // Sending: the other half of what the app is for.
+    item(key = "send") { SendCard(sendStatus, pickFiles, pickSendFolder) }
+
 
     // The hotspot's details live in the phone's own settings, a tap on its tile away.
     if (direct is DirectLink.State.On) item(key = "direct") { DirectCard(direct.info, toggleDirect) }
@@ -593,52 +645,6 @@ private fun LazyListScope.homeTab(
         }
     }
 
-    item {
-        SectionBar("Connected") {
-            if (live.isNotEmpty()) Text("${live.size} live", style = LabelStyle.copy(fontWeight = FontWeight.SemiBold), color = Bridge.Lit)
-        }
-    }
-    item {
-        GroupCard {
-            if (devices.isEmpty()) SettingRow("None yet", first = true, titleColor = Bridge.Muted)
-            devices.forEachIndexed { i, d ->
-                val isLive = (live[d.id] ?: 0) > 0
-                val phone = d.name.startsWith("BlazeItPhone") || d.name.contains("phone", ignoreCase = true)
-                MediaRow(
-                    d.name, (if (isLive) "Live now · " else lastSeen(d.lastSeenAt) + " · ") + d.lastIp,
-                    icon = if (phone) BlazeIcons.Phones else BlazeIcons.Laptop,
-                    color = Color(0xFF5E5CE6),
-                    dim = !isLive,
-                    first = i == 0,
-                ) {
-                    IconChip(BlazeIcons.Close, "Remove ${d.name}", tint = Bridge.Muted, size = 32.dp) { vm.removeDevice(d.id) }
-                }
-            }
-        }
-    }
-}
-
-private data class Quick(
-    val icon: ImageVector,
-    val color: Color,
-    val title: String,
-    val detail: String,
-    val active: Boolean,
-    val onClick: () -> Unit,
-)
-
-/** The four things done most, as a shelf of small square tiles, each glowing a little in its own colour. */
-@Composable
-private fun QuickActions(quick: List<Quick>) {
-    SectionBar("Quick actions")
-    LazyRow(
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        items(quick, key = { it.title }) { q ->
-            Tile(q.icon, q.color, q.title, q.detail, Modifier.width(100.dp), active = q.active, onClick = q.onClick)
-        }
-    }
 }
 
 /** A computer or phone asking to connect: who, the code to compare, Allow or Deny. */
@@ -812,7 +818,8 @@ private fun LinkPicker(options: List<LinkOption>, chosen: LinkOption?, note: Str
  */
 @Composable
 private fun Hero(
-    state: UiState, running: Boolean, top: Dp, onToggle: () -> Unit, openTether: () -> Unit,
+    state: UiState, running: Boolean, top: Dp, gap: Dp, monitorOn: Boolean, onMonitor: () -> Unit,
+    onToggle: () -> Unit, openTether: () -> Unit,
     linkMode: String, direct: DirectLink.State, toggleDirect: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -858,7 +865,17 @@ private fun Hero(
                 modifier = Modifier.align(Alignment.CenterEnd).offset(x = 44.dp, y = 26.dp).size(240.dp),
             )
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.8f))))
-            Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = top + 10.dp, bottom = 18.dp)) {
+            Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = top, bottom = 18.dp)) {
+                // The title and the monitor switch, as in the header of the other tabs, but part of
+                // the hero: they scroll away with it rather than float over it.
+                CompositionLocalProvider(LocalPalette provides TheatreDark) {
+                    Row(Modifier.fillMaxWidth().height(HeaderHeight), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Localhost 8787", style = LargeTitleStyle.copy(shadow = OnArt), color = Color.White,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        MonitorButton(monitorOn, onMonitor)
+                    }
+                }
+                Spacer(Modifier.height(gap + 10.dp))
                 HeroBody(
                     h, kicker, running, onToggle, copy, showQr, { showQr = !showQr },
                     TextStyle(fontSize = 29.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.8).sp, fontFeatureSettings = "tnum", shadow = OnArt),
@@ -866,6 +883,63 @@ private fun Hero(
             }
         }
         HeroExtras(state, running, h, showQr, openTether, Modifier.padding(horizontal = 20.dp))
+    }
+}
+
+/**
+ * Send files: a deep green card with the app's hard offset shadow (the music covers' and titles'),
+ * the title large with its own hard shadow, and two plain buttons: Files, and Folder, which sends
+ * everything in it.
+ */
+@Composable
+private fun SendCard(status: String, onFiles: () -> Unit, onFolder: () -> Unit) {
+    val shape = RoundedCornerShape(22.dp)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 22.dp, top = 20.dp, bottom = 8.dp)) {
+        // The hard shadow, down and to the right.
+        Box(Modifier.matchParentSize().offset(6.dp, 7.dp).clip(shape).background(Color.Black.copy(alpha = if (Bridge.Dark) 0.6f else 0.2f)))
+        Column(
+            Modifier.fillMaxWidth().clip(shape)
+                .background(Brush.linearGradient(
+                    listOf(Color(0xFF3DDC6A), Color(0xFF178A3A), Color(0xFF07361A)),
+                    start = androidx.compose.ui.geometry.Offset.Zero, end = androidx.compose.ui.geometry.Offset(1000f, 800f),
+                ))
+                .padding(18.dp),
+        ) {
+            val hard = with(density) { androidx.compose.ui.geometry.Offset(1.2.dp.toPx(), 1.7.dp.toPx()) }
+            Text(
+                "Send files",
+                style = TextStyle(fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp,
+                    shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.35f), hard, 0f)),
+                color = Color.White,
+            )
+            if (status.isNotEmpty()) Text(status, style = CaptionStyle.copy(fontSize = 14.sp), color = Color.White.copy(alpha = 0.85f),
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SendChoice(BlazeIcons.Upload, "Files", primary = true, Modifier.weight(1f), onFiles)
+                SendChoice(BlazeIcons.Folder, "Folder", primary = false, Modifier.weight(1f), onFolder)
+            }
+        }
+    }
+}
+
+/** One of the send card's two buttons: white (files) or clear with a white edge (a folder). */
+@Composable
+private fun SendChoice(icon: ImageVector, label: String, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val ink = if (primary) Color(0xFF0B3D1C) else Color.White
+    Row(
+        modifier.height(48.dp)
+            .pressable(ButtonShape, scaleTo = 0.95f, onClick = onClick)
+            .background(if (primary) Color.White else Color.Black.copy(alpha = 0.22f))
+            .then(if (primary) Modifier else Modifier.border(1.5.dp, Color.White.copy(alpha = 0.4f), ButtonShape))
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = ink, modifier = Modifier.size(19.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold), color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -884,7 +958,7 @@ private fun HeroBody(
         FitText(
             androidx.compose.ui.text.buildAnnotatedString {
                 append(host)
-                pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White.copy(alpha = 0.72f))); append(":$port"); pop()
+                if (port.isNotEmpty()) { pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White.copy(alpha = 0.72f))); append(":$port"); pop() }
             },
             big.copy(color = Color.White), max = 40.sp, min = 20.sp,
             Modifier.fillMaxWidth().clickable(onClickLabel = "Copy the address", onClick = copy),
@@ -1088,10 +1162,12 @@ private fun decodeSampled(path: String, px: Int): android.graphics.Bitmap? = run
  * the history of recent items, to put one back or remove it.
  */
 @Composable
-private fun ClipboardPanel(shared: String, status: String, vm: MainViewModel) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun ClipboardPanel(shared: String, status: String, vm: MainViewModel, computer: String?) {
     val meta by vm.clipMeta.collectAsStateWithLifecycle()
     val history by vm.clipHistory.collectAsStateWithLifecycle()
     var showHistory by remember { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = showHistory) { showHistory = false }
     var draft by remember { mutableStateOf(shared) }
     // True between a keystroke and the moment it is published; incoming text waits till then.
     var pending by remember { mutableStateOf(false) }
@@ -1108,19 +1184,63 @@ private fun ClipboardPanel(shared: String, status: String, vm: MainViewModel) {
         }
     }
 
-    // History and Clear sit by the title and the history opens under it, as on the laptop page.
+    // A quiet clock by the title opens the history under it; Clear is a small cross in the box,
+    // there only while it holds something.
     SectionBar("Clipboard") {
-        HeaderAction(BlazeIcons.History, "History", lit = showHistory) { showHistory = !showHistory }
-        Spacer(Modifier.width(8.dp))
-        HeaderAction(BlazeIcons.Trash, "Clear", tint = Bridge.Danger) { vm.clearClipboard(); draft = ""; pending = false }
+        // Only while the history is open: clearing it, at the top, beside the clock that closes it.
+        if (showHistory && history.isNotEmpty()) {
+            Text(
+                "Clear history", style = LabelStyle.copy(fontWeight = FontWeight.SemiBold), color = Bridge.Danger,
+                modifier = Modifier.clip(ButtonShape).clickable { vm.forgetAllClips() }.padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+        }
+        IconChip(
+            BlazeIcons.History, if (showHistory) "Hide history" else "History",
+            tint = if (showHistory) Bridge.Text else Bridge.Muted, bg = if (showHistory) Bridge.Chip else Color.Transparent, size = 34.dp,
+        ) { showHistory = !showHistory }
     }
+    // Who it is shared with, live.
+    Row(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp).offset(y = (-4).dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(if (computer != null) Bridge.Good else Bridge.Faint))
+        Spacer(Modifier.width(7.dp))
+        Text(
+            if (computer != null) "Shared with $computer" else "No computer connected",
+            style = CaptionStyle, color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+    }
+    // Hold a picture or file to keep it: Android's own Save as picks the folder and the name.
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var saving by remember { mutableStateOf<java.io.File?>(null) }
+    val saveAs = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val target = r.data?.data
+        val f = saving
+        saving = null
+        if (r.resultCode == android.app.Activity.RESULT_OK && target != null && f != null) vm.saveClipTo(f, target)
+    }
+    val askWhere = { f: java.io.File?, name: String, mime: String ->
+        if (f != null) {
+            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+            saving = f
+            saveAs.launch(
+                Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType(mime.ifBlank { "application/octet-stream" }).putExtra(Intent.EXTRA_TITLE, name)
+            )
+        }
+    }
+    val save = { askWhere(vm.clipFile(), meta.name, meta.mime) }
     Column(Modifier.fillMaxWidth().panel().padding(16.dp)) {
         if (showHistory) {
-            ClipHistory(history, current = meta.v, vm = vm)
+            ClipHistory(history, current = meta.v, vm = vm) { m -> askWhere(vm.historyFile(m.v), m.name, m.mime) }
             Spacer(Modifier.height(12.dp))
         }
         when (meta.kind) {
-            "image", "file" -> Column(Modifier.fillMaxWidth()) {
+            // What is on the clipboard, in a well of its own: the box holds it, it is not a row of
+            // its own beside Send files. A long press keeps it on this phone.
+            "image", "file" -> Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Bridge.Chip)
+                    .combinedClickable(onClick = {}, onLongClick = save).padding(12.dp)
+            ) {
                 picture?.let {
                     Image(
                         it, meta.name,
@@ -1153,9 +1273,11 @@ private fun ClipboardPanel(shared: String, status: String, vm: MainViewModel) {
                 )
             }
         }
-        if (status.isNotEmpty()) {
+        val hint = if (meta.kind == "image" || meta.kind == "file") "Hold to save it" else ""
+        if (status.isNotEmpty() || hint.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text(status, style = LabelStyle, color = Bridge.Good, modifier = Modifier.padding(start = 4.dp))
+            Text(status.ifEmpty { hint }, style = LabelStyle, color = if (status.isNotEmpty()) Bridge.Good else Bridge.Faint,
+                modifier = Modifier.padding(start = 4.dp))
         }
     }
 }
@@ -1165,7 +1287,11 @@ private fun ClipboardPanel(shared: String, status: String, vm: MainViewModel) {
  * (on the computer too), the cross to remove it.
  */
 @Composable
-private fun ClipHistory(items: List<dev.periy.bridge.server.ClipMeta>, current: Long, vm: MainViewModel) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun ClipHistory(
+    items: List<dev.periy.bridge.server.ClipMeta>, current: Long, vm: MainViewModel,
+    save: (dev.periy.bridge.server.ClipMeta) -> Unit,
+) {
     Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
         if (items.isEmpty()) {
             Text("Nothing copied yet.", style = BodyStyle, color = Bridge.Muted, modifier = Modifier.padding(4.dp))
@@ -1175,7 +1301,10 @@ private fun ClipHistory(items: List<dev.periy.bridge.server.ClipMeta>, current: 
             Row(
                 Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(10.dp))
                     .background(if (m.v == current) Bridge.Accent.copy(alpha = 0.16f) else Bridge.Chip)
-                    .clickable { vm.reuseClip(m.v) }.padding(horizontal = 12.dp, vertical = 10.dp),
+                    .combinedClickable(
+                        onClick = { vm.reuseClip(m.v) },
+                        onLongClick = { if (m.kind != "text") save(m) },
+                    ).padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 when (m.kind) {
@@ -1200,10 +1329,6 @@ private fun ClipHistory(items: List<dev.periy.bridge.server.ClipMeta>, current: 
                 }
             }
         }
-        Text(
-            "Clear history", style = LabelStyle, color = Bridge.Danger,
-            modifier = Modifier.padding(top = 8.dp, start = 4.dp).clip(RoundedCornerShape(8.dp)).clickable { vm.forgetAllClips() }.padding(4.dp),
-        )
     }
 }
 
@@ -1233,34 +1358,61 @@ private fun ago(at: Long): String {
     }
 }
 
-// ---------------------------------------------------------------------- tab: phones
+// ---------------------------------------------------------------------- tab: devices
 
-private fun LazyListScope.phonesTab(
+/**
+ * Everything this phone talks to: the computers and phones allowed in (live ones first in
+ * mind), other phones nearby to send to, and at the bottom, unpairing everything.
+ */
+private fun LazyListScope.devicesTab(
     running: Boolean,
     transfers: List<Transfer>,
     nearby: List<NearbyPhone>,
     paired: List<Peer>,
     peerStatus: Map<String, PeerStatus>,
     routes: Map<String, String>,
-    phoneDirect: Boolean,
-    setPhoneDirect: (Boolean) -> Unit,
+    devices: List<PairedDevice>,
+    live: Map<String, Int>,
+    vm: MainViewModel,
     connect: (NearbyPhone) -> Unit,
     forget: (Peer) -> Unit,
     sendFilesTo: (Peer) -> Unit,
-    sendTextTo: (Peer) -> Unit,
+    browse: (Peer) -> Unit,
 ) {
     val pairedNames = paired.map { it.name }.toSet()
     val unpaired = nearby.filter { it.name !in pairedNames }
-    item { Searching(running, found = paired.size + unpaired.size) }
+    // Linked phones have their own list below; their way in here is not shown twice.
+    val linkedIds = paired.map { it.deviceId }.filter { it.isNotEmpty() }.toSet()
+    val computers = devices.filter { it.id !in linkedIds }
 
     item {
-        GroupCard(Modifier.padding(top = 12.dp)) {
-            SettingRow(
-                "Send over a direct link", "Phone to phone, many times faster",
-                first = true, icon = BlazeIcons.Bolt, iconColor = Bridge.Blue,
-            ) { Toggle(phoneDirect) { setPhoneDirect(it) } }
+        SectionBar("Connected", Modifier.padding(top = 4.dp)) {
+            if (live.isNotEmpty()) Text("${live.size} live", style = LabelStyle.copy(fontWeight = FontWeight.SemiBold), color = Bridge.Lit)
         }
     }
+    item {
+        GroupCard {
+            if (computers.isEmpty()) SettingRow("None yet", first = true, titleColor = Bridge.Muted)
+            // Live ones first, then by when they were last here.
+            computers.sortedWith(compareByDescending<PairedDevice> { (live[it.id] ?: 0) > 0 }.thenByDescending { it.lastSeenAt })
+                .forEachIndexed { i, d ->
+                    val isLive = (live[d.id] ?: 0) > 0
+                    val phone = d.name.startsWith("BlazeItPhone") || d.name.contains("phone", ignoreCase = true)
+                    MediaRow(
+                        d.name, (if (isLive) "Live now · " else lastSeen(d.lastSeenAt) + " · ") + d.lastIp,
+                        icon = if (phone) BlazeIcons.Phones else BlazeIcons.Laptop,
+                        color = Color(0xFF5E5CE6),
+                        dim = !isLive,
+                        first = i == 0,
+                    ) {
+                        IconChip(BlazeIcons.Close, "Remove ${d.name}", tint = Bridge.Muted, size = 32.dp) { vm.removeDevice(d.id) }
+                    }
+                }
+        }
+    }
+
+    item { SectionBar("Phones") }
+    item { Searching(running, found = paired.size + unpaired.size) }
 
     if (paired.isNotEmpty()) {
         item { SectionBar("My phones") }
@@ -1268,12 +1420,21 @@ private fun LazyListScope.phonesTab(
             GroupCard {
                 paired.forEachIndexed { i, p ->
                     val here = nearby.any { it.name == p.name }
-                    MediaRow(p.name, routes[p.name] ?: if (here) "Nearby · ready" else "Not seen right now", BlazeIcons.Phones, Color(0xFF30D158), first = i == 0, dim = !here) {
+                    // Linked both ways, a phone is one more place: its files open with a tap, the
+                    // clipboard is shared with it, and so are the computers on it.
+                    MediaRow(
+                        p.name,
+                        routes[p.name] ?: when {
+                            !p.mutual -> "One way only · update Localhost 8787 on it"
+                            here -> "Nearby · files and clipboard shared"
+                            else -> "Files and clipboard shared"
+                        },
+                        BlazeIcons.Phones, Color(0xFF30D158), first = i == 0, dim = !here && !p.mutual,
+                        onClick = { browse(p) },
+                    ) {
                         IconChip(BlazeIcons.Upload, "Send files to ${p.name}", tint = Bridge.OnAccent, bg = Bridge.Accent, size = 36.dp) { sendFilesTo(p) }
                         Spacer(Modifier.width(8.dp))
-                        IconChip(BlazeIcons.Message, "Send text to ${p.name}", size = 36.dp) { sendTextTo(p) }
-                        Spacer(Modifier.width(8.dp))
-                        IconChip(BlazeIcons.Close, "Forget ${p.name}", tint = Bridge.Muted, size = 36.dp) { forget(p) }
+                        IconChip(BlazeIcons.Close, "Unlink ${p.name}", tint = Bridge.Muted, size = 36.dp) { forget(p) }
                     }
                 }
             }
@@ -1321,16 +1482,24 @@ private fun LazyListScope.phonesTab(
     item { ConnectByAddress(connect) }
 
     transfersSection(transfers)
+
+    // Last, and apart: it signs out every computer and phone at once.
+    item { SectionBar("Pairing") }
+    item {
+        GroupCard {
+            SettingRow("Unpair everything", "Every computer and phone signs in again", first = true, titleColor = Bridge.Danger, onClick = { vm.unpairAll() })
+        }
+    }
 }
 
-/** The top of the Phones tab: what is going on, with a soft pulse while it looks. */
+/** Phones nearby: what is going on, with a soft pulse while it looks. */
 @Composable
 private fun Searching(running: Boolean, found: Int) {
     val pulse by rememberInfiniteTransition(label = "look").animateFloat(
         0.35f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "dot",
     )
     Row(
-        Modifier.fillMaxWidth().padding(top = 12.dp).panel().padding(18.dp),
+        Modifier.fillMaxWidth().panel().padding(18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Artwork(BlazeIcons.Phones, Color(0xFF30D158), Modifier.size(56.dp), radius = 12.dp, glyph = 28.dp, center = true)
@@ -1407,7 +1576,8 @@ private fun TransferRow(t: Transfer, first: Boolean) {
             Spacer(Modifier.height(4.dp))
             Row {
                 Text(
-                    formatBytes(t.transferred) + " of " + formatBytes(t.total),
+                    // A folder saved as a zip has no size until it has all come.
+                    formatBytes(t.transferred) + if (t.total > 0) " of " + formatBytes(t.total) else "",
                     style = BodyStyle.copy(fontSize = 12.sp, fontFeatureSettings = "tnum"),
                     color = if (t.state == TransferState.FAILED) Bridge.Danger else Bridge.Muted,
                     modifier = Modifier.weight(1f),
@@ -1625,12 +1795,6 @@ private fun LazyListScope.settingsTab(
         }
     }
 
-    item { SectionBar("Pairing") }
-    item {
-        GroupCard {
-            SettingRow("Unpair everything", first = true, titleColor = Bridge.Danger, onClick = { vm.unpairAll() })
-        }
-    }
 }
 
 /** A word on the right of a setting that does something, in blue. */

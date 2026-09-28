@@ -398,30 +398,6 @@ fun SoftButton(
     }
 }
 
-/** A small action beside a section's title: an icon and a word. */
-@Composable
-fun HeaderAction(
-    icon: ImageVector,
-    label: String,
-    tint: Color = Bridge.Text,
-    lit: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Row(
-        Modifier
-            .height(32.dp)
-            .pressable(ButtonShape, onClick = onClick)
-            .background(if (lit) Bridge.Accent else Bridge.Chip)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val c = if (lit) Bridge.OnAccent else tint
-        Icon(icon, null, tint = c, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(label, style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = c)
-    }
-}
-
 /** A round icon button on the well colour. */
 @Composable
 fun IconChip(icon: ImageVector, description: String, tint: Color = Bridge.Text, bg: Color = Bridge.Chip, size: Dp = 38.dp, onClick: () -> Unit) {
@@ -429,51 +405,6 @@ fun IconChip(icon: ImageVector, description: String, tint: Color = Bridge.Text, 
         Modifier.size(size).pressable(CircleShape, scaleTo = 0.9f, onClick = onClick).background(bg),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, description, tint = tint, modifier = Modifier.size(size * 0.5f)) }
-}
-
-/** Three bars rising and falling: Apple Music's sign that something is playing. */
-@Composable
-fun NowPlayingBars(color: Color, modifier: Modifier = Modifier, height: Dp = 14.dp) {
-    val tr = rememberInfiniteTransition(label = "eq")
-    Row(modifier.height(height), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        listOf(0, 280, 560).forEach { delay ->
-            val f by tr.animateFloat(0.25f, 1f, infiniteRepeatable(tween(520, delay, LinearEasing), RepeatMode.Reverse), label = "bar")
-            Box(Modifier.width(3.dp).fillMaxHeight(f).clip(RoundedCornerShape(1.dp)).background(color))
-        }
-    }
-}
-
-/**
- * A quick action: a square of artwork, glowing onto the page in its colour, with the title and
- * a line under it, as a playlist on Home. When on, the bars play in the corner.
- */
-@Composable
-fun Tile(
-    icon: ImageVector,
-    color: Color,
-    title: String,
-    detail: String?,
-    modifier: Modifier = Modifier,
-    active: Boolean = false,
-    onClick: () -> Unit,
-) {
-    val shape = RoundedCornerShape(14.dp)
-    Column(modifier.pressable(scaleTo = 0.95f, onClick = onClick)) {
-        Artwork(
-            icon, color,
-            Modifier.fillMaxWidth().aspectRatio(1f).depth(color, shape, if (Bridge.Dark) 14.dp else 10.dp),
-            radius = 14.dp, glyph = 34.dp,
-        ) {
-            if (active) Box(
-                Modifier.align(Alignment.TopEnd).padding(9.dp).clip(ButtonShape).background(Color.Black.copy(alpha = 0.35f))
-                    .padding(horizontal = 7.dp, vertical = 5.dp),
-            ) { NowPlayingBars(Color.White, height = 11.dp) }
-        }
-        Spacer(Modifier.height(9.dp))
-        Text(title, style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
-            color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(detail ?: " ", style = CaptionStyle, color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
 }
 
 /** Body copy inside a card. */

@@ -11,6 +11,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.Cookie
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.formUrlEncode
 import io.ktor.http.withCharset
 import io.ktor.http.content.OutgoingContent
 import io.ktor.serialization.kotlinx.json.json
@@ -33,6 +34,7 @@ import io.ktor.server.request.header
 import io.ktor.server.request.path
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveChannel
+import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
@@ -55,6 +57,9 @@ import io.ktor.utils.io.writer
 import kotlinx.coroutines.CoroutineScope
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -62,11 +67,28 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.FileInputStream
 import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "BridgeServer"
 private const val TUS_VERSION = "1.0.0"
+
+/** What of a linked phone's files the page may ask for through this one. */
+private val PEER_FS = setOf("file", "view", "text", "thumb", "zip")
+
+/** A linked phone's answer headers passed back as they are (length and type go separately). */
+private val PASSED_HEADERS = listOf(
+    "Content-Range", "Accept-Ranges", "Content-Disposition", "Cache-Control", "Content-Security-Policy", "X-Content-Type-Options",
+)
+
+/** How other phones and laptop helpers are named in the device list (see describeUserAgent). */
+private const val PHONE_PREFIX = "Phone: "
+
+/** An introduction for a direct send (a WebRTC offer or candidate) is a few kilobytes at most. */
+private const val SIGNAL_MAX = 64 * 1024
+private const val HELPER_PREFIX = "Laptop control on "
 
 /**
  * The HTTP server the PC talks to. The phone is the origin; there is nothing else in the
@@ -96,6 +118,7 @@ class BridgeServer(
     private val pairing: PairingManager,
     private val music: MusicLibrary,
     private val direct: dev.periy.bridge.net.DirectLink,
+    private val peers: PeerManager,
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val outbound = OutboundTracker()
@@ -205,6 +228,8 @@ class BridgeServer(
             directRoutes()
             p2pTrial()
             phoneFileRoutes()
+            peerRoutes()
+            pipeRoutes()
             notificationRoutes()
             syncRoutes()
         }
@@ -445,6 +470,441 @@ class BridgeServer(
                 runCatching { phoneFiles.zip(dir, this) }
             }
         }
+    }
+
+    // ------------------------------------------------------------------ linked phones
+
+    /**
+     * Phone to phone (see PeerManager): the greeting that links two phones both ways, the
+     * goodbye that unlinks them, the clipboard passed between them; and for the page, the
+     * linked phones and their files, passed through this one.
+     */
+    private fun io.ktor.server.routing.Route.peerRoutes() {
+        post("/api/peers/hello") {
+            val me = call.device() ?: return@post
+            val h = runCatching { call.receive<PeerHello>() }.getOrNull()
+            if (h == null || h.cookie.isBlank() || h.name.isBlank()) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad greeting"))
+                return@post
+            }
+            peers.hello(h, call.request.origin.remoteAddress, me.id)
+            call.respond(ApiResult(true, config.deviceName))
+        }
+        post("/api/peers/bye") {
+            call.device()?.let { peers.bye(it.id) }
+            call.respond(ApiResult(true))
+        }
+        // A copy on a linked phone. Taken only when newer than what is here (see PeerManager.takeClip).
+        post("/api/peers/clip") {
+            val me = call.device() ?: return@post
+            val c = runCatching { call.receive<PeerClip>() }.getOrNull()
+            if (c == null || c.text.isEmpty() || c.text.length > ClipboardStore.MAX_CHARS) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad copy"))
+                return@post
+            }
+            val from = peers.byDevice(me.id)?.name ?: me.name
+            if (peers.takeClip(from, c.at) { clipboard.set(c.text, c.at) }) mirrorToPhone()
+            call.respond(ApiResult(true))
+        }
+        post("/api/peers/clip/blob") {
+            val me = call.device() ?: return@post
+            val declared = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull() ?: -1
+            if (declared > ClipboardStore.MAX_BYTES) {
+                call.respond(HttpStatusCode.PayloadTooLarge, ApiResult(false, "Too large for the clipboard"))
+                return@post
+            }
+            val at = call.request.queryParameters["at"]?.toLongOrNull() ?: 0
+            val name = call.request.queryParameters["name"].orEmpty()
+            val mime = call.request.header(HttpHeaders.ContentType)?.substringBefore(';')?.trim().orEmpty()
+            val from = peers.byDevice(me.id)?.name ?: me.name
+            val channel = call.receiveChannel()
+            val took = withContext(Dispatchers.IO) {
+                peers.takeClip(from, at) { clipboard.setBlob(name, mime, channel.toInputStream(), at) != null }
+            }
+            if (took) mirrorToPhone()
+            call.respond(ApiResult(true))
+        }
+
+        get("/api/peers") {
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respond(peers.dto())
+        }
+        // A linked phone's files for the page, through this phone: "?peer=<name>" and the rest as on /api/fs.
+        get("/api/peer/fs") { proxyToPeer(call, "/api/fs") }
+        get("/api/peer/fs/{what}") {
+            val what = call.parameters["what"].orEmpty()
+            if (what !in PEER_FS) {
+                call.respond(HttpStatusCode.NotFound, ApiResult(false, "No such thing"))
+                return@get
+            }
+            proxyToPeer(call, "/api/fs/$what")
+        }
+    }
+
+    /**
+     * A request for a linked phone's files, passed on to it, and its answer streamed straight
+     * back: status, type, length and byte ranges as the other phone gave them, nothing kept.
+     */
+    private suspend fun proxyToPeer(call: ApplicationCall, path: String) {
+        val peer = peers.find(call.request.queryParameters["peer"].orEmpty())
+        if (peer == null) {
+            call.respond(HttpStatusCode.NotFound, ApiResult(false, "That phone is not linked to this one"))
+            return
+        }
+        val query = call.request.queryParameters.entries()
+            .filter { it.key != "peer" }
+            .flatMap { e -> e.value.map { e.key to it } }
+            .formUrlEncode()
+        val conn = runCatching {
+            withContext(Dispatchers.IO) {
+                peers.openGet(peer, if (query.isEmpty()) path else "$path?$query", call.request.header(HttpHeaders.Range))
+                    .also { it.responseCode }
+            }
+        }.getOrElse {
+            call.respond(HttpStatusCode.BadGateway, ApiResult(false, "Could not reach ${peer.name}"))
+            return
+        }
+        val code = conn.responseCode
+        val passed = io.ktor.http.Headers.build {
+            PASSED_HEADERS.forEach { h -> conn.getHeaderField(h)?.let { append(h, it) } }
+        }
+        call.respond(object : OutgoingContent.WriteChannelContent() {
+            override val status = HttpStatusCode.fromValue(code)
+            override val contentType = conn.contentType?.let { runCatching { ContentType.parse(it) }.getOrNull() }
+            override val contentLength = conn.getHeaderField(HttpHeaders.ContentLength)?.toLongOrNull()
+            override val headers = passed
+            override suspend fun writeTo(channel: io.ktor.utils.io.ByteWriteChannel) {
+                try {
+                    withContext(Dispatchers.IO) {
+                        (if (code < 400) conn.inputStream else conn.errorStream)?.use { ins ->
+                            val buf = ByteArray(256 * 1024)
+                            while (true) {
+                                val n = ins.read(buf)
+                                if (n < 0) break
+                                channel.writeFully(buf, 0, n)
+                                Monitor.addOut(n)
+                            }
+                        }
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            }
+        })
+    }
+
+    // ------------------------------------------------------------------ straight through
+
+    /** See Pipes: a laptop's file passed on to another computer, here or on a linked phone, as it arrives. */
+    private fun io.ktor.server.routing.Route.pipeRoutes() {
+        // Where this computer can send besides this phone: computers open here, linked phones,
+        // and the computers open on those. "?local=1" is a linked phone asking for this one's own.
+        get("/api/targets") {
+            val me = call.device() ?: return@get
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            val local = localTargets(except = me.id)
+            val remote = if (call.request.queryParameters["local"] == "1") emptyList() else coroutineScope {
+                peers.peers.value.map { p ->
+                    async {
+                        listOf(TargetDto("peer:${p.name}/phone", p.name, "phone")) +
+                            peers.remoteTargets(p).map { t -> t.copy(id = "peer:${p.name}/${t.id}", via = p.name) }
+                    }
+                }.awaitAll().flatten()
+            }
+            call.respond(TargetsDto(config.deviceName, local + remote))
+        }
+
+        post("/api/pipe") {
+            val me = call.device() ?: return@post
+            val o = runCatching { call.receive<PipeOffer>() }.getOrNull()
+            if (o == null || o.size < 0 || o.name.isBlank()) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad offer"))
+                return@post
+            }
+            val from = o.from.ifBlank { displayName(me) }
+            val sink: Pipes.Sink = when {
+                o.to == "phone" -> {
+                    if (!storage.hasDestination()) {
+                        call.respond(HttpStatusCode.Conflict, ApiResult(false, "${config.deviceName} has no folder for received files yet"))
+                        return@post
+                    }
+                    Pipes.Sink.Store
+                }
+                o.to.startsWith("dev:") -> {
+                    val id = o.to.removePrefix("dev:")
+                    if ((devices.live.value[id] ?: 0) <= 0) {
+                        call.respond(HttpStatusCode.NotFound, ApiResult(false, "That computer does not have the page open right now"))
+                        return@post
+                    }
+                    Pipes.Sink.Device(id)
+                }
+                o.to.startsWith("peer:") -> {
+                    val rest = o.to.removePrefix("peer:")
+                    val peer = peers.find(rest.substringBefore('/'))
+                    if (peer == null) {
+                        call.respond(HttpStatusCode.NotFound, ApiResult(false, "That phone is not linked to this one"))
+                        return@post
+                    }
+                    val remote = withContext(Dispatchers.IO) {
+                        peers.offerPipe(peer, o.copy(to = rest.substringAfter('/', "phone"), from = from))
+                    }.getOrElse {
+                        call.respond(HttpStatusCode.BadGateway, ApiResult(false, it.message ?: "Could not reach ${peer.name}"))
+                        return@post
+                    }
+                    Pipes.Sink.Relay(peer, remote)
+                }
+                else -> {
+                    call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Send it where?"))
+                    return@post
+                }
+            }
+            val p = Pipes.open(sanitizeFilename(o.name), o.size, o.mime.ifBlank { "application/octet-stream" }, from, sink, me.id, peers.byDevice(me.id))
+            if (sink is Pipes.Sink.Device) EventBus.emitTo(sink.id, "incoming", json.encodeToString(p.incoming()))
+            call.respond(PipeDto(p.id))
+        }
+
+        // The sender waits on this until the other computer has taken it, or said no.
+        get("/api/pipe/{id}") {
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            val p = Pipes.get(call.parameters["id"].orEmpty())
+            val sink = p?.sink
+            val state = when {
+                p == null -> "gone"
+                sink is Pipes.Sink.Relay -> withContext(Dispatchers.IO) { peers.pipeState(sink.peer, sink.remote) } ?: "waiting"
+                else -> p.state()
+            }
+            call.respond(PipeStateDto(state))
+        }
+
+        post("/api/pipe/{id}/decline") {
+            val me = call.device()
+            val p = Pipes.get(call.parameters["id"].orEmpty())
+            if (p != null && (p.sink as? Pipes.Sink.Device)?.id == me?.id) {
+                p.answer.complete(false)
+                p.chunks.close()
+            }
+            call.respond(ApiResult(true))
+        }
+
+        // The receiving computer says yes, and that it will take it browser to browser if it can.
+        post("/api/pipe/{id}/accept") {
+            val me = call.device()
+            val p = Pipes.get(call.parameters["id"].orEmpty())
+            if (p == null || (p.sink as? Pipes.Sink.Device)?.id != me?.id) {
+                call.respond(HttpStatusCode.NotFound, ApiResult(false, "Nothing is waiting for this computer"))
+                return@post
+            }
+            p.direct = true
+            p.answer.complete(true)
+            call.respond(PipeStateDto(p.state()))
+        }
+
+        // The introductions for a direct send: offers and network candidates, passed between the
+        // two pages. From the sender toward the receiver (on through a linked phone when it is
+        // there), or back from the receiver toward the sender.
+        post("/api/pipe/{id}/signal") {
+            val me = call.device() ?: return@post
+            val p = Pipes.get(call.parameters["id"].orEmpty())
+            val msg = runCatching { json.parseToJsonElement(call.receiveText().take(SIGNAL_MAX)).toString() }.getOrNull()
+            if (p == null || msg == null) {
+                call.respond(HttpStatusCode.NotFound, ApiResult(false, "No such send"))
+                return@post
+            }
+            val sink = p.sink
+            val fromReceiver = sink is Pipes.Sink.Device && sink.id == me.id
+            withContext(Dispatchers.IO) {
+                if (fromReceiver) signalSender(p, msg)
+                else when (sink) {
+                    is Pipes.Sink.Device -> EventBus.emitTo(sink.id, "rtc", """{"id":"${p.id}","msg":$msg}""")
+                    is Pipes.Sink.Relay -> peers.signal(sink.peer, sink.remote, msg)
+                    Pipes.Sink.Store -> {}
+                }
+            }
+            call.respond(ApiResult(true))
+        }
+        // A linked phone passing a receiver's introduction back, toward the computer that sent here.
+        post("/api/pipe/back") {
+            val me = call.device() ?: return@post
+            val peer = peers.byDevice(me.id)
+            val body = runCatching { json.parseToJsonElement(call.receiveText().take(SIGNAL_MAX)).jsonObject }.getOrNull()
+            val remote = body?.get("remote")?.jsonPrimitive?.content.orEmpty()
+            val p = if (peer != null) Pipes.byRelay(peer, remote) else null
+            val msg = body?.get("msg")?.toString()
+            if (p != null && msg != null) withContext(Dispatchers.IO) { signalSender(p, msg) }
+            call.respond(ApiResult(p != null))
+        }
+        // A direct send is over: the pipe, here and on a linked phone, can go.
+        post("/api/pipe/{id}/close") {
+            val p = Pipes.get(call.parameters["id"].orEmpty())
+            if (p != null && !p.sending && !p.receiving) {
+                Pipes.close(p)
+                (p.sink as? Pipes.Sink.Relay)?.let { r -> withContext(Dispatchers.IO) { peers.closePipe(r.peer, r.remote) } }
+            }
+            call.respond(ApiResult(true))
+        }
+
+        // The receiving computer's download. Asking for it is saying yes.
+        get("/api/pipe/{id}/data") {
+            val me = call.device()
+            val p = Pipes.get(call.parameters["id"].orEmpty())
+            if (p == null || (p.sink as? Pipes.Sink.Device)?.id != me?.id) {
+                call.respond(HttpStatusCode.NotFound, ApiResult(false, "Nothing is waiting for this computer"))
+                return@get
+            }
+            // Taking it is saying yes; after a yes to a direct send, this is its way through the phone instead.
+            if (!p.answer.complete(true) && (p.state() != "direct" || p.receiving)) {
+                call.respond(HttpStatusCode.Conflict, ApiResult(false, "That has been answered already"))
+                return@get
+            }
+            p.receiving = true
+            call.response.header(
+                HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, p.name).toString(),
+            )
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.response.header("X-Content-Type-Options", "nosniff")
+            call.respond(object : OutgoingContent.WriteChannelContent() {
+                // Always saved, never shown: whatever the file is, it cannot run as this page.
+                override val contentType = ContentType.Application.OctetStream
+                override val contentLength = p.size
+                override suspend fun writeTo(channel: io.ktor.utils.io.ByteWriteChannel) {
+                    var n = 0L
+                    try {
+                        while (n < p.size) {
+                            val piece = withTimeoutOrNull(Pipes.IDLE_MS) { p.chunks.receiveCatching() }
+                                ?: error("The sender stopped")
+                            val b = piece.getOrNull() ?: break
+                            channel.writeFully(b, 0, b.size)
+                            n += b.size
+                            Monitor.addOut(b.size)
+                        }
+                        channel.flush()
+                    } finally {
+                        p.delivered.complete(n == p.size)
+                        if (n != p.size) p.chunks.close(java.io.IOException("The computer stopped taking it"))
+                    }
+                }
+            })
+        }
+
+        // The sender's upload: into the receiving computer's download, on to a linked phone, or
+        // into this phone's folder. It answers once the file has arrived wherever it was going.
+        post("/api/pipe/{id}/data") {
+            val p = Pipes.get(call.parameters["id"].orEmpty())
+            if (p == null || p.sending) {
+                call.respond(HttpStatusCode.Gone, ApiResult(false, "That send has closed; start it again"))
+                return@post
+            }
+            p.sending = true
+            val tid = "pipe-" + p.id
+            Transfers.begin(tid, p.name + "  →  " + sinkName(p.sink), Direction.OUTBOUND, p.size)
+            var ok = false
+            try {
+                when (val sink = p.sink) {
+                    is Pipes.Sink.Relay -> {
+                        val (code, msg) = withContext(Dispatchers.IO) {
+                            peers.pushPipe(sink.peer, sink.remote, call.receiveChannel().toInputStream(), p.size) { Transfers.progress(tid, it) }
+                        }
+                        ok = code in 200..299
+                        call.respond(HttpStatusCode.fromValue(code), ApiResult(ok, msg))
+                    }
+                    Pipes.Sink.Store -> {
+                        val entry = withContext(Dispatchers.IO) { storeFromPipe(p, call.receiveChannel().toInputStream(), tid) }
+                        ok = true
+                        call.respond(ApiResult(true, entry.name))
+                    }
+                    is Pipes.Sink.Device -> {
+                        val yes = withTimeoutOrNull(Pipes.ANSWER_MS) { p.answer.await() } ?: false
+                        if (!yes) {
+                            call.respond(HttpStatusCode.Gone, ApiResult(false, "They did not take it"))
+                            return@post
+                        }
+                        val input = call.receiveChannel().toInputStream()
+                        withContext(Dispatchers.IO) {
+                            var sent = 0L
+                            while (sent < p.size) {
+                                val b = ByteArray(minOf(Pipes.PIECE.toLong(), p.size - sent).toInt())
+                                var got = 0
+                                while (got < b.size) {
+                                    val n = input.read(b, got, b.size - got)
+                                    if (n < 0) error("The upload stopped part way")
+                                    got += n
+                                }
+                                p.chunks.send(b)
+                                sent += got
+                                Monitor.addIn(got)
+                                Transfers.progress(tid, sent)
+                            }
+                        }
+                        p.chunks.close()
+                        ok = p.delivered.await()
+                        call.respond(
+                            if (ok) HttpStatusCode.OK else HttpStatusCode.BadGateway,
+                            ApiResult(ok, if (ok) null else "The other computer stopped taking it"),
+                        )
+                    }
+                }
+            } finally {
+                Transfers.finish(tid, ok)
+                Pipes.close(p)
+            }
+        }
+    }
+
+    /** An introduction from a pipe's receiver, toward whoever sent it: a computer here, or a linked phone. */
+    private fun signalSender(p: Pipes.Pipe, msg: String) {
+        val back = p.senderPeer
+        if (back != null) peers.signalBack(back, p.id, msg)
+        else EventBus.emitTo(p.senderId, "rtc", """{"id":"${p.id}","msg":$msg}""")
+    }
+
+    /** A pipe's file into this phone's folder for received files. */
+    private fun storeFromPipe(p: Pipes.Pipe, input: java.io.InputStream, tid: String): FileEntry {
+        val slot = storage.newSlot(p.id)
+        try {
+            var got = 0L
+            slot.writer(0).use { w ->
+                val buf = ByteArray(Pipes.PIECE)
+                while (got < p.size) {
+                    val n = input.read(buf, 0, minOf(buf.size.toLong(), p.size - got).toInt())
+                    if (n < 0) error("The upload stopped part way")
+                    w.write(buf, 0, n)
+                    got += n
+                    Monitor.addIn(n)
+                    Transfers.progress(tid, got)
+                }
+                w.sync()
+            }
+            return slot.finish(p.name, p.mime, Origin.PC, emptyList()).also { index.add(it) }
+        } catch (t: Throwable) {
+            slot.discard()
+            throw t
+        }
+    }
+
+    private fun sinkName(s: Pipes.Sink): String = when (s) {
+        is Pipes.Sink.Device -> devices.get(s.id)?.let(::displayName) ?: "a computer"
+        Pipes.Sink.Store -> config.deviceName
+        is Pipes.Sink.Relay -> s.peer.name
+    }
+
+    /** Computers with the page open here right now (not their helpers, not phones), by name. */
+    private fun localTargets(except: String): List<TargetDto> {
+        val live = devices.live.value
+        return devices.devices.value
+            .filter { (live[it.id] ?: 0) > 0 && it.id != except && !it.name.startsWith(PHONE_PREFIX) && !it.name.startsWith(HELPER_PREFIX) }
+            .map { TargetDto("dev:${it.id}", displayName(it), "computer") }
+    }
+
+    /**
+     * A computer as a person knows it: a page by its machine's name when that machine's helper
+     * is paired from the same address, else by its browser ("Edge on Windows").
+     */
+    private fun displayName(d: PairedDevice): String {
+        if (d.name.startsWith(PHONE_PREFIX)) return d.name.removePrefix(PHONE_PREFIX)
+        if (d.name.startsWith(HELPER_PREFIX)) return d.name.removePrefix(HELPER_PREFIX)
+        return devices.devices.value.firstOrNull { it.name.startsWith(HELPER_PREFIX) && it.lastIp == d.lastIp }
+            ?.name?.removePrefix(HELPER_PREFIX) ?: d.name
     }
 
     /** Wi-Fi Direct, being tried as a faster way to host the direct link. Debug builds only. */
@@ -857,6 +1317,7 @@ class BridgeServer(
         }
         delete("/api/clipboard/history") {
             clipboard.forgetAll()
+            SystemClipboard.clear(ctx)
             call.respond(ApiResult(true))
         }
 
@@ -905,9 +1366,12 @@ class BridgeServer(
             send(data = config.look().json(), event = "look")
             // The phone's notifications too: any that came or went while this tab was away.
             send(data = Notifs.snapshotJson(ctx), event = "notifs")
+            send(data = json.encodeToString(peers.dto()), event = "peers")
+            // A file another computer is sending this one, asked for again after a reload.
+            device?.let { d -> Pipes.waitingFor(d.id).forEach { send(data = json.encodeToString(it.incoming()), event = "incoming") } }
 
             val pump = CoroutineScope(coroutineContext).launch {
-                EventBus.events.collect { send(data = it.data, event = it.name) }
+                EventBus.events.collect { if (it.to == null || it.to == device?.id) send(data = it.data, event = it.name) }
             }
             try {
                 // Heartbeat. Without it the connection idles out and every browser tab

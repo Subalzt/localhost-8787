@@ -118,6 +118,9 @@ class BridgeService : Service() {
                     container.newServer().start()
                     // Let other phones running Localhost 8787 find this one on the network.
                     container.peers.advertise(container.prefs.port)
+                    // Links to other phones made one way only are completed, and old ones renewed.
+                    container.peers.online()
+                    container.stun.start()
                 }
                     .onFailure {
                         Log.e(TAG, "Server failed to start", it)
@@ -150,6 +153,7 @@ class BridgeService : Service() {
         dev.periy.bridge.server.ClipWatch.stop(applicationContext)
         container.direct.stop()
         container.peers.stopAdvertising()
+        container.stun.stop()
         container.stopServer()
         releaseLocks()
         scope.cancel()
@@ -172,6 +176,7 @@ class BridgeService : Service() {
         _running.value = false
         container.direct.stop()
         container.peers.stopAdvertising()
+        container.stun.stop()
         container.stopServer()
         releaseLocks()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)

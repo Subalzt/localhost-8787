@@ -97,11 +97,14 @@ class DeviceRegistry(ctx: Context) {
 
     fun connected(id: String) = synchronized(lock) {
         _live.value = _live.value + (id to ((_live.value[id] ?: 0) + 1))
+        // Pages list the computers they can send to; one just opened.
+        EventBus.emit("targets", "")
     }
 
     fun disconnected(id: String) = synchronized(lock) {
         val n = (_live.value[id] ?: 1) - 1
         _live.value = if (n <= 0) _live.value - id else _live.value + (id to n)
+        EventBus.emit("targets", "")
     }
 
     private fun persist() {

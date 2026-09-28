@@ -11,6 +11,8 @@ import dev.periy.bridge.server.MusicLibrary
 import dev.periy.bridge.server.FileIndex
 import dev.periy.bridge.server.PairingManager
 import dev.periy.bridge.server.PeerManager
+import dev.periy.bridge.server.SESSION_COOKIE
+import dev.periy.bridge.server.Session
 import dev.periy.bridge.server.ServerConfig
 import dev.periy.bridge.server.Storage
 import dev.periy.bridge.server.TusStore
@@ -34,7 +36,21 @@ class Container(ctx: Context) {
     val pairing = PairingManager(app, devices)
     val music = MusicLibrary(app) { prefs.coverLookup }
     val direct = dev.periy.bridge.net.DirectLink(app)
-    val peers = PeerManager(app, ::deviceName, { prefs.uploadStreams }, direct) { prefs.phoneDirect }
+    /** How two laptops' pages learn their addresses, to send to each other directly. */
+    val stun = dev.periy.bridge.net.StunServer()
+    // Phone to phone goes over the network both are on; the direct-link option was taken off the Devices tab.
+    val peers = PeerManager(
+        app, ::deviceName, { prefs.uploadStreams }, direct, useDirect = { false },
+        access = object : PeerManager.Access {
+            override val port: Int get() = prefs.port
+            override fun grant(name: String, ip: String): String = devices.add("Phone: $name", ip).id
+            override fun cookie(deviceId: String): String? = devices.get(deviceId)?.let {
+                SESSION_COOKIE + "=" + Session.issue(prefs.sessionKey(), PeerManager.SESSION_TTL_MS, it.id)
+            }
+            override fun revoke(deviceId: String) = devices.remove(deviceId)
+        },
+        storage = storage, index = index, clipboard = clipboard, clipSync = { prefs.clipSync },
+    )
 
     private val _theme = MutableStateFlow(prefs.theme)
 
@@ -95,7 +111,7 @@ class Container(ctx: Context) {
             clipSync = { prefs.clipSync },
             deviceName = deviceName(),
         )
-        return BridgeServer(app, config, storage, tus, index, clipboard, devices, pairing, music, direct)
+        return BridgeServer(app, config, storage, tus, index, clipboard, devices, pairing, music, direct, peers)
             .also { server = it }
     }
 
