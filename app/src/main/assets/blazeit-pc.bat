@@ -88,6 +88,8 @@ public static class BlazeItPc
         // phone (the trackpad stream and the live events), so everything else would queue.
         ServicePointManager.DefaultConnectionLimit = 32;
         Directory.CreateDirectory(Dir);
+        // An error nothing caught ends the helper; the log says which.
+        AppDomain.CurrentDomain.UnhandledException += delegate (object o, UnhandledExceptionEventArgs e) { Log("Stopped by an error: " + e.ExceptionObject); };
         bool first;
         single = new Mutex(true, "Local\\BlazeItLaptopHelper", out first);
         if (!first)
@@ -153,6 +155,27 @@ public static class BlazeItPc
     static void Say(string s)
     {
         Console.WriteLine(DateTime.Now.ToString("HH:mm:ss") + "  " + s);
+        Log(s);
+    }
+
+    static readonly object logLock = new object();
+
+    /**
+     * What the helper said and what went wrong, kept in helper.log beside its pairing, so a helper
+     * that stopped leaves a reason behind. Started afresh past half a megabyte.
+     */
+    static void Log(string s)
+    {
+        try
+        {
+            lock (logLock)
+            {
+                string f = Path.Combine(Dir, "helper.log");
+                if (File.Exists(f) && new FileInfo(f).Length > 512 * 1024) File.Delete(f);
+                File.AppendAllText(f, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + s + Environment.NewLine);
+            }
+        }
+        catch { }
     }
 
     // ------------------------------------------------------------------ finding the phone
@@ -213,6 +236,7 @@ public static class BlazeItPc
     static string LinkName(string host)
     {
         if (host == usbHost) return "over the USB cable";
+        if (host == AdbHost) return "over the cable's USB debugging (turn on USB tethering on the phone for full speed)";
         if (directSsid != null) return "on the phone's " + (directSsid.StartsWith("AndroidShare") ? "direct link" : "hotspot");
         return "over Wi-Fi";
     }
@@ -319,7 +343,96 @@ public static class BlazeItPc
             }
         }
         catch { }
+        // Last, the cable with USB debugging on: slower, but it needs no network at all.
+        if (list.Count == 0 || !list.Exists(Ping))
+        {
+            string a = AdbPath();
+            if (a != null && !list.Contains(a)) list.Add(a);
+        }
         return list;
+    }
+
+    /** The phone over USB debugging is at this address: a relay here into adb's forward. */
+    const string AdbHost = "127.0.0.2";
+    const int AdbForwardPort = 18787;
+    static bool adbRelay;
+
+    /**
+     * The last way in: the cable with USB debugging on, when there is no network between the two
+     * (the phone on another Wi-Fi, USB tethering off). adb forwards a port on this laptop to the
+     * phone's, and a relay on 127.0.0.2:8787 hands connections to it, so the phone is at an address
+     * like any other. The page, the clipboard and the trackpad work; the second screen needs a
+     * network. Null when adb or a phone on it is not there.
+     */
+    static string AdbPath()
+    {
+        try
+        {
+            string scrcpy = FindScrcpy();
+            string adb = FindAdb(scrcpy != null ? Path.GetDirectoryName(scrcpy) : ScrcpyHome);
+            if (!File.Exists(adb)) return null;
+            if (!Regex.IsMatch(RunOut(adb, "devices"), @"\n\S+\s+device\b")) return null;
+            RunOut(adb, "forward tcp:" + AdbForwardPort + " tcp:" + PhonePort);
+            if (!adbRelay)
+            {
+                TcpListener l = new TcpListener(IPAddress.Parse(AdbHost), PhonePort);
+                l.Start();
+                KeepToSelf(l.Server);
+                adbRelay = true;
+                Thread t = new Thread(delegate ()
+                {
+                    while (true)
+                    {
+                        TcpClient c;
+                        try { c = l.AcceptTcpClient(); }
+                        catch (Exception e) { Log("Taking a connection over USB debugging: " + e.Message); Thread.Sleep(200); continue; }
+                        Thread one = new Thread(delegate () { AdbPipe(c); });
+                        one.IsBackground = true;
+                        one.Start();
+                    }
+                });
+                t.IsBackground = true;
+                t.Start();
+            }
+            return AdbHost;
+        }
+        catch { return null; }
+    }
+
+    /** One connection through adb's forward, both ways. */
+    static void AdbPipe(TcpClient c)
+    {
+        TcpClient to = new TcpClient();
+        try
+        {
+            KeepToSelf(c.Client);
+            to.NoDelay = c.NoDelay = true;
+            to.Connect(IPAddress.Loopback, AdbForwardPort);
+            KeepToSelf(to.Client);
+            NetworkStream a = c.GetStream(), b = to.GetStream();
+            Thread up = new Thread(delegate () { Copy(a, b, to); });
+            up.IsBackground = true;
+            up.Start();
+            Copy(b, a, c);
+        }
+        catch { }
+        finally
+        {
+            try { c.Close(); } catch { }
+            try { to.Close(); } catch { }
+        }
+    }
+
+    static void Copy(Stream from, Stream to, TcpClient closeAfter)
+    {
+        byte[] buf = new byte[1 << 16];
+        try
+        {
+            int n;
+            while ((n = from.Read(buf, 0, buf.Length)) > 0) to.Write(buf, 0, n);
+        }
+        catch { }
+        try { closeAfter.Client.Shutdown(SocketShutdown.Send); } catch { }
     }
 
     static void FindPhone(bool firstTime)
@@ -335,7 +448,7 @@ public static class BlazeItPc
                     MoveTo(c);
                     if (moved) Say("Found the phone at " + c + ", " + LinkName(c) + ".");
                     // The direct link's address is not where to look next time.
-                    if (directSsid == null && !UsbGateways().Contains(c)) File.WriteAllText(Path.Combine(Dir, "phone.txt"), c);
+                    if (directSsid == null && c != AdbHost && !UsbGateways().Contains(c)) File.WriteAllText(Path.Combine(Dir, "phone.txt"), c);
                     return;
                 }
             }
@@ -1944,9 +2057,17 @@ public static class BlazeItPc
         Thread sweep = new Thread(SweepLoop);
         sweep.IsBackground = true;
         sweep.Start();
+        AcceptLoop(l);
+    }
+
+    static void AcceptLoop(TcpListener l)
+    {
         while (true)
         {
-            TcpClient c = l.AcceptTcpClient();
+            TcpClient c;
+            // A connection that fails before it is taken is the browser's business, not the end of the page.
+            try { c = l.AcceptTcpClient(); }
+            catch (Exception e) { Log("Taking a connection: " + e.Message); Thread.Sleep(200); continue; }
             KeepToSelf(c.Client);
             Thread t = new Thread(delegate ()
             {
