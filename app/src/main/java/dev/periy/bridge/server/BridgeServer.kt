@@ -1133,7 +1133,7 @@ class BridgeServer(
         }
         post("/api/look") {
             val body = runCatching { call.receive<LookRequest>() }.getOrDefault(LookRequest())
-            config.setLook(body.style, body.accent)
+            config.setLook(body.style, body.accent, body.namida)
             call.respond(ApiResult(true))
         }
     }
@@ -1243,6 +1243,7 @@ class BridgeServer(
                     theme = config.theme(),
                     style = config.look().style,
                     accent = config.look().accent,
+                    namida = config.look().namida,
                     clipSync = config.clipSync(),
                     clip = clipboard.meta.value,
                 )

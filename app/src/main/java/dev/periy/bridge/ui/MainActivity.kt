@@ -57,8 +57,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -1772,6 +1770,14 @@ private fun LazyListScope.settingsTab(
         Box(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp)) {
             val themes = listOf("system", "light", "dark")
             SegmentedRow(listOf("Automatic", "Light", "Dark"), themes.indexOf(theme)) { vm.setTheme(themes[it]) }
+        }
+    }
+    // Namida's look over the whole app and every page (Music has it always); shared like the colour.
+    item {
+        GroupCard(Modifier.padding(top = 16.dp)) {
+            SettingRow("Namida style", "Its surfaces, font and icons everywhere, in your colour", first = true, icon = BlazeIcons.Music, iconColor = Bridge.Purple) {
+                Toggle(look.namida) { vm.setNamida(it) }
+            }
         }
     }
 

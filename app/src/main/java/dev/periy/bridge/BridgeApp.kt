@@ -90,7 +90,7 @@ class Container(ctx: Context) {
         EventBus.emit("theme", v)
     }
 
-    private val _look = MutableStateFlow(Look(styleName(prefs.style) ?: "theatre", prefs.accent.takeIf { it in ACCENT_NAMES } ?: "auto"))
+    private val _look = MutableStateFlow(Look(styleName(prefs.style) ?: "theatre", prefs.accent.takeIf { it in ACCENT_NAMES } ?: "auto", prefs.namidaUi))
 
     init {
         // A removed style must not remain in preferences after the next app launch.
@@ -100,14 +100,16 @@ class Container(ctx: Context) {
     /** The look and the colour: shared like the theme. */
     val look: StateFlow<Look> = _look
 
-    /** Either or both; an unknown value leaves that half as it is. */
-    fun setLook(style: String? = null, accent: String? = null) {
+    /** Any of them; an unknown or missing value leaves that part as it is. */
+    fun setLook(style: String? = null, accent: String? = null, namida: Boolean? = null) {
         val v = Look(
             style?.let(::styleName) ?: _look.value.style,
             accent?.takeIf { it in ACCENT_NAMES } ?: _look.value.accent,
+            namida ?: _look.value.namida,
         )
         prefs.style = v.style
         prefs.accent = v.accent
+        prefs.namidaUi = v.namida
         _look.value = v
         EventBus.emit("look", v.json())
     }
@@ -131,7 +133,7 @@ class Container(ctx: Context) {
             theme = { _theme.value },
             setTheme = ::setTheme,
             look = { _look.value },
-            setLook = { s, a -> setLook(s, a) },
+            setLook = { s, a, n -> setLook(s, a, n) },
             laptopLink = { prefs.laptopLink },
             hotspot = { prefs.hotspotSsid to prefs.hotspotPass },
             clipSync = { prefs.clipSync },
@@ -168,8 +170,12 @@ fun styleName(s: String): String? = when (s) {
     else -> null
 }
 
-data class Look(val style: String = "theatre", val accent: String = "auto") {
-    fun json() = """{"style":"$style","accent":"$accent"}"""
+/**
+ * The shared look: the style, the colour, and [namida], Namida's surfaces, shapes, font and icons
+ * over everything outside Music (which is Namida's always).
+ */
+data class Look(val style: String = "theatre", val accent: String = "auto", val namida: Boolean = false) {
+    fun json() = """{"style":"$style","accent":"$accent","namida":$namida}"""
 }
 
 class BridgeApp : Application() {

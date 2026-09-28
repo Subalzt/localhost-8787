@@ -107,6 +107,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean(K_COVER_LOOKUP, true)
         set(v) = sp.edit { putBoolean(K_COVER_LOOKUP, v) }
 
+    /** Namida's look over the whole app and every page, not only Music (shared, like the colour). */
+    var namidaUi: Boolean
+        get() = sp.getBoolean(K_NAMIDA_UI, false)
+        set(v) = sp.edit { putBoolean(K_NAMIDA_UI, v) }
+
     /** The phone's player shows the song's lyrics over its cover (Namida's lyrics button). */
     var lyricsShown: Boolean
         get() = sp.getBoolean(K_LYRICS_SHOWN, true)
@@ -150,5 +155,6 @@ class Prefs(ctx: Context) {
         const val K_MONITOR = "show_monitor"
         const val K_COVER_LOOKUP = "cover_lookup"
         const val K_LYRICS_SHOWN = "lyrics_shown"
+        const val K_NAMIDA_UI = "namida_ui"
     }
 }
