@@ -14,7 +14,6 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import dev.periy.bridge.server.MusicLibrary
-import dev.periy.bridge.server.SyncPlay
 import dev.periy.bridge.server.TrackDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -548,8 +547,6 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
     private fun releasePlayers() { releaseCurrent(); releaseNext() }
 
     private fun gainFocus(): Boolean {
-        // The phone's speaker cannot play in a group and on its own at once: it leaves the group.
-        SyncPlay.state.takeIf { "phone" in it.members }?.let { SyncPlay.set(it.copy(members = it.members - "phone")) }
         registerNoisy()
         MusicService.ensure(app)
         if (hasFocus) return true

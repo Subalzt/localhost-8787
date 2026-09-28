@@ -173,17 +173,6 @@ class MainActivity : ComponentActivity() {
         if (intent.action == dev.periy.bridge.music.MusicService.ACTION_OPEN_PLAYER) { openPlayer.value = true; intent.action = null; return }
         // Debug builds: `adb shell am start ... --ez serve true` starts the server for testing.
         if (dev.periy.bridge.BuildConfig.DEBUG && intent.getBooleanExtra("serve", false)) BridgeService.start(this)
-        // Debug builds: `--el synctest <trackId>` runs the phone's synced player silently from the
-        // start of that song (see SyncPlay's log), `--ez syncstop true` stops it.
-        if (dev.periy.bridge.BuildConfig.DEBUG) {
-            val id = intent.getLongExtra("synctest", -1)
-            if (id >= 0) dev.periy.bridge.server.SyncPlay.phone?.let {
-                it.silent = true
-                it.apply(dev.periy.bridge.server.SyncState(on = true, members = listOf("phone"), trackId = id, playing = true,
-                    anchorMs = System.currentTimeMillis() + 1500, anchorPos = 0.0))
-            }
-            if (intent.getBooleanExtra("syncstop", false)) dev.periy.bridge.server.SyncPlay.phone?.release()
-        }
         // Debug builds: `--es style theatre` and `--es accent blue` switch the look, for screenshots.
         if (dev.periy.bridge.BuildConfig.DEBUG) {
             intent.getStringExtra("accent")?.let { vm.setAccent(it) }

@@ -727,32 +727,6 @@
   @media (max-width: 900px) { .strip .gs-shuffle { display: none; } }
   .album-strip .gs-art { position: relative; overflow: hidden; box-shadow: 3px 4px 0 color-mix(in srgb, var(--txt) 14%, transparent); }
   .album-strip .gs-art img { width: 100%; height: 100%; object-fit: cover; }
-  /* Playing together: the Sync button in the player (lit, with how many devices, while on),
-     its list of devices, and the one-click Join a browser asks for before it makes sound. */
-  #pl-sync { position: relative; }
-  #pl-sync.on { color: var(--accent); }
-  #pl-sync b { position: absolute; top: 0; right: -2px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px;
-    background: var(--accent); color: var(--on-accent); font: 800 9px/14px system-ui, sans-serif; text-align: center; }
-  #pl-sync b:empty { display: none; }
-  .sync-pop { position: fixed; z-index: 50; right: 18px; bottom: calc(var(--player-h, 72px) + 10px); width: 340px; max-width: calc(100vw - 24px);
-    padding: 16px 14px 12px; border-radius: 18px; background: var(--surface); box-shadow: var(--float-shadow); }
-  .sync-head b { display: block; padding: 0 6px; font-size: 16px; font-weight: 800; letter-spacing: -.2px; }
-  .sync-note { margin: 3px 6px 10px; font-size: 13px; color: var(--sub); }
-  .sync-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 8px; border: 0; border-radius: 12px;
-    background: none; color: var(--txt); text-align: left; cursor: pointer; font: inherit; }
-  .sync-row:hover { background: var(--surface-2); }
-  .sync-row.self { cursor: default; }
-  .sync-row.self:hover { background: none; }
-  .sync-row .sr-ic { flex: 0 0 34px; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--surface-2); }
-  .sync-row .sr-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-  .sync-row .grow { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
-  .sync-row .grow b { font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sync-row .grow span { font-size: 12px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sync-row.on .switch { background: var(--good); }
-  .sync-row.on .switch::after { left: 17px; }
-  .sync-hint { margin: 8px 8px 2px; font-size: 12.5px; color: var(--sub); }
-  .sync-join { position: fixed; z-index: 60; left: 50%; top: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px;
-    padding: 10px 10px 10px 18px; border-radius: 16px; background: var(--surface); box-shadow: var(--float-shadow); font-size: 14px; }  /* The little visualizer in the player bar, beside the title. */
   .pl-viz { flex: 0 0 auto; width: 46px; height: 26px; display: block; }
   @media (max-width: 900px) {
     .stage { flex-direction: column; align-items: flex-start; gap: 22px; padding: 22px; }
@@ -1725,7 +1699,7 @@
   :root[data-style="theatre"] .beam-title { font-weight: 800; }
 
   :root[data-style="theatre"] .logo, :root[data-style="theatre"] .stage-artist, :root[data-style="theatre"] .strip .gs-name,
-  :root[data-style="theatre"] .status-line .rate b, :root[data-style="theatre"] .dock .rate, :root[data-style="theatre"] .sync-head b,
+  :root[data-style="theatre"] .status-line .rate b, :root[data-style="theatre"] .dock .rate,
   #login p, #login .btn.lg-go, :root[data-style="theatre"] .drop-veil span#drop-to { font-size: var(--t-head); }
 
   :root[data-style="theatre"] .btn, :root[data-style="theatre"] .tabs button, :root[data-style="theatre"] .row .title,
@@ -1735,7 +1709,7 @@
   :root[data-style="theatre"] .pl-title, :root[data-style="theatre"] .field b, :root[data-style="theatre"] .clip-history .h-body b,
   :root[data-style="theatre"] .crumbs, :root[data-style="theatre"] .viewer-bar b, :root[data-style="theatre"] .viewer-stage .doc,
   :root[data-style="theatre"] .beam-btn, :root[data-style="theatre"] .status-line .who > span, :root[data-style="theatre"] .status-line #route-badge,
-  :root[data-style="theatre"] .status-line .btn, :root[data-style="theatre"] .sync-row .grow b, #login .note.lg-ask,
+  :root[data-style="theatre"] .status-line .btn, #login .note.lg-ask,
   :root[data-style="theatre"] .side-item { font-size: var(--t-body); }
 
   :root[data-style="theatre"] .btn.sm, :root[data-style="theatre"] .seg button, :root[data-style="theatre"] .note, :root[data-style="theatre"] .meta,
@@ -1748,8 +1722,8 @@
   :root[data-style="theatre"] .notif .n-head, :root[data-style="theatre"] .clip-history .h-body span, :root[data-style="theatre"] .clip-history .empty,
   :root[data-style="theatre"] .empty, :root[data-style="theatre"] .clip-item .file span, :root[data-style="theatre"] .clip-item .cap,
   :root[data-style="theatre"] .clip-status, :root[data-style="theatre"] .viewer-bar span, :root[data-style="theatre"] .viewer-count,
-  :root[data-style="theatre"] .viewer-note, :root[data-style="theatre"] .viewer-stage .none, :root[data-style="theatre"] .sync-note,
-  :root[data-style="theatre"] .sync-row .grow span, :root[data-style="theatre"] .sync-hint, :root[data-style="theatre"] .mon-sub,
+  :root[data-style="theatre"] .viewer-note, :root[data-style="theatre"] .viewer-stage .none,
+  :root[data-style="theatre"] .mon-sub,
   :root[data-style="theatre"] .mon-grid > div, :root[data-style="theatre"] .ch-head span, :root[data-style="theatre"] .ch-legend,
   :root[data-style="theatre"] .ch-hint, :root[data-style="theatre"] .dock .lbl, :root[data-style="theatre"] .field span, #login .meta,
   .lg-chips span, :root[data-style="theatre"] .page-head p, :root[data-style="theatre"] .calm span { font-size: var(--t-sub); }
@@ -2109,7 +2083,6 @@
     <span class="pl-times"><span id="pl-cur">0:00</span> / <span id="pl-dur">0:00</span></span>
     <span class="pl-time" id="pl-time" hidden></span>
     <button class="pl-btn small lyr-btn" id="pl-lyrics" type="button" title="Lyrics" aria-label="Lyrics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-7l-4.2 3.4v-3.4H5A1.5 1.5 0 0 1 3.5 15V6.5A1.5 1.5 0 0 1 5 5Z"/><path d="M8 9.5h8M8 12.5h5"/></svg></button>
-    <button class="pl-btn small" id="pl-sync" title="Play on other devices, in step"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M8.3 15.7a5.3 5.3 0 0 1 0-7.4M15.7 8.3a5.3 5.3 0 0 1 0 7.4M5.5 18.5a9.2 9.2 0 0 1 0-13M18.5 5.5a9.2 9.2 0 0 1 0 13"/></svg><b id="pl-sync-n"></b></button>
     <button class="pl-btn small" id="pl-mute" title="Mute"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M4 9.5h3l4.5-3.8v12.6L7 14.5H4z"/><path class="w1" d="M15 9.5a3.5 3.5 0 0 1 0 5"/><path class="w2" d="M17.8 7a7 7 0 0 1 0 10"/></svg></button>
     <input id="pl-vol" type="range" min="0" max="100" value="100" aria-label="Volume">
   </div>
@@ -2173,7 +2146,6 @@
     <div class="np-card" role="dialog" aria-label="Configure">
       <b class="np-card-title">Configure</b>
       <label class="np-slider"><span class="np-sl-head"><i data-nx="speed"></i><b>Speed</b><em id="np-speed-v">100%</em></span><input id="np-speed" type="range" min="0.5" max="2" step="0.01" value="1"></label>
-      <p class="np-note" id="np-speed-note" hidden>Songs play at their own speed while in step with other devices.</p>
       <label class="np-slider"><span class="np-sl-head"><i data-nx="volume" id="np-vol-i"></i><b>Volume</b><em id="np-vol-v">100%</em></span><input id="np-vol" type="range" min="0" max="100" step="1" value="100"></label>
       <div class="np-card-actions"><button type="button" class="np-btn np-reset" id="np-reset" title="Put them back" aria-label="Put them back" data-nx="reset"></button><button type="button" class="np-done" id="np-done">Done</button></div>
     </div>
@@ -2192,13 +2164,6 @@
     <p class="lyr-src" id="lyr-src"></p>
   </div>
 </div>
-<!-- Playing together: which devices play in step with this one. -->
-<div class="sync-pop" id="sync-pop" hidden>
-  <div class="sync-head"><b>Play in sync</b></div>
-  <p class="sync-note" id="sync-note"></p>
-  <div id="sync-list"></div>
-</div>
-<div class="sync-join" id="sync-join" hidden><span>Music is playing in sync from <b id="sync-join-from">another device</b>.</span><button class="btn sm" id="sync-join-btn" type="button">Join</button></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Preview">
   <div class="viewer-bar">
@@ -4740,7 +4705,6 @@ function connectEvents() {
   events.addEventListener("look", function (e) { try { applyLook(JSON.parse(e.data)); } catch (err) {} });
   events.addEventListener("cover", function (e) { coverArrived(e.data); });
   events.addEventListener("favourites", function (e) { try { setFavourites(JSON.parse(e.data)); } catch (err) {} });
-  syncEvents(events);
   // The phone's links changed: the helper may be moving this page onto another one.
   events.addEventListener("direct", function () { setTimeout(refreshRoute, 1500); setTimeout(refreshRoute, 5000); });
   events.addEventListener("files", function (e) {
@@ -5530,7 +5494,6 @@ function playCurrent() {
   var t = currentTrack();
   if (!t) return;
   vizEnsure();
-  if (syncMember()) { syncPlayTrack(t); return; }
   var audio = $("audio");
   // From memory if it was prefetched; otherwise stream it with ranges.
   audio.src = player.blobs[t.id] || streamUrl(t.id);
@@ -5871,7 +5834,6 @@ function deckNext() {
 
 /** Plays the song [k] places ahead in the queue now, as if the ones between had been skipped. */
 function jumpAhead(k) {
-  if (syncFollower()) return;
   var n = player.order.length, p = player.pos + k;
   if (p >= n) { if (player.repeat !== "all") return; p = p % n; }
   player.pos = p;
@@ -5921,7 +5883,7 @@ function vizStart() {
 function vizFrame() {
   viz.raf = 0;
   var audio = $("audio");
-  var playing = syncMember() ? isPlaying() : !audio.paused && !audio.ended;
+  var playing = !audio.paused && !audio.ended;
   var lv = viz.levels, moving = false;
   if (playing && viz.an) {
     viz.an.getByteFrequencyData(viz.data);
@@ -5975,7 +5937,7 @@ var LYRICS_RETRY_MS = 3 * 24 * 3600 * 1000;
 var LYRICS_LEAD_MS = 180;
 var lyr = { open: false, byId: {}, pending: {}, track: null, data: null, els: [], gaps: [], active: -1, raf: 0, userAt: 0 };
 
-function lyricsPos() { return syncMember() ? syncPos() : ($("audio").currentTime || 0); }
+function lyricsPos() { return $("audio").currentTime || 0; }
 
 /** "Artist feat. Other" and "A, B & C" look up as their first artist. */
 function mainArtist(a) { return String(a || "").split(/\s+(?:feat\.?|ft\.?|featuring|with|x)\s+|\s*[,;&\/]\s*/i)[0].trim(); }
@@ -6224,7 +6186,7 @@ function setupLyrics() {
 }
 
 function openLyrics() {
-  var t = currentTrack() || (syncMember() && sync.state ? music.tracks.filter(function (x) { return x.id === sync.state.trackId; })[0] : null);
+  var t = currentTrack();
   if (!t) return;
   lyr.open = true;
   var v = $("lyr");
@@ -6332,7 +6294,8 @@ function gapEl(host) {
 
 function lyricsSeek(ms) {
   var s = Math.max(0, ms / 1000 - 0.05);
-  if (syncMember()) syncSeek(s); else { $("audio").currentTime = s; if ($("audio").paused) resume(); }
+  $("audio").currentTime = s;
+  if ($("audio").paused) resume();
   lyr.userAt = 0;
 }
 
@@ -6401,20 +6364,17 @@ function showPlayer(t) {
 }
 
 function playNext(auto) {
-  if (syncFollower()) { if (!auto) syncCmd("next"); return; }
   var audio = $("audio");
-  if (auto && player.repeat === "one") { if (syncMember()) playCurrent(); else { audio.currentTime = 0; audio.play(); } return; }
+  if (auto && player.repeat === "one") { audio.currentTime = 0; audio.play(); return; }
   if (player.pos + 1 < player.order.length) { player.pos++; playCurrent(); return; }
   if (player.repeat === "all" && player.order.length) { player.pos = 0; playCurrent(); return; }
   if (auto) { setPlayIcon(false); }
 }
 
 function playPrev() {
-  if (syncFollower()) { syncCmd("prev"); return; }
   var audio = $("audio");
   // Like every player: early in a song, go back a track; later, restart this one.
-  var at = syncMember() ? syncPos() : audio.currentTime;
-  if (at > 3 || player.pos <= 0) { if (syncMember()) syncSeek(0); else audio.currentTime = 0; return; }
+  if (audio.currentTime > 3 || player.pos <= 0) { audio.currentTime = 0; return; }
   player.pos--;
   playCurrent();
 }
@@ -6451,7 +6411,6 @@ function parkSoon() {
   }, PARK_AFTER_MS);
 }
 function resume() {
-  if (syncMember()) { syncSetPlaying(true); return; }
   var audio = $("audio"), t = currentTrack();
   if (!t) return;
   vizEnsure();
@@ -6471,7 +6430,6 @@ function resume() {
 
 function togglePlay() {
   var audio = $("audio");
-  if (syncMember()) { syncTogglePlay(); return; }
   if (!currentTrack()) return;
   if (audio.paused) resume(); else audio.pause();
 }
@@ -6510,13 +6468,6 @@ function setupPlayer() {
   seek.addEventListener("change", function () {
     var t = currentTrack();
     var dur = audio.duration && isFinite(audio.duration) ? audio.duration : (t ? t.durationMs / 1000 : 0);
-    if (syncMember()) {
-      var b = sync.eng.bufs[sync.state.trackId];
-      var d = b && b.buf ? b.buf.duration : dur;
-      if (d > 0) syncSeek(seek.value / 1000 * d);
-      seeking = false;
-      return;
-    }
     if (dur > 0) audio.currentTime = seek.value / 1000 * dur;
     seeking = false;
   });
@@ -6571,17 +6522,17 @@ function setupPlayer() {
   // Keyboard, when you are not typing: space plays and pauses, arrows seek.
   document.addEventListener("keydown", function (e) {
     var tag = (document.activeElement && document.activeElement.tagName) || "";
-    if (tag === "INPUT" || tag === "TEXTAREA" || (!currentTrack() && !syncMember()) || !$("viewer").hidden) return;
+    if (tag === "INPUT" || tag === "TEXTAREA" || !currentTrack() || !$("viewer").hidden) return;
     if (e.code === "Space") { e.preventDefault(); togglePlay(); }
-    else if (e.code === "ArrowRight") { if (syncMember()) syncSeek(syncPos() + 10); else audio.currentTime = Math.min(audio.currentTime + 10, audio.duration || 1e9); }
-    else if (e.code === "ArrowLeft") { if (syncMember()) syncSeek(syncPos() - 10); else audio.currentTime = Math.max(audio.currentTime - 10, 0); }
+    else if (e.code === "ArrowRight") audio.currentTime = Math.min(audio.currentTime + 10, audio.duration || 1e9);
+    else if (e.code === "ArrowLeft") audio.currentTime = Math.max(audio.currentTime - 10, 0);
   });
 
   // Hardware media keys and the OS media overlay.
   if ("mediaSession" in navigator) {
     try {
       navigator.mediaSession.setActionHandler("play", resume);
-      navigator.mediaSession.setActionHandler("pause", function () { if (syncMember()) syncSetPlaying(false); else audio.pause(); });
+      navigator.mediaSession.setActionHandler("pause", function () { audio.pause(); });
       navigator.mediaSession.setActionHandler("nexttrack", function () { playNext(false); });
       navigator.mediaSession.setActionHandler("previoustrack", playPrev);
       navigator.mediaSession.setActionHandler("seekto", function (d) { if (d.seekTime != null) audio.currentTime = d.seekTime; });
@@ -6714,9 +6665,8 @@ function npSpring(from, to, set, done) {
 function npTrack() { return np.track || currentTrack(); }
 
 /** Where the song is, in seconds, and how long it is. */
-function npPos() { return syncMember() ? syncPos() : ($("audio").currentTime || 0); }
+function npPos() { return $("audio").currentTime || 0; }
 function npDur() {
-  if (syncMember() && sync.state) { var b = sync.eng.bufs[sync.state.trackId]; if (b && b.buf) return b.buf.duration; }
   var a = $("audio"), t = npTrack();
   return a.duration && isFinite(a.duration) ? a.duration : (t ? t.durationMs / 1000 : 0);
 }
@@ -6725,7 +6675,7 @@ function npDur() {
 function npAround() {
   var cur = npTrack();
   if (!cur) return [null, null, null];
-  if (syncFollower() || currentTrack() !== cur) return [null, cur, null];
+  if (currentTrack() !== cur) return [null, cur, null];
   var n = player.order.length, p = player.pos;
   var prev = p > 0 ? player.queue[player.order[p - 1]] : (player.repeat === "all" && n > 1 ? player.queue[player.order[n - 1]] : null);
   return [prev || null, cur, trackAhead(1)];
@@ -7083,7 +7033,7 @@ function npText() {
   var t = npTrack();
   if (!t) return;
   var n = player.order.length;
-  $("np-count").textContent = !syncFollower() && currentTrack() === t && n ? (player.pos + 1) + " of " + n : "Playing";
+  $("np-count").textContent = currentTrack() === t && n ? (player.pos + 1) + " of " + n : "Playing";
   $("np-album").textContent = t.album;
   // The chip: the kind of file, then its bitrate and sample rate (and the speed, when changed).
   var info = np.info[t.id], chip = $("np-chip-t");
@@ -7193,7 +7143,7 @@ function npSetSpeed(v) {
 }
 
 function npSoundPaint() {
-  var sp = $("np-speed"), vo = $("np-vol"), a = $("audio"), sync = syncMember();
+  var sp = $("np-speed"), vo = $("np-vol"), a = $("audio");
   var v = a.muted ? 0 : Math.round(a.volume * 100);
   sp.value = np.speed; vo.value = v;
   sp.style.setProperty("--p", ((np.speed - 0.5) / 1.5 * 100).toFixed(1) + "%");
@@ -7202,8 +7152,6 @@ function npSoundPaint() {
   $("np-vol-v").textContent = v + "%";
   var vi = $("np-vol-i"), vn = v === 0 ? "mute" : "volume";
   if (vi.dataset.nx !== vn) { vi.dataset.nx = vn; vi.innerHTML = nx(vn); }
-  sp.disabled = sync;
-  $("np-speed-note").hidden = !sync;
   $("np-reset").disabled = np.speed === 1 && v === 100;
 }
 
@@ -7230,7 +7178,7 @@ function npTrackChanged(t) {
   np.grow = np.env[t.id] ? 1 : 0;
   npLoudness(t.id);
   npInfo(t.id);
-  var nx = !syncFollower() && currentTrack() === t ? trackAhead(1) : null;
+  var nx = currentTrack() === t ? trackAhead(1) : null;
   if (nx) npLoudness(nx.id);
   np.tintRgb = npRgb(getComputedStyle($("player")).getPropertyValue("--pl-tint").trim() || "#48484F", np.tintRgb);
   if (!np.frozen) npFill();
@@ -7461,7 +7409,7 @@ function npRelease(vy) {
  * (the song stays there, to play again), so the bar springs back into place rather than going.
  */
 function npDismiss() {
-  if (syncMember()) syncSetPlaying(false); else $("audio").pause();
+  $("audio").pause();
   npGo(0);
 }
 
@@ -7510,8 +7458,7 @@ function npSettle() {
 function npToSong(dir) {
   var trio = npAround();
   if (dir < 0 && (npPos() > 3 || !trio[0])) { npSettle(); playPrev(); return; }
-  if (dir > 0 && !trio[2]) { npSettle(); if (syncFollower()) syncCmd("next"); return; }
-  if (syncFollower()) { npSettle(); syncCmd(dir > 0 ? "next" : "prev"); return; }
+  if (dir > 0 && !trio[2]) { npSettle(); return; }
   if (!npShow()) { if (dir > 0) playNext(false); else playPrev(); return; }
   if (np.sStop) np.sStop();
   if (np.frozen) np.frozen = null;
@@ -7524,7 +7471,7 @@ function npToSong(dir) {
 // ---- the queue
 
 function npQueueRender() {
-  var host = $("np-qlist"), locked = syncFollower() || !currentTrack();
+  var host = $("np-qlist"), locked = !currentTrack();
   host.classList.toggle("locked", locked);
   // The same songs in the same order: only which is playing (and the hearts) changes, in place, so it glides.
   var key = player.order.map(function (qi) { var t = player.queue[qi]; return t ? t.id : "-"; }).join(",") + "|" + locked;
@@ -7642,7 +7589,7 @@ function npMenusClose() {
 
 /** Takes off the songs before the one playing, or after it. */
 function npClearSide(side) {
-  if (syncFollower() || !currentTrack()) return;
+  if (!currentTrack()) return;
   if (side === "before") { player.order.splice(0, player.pos); player.pos = 0; }
   else player.order.splice(player.pos + 1);
   npQueueChanged();
@@ -7650,7 +7597,7 @@ function npClearSide(side) {
 
 /** Shuffles what is left after the song playing, as Namida's Shuffle in the queue does. */
 function npShuffleUpcoming() {
-  if (syncFollower() || !currentTrack()) return;
+  if (!currentTrack()) return;
   var rest = player.order.slice(player.pos + 1);
   for (var i = rest.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), x = rest[i]; rest[i] = rest[j]; rest[j] = x; }
   player.order = player.order.slice(0, player.pos + 1).concat(rest);
@@ -7669,7 +7616,7 @@ function npQueueChanged() {
 }
 
 function npRemove(i) {
-  if (syncFollower() || player.order.length < 2 || i < 0 || i >= player.order.length) return;
+  if (player.order.length < 2 || i < 0 || i >= player.order.length) return;
   var wasCur = i === player.pos;
   player.order.splice(i, 1);
   if (i < player.pos) player.pos--;
@@ -7691,7 +7638,6 @@ function npMove(from, to) {
 
 /** A song dragged by its handle: it follows the pointer, and the others make room as it passes them. */
 function npQueueDrag(e, row) {
-  if (syncFollower()) return;
   e.preventDefault();
   e.stopPropagation();
   var h = e.currentTarget, y0 = e.clientY, off = 0, rowH = row.offsetHeight || 62, moved = false;
@@ -7804,7 +7750,6 @@ function npWaveGesture(e) {
 }
 
 function npSeekTo(sec) {
-  if (syncMember()) { syncSeek(sec); return; }
   var a = $("audio");
   if (player.parked) { player.parkedAt = sec; resume(); return; }
   try { a.currentTime = sec; } catch (e) {}
@@ -7814,7 +7759,7 @@ function setupFullPlayer() {
   var bar = $("player");
   // The bar: dragged up it opens; a click on its cover or title opens it too.
   bar.addEventListener("pointerdown", function (e) {
-    if (e.target.closest("button, input, a, .sync-pop")) return;
+    if (e.target.closest("button, input, a")) return;
     npGesture(e, "bar");
   });
   var openFromBar = function () { if (performance.now() - np.dragged > 350) npExpand(); };
@@ -7953,433 +7898,8 @@ function setupFullPlayer() {
   });
 }
 
-// ------------------------------------------------------------------ playing together
-//
-// The same music on this computer, other computers with the page open, and the phone's
-// speaker, in step (see SyncPlay on the phone).
-//
-// Each member loads the whole song into memory and plays it through Web Audio, scheduled
-// for the exact instant: not the <audio> element, which cannot be told when to start. The
-// phone keeps the clock; this page measures how far its clock is from it, and the
-// group shares one state: at phone time anchorMs the song trackId is at anchorPos, playing
-// or not. Changes are set a moment ahead (anchorMs in the future), so every member,
-// this one included, makes them at the same instant. The output's own timestamp says which
-// sample is heard when, so the song starts exactly where the group is. The channel
-// carries only the changes: play, pause, where, which song, and the next one to load.
-//
-// Play, pause and seek from any member change the group. A song picked here makes this
-// page the leader: its queue goes on to the next song, and next and previous from other
-// members come to it.
-
-var sync = {
-  id: (function () {
-    try {
-      var v = sessionStorage.getItem("blazeit.syncid");
-      if (!v) { v = uid(); sessionStorage.setItem("blazeit.syncid", v); }
-      return v;
-    } catch (e) { return uid(); }
-  })(),
-  offset: 0, clockAt: 0,
-  state: null, pages: [], phone: "Phone",
-  helloTimer: 0, uiTimer: 0, checkTimer: 0,
-  was: false, wasLeader: false, wasPlaying: false, lastTrack: -1,
-  eng: { bufs: {}, src: null, gain: null, startCtx: 0, startOff: 0, trackId: -1, endedSeq: -1 },
-};
-
-function serverNow() { return performance.timeOrigin + performance.now() + sync.offset; }
-
-/** Measures the phone's clock against this one: several round trips, the quickest trusted. */
-async function syncClock() {
-  var samples = [];
-  for (var i = 0; i < 7; i++) {
-    try {
-      var t0 = performance.now();
-      var r = await fetch("/api/sync/time", { cache: "no-store", credentials: "same-origin" });
-      var body = await r.json();
-      var t1 = performance.now();
-      samples.push({ rtt: t1 - t0, offset: body.now - (performance.timeOrigin + (t0 + t1) / 2) });
-    } catch (e) {}
-  }
-  if (!samples.length) return;
-  samples.sort(function (a, b) { return a.rtt - b.rtt; });
-  var best = samples.slice(0, 3);
-  sync.offset = best.reduce(function (n, s) { return n + s.offset; }, 0) / best.length;
-  sync.clockAt = Date.now();
-}
-
-function syncMember(s) { s = s || sync.state; return !!(s && s.on && s.members.indexOf(sync.id) >= 0); }
-function syncLeader() { return syncMember() && sync.state.leader === sync.id; }
-function syncFollower() { return syncMember() && sync.state.leader !== sync.id; }
-
-/** Playing, as the page should show it: the group's state when in one, else the player's. */
-function isPlaying() { return syncMember() ? !!sync.state.playing && sync.state.trackId >= 0 : !$("audio").paused; }
-
-/** Where the group is in the song now, in seconds. */
-function syncPos() {
-  var s = sync.state;
-  if (!s) return 0;
-  if (!s.playing) return s.anchorPos;
-  return Math.max(0, s.anchorPos + (serverNow() - s.anchorMs) / 1000);
-}
-
-/** Tells the phone this page is open (every few seconds, so a closed one drops out). */
-async function syncHello() {
-  try {
-    var res = await api("/api/sync/hello", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: sync.id }),
-    });
-    var info = await res.json();
-    sync.pages = info.pages || [];
-    sync.phone = info.phone || "Phone";
-    if (!sync.state || info.state.seq > sync.state.seq) { sync.state = info.state; syncApply(); }
-    renderSync();
-  } catch (e) {}
-}
-
-function syncSend(next) {
-  api("/api/sync/state", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) }).catch(function () {});
-}
-
-/** A change made here: applied here at once, and sent to the rest. */
-function syncSet(change) {
-  var s = sync.state || {};
-  var next = Object.assign({}, s, change);
-  next.seq = (s.seq || 0);
-  sync.state = next;
-  syncSend(next);
-  syncApply();
-}
-
-function syncCmd(cmd) {
-  api("/api/sync/cmd", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cmd: cmd, from: sync.id }) }).catch(function () {});
-}
-
-// ---- what the player's controls do while in a group
-
-function syncTogglePlay() {
-  var at = serverNow() + 220;
-  if (sync.state.playing) syncSet({ playing: false, anchorMs: at, anchorPos: syncPos() + 0.22 });
-  else syncSet({ playing: true, anchorMs: at, anchorPos: sync.state.anchorPos });
-}
-
-function syncSetPlaying(on) { if (!!sync.state.playing !== on) syncTogglePlay(); }
-
-function syncSeek(pos) {
-  syncSet({ anchorMs: serverNow() + 220, anchorPos: Math.max(0, pos) });
-}
-
-/** A song picked here (or this page's queue moving on): everyone loads it and starts together. */
-function syncPlayTrack(t) {
-  var next = trackAhead(1);
-  var ready = sync.eng.bufs[t.id] && sync.eng.bufs[t.id].buf;
-  engLoad(t.id);
-  showPlayer(t);
-  markPlaying();
-  syncSet({
-    trackId: t.id, nextId: next ? next.id : -1, playing: true,
-    anchorPos: 0, anchorMs: serverNow() + (ready ? 400 : 1800), leader: sync.id,
-  });
-}
-
-// ---- the engine: songs in memory, started by the audio clock
-
-function engCtx() {
-  vizEnsure();
-  return viz.ctx;
-}
-
-/** Loads a song into memory (the whole file, decoded). Only the current and next are kept. */
-function engLoad(id) {
-  var e = sync.eng;
-  if (id == null || id < 0) return Promise.resolve(null);
-  if (e.bufs[id]) return e.bufs[id].p;
-  var ctx = engCtx();
-  if (!ctx) return Promise.reject(new Error("no audio yet"));
-  var entry = { buf: null, p: null };
-  entry.p = fetch(player.blobs[id] || streamUrl(id), { credentials: "same-origin" })
-    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); })
-    .then(function (ab) { return ctx.decodeAudioData(ab); })
-    .then(function (b) { entry.buf = b; return b; })
-    .catch(function (err) { delete e.bufs[id]; throw err; });
-  e.bufs[id] = entry;
-  var s = sync.state || {};
-  Object.keys(e.bufs).forEach(function (k) {
-    if (+k !== +id && +k !== s.trackId && +k !== s.nextId) delete e.bufs[k];
-  });
-  return entry.p;
-}
-
-/** The audio clock's time at which a phone-clock instant is heard, from the output's own report. */
-function ctxAt(serverMs) {
-  var ctx = viz.ctx, ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
-  if (ts && ts.performanceTime > 0) {
-    return ts.contextTime + (serverMs - sync.offset - performance.timeOrigin - ts.performanceTime) / 1000;
-  }
-  return ctx.currentTime + (serverMs - serverNow()) / 1000 - (ctx.outputLatency || 0) - (ctx.baseLatency || 0);
-}
-
-/** Plays the group's state: starts, moves or stops the song so it is where the group is. */
-function engRender() {
-  var s = sync.state, e = sync.eng;
-  if (!syncMember(s)) { engStop(); return; }
-  if (s.nextId >= 0) engLoad(s.nextId).catch(function () {});
-  if (s.trackId < 0 || !s.playing) { engStop(s.trackId >= 0 ? s.anchorMs : 0); return; }
-  var ctx = engCtx();
-  if (!ctx) return;
-  var entry = e.bufs[s.trackId];
-  if (!entry || !entry.buf) {
-    engLoad(s.trackId).then(function () { if (sync.state && sync.state.trackId === s.trackId) engRender(); }).catch(function () {});
-    return;
-  }
-  var buf = entry.buf, when = ctxAt(s.anchorMs), off = s.anchorPos, soonest = ctx.currentTime + 0.03;
-  if (when < soonest) { off += soonest - when; when = soonest; }
-  if (off >= buf.duration - 0.05) { engStop(); engEnded(s); return; }
-  // Already playing this song on the same plan (within 5 ms): leave it be.
-  if (e.src && e.trackId === s.trackId && Math.abs((e.startOff - e.startCtx) - (off - when)) < 0.005) return;
-  var g = ctx.createGain();
-  g.connect(viz.an || ctx.destination);
-  var src = ctx.createBufferSource();
-  src.buffer = buf;
-  src.connect(g);
-  // A change of place crossfades over a few milliseconds, so nothing clicks.
-  g.gain.setValueAtTime(0, when);
-  g.gain.linearRampToValueAtTime(1, when + 0.012);
-  if (e.src) {
-    try {
-      e.gain.gain.setValueAtTime(1, when);
-      e.gain.gain.linearRampToValueAtTime(0, when + 0.012);
-      e.src.stop(when + 0.02);
-    } catch (err) {}
-  }
-  src.start(when, off);
-  src.onended = function () { if (e.src === src) { e.src = null; engEnded(sync.state); } };
-  e.src = src; e.gain = g; e.startCtx = when; e.startOff = off; e.trackId = s.trackId;
-  // This page was playing on its own until now: its own player stops the moment the group starts.
-  var audio = $("audio");
-  if (!audio.paused) setTimeout(function () { audio.pause(); }, Math.max(0, (when - ctx.currentTime) * 1000));
-}
-
-/** Stops the song, at phone time [atMs] when that is still ahead (a pause everyone makes together). */
-function engStop(atMs) {
-  var e = sync.eng, ctx = viz.ctx;
-  if (!e.src || !ctx) { e.src = null; return; }
-  var when = Math.max(ctx.currentTime + 0.01, atMs ? ctxAt(atMs) : 0);
-  try {
-    e.gain.gain.setValueAtTime(1, when);
-    e.gain.gain.linearRampToValueAtTime(0, when + 0.015);
-    e.src.stop(when + 0.02);
-  } catch (err) {}
-  e.src = null;
-}
-
-/** The song came to its end: the leader's queue moves on (once). */
-function engEnded(s) {
-  if (!s || !syncLeader() || sync.eng.endedSeq === s.seq) return;
-  sync.eng.endedSeq = s.seq;
-  playNext(true);
-}
-
-/** Every couple of seconds: still where the group is? Clocks wander; a plan off by 15 ms is redone. */
-function engCheck() {
-  var s = sync.state, e = sync.eng;
-  if (!syncMember(s) || !s.playing || !e.src || !viz.ctx) return;
-  var when = ctxAt(s.anchorMs);
-  var diff = (e.startOff - e.startCtx) - (s.anchorPos - when);
-  if (Math.abs(diff) > 0.015) engRender();
-  if (Date.now() - sync.clockAt > 60000) syncClock();
-}
-
-// ---- following the group
-
-/** A new state (from the phone, or made here): follow it. */
-function syncApply() {
-  var s = sync.state, audio = $("audio");
-  renderSync();
-  if (!s) return;
-  if (!syncMember(s)) {
-    if (sync.was) {
-      var pos = sync.lastPos || 0, id = sync.lastTrack;
-      engStop();
-      stopSyncUi();
-      // The group ended from here while playing: carry on here, on this page's own player.
-      if (sync.wasLeader && sync.wasPlaying && id >= 0) {
-        var t = music.tracks.filter(function (x) { return x.id === id; })[0];
-        if (t) {
-          audio.src = player.blobs[t.id] || streamUrl(t.id);
-          audio.addEventListener("loadedmetadata", function once() {
-            audio.removeEventListener("loadedmetadata", once);
-            try { audio.currentTime = pos; } catch (e) {}
-          });
-          var p = audio.play();
-          if (p && p.catch) p.catch(function () {});
-        }
-      }
-      setPlayIcon(!audio.paused);
-      renderStage();
-    }
-    sync.was = false;
-    $("sync-join").hidden = true;
-    return;
-  }
-  sync.was = true;
-  sync.wasLeader = s.leader === sync.id;
-  sync.wasPlaying = s.playing;
-  sync.lastTrack = s.trackId;
-  var t2 = s.trackId >= 0 ? music.tracks.filter(function (x) { return x.id === s.trackId; })[0] : null;
-  if (s.trackId >= 0 && !t2) {
-    if (!music.loaded && !music.loading) musicLoad(false).then(syncApply);
-    return;
-  }
-  if (t2) {
-    var cur = currentTrack();
-    if (!cur || cur.id !== t2.id) {
-      // Following another member: this page's queue is just the song playing.
-      player.queue = [t2]; player.order = [0]; player.pos = 0;
-      showPlayer(t2);
-    }
-  }
-  // A page nobody has clicked on cannot make sound: one click to join.
-  if (!viz.ctx && navigator.userActivation && !navigator.userActivation.hasBeenActive) {
-    $("sync-join").hidden = !s.playing;
-    startSyncUi();
-    return;
-  }
-  $("sync-join").hidden = true;
-  engRender();
-  startSyncUi();
-  setPlayIcon(s.playing);
-  renderStage();
-  markPlaying();
-}
-
-/** The player bar while in a group: the group's place, four times a second. */
-function startSyncUi() {
-  if (sync.uiTimer) return;
-  sync.uiTimer = setInterval(function () {
-    if (!syncMember()) { stopSyncUi(); return; }
-    var s = sync.state, t = currentTrack(), pos = syncPos();
-    sync.lastPos = pos;
-    var entry = sync.eng.bufs[s.trackId];
-    var dur = entry && entry.buf ? entry.buf.duration : (t ? t.durationMs / 1000 : 0);
-    $("pl-cur").textContent = fmtTime(Math.min(pos, dur));
-    $("pl-dur").textContent = fmtTime(dur);
-    $("pl-time").textContent = fmtTime(Math.min(pos, dur)) + " / " + fmtTime(dur);
-    var seek = $("pl-seek");
-    if (document.activeElement !== seek && dur > 0) {
-      var pct = Math.min(100, pos / dur * 100);
-      seek.value = Math.round(pct * 10);
-      seek.style.setProperty("--p", pct + "%");
-    }
-    setPlayIcon(s.playing);
-  }, 250);
-  if (!sync.checkTimer) sync.checkTimer = setInterval(engCheck, 2000);
-  vizStart();
-}
-
-function stopSyncUi() {
-  clearInterval(sync.uiTimer); sync.uiTimer = 0;
-  clearInterval(sync.checkTimer); sync.checkTimer = 0;
-}
-
-/** The player bar's Sync button and its list of devices. */
-function renderSync() {
-  var btn = $("pl-sync"), s = sync.state;
-  if (!btn) return;
-  var n = syncMember(s) ? s.members.length : 0;
-  btn.classList.toggle("on", n > 1);
-  $("pl-sync-n").textContent = n > 1 ? n : "";
-  var leader = s && s.leader;
-  var from = leader && leader !== sync.id ? (sync.pages.filter(function (p) { return p.id === leader; })[0] || {}).name : null;
-  $("sync-note").textContent = !syncMember(s) ? "Pick the devices to play on, in step with this one."
-    : from ? "Playing with " + from + ". Controls here work for everyone."
-    : "Playing on " + n + " devices, in step.";
-  $("sync-join-from").textContent = from || "another device";
-  var list = $("sync-list");
-  list.innerHTML = "";
-  var rows = [{ id: sync.id, name: "This computer", sub: "Plays here", self: true }, { id: "phone", name: sync.phone, sub: "The phone's speaker" }]
-    .concat(sync.pages.filter(function (p) { return p.id !== sync.id; }).map(function (p) { return { id: p.id, name: p.name, sub: p.ip }; }));
-  rows.forEach(function (r) {
-    var on = r.self || !!(s && s.on && s.members.indexOf(r.id) >= 0);
-    var b = document.createElement("button");
-    b.type = "button";
-    b.className = "sync-row" + (on ? " on" : "") + (r.self ? " self" : "");
-    b.innerHTML = '<span class="sr-ic"></span><span class="grow"><b></b><span></span></span><i class="switch"></i>';
-    b.querySelector("b").textContent = r.name;
-    b.querySelector(".grow span").textContent = r.sub;
-    b.firstChild.innerHTML = r.id === "phone"
-      ? '<svg viewBox="0 0 24 24"><path d="M9 2.5h6A2.5 2.5 0 0 1 17.5 5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 19V5A2.5 2.5 0 0 1 9 2.5Z"/><path d="M11 18.5h2"/></svg>'
-      : '<svg viewBox="0 0 24 24"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V16h-15V6.5a1 1 0 0 1 1-1Z"/><path d="M2.5 18.5h19"/></svg>';
-    if (!r.self) b.onclick = function () { syncToggle(r.id); };
-    list.appendChild(b);
-  });
-  if (sync.pages.filter(function (p) { return p.id !== sync.id; }).length === 0) {
-    var hint = document.createElement("p");
-    hint.className = "sync-hint";
-    hint.textContent = "Open this page on another computer and it shows up here.";
-    list.appendChild(hint);
-  }
-}
-
-/**
- * Adds a device to the group, or takes it out. Starting a group from here: this page leads,
- * from where its own player is, and hands over to the group's engine at the start instant.
- */
-function syncToggle(id) {
-  var s = sync.state, inGroup = syncMember(s);
-  var list = inGroup ? s.members.slice() : [sync.id];
-  var i = list.indexOf(id);
-  if (i >= 0) list.splice(i, 1); else list.push(id);
-  syncClock().then(function () {
-    vizEnsure();
-    if (inGroup) { syncSet({ members: list, on: list.length > 1 }); return; }
-    var audio = $("audio"), cur = currentTrack(), next = trackAhead(1), lead = 1.6;
-    if (cur) engLoad(cur.id).catch(function () {});
-    var playing = !!cur && !audio.paused;
-    syncSet({
-      on: list.length > 1, members: list, leader: sync.id,
-      trackId: cur ? cur.id : -1, nextId: next ? next.id : -1, playing: playing,
-      anchorMs: serverNow() + lead * 1000, anchorPos: cur ? audio.currentTime + (playing ? lead : 0) : 0,
-    });
-  });
-}
-
-function setupSync() {
-  $("pl-sync").onclick = function (e) {
-    e.stopPropagation();
-    var pop = $("sync-pop");
-    pop.hidden = !pop.hidden;
-    if (!pop.hidden) syncHello();
-  };
-  document.addEventListener("click", function (e) {
-    var pop = $("sync-pop");
-    if (!pop.hidden && !pop.contains(e.target)) pop.hidden = true;
-  });
-  $("sync-join-btn").onclick = function () {
-    $("sync-join").hidden = true;
-    vizEnsure();
-    syncApply();
-  };
-  syncClock().then(syncHello);
-  sync.helloTimer = setInterval(function () { if (document.visibilityState === "visible" || syncMember()) syncHello(); }, 5000);
-  window.addEventListener("pagehide", function () {
-    try { navigator.sendBeacon("/api/sync/bye", new Blob([JSON.stringify({ id: sync.id })], { type: "application/json" })); } catch (e) {}
-  });
-}
-
-function syncEvents(events) {
-  events.addEventListener("sync", function (e) {
-    try { sync.state = JSON.parse(e.data); syncApply(); } catch (err) {}
-  });
-  events.addEventListener("syncpages", function (e) { try { sync.pages = JSON.parse(e.data); renderSync(); } catch (err) {} });
-  events.addEventListener("synccmd", function (e) {
-    try {
-      var c = JSON.parse(e.data);
-      if (!syncLeader() || c.from === sync.id) return;
-      if (c.cmd === "next") playNext(false);
-      else if (c.cmd === "prev") playPrev();
-    } catch (err) {}
-  });
-}
+/** Playing, as the page should show it. */
+function isPlaying() { return !$("audio").paused; }
 
 // ------------------------------------------------------------------ auth
 
@@ -8417,7 +7937,6 @@ function showApp() {
     setupLyrics();
     setupBarTuck();
     setupTopBar();
-    setupSync();
     setupPhoneFiles();
     setupNotifs();
     setupMirror();

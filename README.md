@@ -371,8 +371,7 @@ else starts at once, and skipping is instant. Media keys and the Windows media o
   every page), a thin waveform, and a glowing play disc in the cover's colour, which tints the whole
   player. Along the bottom, a chip with **what the file is** (FLAC, MP3, OPUS..., its bitrate, its
   sample rate and, for a 24-bit file, a Hi-Res badge), **repeat**, and the **sound controls**
-  (Namida's Configure: speed and volume in percent). Shuffle, lyrics and playing in step are on the
-  bar.
+  (Namida's Configure: speed and volume in percent). Shuffle and lyrics are on the bar.
 
 | Your albums | Playing, with what is next |
 | --- | --- |
@@ -437,8 +436,8 @@ Namida's:
 - Pull the mini player down under itself to stop and put it away. The queue is kept for next time,
   paused where it stopped.
 
-Albums run on from one song to the next without a gap. The phone's speaker leaves a sync group
-when it starts playing on its own, and a call or another app's sound pauses it.
+Albums run on from one song to the next without a gap, and a call or another app's sound pauses
+it.
 
 ### 7. Lyrics, found and saved by themselves
 
@@ -461,14 +460,7 @@ it is sung; in a long instrumental gap, three dots swell until the singing start
 | --- | --- |
 | <img src="docs/images/web-lyrics.png" width="520"> | <img src="docs/images/web-lyrics-phone.png" width="200"> |
 
-### 8. Play in sync on several devices
-
-The **Sync** button in the player lists the phone's speaker and every other computer with the
-page open. Switch them on and they all play the same song at the same moment: pause, skip or seek
-on any one and the rest follow. In tests the laptops stay within 0.1 ms of each other and the
-phone within a few milliseconds.
-
-### 9. The phone's notifications on the laptop
+### 8. The phone's notifications on the laptop
 
 The page's **Alerts** tab shows the phone's notifications. Reply to a message, press their
 buttons (*Mark as read*), or clear them, and it happens on the phone. Ongoing ones (music,
@@ -476,26 +468,26 @@ downloads) sit apart and never pop up. Needs *Notification access* on the phone.
 
 <img src="docs/images/web-alerts.png" width="620" alt="Alerts">
 
-### 10. The phone as trackpad and keyboard
+### 9. The phone as trackpad and keyboard
 
 The phone's **Control** tab is a trackpad for the laptop, with Windows gestures (two fingers to
 scroll, three for Task View, four to switch desktops), the phone's keyboard typing into the
 laptop, and the laptop's volume and play/pause/next keys. It opens **locked**: tap once to use it,
 so a swipe across it changes tab instead. It locks again when you leave.
 
-### 11. The phone's screen on the laptop
+### 10. The phone's screen on the laptop
 
 *Phone screen* on the page opens the phone in a window on the laptop, to use with the mouse and
 keyboard, sound included (via [scrcpy](https://github.com/Genymobile/scrcpy); the phone needs USB
 debugging on). It uses the cable when one is plugged in.
 
-### 12. The phone as a second screen
+### 11. The phone as a second screen
 
 *Use as a second screen* on the Control tab shows the laptop's desktop on the phone; taps on it
 click there. With a virtual-display driver on the laptop it is a real extra monitor. Protected
 video (Netflix, Prime Video) shows black, as it does for any screen capture.
 
-### 13. A live monitor
+### 12. A live monitor
 
 The pulse button shows a small floating pill: speed each way, ping and signal, over any screen.
 Tap it for the full picture: the last minute, how full the link is and with what, and the
@@ -508,12 +500,12 @@ session's peak and total. On the laptop, *Monitor* docks it down the right side.
 The laptop downloading from the phone over shared Wi-Fi (both on channel 36, so every byte crosses
 the air twice) at about 10 MB/s: 57% of what that link carries.
 
-### 14. Measure the connection
+### 13. Measure the connection
 
 *Settings → Measure* on the page tests the connection alone for five seconds each way. Compare it
 with a real transfer: close means the network is the limit, far below means storage is.
 
-### 15. Back works as in an app
+### 14. Back works as in an app
 
 - **On the phone**, Back closes whatever is open (the player a step at a time, a search, an album,
   Music, a linked phone's files, the clipboard's history), then returns to Home; at Home it sends the app to the background, as Home does. It
@@ -522,7 +514,7 @@ with a real transfer: close means the network is the limit, far below means stor
   lyrics, a file being viewed or the monitor, then returns to the tab before. It leaves the page only from where
   you opened it. Each tab has its own address (`#music`), so a reload or a bookmark opens it.
 
-### 16. Any browser, any computer
+### 15. Any browser, any computer
 
 The page is one file with no dependencies and works in Chrome, Edge, Brave, Opera, Firefox and
 Safari, on Windows, macOS, Linux, ChromeOS, Android and iPad. It is checked in Edge and Firefox,
@@ -531,7 +523,7 @@ there the page falls back by itself (copying still works, a direct laptop-to-lap
 held in memory or goes through the phone). Only the laptop helper is Windows-only; everything
 else needs just a browser.
 
-### 17. The look
+### 16. The look
 
 After the Apple TV app, the same on the phone and the laptop: the app's own icon, a night-blue banner, large titles,
 capsule buttons, and on the phone the tabs float along the bottom within reach of a thumb.

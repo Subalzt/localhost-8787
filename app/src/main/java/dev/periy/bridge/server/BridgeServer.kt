@@ -167,15 +167,12 @@ class BridgeServer(
         engine = server
         beacon.start()
         Monitor.start(ctx)
-        SyncPlay.phone = PhoneSyncPlayer(ctx, music)
         Log.i(TAG, "Listening on :${config.port}")
     }
 
     fun stop() {
         beacon.stop()
         Monitor.stop()
-        SyncPlay.phone?.release()
-        SyncPlay.phone = null
         engine?.stop(GRACE_MS, TIMEOUT_MS)
         engine = null
         Log.i(TAG, "Stopped")
@@ -237,37 +234,6 @@ class BridgeServer(
             peerRoutes()
             pipeRoutes()
             notificationRoutes()
-            syncRoutes()
-        }
-    }
-
-    // ------------------------------------------------------------------ playing together
-
-    /** See SyncPlay: the clock, who is open, and the state every member plays by. */
-    private fun io.ktor.server.routing.Route.syncRoutes() {
-        get("/api/sync/time") {
-            call.response.header(HttpHeaders.CacheControl, "no-store")
-            call.respond(SyncTime(System.currentTimeMillis()))
-        }
-        post("/api/sync/hello") {
-            val body = runCatching { call.receive<SyncHello>() }.getOrDefault(SyncHello())
-            SyncPlay.hello(body.id, call.device()?.name ?: "Browser", call.request.origin.remoteAddress)
-            call.respond(SyncPlay.info(config.deviceName))
-        }
-        post("/api/sync/bye") {
-            val body = runCatching { call.receive<SyncHello>() }.getOrDefault(SyncHello())
-            SyncPlay.bye(body.id)
-            call.respond(ApiResult(true))
-        }
-        post("/api/sync/state") {
-            val body = runCatching { call.receive<SyncState>() }.getOrNull()
-            if (body == null) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad state")); return@post }
-            SyncPlay.set(body)
-            call.respond(SyncPlay.info(config.deviceName))
-        }
-        post("/api/sync/cmd") {
-            runCatching { call.receive<SyncCmd>() }.getOrNull()?.let(SyncPlay::command)
-            call.respond(ApiResult(true))
         }
     }
 
