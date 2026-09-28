@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Localhost 8787</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23FFC21A'/%3E%3Cpath d='M36 10 17 36h14l-3 18 19-26H33l3-18Z' fill='%2315120A'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Cdefs%3E%3ClinearGradient id='fa' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%232A2270'/%3E%3Cstop offset='.55' stop-color='%230C0C18'/%3E%3Cstop offset='1' stop-color='%2308080E'/%3E%3C/linearGradient%3E%3CradialGradient id='fc' cx='98' cy='18' r='48' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%2364D2FF' stop-opacity='.44'/%3E%3Cstop offset='1' stop-color='%2364D2FF' stop-opacity='0'/%3E%3C/radialGradient%3E%3CradialGradient id='fd' cx='30' cy='100' r='56' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%23FFB000' stop-opacity='.4'/%3E%3Cstop offset='1' stop-color='%23FFB000' stop-opacity='0'/%3E%3C/radialGradient%3E%3CradialGradient id='fe' cx='104' cy='104' r='50' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%23BF5AF2' stop-opacity='.4'/%3E%3Cstop offset='1' stop-color='%23BF5AF2' stop-opacity='0'/%3E%3C/radialGradient%3E%3ClinearGradient id='fb' x1='330' y1='272' x2='520' y2='586' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%23FFF4A8'/%3E%3Cstop offset='.42' stop-color='%23FFD60A'/%3E%3Cstop offset='1' stop-color='%23FF9F0A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='108' height='108' rx='24' fill='url(%23fa)'/%3E%3Crect width='108' height='108' rx='24' fill='url(%23fc)'/%3E%3Crect width='108' height='108' rx='24' fill='url(%23fd)'/%3E%3Crect width='108' height='108' rx='24' fill='url(%23fe)'/%3E%3Cpath transform='translate(54 54) scale(.2) translate(-438.5 -429)' d='M295,272 H371 V358 A127.5,127.5 0 1 1 371,551 V586 H295 V484 H433 V527 L527,458 L433,386 V430 H295 Z' fill='url(%23fb)'/%3E%3C/svg%3E">
 <style>
   /* Localhost 8787 on a laptop, in the app's look, Theatre, after the Apple TV app: the tabs as
      pills along the top, a big dark hero edge to edge, white capsule buttons. It is drawn with
@@ -109,8 +109,11 @@
   }
   .logo { display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 750; letter-spacing: -.3px; padding: 0 8px 26px; }
   /* The mark in the text colour, as the app's name is: it does not take the chosen colour. */
-  .logo .mark { width: 32px; height: 32px; border-radius: 10px; background: var(--txt); display: grid; place-items: center; }
-  .logo .mark svg { width: 20px; height: 20px; fill: var(--bg); }
+  /* The app's own icon, as on the phone's home screen, lit by a soft glow of its gold. */
+  .logo .mark { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 9px; overflow: hidden; display: block;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 6px 18px -6px rgba(255,176,0,.6); transition: transform .2s cubic-bezier(.2,.8,.2,1); }
+  .logo .mark svg { width: 100%; height: 100%; display: block; }
+  .logo:hover .mark { transform: scale(1.06); }
   .tabs { display: flex; flex-direction: column; gap: 4px; }
   .tabs button, .side-item {
     position: relative; display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 0; border-radius: 12px;
@@ -119,9 +122,14 @@
   .tabs button:hover, .side-item:hover { background: var(--surface-2); color: var(--txt); }
   .tabs button.on { background: color-mix(in srgb, var(--accent) 26%, transparent); color: var(--txt); font-weight: 650; }
   .tabs svg, .side-item svg { width: 20px; height: 20px; flex: 0 0 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-  .tabs .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; margin-left: auto; }
-  .tabs .eq b { width: 2.5px; border-radius: 1px; background: var(--music); animation: eq .9s ease-in-out infinite alternate; }
-  .tabs .eq b:nth-child(2) { animation-delay: -.35s; } .tabs .eq b:nth-child(3) { animation-delay: -.7s; }
+  /* Beside Music while a song plays: a small note in the tab's own colour, swaying gently. */
+  .tabs .tab-note { display: inline-block; flex: 0 0 auto; width: 13px; height: 13px; margin-left: auto; background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3' fill='black'/%3E%3Ccircle cx='18' cy='16' r='3' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3' fill='black'/%3E%3Ccircle cx='18' cy='16' r='3' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
+    transform-origin: 50% 80%; animation: note-sway 2.4s ease-in-out infinite; }
+  .tabs .tab-note[hidden] { display: none; }
+  @keyframes note-sway { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-1.5px) rotate(-8deg); } }
+  @media (prefers-reduced-motion: reduce) { .tabs .tab-note { animation: none; } }
   @keyframes eq { from { height: 25%; } to { height: 100%; } }
   .tabs .count { margin-left: auto; font-style: normal; font-size: 11.5px; font-weight: 750; color: var(--on-accent); background: var(--accent);
     min-width: 20px; height: 20px; line-height: 20px; border-radius: 10px; padding: 0 6px; text-align: center; }
@@ -191,8 +199,6 @@
     background: color-mix(in srgb, var(--orange) 14%, var(--surface)); color: var(--txt); }
   .route-hint a { color: var(--blue); }
   .home-main { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 16px; align-items: stretch; }
-  .send-card { display: flex; flex-direction: column; }
-  .send-card .drop { flex: 1; min-height: 190px; }
   @keyframes pulse { to { opacity: .45; } }
 
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
@@ -320,13 +326,66 @@
   .dock .list .inner { padding: 4px 16px 8px; }
 
   /* ---------------------------------------------------------------- login */
-  #login { max-width: 440px; margin: 13vh auto 0; padding: 30px 30px 28px; border-radius: 28px; background: var(--surface); box-shadow: var(--float-shadow); }
-  #login .logo { padding: 0 0 22px; }
-  #login h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -.6px; }
-  #login p { margin: 6px 0 0; color: var(--sub); }
-  #login .pad { margin-top: 20px; }
-  #login .actions .btn { flex: 1; height: 46px; border-radius: 23px; }
-  .code { font-family: var(--mono); font-size: 44px; font-weight: 800; letter-spacing: 14px; text-align: center; padding: 16px; margin: 14px 0 8px; border-radius: 20px; background: var(--surface-2); }
+  /* The connect page: the app's night-blue hero, full screen, always dark whatever the theme. */
+  #login { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; overflow: hidden auto; padding: 32px 20px;
+    color: #FFFFFF; background: var(--hero, linear-gradient(160deg, #2A7BE8 0%, #0B2F66 52%, #05070D 100%)); }
+  .lg-bg { position: fixed; inset: 0; pointer-events: none; }
+  .lg-glow { position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%; filter: blur(60px); opacity: .55; }
+  .lg-glow.a { left: -20vmax; top: -30vmax; background: radial-gradient(circle, color-mix(in srgb, var(--hero-glow, #3D8BFF) 80%, #FFF), transparent 65%);
+    animation: lg-drift 16s ease-in-out infinite alternate; }
+  .lg-glow.b { right: -25vmax; bottom: -35vmax; background: radial-gradient(circle, #7A5CFF, transparent 62%); opacity: .35;
+    animation: lg-drift 20s ease-in-out infinite alternate-reverse; }
+  @keyframes lg-drift { to { transform: translate(8vmax, 6vmax) scale(1.08); } }
+  .lg-bolt { position: absolute; right: -8vmin; bottom: -12vmin; width: 62vmin; height: 62vmin; fill: none; stroke: rgba(255,255,255,.07);
+    stroke-width: 1.2; stroke-linejoin: round; transform: rotate(8deg); }
+  .lg-card { position: relative; width: min(440px, 100%); text-align: center; animation: lg-in .6s cubic-bezier(.2,.8,.2,1); }
+  @keyframes lg-in { from { opacity: 0; transform: translateY(18px) scale(.98); } }
+  .lg-radar { position: relative; width: 112px; height: 112px; margin: 0 auto 26px; display: grid; place-items: center; }
+  .lg-radar i { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.55); opacity: 0;
+    animation: lg-ping 3.2s cubic-bezier(.2,.6,.3,1) infinite; }
+  .lg-radar i:nth-child(2) { animation-delay: 1.07s; } .lg-radar i:nth-child(3) { animation-delay: 2.13s; }
+  #login.waiting .lg-radar i { animation-duration: 1.6s; }
+  #login.waiting .lg-radar i:nth-child(2) { animation-delay: .53s; } #login.waiting .lg-radar i:nth-child(3) { animation-delay: 1.07s; }
+  @keyframes lg-ping { 0% { transform: scale(.55); opacity: .9; } 100% { transform: scale(1.9); opacity: 0; } }
+  .lg-mark { position: relative; width: 76px; height: 76px; display: grid; place-items: center; border-radius: 24px; background: #FFFFFF;
+    box-shadow: 7px 8px 0 rgba(0,0,0,.28), 0 20px 50px -12px color-mix(in srgb, var(--hero-glow, #3D8BFF) 90%, transparent); }
+  .lg-mark svg { width: 42px; height: 42px; fill: #0B2F66; }
+  #login.waiting .lg-mark { animation: lg-beat 1.6s ease-in-out infinite; }
+  @keyframes lg-beat { 50% { transform: scale(1.06); } }
+  .lg-brand { font-size: 13px; font-weight: 800; letter-spacing: 2.4px; text-transform: uppercase; opacity: .72; }
+  #login h1 { margin: 10px 0 0; font-size: clamp(38px, 9vw, 54px); font-weight: 900; line-height: 1.02; letter-spacing: -.045em;
+    text-shadow: .035em .05em 0 rgba(0,0,0,.35); }
+  #login p { margin: 14px auto 0; max-width: 34ch; font-size: 16px; color: rgba(255,255,255,.8); }
+  #login .pad { margin-top: 30px; }
+  #login .actions { justify-content: center; margin: 0; }
+  #login .btn.lg-go { height: 56px; padding: 0 30px; gap: 10px; border-radius: 28px; font-size: 17px; font-weight: 750; background: #FFFFFF; color: #0B1B33;
+    position: relative; overflow: hidden; box-shadow: 5px 6px 0 rgba(0,0,0,.28); transition: transform .18s cubic-bezier(.25,.8,.3,1), box-shadow .18s; }
+  #login .btn.lg-go svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
+    transition: transform .2s; }
+  #login .btn.lg-go:hover { transform: translate(-1px, -2px); box-shadow: 7px 9px 0 rgba(0,0,0,.28); }
+  #login .btn.lg-go:hover svg { transform: translateX(3px); }
+  #login .btn.lg-go:active { transform: translate(3px, 4px); box-shadow: 1px 1px 0 rgba(0,0,0,.28); }
+  #login .btn.lg-go::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(11,47,102,.12) 50%, transparent 70%);
+    transform: translateX(-100%); animation: lg-shine 3.4s ease-in-out 1s infinite; }
+  @keyframes lg-shine { 0%, 60% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+  #login .btn.ghost { height: 44px; padding: 0 22px; border-radius: 22px; background: rgba(255,255,255,.14); color: #FFFFFF; }
+  #login .btn.ghost:hover { background: rgba(255,255,255,.24); }
+  #login .note.lg-ask { margin: 0 auto; max-width: none; color: rgba(255,255,255,.85); font-size: 15px; }
+  #login .note.lg-ask b { color: #FFFFFF; }
+  .code { display: flex; justify-content: center; gap: 10px; margin: 16px 0 12px; perspective: 600px; }
+  .code span { width: 64px; height: 80px; display: grid; place-items: center; border-radius: 18px; font-family: var(--mono); font-size: 40px; font-weight: 800;
+    color: #0B1B33; background: #FFFFFF; box-shadow: 5px 6px 0 rgba(0,0,0,.28);
+    animation: lg-flip .5s cubic-bezier(.2,.9,.3,1.3) backwards; animation-delay: calc(var(--i, 0) * 90ms); }
+  @keyframes lg-flip { from { opacity: 0; transform: rotateX(-90deg) translateY(10px); } }
+  #login .meta { color: rgba(255,255,255,.7); font-size: 14px; margin-bottom: 18px; }
+  #login .banner { margin-bottom: 16px; background: rgba(255,159,10,.2); color: #FFFFFF; }
+  .lg-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 36px; }
+  .lg-chips span { padding: 6px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 650; color: rgba(255,255,255,.82);
+    background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+  @media (prefers-reduced-motion: reduce) {
+    .lg-glow, .lg-radar i, #login.waiting .lg-mark, #login .btn.lg-go::after, .code span, .lg-card { animation: none; }
+    .lg-radar i { opacity: .25; }
+  }
 
   /* ---------------------------------------------------------------- phone storage */
   .fs-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -358,8 +417,10 @@
      and buttons shown when the pointer is on them. */
   .notif { position: relative; display: flex; gap: 12px; padding: 14px 4px; min-width: 0; }
   .notif + .notif { border-top: 1px solid var(--line); }
-  .notif > img { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 11px; background: var(--surface-2);
+  .notif > img, .notif > .n-letter { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 11px; background: var(--surface-2);
     outline: 1px solid color-mix(in srgb, var(--txt) 10%, transparent); outline-offset: -1px; }
+  /* An app whose icon the phone could not give: its first letter instead of a broken picture. */
+  .notif > .n-letter { display: grid; place-items: center; font-size: 17px; font-weight: 700; color: var(--sub); }
   .notif .n-body { flex: 1 1 auto; min-width: 0; }
   .notif .n-head { display: flex; gap: 8px; align-items: center; min-height: 22px; font-size: 12.5px; color: var(--sub); }
   .notif .n-head .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -496,6 +557,7 @@
   .stage-album { margin-top: 4px; font-size: 13.5px; opacity: .78; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .stage-album .badge { background: rgba(255,255,255,.18); color: #FFFFFF; }
   .stage-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .stage-actions:empty { display: none; }
   .stage-actions .btn { height: 40px; background: #FFFFFF; color: #111114; box-shadow: 4px 5px 0 rgba(0,0,0,.28); }
   .stage-actions .btn:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 6px 7px 0 rgba(0,0,0,.28); }
   .stage-actions .btn:active:not(:disabled) { transform: translate(2px, 3px); box-shadow: 1px 1px 0 rgba(0,0,0,.28); }
@@ -607,10 +669,52 @@
   :root[data-style="theatre"] .mu-bar { top: 72px; }
   @media (max-width: 900px) { :root[data-style="theatre"] .mu-bar { top: 64px; } }
   .mu-bar .mu-tools { margin: 0 0 10px; }
-  /* One height across the bar: the switch, the search and Rescan line up top and bottom. */
-  .mu-tools .seg, .mu-tools input[type=search], .mu-tools .btn { height: 42px; box-sizing: border-box; }
-  .mu-tools .seg { align-items: stretch; }
-  .mu-tools .btn { padding: 0 18px; flex: 0 0 auto; }
+  /* The bar is three capsules of one height and one grey: Albums or Songs, the search, Rescan.
+     The switch's thumb slides between its halves, as the phone's does; each half has an icon and
+     how many there are (of what the search finds, while you search). The search is the size of a
+     search, at the end of the row, with its magnifier, a clear button once something is typed,
+     and a / key hint on a computer. */
+  .mu-tools { gap: 10px; }
+  .mu-seg { position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; flex: 0 0 auto; height: 40px; padding: 3px;
+    box-sizing: border-box; border-radius: 999px; background: var(--surface-2); }
+  .mu-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 999px; background: var(--surface-3);
+    box-shadow: 0 1px 2px rgba(0,0,0,.3), inset 0 .5px 0 rgba(255,255,255,.1); transition: transform .34s cubic-bezier(.3,1.25,.45,1); }
+  :root[data-theme="light"] .mu-thumb { background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.1), 0 3px 8px -2px rgba(0,0,0,.14); }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .mu-thumb { background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.1), 0 3px 8px -2px rgba(0,0,0,.14); } }
+  .mu-seg[data-on="songs"] .mu-thumb { transform: translateX(100%); }
+  .mu-seg button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 0;
+    padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--sub); font: inherit; font-size: var(--t-body); font-weight: 600;
+    letter-spacing: -.1px; white-space: nowrap; cursor: pointer; transition: color .2s; -webkit-tap-highlight-color: transparent; }
+  .mu-seg button:hover, .mu-seg button.on { color: var(--txt); }
+  .mu-seg button:active span { opacity: .6; }
+  .mu-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .mu-seg svg { width: 17px; height: 17px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .mu-seg em { font-style: normal; font-size: var(--t-sub); font-weight: 600; color: color-mix(in srgb, var(--sub) 70%, transparent); font-variant-numeric: tabular-nums; transition: color .2s; }
+  .mu-seg em:empty { display: none; }
+  .mu-seg button.on em { color: var(--sub); }
+
+  .mu-search { position: relative; flex: 1 1 280px; max-width: 440px; min-width: 0; margin-left: auto; }
+  .mu-tools .mu-search input { display: block; width: 100%; height: 40px; box-sizing: border-box; padding: 0 40px 0 40px; border-radius: 999px;
+    background: var(--surface-2); font-size: var(--t-body); transition: background .15s, box-shadow .15s; }
+  .mu-tools .mu-search input::placeholder { color: var(--sub); }
+  .mu-tools .mu-search input:hover { background: color-mix(in srgb, var(--surface-2) 70%, var(--surface-3)); }
+  .mu-tools .mu-search input:focus { background: var(--surface-3); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .mu-search input::-webkit-search-cancel-button, .mu-search input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+  .mu-lens { position: absolute; left: 14px; top: 50%; width: 17px; height: 17px; margin-top: -8.5px; pointer-events: none;
+    fill: none; stroke: var(--sub); stroke-width: 2.1; stroke-linecap: round; transition: stroke .15s; }
+  .mu-search:focus-within .mu-lens { stroke: var(--txt); }
+  .mu-key { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); min-width: 20px; height: 20px; box-sizing: border-box;
+    display: grid; place-items: center; padding: 0 5px; border: 1px solid color-mix(in srgb, var(--sub) 45%, transparent); border-radius: 6px;
+    color: var(--sub); font: 600 12px/1 var(--mono, ui-monospace, monospace); pointer-events: none; transition: opacity .15s; }
+  .mu-search:focus-within .mu-key, .mu-search.typed .mu-key { opacity: 0; }
+  .mu-clear { position: absolute; right: 9px; top: 50%; width: 22px; height: 22px; margin-top: -11px; display: grid; place-items: center; padding: 0;
+    border: 0; border-radius: 50%; background: color-mix(in srgb, var(--sub) 70%, transparent); color: var(--bg); cursor: pointer;
+    opacity: 0; transform: scale(.6); pointer-events: none; transition: opacity .15s, transform .2s cubic-bezier(.3,1.3,.5,1), background .15s; }
+  .mu-clear:hover { background: var(--txt); }
+  .mu-clear svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round; }
+  .mu-search.typed .mu-clear { opacity: 1; transform: none; pointer-events: auto; }
+  @media (hover: none) { .mu-key { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .mu-thumb { transition: none; } }
 
   /* An album opened while another plays: a strip over its songs, its cover, Play and Shuffle. */
   .strip { display: flex; align-items: center; gap: 14px; margin: 0 0 22px; padding: 12px 14px; border-radius: 16px;
@@ -682,12 +786,12 @@
   .pl-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
   .pl-btn svg .fill { fill: currentColor; stroke: none; }
   .pl-btn:hover { color: var(--txt); background: var(--surface-2); }
-  .pl-btn.on { color: var(--music); }
+  .pl-btn.on { color: var(--accent); }
   #pl-prev, #pl-next { color: var(--txt); }
   .pl-btn.play { width: 42px; height: 42px; color: var(--surface); background: var(--txt); }
   .pl-btn.play:hover { background: var(--txt); transform: scale(1.05); }
   #pl-repeat .one { display: none; position: absolute; top: 3px; right: 3px; width: 12px; height: 12px; border-radius: 50%;
-    background: var(--music); color: #fff; font: 800 8.5px/12px system-ui; text-align: center; }
+    background: var(--accent); color: var(--on-accent); font: 800 8.5px/12px system-ui; text-align: center; }
   #pl-repeat.one .one { display: block; }
   .pl-bar { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 640px; }
   .pl-t { font-size: 12px; color: var(--sub); font-variant-numeric: tabular-nums; min-width: 36px; text-align: center; }
@@ -767,7 +871,7 @@
     .side .logo, .side .status { display: none; }
     .tabs { flex-direction: row; flex: 1 1 auto; }
     .tabs button { flex: 1 1 0; flex-direction: column; gap: 3px; padding: 6px 4px; font-size: 11.5px; text-align: center; }
-    .tabs .eq, .tabs .count { position: absolute; top: 2px; right: 20%; margin: 0; }
+    .tabs .tab-note, .tabs .count { position: absolute; top: 2px; right: 20%; margin: 0; }
     .side-foot { margin: 0; flex-direction: row; }
     .side-item { width: auto; flex-direction: column; gap: 3px; font-size: 11.5px; padding: 6px 10px; }
     .side-item .switch { display: none; }
@@ -904,7 +1008,8 @@
   :root[data-style="theatre"] .tabs button svg { display: none; }
   :root[data-style="theatre"] .tabs button:hover:not(.on) { background: color-mix(in srgb, var(--txt) 8%, transparent); }
   :root[data-style="theatre"] .tabs button.on { background: var(--accent); color: var(--on-accent); }
-  :root[data-style="theatre"] .tabs .eq, :root[data-style="theatre"] .tabs .count { position: static; margin: 0 0 0 4px; }
+  :root[data-style="theatre"] .tabs .count { position: static; margin: 0 0 0 4px; }
+  :root[data-style="theatre"] .tabs .tab-note { position: static; margin: 0 -2px 0 0; }
   :root[data-style="theatre"] .side-foot { flex: 1 1 0; flex-direction: row; justify-content: flex-end; align-items: center; gap: 8px; margin: 0; }
   :root[data-style="theatre"] .side-item { width: auto; flex-direction: row; padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 600;
     background: color-mix(in srgb, var(--txt) 8%, transparent); }
@@ -955,15 +1060,15 @@
   :root[data-style="theatre"] .side { background: none; }
   :root[data-style="theatre"] .side::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
     background: linear-gradient(var(--bg) 58%, color-mix(in srgb, var(--bg) 0%, transparent)); transition: opacity .25s; }
-  :root[data-style="theatre"] body.at-top:is([data-tab="home"], [data-tab="music"]:has(#deck:not([hidden]))) .side { --txt: #FFFFFF; --bg: #000000; color: #FFFFFF; }
-  :root[data-style="theatre"][data-accent="auto"] body.at-top:is([data-tab="home"], [data-tab="music"]:has(#deck:not([hidden]))) .side { --accent: #FFFFFF; --on-accent: #000000; }
-  :root[data-style="theatre"] body.at-top:is([data-tab="home"], [data-tab="music"]:has(#deck:not([hidden]))) .side::before { opacity: 0; }
+  :root[data-style="theatre"] body.at-top:is([data-tab="home"], [data-tab="music"].deck-on) .side { --txt: #FFFFFF; --bg: #000000; color: #FFFFFF; }
+  :root[data-style="theatre"][data-accent="auto"] body.at-top:is([data-tab="home"], [data-tab="music"].deck-on) .side { --accent: #FFFFFF; --on-accent: #000000; }
+  :root[data-style="theatre"] body.at-top:is([data-tab="home"], [data-tab="music"].deck-on) .side::before { opacity: 0; }
   :root[data-style="theatre"] .main > section:is([data-panel="home"], [data-panel="music"]) { max-width: none; }
   :root[data-style="theatre"] section[data-panel="home"] > :not(.status-line),
   :root[data-style="theatre"] section[data-panel="music"] > :not(#deck):not(#mu-bar) { max-width: 1240px; margin-left: auto; margin-right: auto; }
   /* The filter bar keeps its frosted edge a little wider than the column. */
   :root[data-style="theatre"] section[data-panel="music"] > #mu-bar { margin-left: calc(max(0px, (100% - 1240px) / 2) - 14px); margin-right: calc(max(0px, (100% - 1240px) / 2) - 14px); }
-  :root[data-style="theatre"] body[data-tab="music"]:has(#deck:not([hidden])) .page-head { display: none; }
+  :root[data-style="theatre"] body[data-tab="music"].deck-on .page-head { display: none; }
 
   /* Home: the phone's name large with a hard shadow, how this page reaches it under it, the screens and the speed at the right. */
   :root[data-style="theatre"] .status-line {
@@ -975,7 +1080,6 @@
   /* Short enough that what is on the phone shows under it without scrolling. */
   :root[data-style="theatre"] section[data-panel="home"] .clip-field textarea,
   :root[data-style="theatre"] section[data-panel="home"] .clip-item { min-height: 118px; }
-  :root[data-style="theatre"] section[data-panel="home"] .send-card .drop { min-height: 140px; padding: 20px 18px; }
   :root[data-style="theatre"] section[data-panel="home"] .bar { margin-top: 30px; }
   :root[data-style="theatre"][data-theme="dark"] .status-line { background: linear-gradient(transparent 45%, var(--bg)), var(--hero); }
   @media (prefers-color-scheme: dark) { :root[data-style="theatre"]:not([data-theme="light"]) .status-line { background: linear-gradient(transparent 45%, var(--bg)), var(--hero); } }
@@ -1019,7 +1123,6 @@
   * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--txt) 22%, transparent) transparent; }
 
   .card { box-shadow: var(--card-shadow); }
-  .logo .mark { box-shadow: 0 4px 10px -4px rgba(0,0,0,.35); }
   .btn { transition: filter .15s, background .15s, transform .18s cubic-bezier(.25,.8,.3,1), box-shadow .2s; }
   /* Flat as the phone's: a quiet shadow for lift, never a coloured glow. */
   .btn:not(.ghost):not(:disabled) { box-shadow: 0 1px 2px rgba(0,0,0,.12); }
@@ -1051,33 +1154,458 @@
   .player .cover { border-radius: 10px; box-shadow: 0 10px 20px -10px rgba(0,0,0,.6); }
   .pl-btn.play { box-shadow: 0 10px 20px -10px rgba(0,0,0,.55); }
 
+
+  /* ================================================================ settings, as the phone's
+     Section titles, then rows grouped on one card: a squircle of colour, the title and a line
+     under it, the control on the right; hairlines between rows start after the icon. */
+  :root[data-style="theatre"] .main > section.settings { max-width: 1240px; }
+  .settings { display: block; }
+  .settings > * { max-width: 720px; }
+  .set-title { margin: 32px 2px 10px; font-size: 22px; font-weight: 750; letter-spacing: -.4px; }
+  .set-title:first-child { margin-top: 4px; }
+  .set-group { overflow: hidden; border-radius: 16px; background: var(--surface); box-shadow: var(--card-shadow); }
+  .set-row { position: relative; display: flex; align-items: center; gap: 14px; min-height: 58px; padding: 11px 16px; }
+  .set-row + .set-row::before { content: ""; position: absolute; top: 0; left: 60px; right: 0; height: 1px; background: var(--line); }
+  .set-row.sr-block { min-height: 0; padding: 4px 16px 14px 60px; }
+  .set-row.sr-block::before, .set-row.sr-note::before { display: none; }
+  .set-row.sr-note { min-height: 0; padding: 0 16px 14px 60px; margin-top: -6px; font-size: 13px; color: var(--sub); }
+  .sq { width: 30px; height: 30px; flex: 0 0 30px; display: grid; place-items: center; border-radius: 8px; color: #FFFFFF;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--tint, var(--blue)) 72%, #FFF), var(--tint, var(--blue))); }
+  .sq svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+  .sr-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .sr-text > b { font-size: 15.5px; font-weight: 500; }
+  .sr-text > span { font-size: 13px; color: var(--sub); }
+  .sr-text > span b { color: var(--txt); font-weight: 600; }
+  #helper-state.ok { color: var(--good); }
+  #helper-state.warn { color: var(--orange); }
+  .sr-value { font-size: 15px; color: var(--sub); }
+  .sr-action { flex: 0 0 auto; padding: 6px 2px; border: 0; background: none; color: var(--blue); font: inherit; font-size: 15.5px; font-weight: 500;
+    cursor: pointer; text-decoration: none; }
+  .sr-action:hover { opacity: .7; text-decoration: none; }
+  .sr-action:disabled { opacity: .4; cursor: default; }
+  .set-row .seg { flex: 0 0 auto; }
+  .set-row.sr-block .seg { display: flex; width: 100%; }
+  .set-row.sr-block .seg button { flex: 1 1 0; }
+  .set-row .swatches { margin: 0; padding: 4px 0 0; }
+  details.sr-more { display: block; min-height: 0; padding: 0 16px; }
+  details.sr-more summary { display: flex; align-items: center; min-height: 48px; padding-left: 44px; list-style: none; cursor: pointer; font-size: 15px; }
+  details.sr-more summary::-webkit-details-marker { display: none; }
+  details.sr-more summary::after { content: ""; width: 8px; height: 8px; margin: 0 4px 0 auto; border-right: 2px solid var(--faint); border-bottom: 2px solid var(--faint);
+    transform: rotate(-45deg); transition: transform .2s; }
+  details.sr-more[open] summary::after { transform: rotate(45deg); }
+  details.sr-more > :not(summary) { margin-left: 44px; }
+  details.sr-more[open] { padding-bottom: 12px; }
+  details.sr-more .note { margin: 8px 0 0 44px; }
+  @media (max-width: 700px) {
+    .set-row { flex-wrap: wrap; }
+    .set-row > .seg { margin-left: 44px; }
+  }
+
+  /* ================================================================ the remodel
+     The page drawn like the phone. Motion is quick and physical: the tab pill glides, a page
+     rises into place, what is pressed gives. Home's titles are large and plain, the clipboard's
+     controls quiet, and Send files the one bold thing. Settings is led by squircles of colour.
+     The player is frosted, lit by the cover, with the progress along its whole top edge. In a
+     phone's browser the tabs float along the bottom, as in the app. */
+
+  /* ---------------------------------------------------------------- motion */
+  .tabs { position: relative; }
+  .tabs button { z-index: 1; }
+  .tab-pill { position: absolute; z-index: 0; left: 0; top: 0; width: 0; height: 0; border-radius: 999px; background: var(--accent);
+    pointer-events: none; opacity: 0; }
+  .tabs.ready .tab-pill { opacity: 1; transition: transform .38s cubic-bezier(.3,1.2,.45,1), width .38s cubic-bezier(.3,1.2,.45,1), background .2s; }
+  :root[data-style="theatre"] .tabs.ready button.on { background: none; }
+  [data-panel].enter { animation: panel-in .3s cubic-bezier(.2,.8,.2,1); }
+  @keyframes panel-in { from { opacity: 0; transform: translateY(12px); } }
+  .card, .btn, .icon-btn { -webkit-tap-highlight-color: transparent; }
+  @media (prefers-reduced-motion: reduce) {
+    [data-panel].enter { animation: none; }
+    .tabs.ready .tab-pill { transition: none; }
+  }
+
+  /* ---------------------------------------------------------------- Home */
+  .sec-head { display: flex; align-items: center; gap: 6px; min-height: 36px; margin: -2px 0 12px; }
+  .sec-head h3 { margin: 0; font-size: 20px; font-weight: 750; letter-spacing: -.4px; }
+  .icon-btn { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%;
+    background: none; color: var(--sub); cursor: pointer; transition: background .15s, color .15s, transform .15s; }
+  .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .icon-btn:hover, .icon-btn.on { color: var(--txt); background: var(--surface-2); }
+  .icon-btn:active { transform: scale(.9); }
+  .mu-tools .mu-rescan { width: 40px; height: 40px; flex: 0 0 40px; background: var(--surface-2); color: var(--sub); }
+  .mu-tools .mu-rescan:hover, .mu-tools .mu-rescan.spin { background: var(--surface-3); color: var(--txt); }
+  .mu-tools .mu-rescan svg { width: 18px; height: 18px; stroke-width: 2; }
+  .mu-rescan.spin svg { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .link-danger { border: 0; background: none; color: var(--bad); font: inherit; font-size: 13.5px; font-weight: 650; padding: 6px 10px;
+    border-radius: 999px; cursor: pointer; transition: background .15s; }
+  .link-danger:hover { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+  .clip-history .h-row { transition: background .15s; }
+
+  /* Send files: a deep green card with the app's hard offset shadow (the music covers' and titles'),
+     the title heavy with its own. The whole card chooses files; they can also be dropped anywhere,
+     which blurs the page with one line saying where they go. */
+  .beam-card { position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 22px; min-width: 0;
+    min-height: 190px; padding: 24px; border-radius: 22px; color: #FFFFFF;
+    background: radial-gradient(120% 100% at 0% 0%, rgba(255,255,255,.2), transparent 55%), linear-gradient(135deg, #3DDC6A 0%, #178A3A 48%, #07361A 100%);
+    box-shadow: 8px 9px 0 rgba(0,0,0,.5); transition: transform .2s cubic-bezier(.25,.8,.3,1), box-shadow .2s cubic-bezier(.25,.8,.3,1); }
+  :root[data-theme="light"] .beam-card { box-shadow: 8px 9px 0 rgba(0,0,0,.16); }
+  /* Files being dragged over the page: the card they are going to lifts and rings. */
+  .beam-card.over { transform: translate(-2px, -2px); box-shadow: 10px 11px 0 rgba(0,0,0,.5), inset 0 0 0 3px rgba(255,255,255,.85); }
+  .beam-title { font-size: 38px; font-weight: 900; letter-spacing: -.045em; line-height: 1.02; text-shadow: .035em .05em 0 rgba(0,0,0,.35); }
+  .beam-title { display: block; }
+  .beam-hint { display: block; margin-top: 6px; font-size: 14.5px; font-weight: 600; opacity: .82; }
+  /* On a touchscreen nothing is dragged in. */
+  @media (hover: none) { .beam-hint { display: none; } }
+  .beam-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .beam-btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; height: 48px; padding: 0 20px; border: 0; border-radius: 24px;
+    font: inherit; font-size: 15.5px; font-weight: 700; color: #FFFFFF; cursor: pointer; background: rgba(0,0,0,.22);
+    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4); transition: transform .15s, box-shadow .15s, background .15s; }
+  .beam-btn:hover { background: rgba(0,0,0,.32); }
+  .beam-btn.primary { background: #FFFFFF; color: #0B3D1C; box-shadow: 4px 5px 0 rgba(0,0,0,.35); }
+  .beam-btn.primary:hover { transform: translate(-1px, -1px); box-shadow: 5px 6px 0 rgba(0,0,0,.35); }
+  .beam-btn:active { transform: translate(2px, 3px); }
+  .beam-btn svg { width: 20px; height: 20px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+  /* The clipboard's live line: who it is shared with. */
+  .sec-title { display: flex; flex-direction: column; min-width: 0; }
+  .live-with { display: inline-flex; align-items: center; gap: 6px; margin-top: 1px; font-size: 12.5px; color: var(--sub); white-space: nowrap; }
+  .live-with i { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--good); }
+  .drop-veil { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; opacity: 0; transition: opacity .16s ease;
+    background: color-mix(in srgb, var(--bg) 50%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3); }
+  .drop-veil.on { opacity: 1; }
+  /* The whole window, not the page's column it sits in. */
+  :root[data-style="theatre"] section[data-panel="home"] > .drop-veil { max-width: none; margin: 0; }
+  .drop-veil > div { display: grid; justify-items: center; gap: 6px; transform: translateY(8px) scale(.97); transition: transform .3s cubic-bezier(.3,1.3,.5,1);
+    pointer-events: none; }
+  .drop-veil.on > div { transform: none; }
+  .drop-veil .send-ic { width: 76px; height: 76px; display: grid; place-items: center; margin-bottom: 12px; border-radius: 50%;
+    background: var(--accent); color: var(--on-accent); box-shadow: 0 16px 40px -14px rgba(0,0,0,.6); animation: veil-bob 1.4s ease-in-out infinite; }
+  .drop-veil .send-ic svg { width: 36px; height: 36px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  @keyframes veil-bob { 50% { transform: translateY(-6px); } }
+  .drop-veil b { font-size: 34px; font-weight: 850; letter-spacing: -.04em; }
+  .drop-veil span#drop-to { font-size: 16px; color: var(--sub); }
+
+  /* ---------------------------------------------------------------- Settings, led by squircles as on the phone */
+  section[data-panel="settings"] .card-title .appicon { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 9px; color: #FFFFFF;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--tint, var(--blue)) 78%, #FFF), var(--tint, var(--blue)));
+    box-shadow: 0 5px 12px -6px color-mix(in srgb, var(--tint, var(--blue)) 80%, transparent); }
+  section[data-panel="settings"] .card-title .appicon svg { width: 18px; height: 18px; stroke-width: 2.1; }
+  section[data-panel="settings"] .card { transition: box-shadow .2s; }
+
+  /* ---------------------------------------------------------------- the player */
+  .player { padding: 14px 24px 12px; border-top: 0;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--pl-tint, transparent) 30%, transparent), transparent 60%),
+      color-mix(in srgb, var(--surface) 86%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
+    box-shadow: 0 -1px 0 color-mix(in srgb, var(--txt) 8%, transparent), 0 -24px 48px -30px rgba(0,0,0,.6); }
+  .player .cover { width: 56px; height: 56px; flex-basis: 56px; border-radius: 12px;
+    box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--pl-tint, #000) 80%, #000); transition: transform .2s; }
+  .player .cover:hover { transform: scale(1.04); }
+  .pl-title { font-size: 15px; font-weight: 700; letter-spacing: -.2px; }
+  .pl-ctrls { gap: 14px; }
+  .pl-btn.play { width: 48px; height: 48px; }
+  .pl-btn.play svg { width: 22px; height: 22px; }
+  .pl-btn:active { transform: scale(.9); }
+  .pl-times { font-size: 12.5px; color: var(--sub); font-variant-numeric: tabular-nums; white-space: nowrap; margin-right: 6px; }
+  /* The progress: a hairline along the whole top edge, thicker under the pointer, dragged anywhere. */
+  .player #pl-seek { position: absolute; z-index: 2; left: 0; right: 0; top: -8px; width: 100%; height: 16px; margin: 0; border-radius: 0;
+    background: linear-gradient(to right, var(--accent) var(--p, 0%), color-mix(in srgb, var(--txt) 16%, transparent) var(--p, 0%)) center / 100% 3px no-repeat;
+    transition: background-size .15s ease; }
+  .player #pl-seek:hover, .player #pl-seek:active, .player #pl-seek:focus-visible { background-size: 100% 6px; outline: none; }
+  .player #pl-seek::-webkit-slider-thumb { width: 14px; height: 14px; background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .player #pl-seek::-moz-range-thumb { width: 14px; height: 14px; background: var(--accent); }
+  .player #pl-seek::-moz-range-track { background: transparent; }
+
+  /* ---------------------------------------------------------------- in a phone's browser */
+  @media (max-width: 700px) {
+    /* The tabs stay along the top, all five in one capsule that shares out the width, with the
+       monitor switch beside it; over Home's banner the bar is clear, as on the laptop. */
+    :root[data-style="theatre"] .side { top: 0; bottom: auto; left: 0; right: 0; height: auto; gap: 8px;
+      padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 12px; }
+    :root[data-style="theatre"] .side .logo { display: none; }
+    :root[data-style="theatre"] .tabs { flex: 1 1 auto; min-width: 0; overflow: visible; padding: 4px; }
+    :root[data-style="theatre"] .tabs button { flex: 1 1 0; min-width: 0; justify-content: center; padding: 9px 2px; font-size: 13px; }
+    :root[data-style="theatre"] .side-foot { flex: 0 0 auto; }
+    :root[data-style="theatre"] .side-item { padding: 9px; }
+    :root[data-style="theatre"] .main { padding-top: 76px; padding-bottom: calc(var(--player-h, 0px) + 28px); }
+    :root[data-style="theatre"] .page-head h1 { font-size: 34px; }
+    :root[data-style="theatre"] .status-line { margin: -76px -16px 20px; padding: 96px 16px 22px; min-height: 0; gap: 16px; }
+    :root[data-style="theatre"] #deck { margin: -76px -16px 24px; padding: 92px 16px 22px; }
+    :root[data-style="theatre"] .status-line .who b { font-size: 30px; margin-bottom: 8px; }
+    :root[data-style="theatre"] .status-line .who > span { font-size: 15px; }
+    :root[data-style="theatre"] .status-line .hero-act { flex-wrap: nowrap; gap: 10px; }
+    :root[data-style="theatre"] .status-line .hero-act { flex-wrap: wrap; }
+    :root[data-style="theatre"] .status-line .btn { flex: 1 1 0; height: 44px; padding: 0 12px; font-size: 14.5px; }
+    .beam-card { padding: 20px; min-height: 0; }
+    .beam-title { font-size: 30px; }
+    .beam-btn { flex: 1 1 auto; padding: 0 14px; }
+    :root[data-style="theatre"] .status-line .rate { display: none; }
+    :root[data-style="theatre"] .status-line #route-badge { font-size: 13.5px; padding: 7px 12px 7px 10px; }
+    :root[data-style="theatre"] .status-line::before { width: 260px; height: 260px; right: -70px; top: 30px; }
+    .player { padding: 12px 12px 10px; }
+    .player .cover { width: 46px; height: 46px; flex-basis: 46px; }
+    /* Music: the search gets a line of its own under Albums/Songs and Rescan. */
+    .mu-tools { flex-wrap: wrap; gap: 10px; }
+    .mu-tools .mu-search { order: 3; flex: 1 1 100%; max-width: none; margin-left: 0; }
+    .mu-tools .mu-seg { flex: 1 1 auto; }
+    /* Two covers to a row, as the phone's Music has, not one the width of the screen. */
+    .albums { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 14px; }
+  }
+  /* The music banner stacks on narrow screens: one column, each part the width of the screen. A
+     wrapping column would size itself to the title's full length and run off the edge. */
+  @media (max-width: 900px) {
+    .stage { flex-wrap: nowrap; align-items: stretch; }
+    .stage-art { align-self: flex-start; }
+    .stage-meta, .stage-queue { min-width: 0; max-width: 100%; }
+  }
+
+  /* ---------------------------------------------------------------- linked phones
+     Send files says where the files go, on the green card: this phone unless another is
+     picked from its menu, which lists linked phones (kept there) and computers (sent straight
+     to them, kept nowhere on the way). The Phone tab has a switch for each linked phone. */
+  .beam-head { position: relative; display: flex; align-items: flex-start; gap: 12px; }
+  .beam-card.menu-open { z-index: 30; }
+  .beam-head > div { flex: 1 1 auto; min-width: 0; }
+  .beam-to { flex: 0 1 auto; min-width: 0; max-width: 58%; display: inline-flex; align-items: center; gap: 6px; height: 34px; margin-top: 2px;
+    padding: 0 10px 0 14px; border: 0; border-radius: 999px; background: rgba(0,0,0,.24); color: #FFFFFF; font: inherit; font-size: 14px;
+    font-weight: 650; cursor: pointer; transition: background .15s, transform .15s; }
+  .beam-to span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .beam-to svg { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+  .beam-to:hover { background: rgba(0,0,0,.36); }
+  .beam-to[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .to-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; min-width: 280px; max-width: calc(100vw - 64px); padding: 6px; border-radius: 16px; color: var(--txt);
+    background: color-mix(in srgb, var(--surface) 92%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
+    box-shadow: 0 24px 60px -12px rgba(0,0,0,.55), 0 0 0 .5px var(--line); opacity: 0; transform: translateY(-6px) scale(.97);
+    transform-origin: top right; transition: opacity .16s ease, transform .2s cubic-bezier(.3,1.2,.45,1); }
+  .to-menu.on { opacity: 1; transform: none; }
+  .to-label { padding: 8px 12px 4px; font-size: var(--t-kick); font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--sub); }
+  .to-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border: 0; border-radius: 11px; background: none;
+    color: var(--txt); font: inherit; text-align: left; cursor: pointer; transition: background .12s; }
+  .to-item:hover, .to-item:focus-visible { background: var(--surface-2); outline: none; }
+  .to-item > svg:first-child { width: 22px; height: 22px; flex: 0 0 auto; fill: none; stroke: var(--sub); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .to-item > span { flex: 1 1 auto; min-width: 0; }
+  .to-item b { display: block; font-size: var(--t-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .to-item i { display: block; font-style: normal; font-size: var(--t-sub); color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .to-item .to-check { width: 18px; height: 18px; flex: 0 0 auto; fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+  .to-item.on .to-check { opacity: 1; }
+  .to-item.on > svg:first-child { stroke: var(--txt); }
+
+  .fs-src { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+  .src-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; height: 38px; padding: 0 16px 0 12px; border: 0; border-radius: 999px;
+    background: var(--surface-2); color: var(--sub); font: inherit; font-size: var(--t-body); font-weight: 600; cursor: pointer;
+    transition: background .15s, color .15s, box-shadow .15s; }
+  .src-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .src-chip svg { width: 18px; height: 18px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .src-chip:hover { color: var(--txt); }
+  .src-chip.on { background: var(--surface-3); color: var(--txt); box-shadow: 0 1px 2px rgba(0,0,0,.3), inset 0 .5px 0 rgba(255,255,255,.1); }
+  :root[data-theme="light"] .src-chip.on { background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.1), 0 3px 8px -2px rgba(0,0,0,.14); }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .src-chip.on { background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.1), 0 3px 8px -2px rgba(0,0,0,.14); } }
+
+  /* A file another computer is sending: a card that waits for Save or Decline. */
+  .notif.incoming .n-acts .btn { min-width: 84px; }
+  /* Its answer is the point of it: the buttons show without the pointer over it, as a call does. */
+  .toasts .notif.incoming .n-acts { display: flex; }
+  .notif.incoming .n-text { color: var(--sub); }
+
+  /* ---------------------------------------------------------------- lyrics
+     Full screen over the page, the player along the bottom. The cover's colour lights the room
+     (its own picture, blurred, drifting slowly under it); the line being sung is white and the
+     rest wait in grey, those further off a little out of focus. With word timing, each word
+     fills with white as it is sung. A tap on a line goes there. */
+  .lyr { position: fixed; inset: 0; z-index: 39; display: grid; grid-template-columns: minmax(280px, 36%) minmax(0, 1fr); gap: 56px;
+    padding: 0 6vw calc(var(--player-h, 90px) + 10px); color: #FFFFFF; background: #0B0B0D; overflow: hidden;
+    opacity: 0; transform: translateY(24px); transition: opacity .28s ease, transform .4s cubic-bezier(.2,.8,.2,1); }
+  .lyr.on { opacity: 1; transform: none; }
+  .lyr-bg { position: absolute; inset: -20%; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(60% 55% at 22% 30%, color-mix(in srgb, var(--lyr-tint, #3A3A3C) 85%, transparent), transparent 70%),
+      radial-gradient(55% 60% at 82% 78%, color-mix(in srgb, var(--lyr-tint, #3A3A3C) 55%, #000), transparent 72%),
+      linear-gradient(160deg, color-mix(in srgb, var(--lyr-tint, #3A3A3C) 45%, #000), #060607 75%); }
+  .lyr-bg img { position: absolute; inset: 10%; width: 80%; height: 80%; object-fit: cover; opacity: .5;
+    filter: blur(90px) saturate(1.5); animation: lyr-drift 38s ease-in-out infinite alternate; }
+  @keyframes lyr-drift { from { transform: rotate(0deg) scale(1.05); } to { transform: rotate(25deg) scale(1.3); } }
+  .lyr > .lyr-side, .lyr > .lyr-scroll { position: relative; z-index: 1; }
+  .lyr-close { position: absolute; top: 18px; right: 22px; width: 42px; height: 42px; display: grid; place-items: center; padding: 0; border: 0;
+    border-radius: 50%; background: rgba(255,255,255,.14); color: #FFFFFF; cursor: pointer; transition: background .15s, transform .15s; z-index: 2; }
+  .lyr-close:hover { background: rgba(255,255,255,.24); }
+  .lyr-close:active { transform: scale(.92); }
+  .lyr-close svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .lyr-side { align-self: center; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .lyr-art { width: min(100%, 380px); aspect-ratio: 1 / 1; margin-bottom: 22px; border-radius: 14px; overflow: hidden;
+    background: rgba(0,0,0,.3); box-shadow: 14px 16px 0 rgba(0,0,0,.32), 0 30px 80px -30px rgba(0,0,0,.8); }
+  .lyr-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .lyr-art.gen { display: grid; place-items: center; font-size: clamp(64px, 8vw, 132px); font-weight: 900; letter-spacing: -.04em; color: #FFFFFF;
+    text-shadow: .035em .05em 0 rgba(0,0,0,.35); }
+  .lyr-who { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .lyr-title { font-size: var(--t-title); font-weight: 800; letter-spacing: -.4px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lyr-artist { font-size: var(--t-body); color: rgba(255,255,255,.7); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lyr-scroll { height: 100%; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 30vh 0 55vh;
+    -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 78%, transparent); mask-image: linear-gradient(transparent, #000 14%, #000 78%, transparent); }
+  .lyr-scroll::-webkit-scrollbar { display: none; }
+  .lyr-line { margin: 0 0 26px; max-width: 30ch; font-size: clamp(26px, 2.9vw, 42px); font-weight: 800; letter-spacing: -.02em; line-height: 1.2;
+    color: rgba(255,255,255,.32); cursor: pointer; transform-origin: 0 50%; transition: color .35s ease, transform .5s cubic-bezier(.2,.8,.2,1), filter .5s ease;
+    overflow-wrap: anywhere; }
+  .lyr-line:hover { color: rgba(255,255,255,.55); }
+  .lyr-line.on { color: #FFFFFF; transform: scale(1.02); }
+  .lyr-line.far { filter: blur(1.4px); }
+  .lyr-line.bg-voc { font-size: .72em; font-weight: 700; }
+  /* A word fills with white as it is sung. */
+  .lyr-line .w { background: linear-gradient(90deg, #FFFFFF var(--p, 0%), rgba(255,255,255,.32) calc(var(--p, 0%) + 4%));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lyr-line:not(.on) .w { background: none; color: inherit; }
+  /* A long pause in the singing: three dots that swell until it starts again. */
+  .lyr-gap { display: flex; gap: 10px; height: 0; margin: 0; opacity: 0; overflow: hidden; transition: height .35s ease, opacity .35s ease, margin .35s ease; }
+  .lyr-gap.on { height: 22px; margin: 0 0 26px; opacity: 1; }
+  .lyr-gap i { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,.35); transition: background .3s, transform .3s; }
+  .lyr-gap i.lit { background: #FFFFFF; transform: scale(1.12); }
+  .lyr-plain { white-space: pre-wrap; font-size: clamp(20px, 1.8vw, 26px); font-weight: 700; line-height: 1.5; color: rgba(255,255,255,.88); }
+  .lyr-note { font-size: clamp(22px, 2.2vw, 30px); font-weight: 800; letter-spacing: -.02em; color: rgba(255,255,255,.9); }
+  .lyr-note + p { margin-top: 8px; font-size: var(--t-body); color: rgba(255,255,255,.6); }
+  .lyr-src { margin: 48px 0 0; font-size: var(--t-sub); color: rgba(255,255,255,.45); }
+  .lyr-src a { color: inherit; }
+  /* The button in the player: lit while the lyrics are open, quiet when a song has none. */
+  .pl-btn.lyr-btn.on { color: var(--accent); }
+  .pl-btn.lyr-btn.none { opacity: .45; }
+  #pl-lyrics-m { display: none; }
+  body.lyr-open { overflow: hidden; }
+  @media (max-width: 900px) {
+    .lyr { grid-template-columns: 1fr; gap: 0; padding: 0 22px calc(var(--player-h, 80px) + 6px); }
+    .lyr > .lyr-side { position: absolute; top: 16px; left: 22px; right: 76px; flex-direction: row; align-items: center; gap: 12px; }
+    .lyr-art { width: 52px; margin: 0; border-radius: 8px; flex: 0 0 52px; box-shadow: 4px 5px 0 rgba(0,0,0,.3); }
+    .lyr-art.gen { font-size: 20px; }
+    .lyr-title { font-size: var(--t-head); }
+    .lyr-scroll { padding: 26vh 0 50vh; margin-top: 84px; height: calc(100% - 84px); }
+    .lyr-line { font-size: 27px; margin-bottom: 20px; }
+    #pl-lyrics-m { display: grid; }
+  }
+  @media (prefers-reduced-motion: reduce) { .lyr-bg img { animation: none; } .lyr, .lyr-line { transition: none; } }
+
+  /* ================================================================ one type scale
+     The phone's, and nothing else: a display size for the one big name on a page; the page title;
+     section and card titles; emphasis; rows and buttons; details; kickers and badges. */
+  :root { --t-display: clamp(36px, 3.9vw, 56px); --t-large: 34px; --t-title: 22px; --t-head: 17px; --t-body: 15px; --t-sub: 13px; --t-kick: 11px; }
+  @media (max-width: 700px) { :root { --t-display: 32px; --t-large: 30px; --t-title: 20px; } }
+
+  :root[data-style="theatre"] .status-line .who b, :root[data-style="theatre"] .stage-title, #login h1 { font-size: var(--t-display); }
+  :root[data-style="theatre"] .stage-title.long { font-size: var(--t-large); }
+
+  :root[data-style="theatre"] .page-head h1, :root[data-style="theatre"] .drop-veil b { font-size: var(--t-large); }
+
+  :root[data-style="theatre"] .bar, :root[data-style="theatre"] .set-title, :root[data-style="theatre"] .sec-head h3,
+  :root[data-style="theatre"] .card-title h3, :root[data-style="theatre"] .beam-title, :root[data-style="theatre"] .mon-head > b,
+  :root[data-style="theatre"] .viewer-stage .big h3, :root[data-style="theatre"] .calm b {
+    font-size: var(--t-title); font-weight: 750; letter-spacing: -.4px; line-height: 1.2; }
+  :root[data-style="theatre"] .beam-title { font-weight: 800; }
+
+  :root[data-style="theatre"] .logo, :root[data-style="theatre"] .stage-artist, :root[data-style="theatre"] .strip .gs-name,
+  :root[data-style="theatre"] .status-line .rate b, :root[data-style="theatre"] .dock .rate, :root[data-style="theatre"] .sync-head b,
+  #login p, #login .btn.lg-go, :root[data-style="theatre"] .drop-veil span#drop-to { font-size: var(--t-head); }
+
+  :root[data-style="theatre"] .btn, :root[data-style="theatre"] .tabs button, :root[data-style="theatre"] .row .title,
+  :root[data-style="theatre"] .trk .tl b, :root[data-style="theatre"] .album .cap .t, :root[data-style="theatre"] .sr-text > b,
+  :root[data-style="theatre"] .sr-action, :root[data-style="theatre"] .sr-value, :root[data-style="theatre"] details.sr-more summary,
+  :root[data-style="theatre"] .notif .n-title, :root[data-style="theatre"] .notif .n-text, :root[data-style="theatre"] .sq-row .txt b,
+  :root[data-style="theatre"] .pl-title, :root[data-style="theatre"] .field b, :root[data-style="theatre"] .clip-history .h-body b,
+  :root[data-style="theatre"] .crumbs, :root[data-style="theatre"] .viewer-bar b, :root[data-style="theatre"] .viewer-stage .doc,
+  :root[data-style="theatre"] .beam-btn, :root[data-style="theatre"] .status-line .who > span, :root[data-style="theatre"] .status-line #route-badge,
+  :root[data-style="theatre"] .status-line .btn, :root[data-style="theatre"] .sync-row .grow b, #login .note.lg-ask,
+  :root[data-style="theatre"] .side-item { font-size: var(--t-body); }
+
+  :root[data-style="theatre"] .btn.sm, :root[data-style="theatre"] .seg button, :root[data-style="theatre"] .note, :root[data-style="theatre"] .meta,
+  :root[data-style="theatre"] .banner, :root[data-style="theatre"] .route-hint, :root[data-style="theatre"] .card-title p,
+  :root[data-style="theatre"] .live-with, :root[data-style="theatre"] .beam-hint, :root[data-style="theatre"] .link-danger,
+  :root[data-style="theatre"] .trk .who, :root[data-style="theatre"] .trk .al, :root[data-style="theatre"] .trk .d, :root[data-style="theatre"] .trk .no,
+  :root[data-style="theatre"] .album .cap .a, :root[data-style="theatre"] .sr-text > span, :root[data-style="theatre"] .set-row.sr-note,
+  :root[data-style="theatre"] .pl-sub, :root[data-style="theatre"] .pl-times, :root[data-style="theatre"] .sq-row .txt span,
+  :root[data-style="theatre"] .sq-end, :root[data-style="theatre"] .strip .gs-meta, :root[data-style="theatre"] .stage-album,
+  :root[data-style="theatre"] .notif .n-head, :root[data-style="theatre"] .clip-history .h-body span, :root[data-style="theatre"] .clip-history .empty,
+  :root[data-style="theatre"] .empty, :root[data-style="theatre"] .clip-item .file span, :root[data-style="theatre"] .clip-item .cap,
+  :root[data-style="theatre"] .clip-status, :root[data-style="theatre"] .viewer-bar span, :root[data-style="theatre"] .viewer-count,
+  :root[data-style="theatre"] .viewer-note, :root[data-style="theatre"] .viewer-stage .none, :root[data-style="theatre"] .sync-note,
+  :root[data-style="theatre"] .sync-row .grow span, :root[data-style="theatre"] .sync-hint, :root[data-style="theatre"] .mon-sub,
+  :root[data-style="theatre"] .mon-grid > div, :root[data-style="theatre"] .ch-head span, :root[data-style="theatre"] .ch-legend,
+  :root[data-style="theatre"] .ch-hint, :root[data-style="theatre"] .dock .lbl, :root[data-style="theatre"] .field span, #login .meta,
+  .lg-chips span, :root[data-style="theatre"] .page-head p, :root[data-style="theatre"] .calm span { font-size: var(--t-sub); }
+
+  :root[data-style="theatre"] .stage-kicker, :root[data-style="theatre"] .sq-label, .lg-brand, :root[data-style="theatre"] .mon-live,
+  :root[data-style="theatre"] .tabs .count, :root[data-style="theatre"] .badge, :root[data-style="theatre"] .sq-row .rt i,
+  :root[data-style="theatre"] .sq-row .rt em { font-size: var(--t-kick); }
+  @media (max-width: 700px) { :root[data-style="theatre"] .tabs button { font-size: var(--t-sub); } }
+
+  /* Home: the rate is a line of emphasis beside the buttons, not a heading. */
+  :root[data-style="theatre"] .status-line .rate b { font-weight: 700; letter-spacing: -.2px; }
+
+  /* A switch, as the phone's. */
+  .toggle { position: relative; flex: 0 0 auto; width: 51px; height: 31px; padding: 0; border: 0; border-radius: 16px; cursor: pointer;
+    background: var(--surface-3); transition: background .2s; }
+  .toggle i { position: absolute; left: 2px; top: 2px; width: 27px; height: 27px; border-radius: 50%; background: #FFFFFF;
+    box-shadow: 0 2px 6px rgba(0,0,0,.3); transition: transform .25s cubic-bezier(.3,1.3,.5,1); }
+  .toggle.on { background: var(--good); }
+  .toggle.on i { transform: translateX(20px); }
+
+  /* Alerts: the list under its own title, and a calm empty state. */
+  .sec-row { display: flex; align-items: baseline; gap: 10px; max-width: 720px; margin: 32px 0 10px; }
+  .sec-row .set-title { margin: 0; }
+  section[data-panel="alerts"] > * { max-width: 720px; }
+  :root[data-style="theatre"] .main > section[data-panel="alerts"] { max-width: 1240px; }
+  .calm { display: grid; justify-items: center; gap: 6px; padding: 48px 20px 56px; border-radius: 16px; background: var(--surface); text-align: center;
+    box-shadow: var(--card-shadow); }
+  .calm-ic { width: 64px; height: 64px; display: grid; place-items: center; margin-bottom: 10px; border-radius: 18px; color: #FFFFFF;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bad) 72%, #FFF), var(--bad)); box-shadow: 5px 6px 0 rgba(0,0,0,.35);
+    animation: calm-bob 3.2s ease-in-out infinite; }
+  .calm-ic svg { width: 32px; height: 32px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .calm-ic svg path { stroke: #FFFFFF; fill: none; }
+  @keyframes calm-bob { 50% { transform: translateY(-4px) rotate(-4deg); } }
+  .calm span { color: var(--sub); }
+  @media (prefers-reduced-motion: reduce) { .calm-ic { animation: none; } }
+
+  /* Phone: folders and files as the phone's squares of colour; the path from the storage. */
+  .ficon-dir { flex: 0 0 36px; width: 36px; height: 36px; border-radius: 9px; color: #FFFFFF;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--blue) 72%, #FFF), var(--blue)); }
+  .ficon-dir svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
+  .ficon { flex: 0 0 36px; width: 36px; height: 36px; margin: 0; align-items: center; border-radius: 9px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--tint, var(--sub)) 72%, #FFF), var(--tint, var(--sub))); }
+  .ficon::before, .ficon::after { display: none; }
+  .ficon b { padding: 0; font-size: 9.5px; letter-spacing: .3px; color: #FFFFFF; background: none; }
+  #fs-list .cover { width: 36px; height: 36px; flex-basis: 36px; border-radius: 9px; }
+  .fs-card .fs-head { gap: 6px; margin-bottom: 6px; }
+  .fs-card .crumbs button { font-weight: 600; }
+  #fs-list .row { gap: 14px; }
+  #fs-list .row .sr-action { flex: 0 0 auto; }
 </style>
 </head>
 <body>
 
 <!-- ------------------------------------------------------------------ login -->
 <section id="login" hidden>
-  <div class="logo"><span class="mark"><svg viewBox="0 0 24 24"><path d="M13.5 2.5 5 13.5h6.5l-1 8 8.5-11h-6.5l1-8Z"/></svg></span>Localhost 8787</div>
-  <h1>Connect this computer</h1>
-  <p id="login-device">The phone will ask you to allow it.</p>
+  <div class="lg-bg" aria-hidden="true">
+    <i class="lg-glow a"></i><i class="lg-glow b"></i>
+    <svg class="lg-bolt" viewBox="0 0 24 24"><path d="M13.5 2.5 5 13.5h6.5l-1 8 8.5-11h-6.5l1-8Z"/></svg>
+  </div>
+  <div class="lg-card">
+    <div class="lg-radar" aria-hidden="true"><i></i><i></i><i></i><span class="lg-mark"><svg viewBox="0 0 24 24"><path d="M13.5 2.5 5 13.5h6.5l-1 8 8.5-11h-6.5l1-8Z"/></svg></span></div>
+    <div class="lg-brand">Localhost 8787</div>
+    <h1>Connect this<br>computer</h1>
+    <p id="login-device">The phone will ask you to allow it.</p>
   <div class="pad">
     <div id="login-error" class="banner bad" hidden></div>
     <div id="pair-idle">
-      <div class="actions"><button id="pair" class="btn">Ask to connect</button></div>
+      <div class="actions"><button id="pair" class="btn lg-go">Ask to connect<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6.5 18.5 12 13 17.5"/></svg></button></div>
     </div>
     <div id="pair-wait" hidden>
-      <p class="note" style="margin-top:0">Tap <b>Allow</b> on your phone, but only if it shows this same code:</p>
+      <p class="note lg-ask">Tap <b>Allow</b> on your phone if it shows this code</p>
       <div class="code" id="pair-code">----</div>
       <div class="meta" id="pair-status">Waiting for the phone...</div>
       <div class="actions"><button id="pair-cancel" class="btn ghost">Cancel</button></div>
     </div>
+  </div>
+    <div class="lg-chips"><span>No account</span><span>No cloud</span><span>Stays on your network</span></div>
   </div>
 </section>
 
 <!-- -------------------------------------------------------------------- app -->
 <div class="shell" id="app" hidden>
   <aside class="side">
-    <div class="logo"><span class="mark"><svg viewBox="0 0 24 24"><path d="M13.5 2.5 5 13.5h6.5l-1 8 8.5-11h-6.5l1-8Z"/></svg></span><span>Localhost 8787</span></div>
+    <div class="logo"><span class="mark"><svg aria-hidden="true" viewBox="0 0 108 108"><defs><linearGradient id="lha" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A2270"/><stop offset=".55" stop-color="#0C0C18"/><stop offset="1" stop-color="#08080E"/></linearGradient><radialGradient id="lhc" cx="98" cy="18" r="48" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#64D2FF" stop-opacity=".44"/><stop offset="1" stop-color="#64D2FF" stop-opacity="0"/></radialGradient><radialGradient id="lhd" cx="30" cy="100" r="56" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFB000" stop-opacity=".4"/><stop offset="1" stop-color="#FFB000" stop-opacity="0"/></radialGradient><radialGradient id="lhe" cx="104" cy="104" r="50" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#BF5AF2" stop-opacity=".4"/><stop offset="1" stop-color="#BF5AF2" stop-opacity="0"/></radialGradient><linearGradient id="lhb" x1="330" y1="272" x2="520" y2="586" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFF4A8"/><stop offset=".42" stop-color="#FFD60A"/><stop offset="1" stop-color="#FF9F0A"/></linearGradient></defs><rect width="108" height="108" rx="0" fill="url(#lha)"/><rect width="108" height="108" rx="0" fill="url(#lhc)"/><rect width="108" height="108" rx="0" fill="url(#lhd)"/><rect width="108" height="108" rx="0" fill="url(#lhe)"/><path transform="translate(54 54) scale(.2) translate(-438.5 -429)" d="M295,272 H371 V358 A127.5,127.5 0 1 1 371,551 V586 H295 V484 H433 V527 L527,458 L433,386 V430 H295 Z" fill="url(#lhb)"/></svg></span><span>Localhost 8787</span></div>
     <nav class="tabs" id="tabs"></nav>
     <div class="side-foot">
       <button class="side-item mon-toggle" id="mon-toggle" title="Monitor: live speed, ping and the Wi-Fi link">
@@ -1108,13 +1636,10 @@
 
     <div class="home-main">
       <div class="card clip-card">
-        <div class="card-title">
-          <span class="appicon yellow"><svg viewBox="0 0 24 24"><path d="M9 5.5H7.5A1.5 1.5 0 0 0 6 7v12a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19V7a1.5 1.5 0 0 0-1.5-1.5H15"/><path d="M10 3.5h4a1 1 0 0 1 1 1v1.5a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/></svg></span>
-          <div class="grow"><h3>Clipboard</h3></div>
-          <div class="clip-head">
-            <button class="btn sm ghost" id="clip-history-btn" title="Recent items: put one back, or remove it"><svg class="i" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4.5v4h4"/><path d="M12 7.5V12l3 2"/></svg><span class="lbl">History</span></button>
-            <button class="btn sm ghost danger" id="clip-clear" title="Clear it here and on the phone"><svg class="i" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2"/><path d="M6.5 7l.8 11.5A1.5 1.5 0 0 0 8.8 20h6.4a1.5 1.5 0 0 0 1.5-1.5L17.5 7"/></svg><span class="lbl">Clear</span></button>
-          </div>
+        <div class="sec-head">
+          <div class="sec-title"><h3>Clipboard</h3><span class="live-with"><i></i><span id="clip-with">Shared with the phone</span></span></div><span class="grow"></span>
+          <button class="link-danger" id="clip-clear-history" type="button" hidden title="Empties the history and the clipboard, here and on the phone">Clear history</button>
+          <button class="icon-btn" id="clip-history-btn" type="button" title="History: put a recent item back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4.5v4h4"/><path d="M12 7.5V12l3 2"/></svg></button>
         </div>
         <div class="clip-history" id="clip-history" hidden></div>
         <div class="clip-field">
@@ -1125,22 +1650,26 @@
         <p class="note" id="clip-note"></p>
       </div>
 
-      <div class="card send-card">
-        <div class="card-title">
-          <span class="appicon green"><svg viewBox="0 0 24 24"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span>
-          <div class="grow"><h3>Send files</h3></div>
+      <!-- Send files: choose files or a whole folder; they can also be dropped anywhere on the page. -->
+      <div class="beam-card" id="beam">
+        <div class="beam-head">
+          <div><b class="beam-title">Send files</b><span class="beam-hint">or drag files here</span></div>
+          <!-- Where they go: this phone unless another is picked. Shown once there is somewhere else. -->
+          <button class="beam-to" id="beam-to" type="button" hidden aria-haspopup="menu" title="Where the files go"><span id="beam-to-name">to the phone</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></svg></button>
+          <!-- Where Send files goes: this phone, a linked phone, or a computer, straight. -->
+          <div class="to-menu" id="to-menu" role="menu" hidden></div>
         </div>
-        <div id="drop" class="drop">
-          <div class="big">Drop files or folders here</div>
-          <div class="drop-actions">
-            <button class="btn sm" id="pick-files">Choose files</button>
-            <button class="btn sm ghost" id="pick-folder">Choose a folder</button>
-          </div>
+        <div class="beam-actions">
+          <button class="beam-btn primary" id="pick-files" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg><span>Choose files</span></button>
+          <button class="beam-btn" id="pick-folder" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17Z"/></svg><span>Choose a folder</span></button>
         </div>
-        <input id="file-input" type="file" multiple hidden>
-        <input id="folder-input" type="file" webkitdirectory multiple hidden>
       </div>
     </div>
+
+    <input id="file-input" type="file" multiple hidden>
+    <input id="folder-input" type="file" webkitdirectory multiple hidden>
+    <!-- Files dragged over the page: it blurs, and says where they go. -->
+    <div class="drop-veil" id="drop" hidden><div><span class="send-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span><b>Drop to send</b><span id="drop-to">to the phone</span></div></div>
 
     <div class="bar">On the phone</div>
     <div class="card" id="files"><p class="empty">Nothing yet</p></div>
@@ -1148,11 +1677,13 @@
 
   <!-- ---------------------------------------------------------- phone storage -->
   <section data-panel="phone" hidden>
-    <div class="card">
+    <!-- Which phone: this one, or a phone linked to it. Shown once one is. -->
+    <div class="fs-src" id="fs-src" role="tablist" aria-label="Phone" hidden></div>
+    <div class="card fs-card">
       <div class="fs-head">
         <div class="crumbs" id="fs-crumbs"></div>
-        <button class="btn sm ghost" id="fs-up">Up</button>
-        <button class="btn sm ghost" id="fs-zip" title="The whole folder, subfolders included, as one zip">Download folder</button>
+        <button class="icon-btn" id="fs-up" type="button" title="Up a folder" aria-label="Up a folder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>
+        <button class="sr-action" id="fs-zip" type="button" title="The whole folder, subfolders included, as one zip">Download folder</button>
       </div>
       <div id="fs-list"><p class="empty">Loading...</p></div>
     </div>
@@ -1160,15 +1691,16 @@
 
   <!-- ---------------------------------------------------------- music -->
   <section data-panel="alerts" hidden>
-    <div class="card">
-      <div class="card-title">
-        <span class="appicon red"><svg viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg></span>
-        <div class="grow"><h3>Notifications</h3><p id="notif-sub"></p></div>
-        <button class="btn sm ghost" id="notif-pop" title="Show new ones as pop-ups on this computer">Pop-ups</button>
-        <button class="btn sm ghost" id="notif-clear" title="Dismiss them all, on the phone too">Clear all</button>
+    <div class="set-group">
+      <div class="set-row">
+        <span class="sq red"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg></span>
+        <div class="sr-text"><b>Pop-ups</b><span id="notif-sub">New alerts show on this computer</span></div>
+        <button class="toggle" id="notif-pop" type="button" role="switch" aria-checked="true" aria-label="Pop-ups"><i></i></button>
       </div>
-      <div id="notif-list"><p class="empty">Loading...</p></div>
     </div>
+    <div class="sec-row"><h2 class="set-title">Notifications</h2><span class="grow"></span>
+      <button class="link-danger" id="notif-clear" type="button" hidden title="Dismiss them all, on the phone too">Clear all</button></div>
+    <div id="notif-list"><p class="empty">Loading...</p></div>
   </section>
 
   <section data-panel="music" hidden>
@@ -1186,18 +1718,24 @@
       <!-- The queue: the song playing, lit, and the ones after it, each Ready once it is in memory. -->
       <div class="stage-queue" id="deck-queue" hidden></div>
     </div>
-    <!-- The filter bar, under the banner: Albums or Songs, and the search. It stays at the
+    <!-- The filter bar, under the banner: Albums or Songs, the search, and Rescan. It stays at the
          top while you move through the list, slips away as you scroll down, and is back the
          moment you scroll up. The anchor marks where it sits when it is not pinned. -->
     <div id="mu-anchor"></div>
     <div class="mu-bar" id="mu-bar">
       <div class="mu-tools">
-        <div class="seg" id="music-view">
-          <button data-v="albums" class="on">Albums</button>
-          <button data-v="songs">Songs</button>
+        <div class="mu-seg" id="music-view" role="tablist" aria-label="Show" data-on="albums">
+          <i class="mu-thumb" aria-hidden="true"></i>
+          <button type="button" role="tab" data-v="albums" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="9" width="17" height="11.5" rx="2.5"/><path d="M6 5.8h12M8.5 2.8h7"/></svg><span>Albums</span><em id="mu-n-albums"></em></button>
+          <button type="button" role="tab" data-v="songs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5V6.2l10-2.2v11.3"/><circle cx="6.6" cy="17.6" r="2.6"/><circle cx="16.6" cy="15.4" r="2.6"/></svg><span>Songs</span><em id="mu-n-songs"></em></button>
         </div>
-        <input id="music-search" type="search" placeholder="Search songs, artists, albums" autocomplete="off">
-        <button class="btn sm ghost" id="music-rescan">Rescan</button>
+        <div class="mu-search" id="mu-search">
+          <svg class="mu-lens" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2"/><path d="m15.2 15.2 4.8 4.8"/></svg>
+          <input id="music-search" type="search" placeholder="Search your library" autocomplete="off" spellcheck="false" aria-label="Search your library">
+          <kbd class="mu-key" title="Press / to search">/</kbd>
+          <button class="mu-clear" id="music-clear" type="button" aria-label="Clear the search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg></button>
+        </div>
+        <button class="icon-btn mu-rescan" id="music-rescan" type="button" title="Look for new music on the phone" aria-label="Look for new music on the phone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.9-3.5"/><path d="M4 4.5v3.5h3.5"/><path d="M4 13a8 8 0 0 0 14.9 3.5"/><path d="M20 19.5V16h-3.5"/></svg></button>
       </div>
     </div>
     <div id="music-perm" class="banner bad" hidden>
@@ -1217,57 +1755,53 @@
 
   <!-- ---------------------------------------------------------- settings -->
   <section data-panel="settings" class="settings" hidden>
-    <div class="card">
-      <div class="card-title">
-        <span class="appicon purple"><svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 1 0 17a8.5 8.5 0 1 1 0-17Z"/><path d="M12 3.5v17"/><path d="M12 7.5h4.5M12 11.5h5.5M12 15.5h4.5"/></svg></span>
-        <div class="grow"><h3>Appearance</h3></div>
+    <h2 class="set-title">Appearance</h2>
+    <div class="set-group">
+      <div class="set-row">
+        <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.9 1.8-1.8 0-1.2-1-1.6-1-2.7 0-1 .8-1.7 1.8-1.7h2.2a3.7 3.7 0 0 0 3.7-3.7C20.5 7 16.7 3.5 12 3.5Z"/><circle cx="7.8" cy="11" r="1.1"/><circle cx="10.5" cy="7.6" r="1.1"/><circle cx="15" cy="7.8" r="1.1"/></svg></span>
+        <div class="sr-text"><b>Colour</b></div>
+        <span class="sr-value" id="accent-name">Automatic</span>
       </div>
-      <div class="accent-head"><b>Colour</b><span id="accent-name">Automatic</span></div>
-      <div class="swatches" id="accent-pick"></div>
-      <div class="seg" id="theme-seg">
-        <button data-theme-choice="system">Automatic</button>
-        <button data-theme-choice="light">Light</button>
-        <button data-theme-choice="dark">Dark</button>
+      <div class="set-row sr-block"><div class="swatches" id="accent-pick"></div></div>
+      <div class="set-row">
+        <span class="sq grey"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.5A8 8 0 1 1 9.5 4.5a6.5 6.5 0 0 0 10 10Z"/></svg></span>
+        <div class="sr-text"><b>Light or dark</b></div>
+      </div>
+      <div class="set-row sr-block">
+        <div class="seg" id="theme-seg">
+          <button data-theme-choice="system">Automatic</button>
+          <button data-theme-choice="light">Light</button>
+          <button data-theme-choice="dark">Dark</button>
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-title">
-        <span class="appicon purple"><svg viewBox="0 0 24 24"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V16h-15V6.5a1 1 0 0 1 1-1Z"/><path d="M2.5 18.5h19"/></svg></span>
-        <div class="grow"><h3>Laptop helper</h3><p>Full speed, the fastest link, and the phone as a trackpad</p></div>
-        <a class="btn sm" href="/blazeit-pc.bat" download="blazeit-pc.bat">Download</a>
+    <h2 class="set-title">Laptop helper</h2>
+    <div class="set-group">
+      <div class="set-row">
+        <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V16h-15V6.5a1 1 0 0 1 1-1Z"/><path d="M2.5 18.5h19"/></svg></span>
+        <div class="sr-text"><b>blazeit-pc.bat</b><span id="helper-state"></span></div>
+        <a class="sr-action" href="/blazeit-pc.bat" download="blazeit-pc.bat">Download</a>
       </div>
-      <div class="banner" id="helper-state"></div>
-      <p class="note">Run <b>blazeit-pc.bat</b>. Nothing is installed; close its window to stop it.</p>
+      <div class="set-row sr-note">Full speed, the fastest link, and the phone as a trackpad. Nothing is installed; close its window to stop it.</div>
     </div>
 
-    <div class="card">
-      <div class="card-title">
-        <span class="appicon grey"><svg viewBox="0 0 24 24"><path d="M12 3v14"/><path d="m9 6 3-3 3 3"/><path d="M12 13 7.5 10.5V8"/><path d="M12 15l4.5-2.5V10"/><circle cx="12" cy="19" r="2"/></svg></span>
-        <div class="grow"><h3>USB-C cable</h3><p>The fastest link</p></div>
+    <h2 class="set-title">Speed</h2>
+    <div class="set-group">
+      <div class="set-row">
+        <span class="sq blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v14"/><path d="m9 6 3-3 3 3"/><path d="M12 13 7.5 10.5V8"/><path d="M12 15l4.5-2.5V10"/><circle cx="12" cy="19" r="2"/></svg></span>
+        <div class="sr-text"><b>USB-C cable</b><span>The fastest link. On the phone: <b>Settings &rarr; USB-C cable &rarr; Set up</b>, then turn on USB tethering and open the cable's address from Home.</span></div>
       </div>
-      <ol class="steps">
-        <li>Plug the phone into this laptop.</li>
-        <li>On the phone: <b>Settings &rarr; USB-C cable &rarr; Set up</b>, and turn on <b>USB tethering</b>.</li>
-        <li>Open the cable's address from the phone's Home.</li>
-      </ol>
-    </div>
-
-    <div class="card">
-      <div class="card-title">
-        <span class="appicon green"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>
-        <div class="grow"><h3>Connections per file</h3><p>Four suits most links; one or two on a cable</p></div>
+      <div class="set-row">
+        <span class="sq green"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>
+        <div class="sr-text"><b>Connections per file</b><span>Four suits most links; one or two on a cable</span></div>
+        <div class="seg" id="streams-seg"></div>
       </div>
-      <div class="seg" id="streams-seg"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">
-        <span class="appicon red"><svg viewBox="0 0 24 24"><path d="M2 12h4l3-7 5 14 3-9 2 2h3"/></svg></span>
-        <div class="grow"><h3>Measure the link</h3><p>Five seconds each way, storage left out</p></div>
-        <button id="measure" class="btn sm">Measure</button>
+      <div class="set-row">
+        <span class="sq orange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h4l3-7 5 14 3-9 2 2h3"/></svg></span>
+        <div class="sr-text"><b>Measure the link</b><span id="bench-result">Five seconds each way, storage left out</span></div>
+        <button class="sr-action" id="measure" type="button">Measure</button>
       </div>
-      <p class="note" id="bench-result" style="margin-top:0"></p>
     </div>
   </section>
   </main>
@@ -1322,6 +1856,8 @@
 
 <!-- ------------------------------------------------------------------ player -->
 <div class="player" id="player" hidden>
+  <!-- The progress, along the bar's whole top edge: drag anywhere on it. -->
+  <input id="pl-seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
   <div class="pl-left">
     <div class="cover" id="pl-art" title="Show it in its album">&#9834;</div>
     <div class="pl-meta">
@@ -1336,22 +1872,33 @@
       <button class="pl-btn" id="pl-prev" title="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M18.5 6.2v11.6a.8.8 0 0 1-1.2.7L9 12.7a.8.8 0 0 1 0-1.4l8.3-5.8a.8.8 0 0 1 1.2.7Z"/><path d="M6 6v12"/></svg></button>
       <button class="pl-btn play" id="pl-play" title="Play / pause (space)"></button>
       <button class="pl-btn" id="pl-next" title="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M5.5 6.2v11.6a.8.8 0 0 0 1.2.7l8.3-5.8a.8.8 0 0 0 0-1.4L6.7 5.5a.8.8 0 0 0-1.2.7Z"/><path d="M18 6v12"/></svg></button>
+      <button class="pl-btn lyr-btn" id="pl-lyrics-m" type="button" title="Lyrics" aria-label="Lyrics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-7l-4.2 3.4v-3.4H5A1.5 1.5 0 0 1 3.5 15V6.5A1.5 1.5 0 0 1 5 5Z"/><path d="M8 9.5h8M8 12.5h5"/></svg></button>
       <button class="pl-btn" id="pl-repeat" title="Repeat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3l3 3-3 3"/><path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H20"/><path d="M7 21l-3-3 3-3"/><path d="M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H4"/></svg><i class="one">1</i></button>
-    </div>
-    <div class="pl-bar">
-      <span class="pl-t" id="pl-cur">0:00</span>
-      <input id="pl-seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
-      <span class="pl-t" id="pl-dur">0:00</span>
     </div>
   </div>
   <div class="pl-right">
+    <span class="pl-times"><span id="pl-cur">0:00</span> / <span id="pl-dur">0:00</span></span>
     <span class="pl-time" id="pl-time" hidden></span>
+    <button class="pl-btn small lyr-btn" id="pl-lyrics" type="button" title="Lyrics" aria-label="Lyrics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-7l-4.2 3.4v-3.4H5A1.5 1.5 0 0 1 3.5 15V6.5A1.5 1.5 0 0 1 5 5Z"/><path d="M8 9.5h8M8 12.5h5"/></svg></button>
     <button class="pl-btn small" id="pl-sync" title="Play on other devices, in step"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M8.3 15.7a5.3 5.3 0 0 1 0-7.4M15.7 8.3a5.3 5.3 0 0 1 0 7.4M5.5 18.5a9.2 9.2 0 0 1 0-13M18.5 5.5a9.2 9.2 0 0 1 0 13"/></svg><b id="pl-sync-n"></b></button>
     <button class="pl-btn small" id="pl-mute" title="Mute"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M4 9.5h3l4.5-3.8v12.6L7 14.5H4z"/><path class="w1" d="M15 9.5a3.5 3.5 0 0 1 0 5"/><path class="w2" d="M17.8 7a7 7 0 0 1 0 10"/></svg></button>
     <input id="pl-vol" type="range" min="0" max="100" value="100" aria-label="Volume">
   </div>
 </div>
 <audio id="audio" preload="auto"></audio>
+<!-- Lyrics, full screen over the page, in time with the song; the player stays along the bottom. -->
+<div class="lyr" id="lyr" hidden role="dialog" aria-label="Lyrics">
+  <div class="lyr-bg" id="lyr-bg" aria-hidden="true"></div>
+  <button class="lyr-close" id="lyr-close" type="button" title="Close (Esc)" aria-label="Close lyrics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9.5 6 6 6-6"/></svg></button>
+  <div class="lyr-side">
+    <div class="lyr-art" id="lyr-art"></div>
+    <div class="lyr-who"><b class="lyr-title" id="lyr-title"></b><span class="lyr-artist" id="lyr-artist"></span></div>
+  </div>
+  <div class="lyr-scroll" id="lyr-scroll">
+    <div class="lyr-lines" id="lyr-lines"></div>
+    <p class="lyr-src" id="lyr-src"></p>
+  </div>
+</div>
 <!-- Playing together: which devices play in step with this one. -->
 <div class="sync-pop" id="sync-pop" hidden>
   <div class="sync-head"><b>Play in sync</b></div>
@@ -1495,11 +2042,12 @@ async function api(path, opts) {
 
 function buildTabs() {
   var host = $("tabs");
-  host.innerHTML = "";
+  // The pill behind the tab you are on; it glides from tab to tab (moveTabPill).
+  host.innerHTML = '<i class="tab-pill" id="tab-pill" aria-hidden="true"></i>';
   TABS.forEach(function (t, i) {
     var b = document.createElement("button");
     b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + t.icon + '</svg><span>' + t.label + '</span>' +
-      (t.id === "music" ? '<i class="eq" id="tab-eq" hidden><b></b><b></b><b></b></i>' : "") +
+      (t.id === "music" ? '<i class="tab-note" id="tab-eq" aria-label="Playing" hidden></i>' : "") +
       (t.id === "home" ? '<i class="count" id="tab-count" hidden></i>' : "") +
       (t.id === "alerts" ? '<i class="count" id="alerts-count" hidden></i>' : "");
     b.dataset.tab = t.id;
@@ -1507,6 +2055,11 @@ function buildTabs() {
     b.addEventListener("click", function () { selectTab(t.id); });
     host.appendChild(b);
   });
+  // Re-measured when a tab changes width: the playing note appears beside Music.
+  if (window.ResizeObserver) {
+    var ro = new ResizeObserver(function () { moveTabPill(); });
+    Array.prototype.forEach.call(host.querySelectorAll("button"), function (b) { ro.observe(b); });
+  }
   selectTab(TABS[0].id);
   renderHelperState();
 }
@@ -1566,15 +2119,21 @@ function wireMonitor() {
   });
   $("mon-toggle").addEventListener("click", function () { setMonitor(!monOn); });
   window.addEventListener("resize", layoutMonitor);
+  function closeSheet() {
+    if ($("mon-sheet").hidden) return;
+    navClose("monitor", function () { $("mon-sheet").hidden = true; });
+  }
   $("mon-pill").addEventListener("click", function () {
-    $("mon-sheet").hidden = !$("mon-sheet").hidden;
+    if (!$("mon-sheet").hidden) { closeSheet(); return; }
+    $("mon-sheet").hidden = false;
+    if (!document.body.classList.contains("mon-dock")) navLayer("monitor");
     pollMonitor();
   });
   $("mon-close").addEventListener("click", function () {
-    if (document.body.classList.contains("mon-dock")) setMonitor(false); else $("mon-sheet").hidden = true;
+    if (document.body.classList.contains("mon-dock")) setMonitor(false); else closeSheet();
   });
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && !document.body.classList.contains("mon-dock")) $("mon-sheet").hidden = true;
+    if (e.key === "Escape" && !document.body.classList.contains("mon-dock")) closeSheet();
   });
   setMonitor(monitorWanted());
 }
@@ -1725,8 +2284,22 @@ function drawMonitor(samples) {
   line(function (s) { return s.outBps; }, outC, outC + "40");
 }
 
-function selectTab(id) {
+/** The pill behind the tab you are on, gliding to the one picked. */
+function moveTabPill() {
+  var tabs = $("tabs"), pill = $("tab-pill"), on = tabs && tabs.querySelector("button.on");
+  if (!pill || !on || !on.offsetWidth) return;
+  pill.style.width = on.offsetWidth + "px";
+  pill.style.height = on.offsetHeight + "px";
+  pill.style.transform = "translate(" + on.offsetLeft + "px," + on.offsetTop + "px)";
+  // Placed first without moving, then free to glide.
+  if (!tabs.classList.contains("ready")) setTimeout(function () { tabs.classList.add("ready"); }, 60);
+}
+window.addEventListener("resize", moveTabPill);
+
+function selectTab(id, fromHistory) {
+  var before = document.body.dataset.tab;
   document.body.dataset.tab = id;
+  if (!fromHistory && before !== id) navPush({ tab: id });
   var tab = TABS.filter(function (t) { return t.id === id; })[0];
   if (tab) {
     $("page-title").textContent = tab.label;
@@ -1736,11 +2309,57 @@ function selectTab(id) {
     b.classList.toggle("on", b.dataset.tab === id);
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-panel]"), function (p) {
+    var was = p.hidden;
     p.hidden = p.dataset.panel !== id;
+    // The page coming in rises into place, as the phone's do.
+    if (was && !p.hidden) { p.classList.remove("enter"); void p.offsetWidth; p.classList.add("enter"); }
   });
+  moveTabPill();
   if (id === "music") musicOpen();
   if (id === "phone" && !fs.loaded) fsOpen("");
   if (id === "alerts") { alertsSeen = true; renderAlertCount(); }
+}
+
+
+// ------------------------------------------------------------------ back and forward
+//
+// The browser's Back steps back through the page as it would through an app: an open overlay
+// (the lyrics, a file being looked at, the monitor) closes first, then the tab before comes back.
+// Only from where the page was opened does Back leave it. Each tab has its own address (#music),
+// so a reload or a bookmark opens that tab.
+
+var navReady = false;
+var NAV_TABS = ["home", "phone", "music", "alerts", "settings"];
+
+function navState() { return history.state || {}; }
+
+function navPush(st) {
+  if (!navReady) return;
+  try { history.pushState(st, "", "#" + st.tab); } catch (e) {}
+}
+
+/** An overlay just opened: Back closes it. */
+function navLayer(name) { navPush({ tab: document.body.dataset.tab || "home", layer: name }); }
+
+/** Closes overlay [name] as Back would, when it is the last thing in the history; else [close] directly. */
+function navClose(name, close) {
+  if (navReady && navState().layer === name) history.back();
+  else close();
+}
+
+function setupNav() {
+  var start = (location.hash || "").slice(1);
+  if (NAV_TABS.indexOf(start) < 0) start = document.body.dataset.tab || "home";
+  try { history.replaceState({ tab: start }, "", "#" + start); } catch (e) {}
+  if (start !== document.body.dataset.tab) selectTab(start, true);
+  navReady = true;
+  window.addEventListener("popstate", function (e) {
+    var st = e.state || { tab: (location.hash || "#home").slice(1) };
+    if (lyr.open && st.layer !== "lyrics") closeLyrics(true);
+    if (!$("viewer").hidden && st.layer !== "viewer") closeViewer(true);
+    if (!$("mon-sheet").hidden && !document.body.classList.contains("mon-dock") && st.layer !== "monitor") $("mon-sheet").hidden = true;
+    if (NAV_TABS.indexOf(st.tab) >= 0 && st.tab !== document.body.dataset.tab) selectTab(st.tab, true);
+  });
 }
 
 // ------------------------------------------------------------------ clipboard
@@ -1866,11 +2485,11 @@ function setupClipboard() {
   });
   $("clip").addEventListener("blur", publishText);
 
-  // Clear: here, on the phone, and the phone's own clipboard.
-  $("clip-clear").addEventListener("click", async function () {
+  // Clearing is in the history: it empties the history and the clipboard, here and on the phone.
+  $("clip-clear-history").addEventListener("click", async function () {
     clearTimeout(clipTimer); clipDirty = false;
     clip = { kind: "empty", text: "", v: clip.v }; $("clip").value = ""; renderClip();
-    await api("/api/clipboard", { method: "DELETE" });
+    await api("/api/clipboard/history", { method: "DELETE" });
     flash("Cleared");
   });
 
@@ -1905,6 +2524,7 @@ function toggleHistory() {
   var box = $("clip-history"), open = box.hidden;
   box.hidden = !open;
   $("clip-history-btn").classList.toggle("on", open);
+  $("clip-clear-history").hidden = !open || !clipHist.length;
   if (open) loadHistory();
 }
 
@@ -1926,6 +2546,7 @@ function renderHistory() {
   var box = $("clip-history");
   if (box.hidden) return;
   box.innerHTML = "";
+  $("clip-clear-history").hidden = !clipHist.length;
   if (!clipHist.length) { box.innerHTML = '<p class="empty">Nothing copied yet.</p>'; return; }
   clipHist.forEach(function (m) {
     var row = document.createElement("div");
@@ -1956,11 +2577,6 @@ function renderHistory() {
     };
     box.appendChild(row);
   });
-  var foot = document.createElement("div"); foot.className = "h-foot";
-  foot.innerHTML = "<span></span><button type=\"button\">Clear history</button>";
-  foot.firstChild.textContent = clipHist.length + (clipHist.length === 1 ? " item" : " items") + ", newest first";
-  foot.lastChild.onclick = async function () { await api("/api/clipboard/history", { method: "DELETE" }); };
-  box.appendChild(foot);
 }
 
 // ------------------------------------------------------------------ notifications
@@ -1996,7 +2612,14 @@ function notifEl(n, inToast) {
   var d = document.createElement("div");
   d.className = "notif";
   var icon = document.createElement("img");
-  icon.alt = ""; icon.src = "/api/notifications/icon?pkg=" + encodeURIComponent(n.pkg);
+  icon.alt = "";
+  icon.onerror = function () {
+    var letter = document.createElement("span");
+    letter.className = "n-letter";
+    letter.textContent = (String(n.app || "").trim().charAt(0) || "?").toUpperCase();
+    icon.replaceWith(letter);
+  };
+  icon.src = "/api/notifications/icon?pkg=" + encodeURIComponent(n.pkg);
   d.appendChild(icon);
   var body = document.createElement("div"); body.className = "n-body";
   var head = document.createElement("div"); head.className = "n-head";
@@ -2073,13 +2696,17 @@ function renderNotifs() {
   var host = $("notif-list"), list = Object.keys(notifs).map(function (k) { return notifs[k]; })
     .sort(function (a, b) { return b.at - a.at; });
   $("notif-clear").hidden = !list.length;
-  $("notif-pop").textContent = notifPopOn() ? "Pop-ups on" : "Pop-ups off";
+  $("notif-pop").classList.toggle("on", notifPopOn());
+  $("notif-pop").setAttribute("aria-checked", notifPopOn() ? "true" : "false");
   host.innerHTML = "";
   if (!notifAllowed) {
     host.innerHTML = '<div class="banner bad">Allow it on the phone: Settings &rarr; Laptop access &rarr; Notifications on the laptop.</div>';
     return;
   }
-  if (!list.length) { host.innerHTML = '<p class="empty">Nothing new on the phone.</p>'; return; }
+  if (!list.length) {
+    host.innerHTML = '<div class="calm"><span class="calm-ic"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z\"/><path d=\"M10 20.5a2 2 0 0 0 4 0\"/></svg></span><b>All caught up</b><span>Notifications from the phone show up here.</span></div>';
+    return;
+  }
   // As the phone's shade: the ones to read first, then what is running, under its own heading.
   var ongoing = list.filter(function (n) { return n.ongoing; });
   list.filter(function (n) { return !n.ongoing; }).forEach(function (n) { host.appendChild(notifEl(n, false)); });
@@ -2118,7 +2745,8 @@ function popNotif(n) {
     selectTab("alerts"); card.remove();
   });
   host.prepend(card);
-  while (host.children.length > 3) host.lastChild.remove();
+  var pops = Array.prototype.filter.call(host.children, function (c) { return !c.classList.contains("incoming"); });
+  while (pops.length > 3) pops.pop().remove();
   setTimeout(function () { if (!card._keep && !card.matches(":hover")) card.remove(); else setTimeout(function () { if (!card._keep) card.remove(); }, 6000); }, 7000);
 }
 
@@ -2199,14 +2827,422 @@ function forget(row) {
   var s = loadStore(); delete s[fingerprint(row.file)]; saveStore(s);
 }
 
+// ------------------------------------------------------------------ where files go
+//
+// This phone, unless another place is picked on the green card: a linked phone, which keeps
+// them, or a computer open on this phone or a linked one, which takes them straight as a
+// download (see Pipes on the phone). Nothing is kept on the way to a computer.
+
+var sendTo = { id: "self", name: "" };
+var sendTargets = [];
+var TO_ICON = { phone: '<path d="M9 2.5h6A2.5 2.5 0 0 1 17.5 5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 19V5A2.5 2.5 0 0 1 9 2.5Z"/><path d="M11 18.5h2"/>', computer: '<rect x="4.5" y="5" width="15" height="10.5" rx="1.5"/><path d="M2.5 19h19"/>' };
+var TO_CHECK = '<svg class="to-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17.5 19 7"/></svg>';
+
+var targetsTimer = null;
+function loadTargetsSoon() { clearTimeout(targetsTimer); targetsTimer = setTimeout(loadTargets, 400); }
+async function loadTargets() {
+  try {
+    var d = await (await api("/api/targets")).json();
+    sendTargets = d.targets || [];
+  } catch (e) { return; }
+  renderSendTo();
+  if (!$("to-menu").hidden) fillToMenu();
+}
+
+function sendToName() { return sendTo.id === "self" ? (state.device || "the phone") : sendTo.name; }
+
+function renderSendTo() {
+  // The place picked went away (the computer closed its page): back to this phone.
+  if (sendTo.id !== "self" && !sendTargets.some(function (t) { return t.id === sendTo.id; })) sendTo = { id: "self", name: "" };
+  $("beam-to").hidden = !sendTargets.length;
+  $("beam-to-name").textContent = "to " + sendToName();
+}
+
+function fillToMenu() {
+  var m = $("to-menu");
+  m.innerHTML = "";
+  var self = [{ id: "self", name: state.device || "This phone", kind: "phone", note: "Kept on this phone" }];
+  var phones = sendTargets.filter(function (t) { return t.kind === "phone"; })
+    .map(function (t) { return Object.assign({ note: "Kept on that phone" }, t); });
+  var computers = sendTargets.filter(function (t) { return t.kind === "computer"; })
+    .map(function (t) { return Object.assign({ note: t.via ? "Straight there, through " + t.via : "Straight there, kept nowhere on the way" }, t); });
+  function group(label, list) {
+    if (!list.length) return;
+    var l = document.createElement("div"); l.className = "to-label"; l.textContent = label; m.appendChild(l);
+    list.forEach(function (t) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "to-item" + (t.id === sendTo.id ? " on" : "");
+      b.setAttribute("role", "menuitemradio");
+      b.setAttribute("aria-checked", t.id === sendTo.id ? "true" : "false");
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + TO_ICON[t.kind] + '</svg><span><b></b><i></i></span>' + TO_CHECK;
+      b.querySelector("b").textContent = t.name;
+      b.querySelector("i").textContent = t.note;
+      b.onclick = function () { sendTo = { id: t.id, name: t.name }; closeToMenu(); renderSendTo(); };
+      m.appendChild(b);
+    });
+  }
+  group("Phones", self.concat(phones));
+  group("Computers", computers);
+}
+
+function openToMenu() {
+  var m = $("to-menu");
+  fillToMenu();
+  m.hidden = false;
+  $("beam").classList.add("menu-open");
+  $("beam-to").setAttribute("aria-expanded", "true");
+  // Laid out first, so adding "on" starts its fade and rise.
+  void m.offsetWidth;
+  m.classList.add("on");
+  loadTargets();
+}
+
+function closeToMenu() {
+  var m = $("to-menu");
+  if (m.hidden) return;
+  m.classList.remove("on");
+  $("beam-to").setAttribute("aria-expanded", "false");
+  setTimeout(function () { if (!m.classList.contains("on")) { m.hidden = true; $("beam").classList.remove("menu-open"); } }, 180);
+}
+
+function setupSendTo() {
+  $("beam-to").addEventListener("click", function (e) {
+    e.stopPropagation();
+    if ($("to-menu").hidden || !$("to-menu").classList.contains("on")) openToMenu(); else closeToMenu();
+  });
+  document.addEventListener("click", function (e) { if (!e.target.closest("#to-menu")) closeToMenu(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeToMenu(); });
+  loadTargets();
+  // Computers open and close their pages; a look now and then keeps the list honest.
+  setInterval(function () { if (document.visibilityState === "visible" && !$("app").hidden) loadTargets(); }, 30000);
+}
+
+/** Where a new row goes: nothing for this phone, else the place and its name. */
+function rowTarget(row) {
+  if (sendTo.id !== "self") { row.to = sendTo.id; row.toName = sendTo.name; }
+  return row;
+}
+
+/**
+ * A file sent somewhere other than this phone: offered, waited on until it is taken, then sent
+ * in one piece as it is read. There is no resuming a pipe; Resume starts it again.
+ */
+async function pipePump(row) {
+  row.transferred = 0;
+  try {
+    row.status = "asking " + row.toName;
+    renderTransfers();
+    var res = await api("/api/pipe", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: row.to, name: row.name, size: row.size, mime: row.file.type || "" }),
+    });
+    if (!res.ok) { var m = ""; try { m = (await res.json()).message; } catch (e) {} throw new Error(m || "refused (" + res.status + ")"); }
+    var id = (await res.json()).id;
+    for (;;) {
+      if (row.state !== "active") return;
+      var st = (await (await api("/api/pipe/" + id)).json()).state;
+      if (st === "direct") {
+        row.status = "connecting to " + row.toName;
+        renderTransfers();
+        if (await sendDirect(row, id)) {
+          api("/api/pipe/" + id + "/close", { method: "POST" });
+          row.state = "done"; row.status = "done"; row.bps = 0; row.transferred = row.size;
+          renderTransfers();
+          return;
+        }
+        if (row.state !== "active") return;
+        // The two laptops cannot reach each other: through the phone after all.
+        rtcSignal(id, { t: "pipe" });
+        break;
+      }
+      if (st === "accepted") break;
+      if (st === "declined") throw new Error(row.toName + " said no");
+      if (st === "gone") throw new Error("nobody took it in time");
+      row.status = "waiting for " + row.toName + " to take it";
+      renderTransfers();
+      await sleep(1000);
+    }
+    row.status = "straight to " + row.toName;
+    renderTransfers();
+    await new Promise(function (resolve, reject) {
+      var x = new XMLHttpRequest();
+      row.pipeXhr = x;
+      x.open("POST", "/api/pipe/" + id + "/data", true);
+      x.withCredentials = true;
+      x.setRequestHeader("Content-Type", "application/octet-stream");
+      x.upload.onprogress = function (e) { row.transferred = e.loaded; };
+      x.onload = function () {
+        row.pipeXhr = null;
+        if (x.status >= 200 && x.status < 300) resolve();
+        else reject(new Error(serverMessage(x) || "stopped (" + x.status + ")"));
+      };
+      x.onerror = function () { row.pipeXhr = null; reject(new Error("the connection dropped")); };
+      x.onabort = function () { row.pipeXhr = null; reject(new Error("paused")); };
+      x.send(row.file);
+    });
+    row.state = "done"; row.status = "done"; row.bps = 0; row.transferred = row.size;
+    renderTransfers();
+  } catch (err) {
+    if (row.state === "paused") { renderTransfers(); return; }
+    row.state = "paused";
+    row.status = "stopped - " + (err && err.message ? err.message : "network error") + " - Resume sends it again";
+    row.bps = 0;
+    renderTransfers();
+  }
+}
+
+
+// ------------------------------------------------------------------ laptop to laptop, directly
+//
+// When both laptops are on a network the phone is not the middle of (the same router, a cable),
+// the file goes straight from one browser to the other (WebRTC) and never through the phone. The
+// pipe that offered it carries only the introductions: an offer, an answer, and the addresses each
+// side can be reached at, learnt from the phone's STUN answer. If the two cannot reach each other
+// within a few seconds, the sender says so and the file goes through the phone after all.
+
+var rtcSessions = {};
+var DIRECT_WAIT_MS = 8000;
+var DIRECT_PIECE = 256 * 1024;
+/** Without a file to write into (a page that is not secure), a direct send is held in memory: up to this. */
+var DIRECT_MEMORY_MAX = 512 * 1048576;
+
+function rtcSignal(id, msg) {
+  return api("/api/pipe/" + id + "/signal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(msg) })
+    .catch(function () {});
+}
+
+function newPeerConnection() {
+  // The phone's STUN answer tells each page its address as the phone sees it; on the same network,
+  // the laptop's real one, which the other laptop can reach.
+  var host = route && route.host ? route.host : "";
+  return new RTCPeerConnection({ iceServers: host ? [{ urls: "stun:" + host + ":3478" }] : [] });
+}
+
+/** Candidates that arrive before the other side's description are kept until it has come. */
+function candidateQueue(pc) {
+  var ready = false, waiting = [];
+  return {
+    add: function (c) { if (ready) pc.addIceCandidate(c).catch(function () {}); else waiting.push(c); },
+    open: function () { ready = true; waiting.forEach(function (c) { pc.addIceCandidate(c).catch(function () {}); }); waiting = []; },
+  };
+}
+
+/**
+ * The sender's side, once the other computer has said yes to a direct send: connects, and sends
+ * the file down a data channel. False when the two laptops could not reach each other.
+ */
+async function sendDirect(row, id) {
+  if (!window.RTCPeerConnection) return false;
+  var pc = newPeerConnection(), q = candidateQueue(pc);
+  var dc = pc.createDataChannel("file", { ordered: true });
+  dc.binaryType = "arraybuffer";
+  var sess = rtcSessions[id] = {
+    on: function (m) {
+      if (m.t === "answer") pc.setRemoteDescription(m.sdp).then(q.open).catch(function () {});
+      else if (m.t === "ice") q.add(m.c);
+    },
+  };
+  pc.onicecandidate = function (e) { if (e.candidate) rtcSignal(id, { t: "ice", c: e.candidate.toJSON() }); };
+  row.abortDirect = function () { try { dc.close(); pc.close(); } catch (e) {} };
+  try {
+    await pc.setLocalDescription(await pc.createOffer());
+    rtcSignal(id, { t: "offer", sdp: pc.localDescription.toJSON() });
+    var opened = await Promise.race([
+      new Promise(function (r) { dc.onopen = function () { r(true); }; }),
+      sleep(DIRECT_WAIT_MS).then(function () { return false; }),
+    ]);
+    if (!opened || row.state !== "active") { row.abortDirect(); return false; }
+
+    row.status = "straight to " + row.toName + ", not through the phone";
+    renderTransfers();
+    var gotAll = new Promise(function (res, rej) {
+      dc.onmessage = function (e) { if (e.data === "got") res(); };
+      dc.onclose = function () { rej(new Error("the other computer stopped")); };
+    });
+    gotAll.catch(function () {});
+    // Chrome refuses a send that would take its queue past 16 MB; keep it well under.
+    dc.bufferedAmountLowThreshold = 2 << 20;
+    var off = 0, BLOCK = 8 << 20;
+    while (off < row.size) {
+      var block = await row.file.slice(off, Math.min(off + BLOCK, row.size)).arrayBuffer();
+      for (var p = 0; p < block.byteLength; p += DIRECT_PIECE) {
+        if (row.state !== "active") throw new Error("paused");
+        if (dc.readyState !== "open") throw new Error("the other computer stopped");
+        if (dc.bufferedAmount > (8 << 20)) await new Promise(function (r) { dc.onbufferedamountlow = function () { dc.onbufferedamountlow = null; r(); }; });
+        dc.send(block.slice(p, Math.min(p + DIRECT_PIECE, block.byteLength)));
+        row.transferred = Math.max(0, off + Math.min(p + DIRECT_PIECE, block.byteLength) - dc.bufferedAmount);
+      }
+      off += block.byteLength;
+    }
+    await Promise.race([gotAll, sleep(120000).then(function () { throw new Error("no word back from the other computer"); })]);
+    return true;
+  } finally {
+    delete rtcSessions[id];
+    row.abortDirect = null;
+    try { pc.close(); } catch (e) {}
+  }
+}
+
+/**
+ * The receiver's side: says yes to a direct send, then takes the file down a data channel, or
+ * through the phone when the sender says the two could not connect. It is written into [handle]
+ * (a file picked with Save) as it comes, or held in memory and saved at the end.
+ */
+async function receiveDirect(d, handle) {
+  var row = {
+    id: uid(), dir: "down", recv: true, name: d.name, size: d.size, transferred: 0, bps: 0,
+    streams: [], state: "active", status: "connecting to " + d.from,
+  };
+  transfers.unshift(row);
+  renderTransfers();
+  ensureTicker();
+  var writer = handle ? await handle.createWritable() : null, parts = writer ? null : [];
+  var writing = Promise.resolve(), pc = null, finished = false;
+
+  function put(buf) {
+    row.transferred += buf.byteLength;
+    if (writer) writing = writing.then(function () { return writer.write(buf); });
+    else parts.push(buf);
+  }
+  async function finish(ok, why) {
+    if (finished) return;
+    finished = true;
+    delete rtcSessions[d.id];
+    try { if (pc) pc.close(); } catch (e) {}
+    try { await writing; } catch (e) { ok = false; why = "could not write the file"; }
+    if (writer) { try { if (ok) await writer.close(); else await writer.abort(); } catch (e) {} }
+    else if (ok) {
+      var url = URL.createObjectURL(new Blob(parts));
+      var a = document.createElement("a");
+      a.href = url; a.download = d.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    }
+    row.bps = 0;
+    row.state = ok ? "done" : "error";
+    row.status = ok ? "done" : why || "stopped";
+    renderTransfers();
+  }
+  row.abortDirect = function () { finish(false, "cancelled"); };
+
+  // Through the phone after all: the sender could not reach this laptop directly.
+  async function viaPhone() {
+    try { if (pc) pc.close(); } catch (e) {}
+    pc = null;
+    row.status = "through the phone";
+    renderTransfers();
+    if (!writer) {
+      // Nothing to write into: the browser's own download takes it.
+      finished = true;
+      delete rtcSessions[d.id];
+      transfers = transfers.filter(function (r) { return r !== row; });
+      renderTransfers();
+      nativeDownload({ url: "/api/pipe/" + d.id + "/data", name: d.name });
+      return;
+    }
+    try {
+      var res = await fetch("/api/pipe/" + d.id + "/data", { credentials: "same-origin" });
+      if (!res.ok || !res.body) throw new Error("the phone would not pass it on");
+      var reader = res.body.getReader();
+      for (;;) {
+        var r = await reader.read();
+        if (r.done) break;
+        put(r.value);
+      }
+      finish(row.transferred === d.size, "it ended early");
+    } catch (e) { finish(false, e.message); }
+  }
+
+  rtcSessions[d.id] = {
+    on: function (m) {
+      if (m.t === "pipe") { viaPhone(); return; }
+      if (m.t === "offer") {
+        pc = newPeerConnection();
+        var q = candidateQueue(pc);
+        rtcSessions[d.id].ice = q;
+        pc.onicecandidate = function (e) { if (e.candidate) rtcSignal(d.id, { t: "ice", c: e.candidate.toJSON() }); };
+        pc.ondatachannel = function (e) {
+          var ch = e.channel;
+          ch.binaryType = "arraybuffer";
+          ch.onopen = function () { row.status = "straight from " + d.from + ", not through the phone"; renderTransfers(); };
+          ch.onmessage = function (ev) {
+            if (typeof ev.data === "string") return;
+            put(ev.data);
+            if (row.transferred >= d.size) {
+              writing.then(function () { try { ch.send("got"); } catch (x) {} setTimeout(function () { finish(true); }, 300); });
+            }
+          };
+          ch.onclose = function () { if (row.transferred < d.size) finish(false, "the other computer stopped"); };
+        };
+        pc.setRemoteDescription(m.sdp)
+          .then(function () { q.open(); return pc.createAnswer(); })
+          .then(function (a) { return pc.setLocalDescription(a); })
+          .then(function () { rtcSignal(d.id, { t: "answer", sdp: pc.localDescription.toJSON() }); })
+          .catch(function () {});
+      } else if (m.t === "ice" && rtcSessions[d.id].ice) rtcSessions[d.id].ice.add(m.c);
+    },
+  };
+  var res = await api("/api/pipe/" + d.id + "/accept", { method: "POST" });
+  if (!res.ok) finish(false, "the offer has closed");
+}
+
+/** Save on a file another computer is sending: straight into a file picked here, when it can be. */
+async function takeIncoming(d) {
+  var canDirect = !!window.RTCPeerConnection;
+  var handle = null;
+  if (canDirect && window.showSaveFilePicker && window.isSecureContext) {
+    try { handle = await window.showSaveFilePicker({ suggestedName: d.name }); }
+    catch (e) {
+      if (e && e.name === "AbortError") { api("/api/pipe/" + d.id + "/decline", { method: "POST" }); return; }
+      handle = null;
+    }
+  }
+  if (!canDirect || (!handle && d.size > DIRECT_MEMORY_MAX)) {
+    nativeDownload({ url: "/api/pipe/" + d.id + "/data", name: d.name });
+    return;
+  }
+  receiveDirect(d, handle);
+}
+
+// ------------------------------------------------------------------ a computer sending here
+
+/** A file another computer is sending this one: Save takes it as a download, Decline says no. */
+function showIncoming(d) {
+  if (document.getElementById("in-" + d.id)) return;
+  var host = $("toasts"), c = document.createElement("div");
+  c.className = "notif incoming";
+  c.id = "in-" + d.id;
+  c._keep = true;
+  c.appendChild(appIcon("down", "green"));
+  var body = document.createElement("div");
+  body.className = "n-body";
+  body.innerHTML = '<div class="n-head"><span class="grow n-app"></span></div><div class="n-title"></div><div class="n-text"></div>' +
+    '<div class="n-acts"><button class="btn sm" type="button">Save</button><button class="btn sm ghost" type="button">Decline</button></div>';
+  body.querySelector(".n-app").textContent = "From " + d.from;
+  body.querySelector(".n-title").textContent = d.name;
+  body.querySelector(".n-text").textContent = bytes(d.size);
+  var acts = body.querySelectorAll(".n-acts button");
+  acts[0].onclick = function () { c.remove(); takeIncoming(d); };
+  acts[1].onclick = function () { api("/api/pipe/" + d.id + "/decline", { method: "POST" }); c.remove(); };
+  c.appendChild(body);
+  host.prepend(c);
+  // Unanswered, the offer closes on the phone after five minutes; so does the card.
+  setTimeout(function () { c.remove(); }, 5 * 60 * 1000);
+  if (document.visibilityState !== "visible" && window.Notification && Notification.permission === "granted") {
+    var dn = new Notification(d.from + " is sending you a file", { body: d.name + " \u00b7 " + bytes(d.size), tag: "in-" + d.id });
+    dn.onclick = function () { window.focus(); dn.close(); };
+  }
+}
+
 // ------------------------------------------------------------------ uploads
 
 function addFiles(list) {
   Array.prototype.slice.call(list).forEach(function (f) {
-    var row = {
+    var row = rowTarget({
       id: uid(), dir: "up", file: f, name: f.name, size: f.size,
       transferred: 0, bps: 0, streams: [], state: "queued", status: "waiting",
-    };
+    });
     transfers.unshift(row);
   });
   kickUploads();
@@ -2325,6 +3361,7 @@ async function syncOffsets(row) {
 }
 
 async function pump(row) {
+  if (row.to) return pipePump(row);
   try {
     if (!row.streams.length) {
       var known = row.file && !row.inFolder ? loadStore()[fingerprint(row.file)] : null;
@@ -2429,10 +3466,14 @@ function pauseRow(row) {
   if (row.kind === "folder") { pauseFolder(row); return; }
   row.state = "paused"; row.status = "paused"; row.bps = 0;
   row.streams.forEach(function (s) { if (s.xhr) s.xhr.abort(); if (s.abort) s.abort.abort(); });
+  if (row.pipeXhr) row.pipeXhr.abort();
+  if (row.abortDirect) row.abortDirect();
   renderTransfers();
 }
 function resumeRow(row) {
   if (row.kind === "folder") { resumeFolder(row); return; }
+  // A file taken directly from another computer is sent again from there.
+  if (row.recv) return;
   if (row.dir === "up" && !row.file) return;
   if (row.dir === "up" && !row.inFolder) {
     row.status = "waiting"; row.state = "queued";
@@ -2448,6 +3489,8 @@ function resumeRow(row) {
 function cancelRow(row) {
   if (row.kind === "folder") { cancelFolder(row); return; }
   row.state = "cancelled";
+  if (row.pipeXhr) row.pipeXhr.abort();
+  if (row.abortDirect) row.abortDirect();
   row.streams.forEach(function (s) { if (s.xhr) s.xhr.abort(); if (s.abort) s.abort.abort(); });
   if (row.dir === "up" && row.streams[0]) {
     fetch(row.streams[0].url, {
@@ -2516,11 +3559,11 @@ function addFolder(name, items) {
     id: uid(), dir: "up", kind: "folder", name: name, size: 0, transferred: 0, bps: 0,
     streams: [], state: "active", status: "", cursor: 0,
     children: items.map(function (it) {
-      return {
+      return rowTarget({
         id: uid(), dir: "up", inFolder: true, file: it.file, relDir: it.dir, name: it.file.name,
         size: it.file.size, transferred: 0, bps: 0, streams: [],
         state: "queued", status: "",
-      };
+      });
     }),
   };
   folder.size = folder.children.reduce(function (a, c) { return a + c.size; }, 0);
@@ -2973,18 +4016,65 @@ function renderStreams() {
 // videos, files downloaded with the same parallel ranges as everything else, and a whole
 // folder as one zip. Nothing shows until the phone allows it (Settings, Laptop access).
 
-var fs = { path: "", loaded: false };
+var fs = { path: "", loaded: false, peer: "" };
 
 function fsJoin(a, b) { return a ? a + "/" + b : b; }
+
+/**
+ * Where the Phone tab's requests go: this phone, or a linked one through it ([fs.peer]).
+ * kind is "" (the listing), "file", "thumb", "view", "text" or "zip"; query is the rest.
+ */
+function fsBase() { return fs.peer ? "/api/peer/fs" : "/api/fs"; }
+function fsQuery(query) { return "?" + (fs.peer ? "peer=" + encodeURIComponent(fs.peer) + "&" : "") + query; }
+function fsUrl(kind, query) { return fsBase() + (kind ? "/" + kind : "") + fsQuery(query); }
+
+/** The switch over the list: this phone, and each phone linked to it. */
+var linkedPhones = [];
+function renderFsSources() {
+  var host = $("fs-src");
+  if (fs.peer && !linkedPhones.some(function (p) { return p.name === fs.peer; })) {
+    fs.peer = "";
+    if (fs.loaded) fsOpen("");
+  }
+  host.hidden = !linkedPhones.length;
+  host.innerHTML = "";
+  [{ name: "", label: state.device || "This phone" }].concat(linkedPhones.map(function (p) { return { name: p.name, label: p.name }; }))
+    .forEach(function (src) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "src-chip" + (src.name === fs.peer ? " on" : "");
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", src.name === fs.peer ? "true" : "false");
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2.5h6A2.5 2.5 0 0 1 17.5 5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 19V5A2.5 2.5 0 0 1 9 2.5Z"/><path d="M11 18.5h2"/></svg><span></span>';
+      b.lastChild.textContent = src.label;
+      b.onclick = function () {
+        if (fs.peer === src.name) return;
+        fs.peer = src.name;
+        renderFsSources();
+        fsOpen("");
+      };
+      host.appendChild(b);
+    });
+}
 
 async function fsOpen(path) {
   fs.path = path || "";
   fs.loaded = true;
   var host = $("fs-list");
   host.innerHTML = '<p class="empty">Loading...</p>';
-  var d;
-  try { d = await (await api("/api/fs?path=" + encodeURIComponent(fs.path))).json(); }
-  catch (e) { host.innerHTML = '<p class="empty">Could not reach the phone.</p>'; return; }
+  var d, from = fs.peer;
+  try {
+    var res = await api(fsUrl("", "path=" + encodeURIComponent(fs.path)));
+    d = await res.json();
+    if (!res.ok) throw new Error(d.message || "");
+  } catch (e) {
+    if (from !== fs.peer) return;
+    host.innerHTML = '<p class="empty"></p>';
+    host.firstChild.textContent = (e && e.message && e.message !== "not paired") ? e.message : "Could not reach " + (fs.peer || "the phone") + ".";
+    return;
+  }
+  // Switched to another phone meanwhile: that one's listing is on its way.
+  if (from !== fs.peer) return;
   renderFs(d);
 }
 
@@ -2999,14 +4089,15 @@ function renderFs(d) {
     crumbs.appendChild(b);
     if (!last) { var sep = document.createElement("i"); sep.textContent = "/"; crumbs.appendChild(sep); }
   }
-  crumb("Phone", "", !parts.length);
+  crumb(fs.peer ? fs.peer : "Internal storage", "", !parts.length);
   parts.forEach(function (p, i) { crumb(p, parts.slice(0, i + 1).join("/"), i === parts.length - 1); });
   $("fs-up").hidden = !parts.length;
   // The whole phone as one zip is never what anyone wants; a folder inside it is.
   $("fs-zip").hidden = !d.granted || !d.entries.length || !parts.length;
   host.innerHTML = "";
   if (!d.granted) {
-    host.innerHTML = '<div class="banner bad">Browsing is off. On the phone: Settings &rarr; Laptop access &rarr; Browse this phone, then allow it.</div>';
+    host.innerHTML = '<div class="banner bad"></div>';
+    host.firstChild.textContent = "Browsing is off. On " + (fs.peer || "the phone") + ": Settings \u2192 Laptop access \u2192 Browse this phone, then allow it.";
     return;
   }
   if (d.message && !d.entries.length) { host.innerHTML = '<p class="empty"></p>'; host.firstChild.textContent = d.message; return; }
@@ -3024,7 +4115,7 @@ function renderFs(d) {
       var img = document.createElement("img");
       img.loading = "lazy"; img.alt = "";
       img.onerror = function () { box.replaceWith(fileIcon(e.name, e.mime)); };
-      img.src = "/api/fs/thumb?path=" + encodeURIComponent(path) + "&v=2"; // v: bumped when thumbnails change, past the day-long cache
+      img.src = fsUrl("thumb", "path=" + encodeURIComponent(path) + "&v=2"); // v: bumped when thumbnails change, past the day-long cache
       box.appendChild(img);
       row.appendChild(box);
     } else {
@@ -3046,7 +4137,10 @@ function renderFs(d) {
       var at = files.length - 1;
       row.title = e.preview ? "Click to preview" : "Click for details";
       row.onclick = function () { openViewer(files, at); };
-      row.appendChild(btn("Download", function (ev) { ev.stopPropagation(); startDownload(entry); }, ""));
+      var dl = document.createElement("button");
+      dl.type = "button"; dl.className = "sr-action"; dl.textContent = "Download";
+      dl.onclick = function (ev) { ev.stopPropagation(); startDownload(entry); };
+      row.appendChild(dl);
     }
     host.appendChild(row);
   });
@@ -3054,8 +4148,8 @@ function renderFs(d) {
 
 /** A phone file as the downloader and the preview know it. */
 function fsEntry(dir, e) {
-  var q = "?path=" + encodeURIComponent(fsJoin(dir, e.name));
-  return { id: null, url: "/api/fs/file" + q, q: q, name: e.name, size: e.size, mime: e.mime, modified: e.modified, preview: e.preview || "" };
+  var q = fsQuery("path=" + encodeURIComponent(fsJoin(dir, e.name))), base = fsBase();
+  return { id: null, url: base + "/file" + q, q: q, base: base, name: e.name, size: e.size, mime: e.mime, modified: e.modified, preview: e.preview || "" };
 }
 
 // ------------------------------------------------------------------ preview
@@ -3077,12 +4171,16 @@ var PREVIEW_LIMIT = { video: 500 * MB, audio: 200 * MB, image: 200 * MB, photo: 
 
 function openViewer(items, i) {
   viewer.items = items; viewer.i = i;
+  var was = $("viewer").hidden;
   $("viewer").hidden = false;
   document.body.style.overflow = "hidden";
   showViewerItem();
+  if (was) navLayer("viewer");
 }
 
-function closeViewer() {
+function closeViewer(fromHistory) {
+  if ($("viewer").hidden) return;
+  if (fromHistory !== true) { navClose("viewer", function () { closeViewer(true); }); return; }
   $("viewer").hidden = true;
   $("viewer-stage").innerHTML = ""; // stops a playing video or song
   document.body.style.overflow = "";
@@ -3106,7 +4204,7 @@ function showViewerItem(anyway) {
   $("viewer-prev").disabled = viewer.i === 0;
   $("viewer-next").disabled = viewer.i === viewer.items.length - 1;
   $("viewer-dl").onclick = function () { startDownload(it); };
-  var inline = "/api/fs/file" + it.q + "&inline=1";
+  var inline = it.base + "/file" + it.q + "&inline=1";
 
   function nothing(msg) {
     var box = document.createElement("div");
@@ -3145,7 +4243,7 @@ function showViewerItem(anyway) {
     var img = document.createElement("img");
     img.alt = it.name;
     img.onerror = function () { stage.innerHTML = ""; nothing("This picture could not be shown. Download it to open it."); };
-    img.src = it.preview === "photo" ? "/api/fs/view" + it.q : inline;
+    img.src = it.preview === "photo" ? it.base + "/view" + it.q : inline;
     if (it.preview === "photo") tell("Shown as a converted copy; Download gets the original.");
     stage.appendChild(img);
   } else if (it.preview === "video" || it.preview === "audio") {
@@ -3165,7 +4263,7 @@ function showViewerItem(anyway) {
     stage.appendChild(pre);
     var want = it;
     (it.preview === "doc"
-      ? api("/api/fs/text" + it.q).then(function (r) { return r.json(); }).then(function (d) {
+      ? api(it.base + "/text" + it.q).then(function (r) { return r.json(); }).then(function (d) {
           if (!d.found) throw new Error("none");
           tell("The document's text only; Download it for the layout and pictures.");
           return d.text;
@@ -3204,8 +4302,8 @@ function setupViewer() {
 function setupPhoneFiles() {
   $("fs-up").onclick = function () { fsOpen(fs.path.split("/").slice(0, -1).join("/")); };
   $("fs-zip").onclick = function () {
-    var name = (fs.path.split("/").pop() || "Phone") + ".zip";
-    nativeDownload({ url: "/api/fs/zip?path=" + encodeURIComponent(fs.path), name: name });
+    var name = (fs.path.split("/").pop() || fs.peer || "Phone") + ".zip";
+    nativeDownload({ url: fsUrl("zip", "path=" + encodeURIComponent(fs.path)), name: name });
   };
 }
 
@@ -3221,7 +4319,7 @@ var MEASURE_MS = 5000;
 function renderHelperState() {
   var el = $("helper-state");
   var local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-  el.className = "banner" + (local ? "" : " bad");
+  el.className = local ? "ok" : "warn";
   el.textContent = local
     ? "Running. Full speed, on the fastest link."
     : "Not running: downloads use one connection, and no faster link is picked for you.";
@@ -3302,6 +4400,22 @@ function connectEvents() {
   events.addEventListener("files", function (e) {
     try { state.files = JSON.parse(e.data); renderFiles(); } catch (err) {}
   });
+  // Phones linked to this one: the Phone tab's switch, and places to send files.
+  events.addEventListener("peers", function (e) {
+    try { linkedPhones = JSON.parse(e.data) || []; } catch (err) { return; }
+    renderFsSources();
+    loadTargetsSoon();
+  });
+  // A computer opened or closed its page, here: somewhere to send, or not any more.
+  events.addEventListener("targets", loadTargetsSoon);
+  events.addEventListener("incoming", function (e) {
+    try { showIncoming(JSON.parse(e.data)); } catch (err) {}
+  });
+  events.addEventListener("rtc", function (e) {
+    var d; try { d = JSON.parse(e.data); } catch (err) { return; }
+    var sess = rtcSessions[d.id];
+    if (sess) sess.on(d.msg || {});
+  });
   // The whole list: on connecting (so nothing that came or went while away is missed) and
   // whenever the phone's listener comes back. Taken as it is, with no pop-ups.
   events.addEventListener("notifs", function (e) {
@@ -3350,6 +4464,7 @@ async function refreshState() {
   state.streams = saved ? parseInt(saved, 10) : (s.uploadStreams || 4);
 
   $("hero-title").textContent = state.device || "Phone";
+  $("clip-with").textContent = "Shared with " + (state.device || "the phone");
   $("status-device").textContent = state.device || "Phone";
   renderRoute();
   if (s.clip) { clip = s.clip; renderClip(); }
@@ -3656,6 +4771,7 @@ async function musicOpen() {
 
 async function musicLoad(refresh) {
   music.loading = true;
+  if (refresh) $("music-rescan").classList.add("spin");
   try {
     var res = await api("/api/music" + (refresh ? "?refresh=1" : ""));
     var body = await res.json();
@@ -3667,6 +4783,7 @@ async function musicLoad(refresh) {
     $("music-list").innerHTML = '<p class="empty">Could not load the library.</p>';
   }
   music.loading = false;
+  $("music-rescan").classList.remove("spin");
   renderMusic();
 }
 
@@ -3801,6 +4918,12 @@ function renderMusic() {
   }
 }
 
+/** The search's text, set from code: the field, and its clear button and / hint to match. */
+function setSearchText(v) {
+  $("music-search").value = v;
+  $("mu-search").classList.toggle("typed", v !== "");
+}
+
 /**
  * Keeps your place when a filter changes: if you had scrolled into the list, the list
  * starts again just under the bar; if not, nothing moves.
@@ -3914,12 +5037,17 @@ function renderTracks(host, shown, withAlbum, queue, numbered) {
 
 // ---- albums
 
-function renderAlbums(host) {
+/** The albums the Albums view shows: those whose name or artist, or any song, matches the search. */
+function albumMatches() {
   var q = music.filter.trim().toLowerCase();
-  var albums = music.albums.filter(function (a) {
+  return music.albums.filter(function (a) {
     return !q || (a.album + " " + a.artist).toLowerCase().indexOf(q) >= 0 ||
       a.tracks.some(function (t) { return matchesSearch(t, q); });
   });
+}
+
+function renderAlbums(host) {
+  var albums = albumMatches();
   if (!albums.length) { host.innerHTML = '<p class="empty">No albums match.</p>'; return; }
   var grid = document.createElement("div");
   grid.className = "albums";
@@ -3993,12 +5121,20 @@ function songsSource() {
   return { kind: "songs", label: music.filter.trim() ? "Search" : "Songs" };
 }
 
-/** Albums or Songs lit as the view is; with an album open, Albums (it is where you came from). */
+/**
+ * Albums or Songs lit as the view is; with an album open, Albums (it is where you came from).
+ * Each says how many there are, or while searching, how many it finds.
+ */
 function setViewButtons() {
-  var v = music.album !== null ? "albums" : music.view;
-  Array.prototype.forEach.call($("music-view").children, function (b) {
+  var v = music.album !== null ? "albums" : music.view, seg = $("music-view");
+  seg.dataset.on = v;
+  Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) {
     b.classList.toggle("on", b.dataset.v === v);
+    b.setAttribute("aria-selected", b.dataset.v === v ? "true" : "false");
   });
+  var ready = music.loaded && music.granted && music.tracks.length && music.albums;
+  $("mu-n-albums").textContent = ready ? albumMatches().length.toLocaleString() : "";
+  $("mu-n-songs").textContent = ready ? musicMatches().length.toLocaleString() : "";
 }
 
 // ------------------------------------------------------------------ player
@@ -4121,6 +5257,8 @@ function renderStage() {
   var key = cur ? cur.ak : music.album;
   var a = key !== null && key !== undefined ? music.albumByKey[key] : null;
   el.hidden = !a;
+  // For the styles that change with the banner: a class, as older browsers have no :has().
+  document.body.classList.toggle("deck-on", !!a);
   if (!a) return;
   var here = !!cur && cur.ak === key, many = a.tracks.length > 1;
   el.classList.toggle("playing", playing);
@@ -4147,9 +5285,12 @@ function renderStage() {
 
   var actions = $("stage-actions");
   actions.innerHTML = "";
-  if (here) stageButton(actions, "btn", playing ? PAUSE_SVG + "Pause" : PLAY_SVG + "Play", togglePlay);
-  else stageButton(actions, "btn", PLAY_SVG + "Play", function () { playAlbum(key, false); });
-  if (many) stageButton(actions, "btn ghost", SHUFFLE_SVG + "Shuffle", function () { playAlbum(key, true); });
+  // Playing, the player along the bottom has play, pause and shuffle; the banner does not repeat them.
+  // An album only opened keeps Play and Shuffle: they are how it starts.
+  if (!here) {
+    stageButton(actions, "btn", PLAY_SVG + "Play", function () { playAlbum(key, false); });
+    if (many) stageButton(actions, "btn ghost", SHUFFLE_SVG + "Shuffle", function () { playAlbum(key, true); });
+  }
   if (music.album === key) {
     stageButton(actions, "btn ghost", BACK_SVG + "All albums", closeAlbum);
   } else if (many) {
@@ -4207,7 +5348,7 @@ function revealPlaying() {
   if (!cur) return;
   var a = music.albumByKey[cur.ak], place = player.source && player.source.place;
   if (!a || a.tracks.length < 2) { revealWhereFrom(cur, place); return; }
-  if (music.filter) { music.filter = ""; $("music-search").value = ""; }
+  if (music.filter) { music.filter = ""; setSearchText(""); }
   music.album = cur.ak;
   music.shown = MUSIC_PAGE;
   renderMusic();
@@ -4222,7 +5363,7 @@ function revealWhereFrom(cur, place) {
   if (place) {
     music.view = place.view;
     music.filter = place.filter || "";
-    $("music-search").value = music.filter;
+    setSearchText(music.filter);
   }
   music.album = null;
   music.shown = MUSIC_PAGE;
@@ -4269,14 +5410,21 @@ function setStageArt(albumId, fresh) {
   img.src = artUrl(albumId) + (fresh ? "?v=" + Date.now() : "");
 }
 
-/** The small cover in the player bar, made-up until the real one loads. */
+/**
+ * The small cover in the player bar, made-up until the real one loads. The bar takes a little
+ * of the cover's colour, as the music banner does.
+ */
 function showPlayerArt(t, fresh) {
   var art = $("pl-art");
   art.innerHTML = "";
   art.classList.remove("gen");
-  genCover(art, t.album);
+  $("player").style.setProperty("--pl-tint", genCover(art, t.album));
   var img = new Image();
-  img.onload = function () { art.innerHTML = ""; art.classList.remove("gen"); art.style.background = ""; art.appendChild(img); };
+  img.onload = function () {
+    art.innerHTML = ""; art.classList.remove("gen"); art.style.background = ""; art.appendChild(img);
+    var c = artTint(img);
+    if (c) $("player").style.setProperty("--pl-tint", c);
+  };
   img.src = artUrl(t.albumId) + (fresh ? "?v=" + Date.now() : "");
 }
 
@@ -4458,6 +5606,425 @@ function drawViz(c, lv) {
   }
 }
 
+
+// ------------------------------------------------------------------ lyrics
+//
+// Looked up by this browser, which has the internet the phone may not, from LRCLIB (free, open,
+// no key): synced lines, and word-by-word timing for songs that have it (its Lyricsfile). What is
+// found is left on the phone, so every page after this one has it at once, online or not; a song
+// with none is looked up again after a few days. Shown full screen in time with the song.
+
+var LRCLIB = "https://lrclib.net/api";
+var LYRICS_RETRY_MS = 3 * 24 * 3600 * 1000;
+/** Lines turn a moment early, as the singer's breath comes before the word. */
+var LYRICS_LEAD_MS = 180;
+var lyr = { open: false, byId: {}, pending: {}, track: null, data: null, els: [], gaps: [], active: -1, raf: 0, userAt: 0 };
+
+function lyricsPos() { return syncMember() ? syncPos() : ($("audio").currentTime || 0); }
+
+/** "Artist feat. Other" and "A, B & C" look up as their first artist. */
+function mainArtist(a) { return String(a || "").split(/\s+(?:feat\.?|ft\.?|featuring|with|x)\s+|\s*[,;&\/]\s*/i)[0].trim(); }
+/** "Song (feat. X) - Remastered 2011 [Explicit]" looks up as "Song". */
+function plainTitle(t) {
+  return String(t || "").replace(/\s*[\(\[][^\)\]]*(feat|ft\.|with|remaster|explicit|live|version|edit|mono|stereo)[^\)\]]*[\)\]]/ig, "")
+    .replace(/\s+-\s+.*(remaster|version|edit|live|mix).*$/i, "").trim();
+}
+
+/** A song's lyrics: from the phone, else from LRCLIB when online. Parsed, and kept for this visit. */
+function lyricsFor(t) {
+  if (lyr.byId[t.id]) return Promise.resolve(lyr.byId[t.id]);
+  if (lyr.pending[t.id]) return lyr.pending[t.id];
+  var p = (async function () {
+    var doc = null;
+    try {
+      var d = await (await api("/api/music/lyrics/" + t.id)).json();
+      if (d.found) doc = d.lyrics;
+    } catch (e) {}
+    var stale = doc && doc.source === "none" && Date.now() - (doc.at || 0) > LYRICS_RETRY_MS;
+    var failed = false;
+    if ((!doc || stale) && navigator.onLine) {
+      var found = await lrclibFind(t);
+      if (found) {
+        doc = found;
+        // The .lrc the phone keeps beside the song, for every music player on it.
+        if (found.source !== "none") found.sidecar = lrcFile(t, found, parseLyrics(found));
+        api("/api/music/lyrics/" + t.id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(found) }).catch(function () {});
+      } else failed = !doc;
+    }
+    var parsed = parseLyrics(doc);
+    parsed.offline = !doc && (!navigator.onLine || failed);
+    // A lookup that could not be made is tried again next time; anything else is kept.
+    if (!parsed.offline) lyr.byId[t.id] = parsed;
+    delete lyr.pending[t.id];
+    return parsed;
+  })();
+  lyr.pending[t.id] = p;
+  return p;
+}
+
+function lrcStamp(ms) {
+  ms = Math.max(0, Math.round(ms));
+  var m = Math.floor(ms / 60000), sec = (ms % 60000) / 1000;
+  return (m < 10 ? "0" : "") + m + ":" + (sec < 10 ? "0" : "") + sec.toFixed(2);
+}
+
+/**
+ * A song's lyrics as a .lrc, the way music players read them: the song named at the top, then
+ * timed lines; word timing as Enhanced LRC ("<00:12.50>word"); untimed lyrics as they are.
+ */
+function lrcFile(t, doc, d) {
+  var head = "[ti:" + t.title + "]\n[ar:" + t.artist + "]\n[al:" + t.album + "]\n" +
+    (t.durationMs ? "[length:" + fmtTime(t.durationMs / 1000) + "]\n" : "") + "[re:" + doc.source + ", by Localhost 8787]\n";
+  if (d.kind === "word") {
+    return head + d.lines.map(function (l) {
+      if (!l.words.length) return "[" + lrcStamp(l.t) + "]" + l.text;
+      return "[" + lrcStamp(l.t) + "]" + l.words.map(function (w) { return "<" + lrcStamp(w.t) + ">" + w.w; }).join("") + "<" + lrcStamp(l.e) + ">";
+    }).join("\n") + "\n";
+  }
+  if (d.kind === "line") return head + String(doc.lrc).replace(/^\s*\[(ti|ar|al|length|re|by):[^\]]*\]\s*$/gim, "").trim() + "\n";
+  if (d.kind === "plain") return String(doc.plain).trim() + "\n";
+  return "";
+}
+
+/** LRCLIB: the exact song first (title, artist, album, length), then a search. Null when it could not be asked. */
+async function lrclibFind(t) {
+  var secs = Math.round((t.durationMs || 0) / 1000);
+  function doc(r) {
+    return { source: "LRCLIB", lrc: r.syncedLyrics || "", lyricsfile: r.hasWordSync ? (r.lyricsfile || "") : "",
+      plain: r.plainLyrics || "", instrumental: !!r.instrumental };
+  }
+  try {
+    var q = "artist_name=" + encodeURIComponent(t.artist) + "&track_name=" + encodeURIComponent(t.title) +
+      "&album_name=" + encodeURIComponent(t.album) + (secs ? "&duration=" + secs : "");
+    var r = await fetch(LRCLIB + "/get?" + q);
+    if (r.ok) return doc(await r.json());
+    if (r.status !== 404) return null;
+    var s = await fetch(LRCLIB + "/search?track_name=" + encodeURIComponent(plainTitle(t.title)) + "&artist_name=" + encodeURIComponent(mainArtist(t.artist)));
+    if (!s.ok) return null;
+    var list = await s.json();
+    // The closest in length, preferring timed lyrics; nothing more than ten seconds out.
+    var best = null, bestScore = 1e9;
+    (list || []).forEach(function (x) {
+      var off = secs ? Math.abs((x.duration || 0) - secs) : 0;
+      if (secs && off > 10) return;
+      var score = off + (x.syncedLyrics ? 0 : 20) + (x.plainLyrics || x.instrumental ? 0 : 100);
+      if (score < bestScore) { bestScore = score; best = x; }
+    });
+    return best && bestScore < 100 ? doc(best) : { source: "none" };
+  } catch (e) { return null; }
+}
+
+/** Lines of { t, e, text, words: [{ t, e, w }] }, times in milliseconds; or plain text; or nothing. */
+function parseLyrics(doc) {
+  if (!doc || doc.source === "none") return { kind: "none" };
+  if (doc.instrumental) return { kind: "instrumental", source: doc.source };
+  var src = doc.source;
+  if (doc.lyricsfile) {
+    var lf = null;
+    try { lf = linesFromLyricsfile(yamlLite(doc.lyricsfile)); } catch (e) {}
+    if (lf && lf.length) return { kind: lf.some(function (l) { return l.words.length; }) ? "word" : "line", lines: lf, source: src };
+  }
+  if (doc.lrc) {
+    var lines = parseLrc(doc.lrc);
+    if (lines.length) return { kind: lines.some(function (l) { return l.words.length; }) ? "word" : "line", lines: lines, source: src };
+  }
+  if (doc.plain && doc.plain.trim()) return { kind: "plain", plain: doc.plain.trim(), source: src };
+  return { kind: "none" };
+}
+
+function lrcTime(s) {
+  var m = /^(\d+):(\d+(?:[.:]\d+)?)$/.exec(String(s).trim());
+  return m ? Math.round((parseInt(m[1], 10) * 60 + parseFloat(m[2].replace(":", "."))) * 1000) : NaN;
+}
+
+/** LRC: "[01:02.30] words", several times on one line, an [offset:], and <01:02.30> word times (Enhanced LRC). */
+function parseLrc(text) {
+  var out = [], offset = 0;
+  String(text).split(/\r?\n/).forEach(function (raw) {
+    var rest = raw, stamps = [], m;
+    while ((m = /^\s*\[([^\]]*)\]/.exec(rest))) {
+      var tag = m[1];
+      if (/^offset\s*:/i.test(tag)) offset = parseInt(tag.split(":")[1], 10) || 0;
+      var tt = lrcTime(tag);
+      if (!isNaN(tt)) stamps.push(tt);
+      rest = rest.slice(m[0].length);
+    }
+    if (!stamps.length) return;
+    var words = [], line = rest;
+    if (/<\d+:\d+/.test(rest)) {
+      line = "";
+      var re = /<(\d+:\d+(?:\.\d+)?)>([^<]*)/g, w;
+      while ((w = re.exec(rest))) { if (w[2]) words.push({ t: lrcTime(w[1]), w: w[2] }); line += w[2]; }
+    }
+    stamps.forEach(function (st) { out.push({ t: st, text: line.trim(), words: words.map(function (x) { return { t: x.t, w: x.w }; }) }); });
+  });
+  out.sort(function (a, b) { return a.t - b.t; });
+  // A positive offset shows the words earlier.
+  out.forEach(function (l) { l.t -= offset; l.words.forEach(function (w) { w.t -= offset; }); });
+  for (var i = 0; i < out.length; i++) {
+    var l = out[i];
+    l.e = i + 1 < out.length ? out[i + 1].t : l.t + 6000;
+    for (var k = 0; k < l.words.length; k++) l.words[k].e = k + 1 < l.words.length ? l.words[k + 1].t : l.e;
+  }
+  // A blank line only marks where the one before it ends.
+  return out.filter(function (l) { return l.text; });
+}
+
+/** LRCLIB's Lyricsfile: lines with start_ms and end_ms, and their words, each with its own. */
+function linesFromLyricsfile(doc) {
+  var ls = doc && Array.isArray(doc.lines) ? doc.lines : [];
+  var out = ls.map(function (l) {
+    var words = Array.isArray(l.words) ? l.words.filter(function (w) { return w && w.text != null; }) : [];
+    // Words stored without their spaces get one between them.
+    var spaced = words.some(function (w) { return /\s$/.test(String(w.text)); });
+    return {
+      t: +l.start_ms || 0, e: +l.end_ms || 0, text: String(l.text == null ? "" : l.text).trim(),
+      bg: !!(l.background || l.bg),
+      words: words.map(function (w, i) {
+        return { t: +w.start_ms || 0, e: +w.end_ms || 0, w: String(w.text) + (!spaced && i < words.length - 1 ? " " : "") };
+      }),
+    };
+  }).filter(function (l) { return l.text || l.words.length; });
+  out.sort(function (a, b) { return a.t - b.t; });
+  out.forEach(function (l, i) { if (!l.e || l.e <= l.t) l.e = i + 1 < out.length ? out[i + 1].t : l.t + 6000; if (!l.text) l.text = l.words.map(function (w) { return w.w; }).join("").trim(); });
+  return out;
+}
+
+/**
+ * The YAML a Lyricsfile is written in, as much as it uses: maps, lists (of maps), plain and quoted
+ * values, and | or > blocks. Not a general YAML reader.
+ */
+function yamlLite(src) {
+  var rows = [];
+  String(src).split(/\r?\n/).forEach(function (l) {
+    if (!l.trim() || /^\s*#/.test(l)) return;
+    rows.push({ ind: l.search(/\S/), s: l.trim(), raw: l });
+  });
+  var i = 0;
+  function item(s) { return s === "-" || s.slice(0, 2) === "- "; }
+  function colon(s) {
+    var q = null;
+    for (var k = 0; k < s.length; k++) {
+      var c = s.charAt(k);
+      if (q) { if (c === q) q = null; }
+      else if ((c === "'" || c === '"') && k === 0) q = c;
+      else if (c === ":" && (k + 1 === s.length || s.charAt(k + 1) === " ")) return k;
+    }
+    return -1;
+  }
+  function scalar(v) {
+    v = v.trim();
+    if (/^'.*'$/.test(v)) return v.slice(1, -1).replace(/''/g, "'");
+    if (/^".*"$/.test(v)) { try { return JSON.parse(v); } catch (e) { return v.slice(1, -1); } }
+    if (/^-?\d+(\.\d+)?$/.test(v)) return +v;
+    if (v === "true") return true;
+    if (v === "false") return false;
+    if (v === "null" || v === "~") return null;
+    return v;
+  }
+  function block() { return i >= rows.length ? null : item(rows[i].s) ? list(rows[i].ind) : map(rows[i].ind); }
+  function map(ind) {
+    var o = {};
+    while (i < rows.length && rows[i].ind === ind && !item(rows[i].s)) {
+      var s = rows[i].s, c = colon(s);
+      if (c < 0) { i++; continue; }
+      var k = s.slice(0, c).trim(), v = s.slice(c + 1).trim();
+      i++;
+      if (v === "|" || v === ">" || v === "|-" || v === ">-") {
+        var parts = [];
+        while (i < rows.length && rows[i].ind > ind) { parts.push(rows[i].raw.slice(Math.min(rows[i].ind, ind + 2))); i++; }
+        o[k] = parts.join(v.charAt(0) === "|" ? "\n" : " ");
+      } else if (v === "") {
+        o[k] = i < rows.length && (rows[i].ind > ind || (rows[i].ind === ind && item(rows[i].s))) ? block() : null;
+      } else o[k] = scalar(v);
+    }
+    return o;
+  }
+  function list(ind) {
+    var a = [];
+    while (i < rows.length && rows[i].ind === ind && item(rows[i].s)) {
+      var rest = rows[i].s.slice(1).trim();
+      if (!rest) { i++; a.push(block()); continue; }
+      if (colon(rest) >= 0) {
+        // "- key: value" opens a map whose keys line up after the dash.
+        rows[i] = { ind: ind + (rows[i].s.length - rest.length), s: rest, raw: rows[i].raw };
+        a.push(map(rows[i].ind));
+      } else { a.push(scalar(rest)); i++; }
+    }
+    return a;
+  }
+  return block();
+}
+
+// ---- the view
+
+function setupLyrics() {
+  ["pl-lyrics", "pl-lyrics-m"].forEach(function (id) { $(id).addEventListener("click", function () { if (lyr.open) closeLyrics(); else openLyrics(); }); });
+  $("lyr-close").addEventListener("click", closeLyrics);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && lyr.open) closeLyrics(); });
+  // Scrolling by hand looks around; the lines follow the song again a few seconds later.
+  var sc = $("lyr-scroll");
+  ["wheel", "touchmove"].forEach(function (ev) { sc.addEventListener(ev, function () { lyr.userAt = performance.now(); }, { passive: true }); });
+  sc.addEventListener("keydown", function () { lyr.userAt = performance.now(); });
+}
+
+function openLyrics() {
+  var t = currentTrack() || (syncMember() && sync.state ? music.tracks.filter(function (x) { return x.id === sync.state.trackId; })[0] : null);
+  if (!t) return;
+  lyr.open = true;
+  var v = $("lyr");
+  v.hidden = false;
+  document.body.classList.add("lyr-open");
+  $("pl-lyrics").classList.add("on"); $("pl-lyrics-m").classList.add("on");
+  void v.offsetWidth;
+  v.classList.add("on");
+  showLyrics(t);
+  navLayer("lyrics");
+}
+
+function closeLyrics(fromHistory) {
+  if (!lyr.open) return;
+  if (fromHistory !== true) { navClose("lyrics", function () { closeLyrics(true); }); return; }
+  lyr.open = false;
+  cancelAnimationFrame(lyr.raf);
+  var v = $("lyr");
+  v.classList.remove("on");
+  document.body.classList.remove("lyr-open");
+  $("pl-lyrics").classList.remove("on"); $("pl-lyrics-m").classList.remove("on");
+  setTimeout(function () { if (!lyr.open) v.hidden = true; }, 300);
+}
+
+/** Called for every song the player shows: the view follows it, and its lyrics are fetched ahead. */
+function lyricsTrackChanged(t) {
+  if (!t) return;
+  lyricsFor(t).then(function (d) {
+    var none = d.kind === "none" && !d.offline;
+    $("pl-lyrics").classList.toggle("none", none); $("pl-lyrics-m").classList.toggle("none", none);
+  });
+  if (lyr.open) showLyrics(t);
+}
+
+function showLyrics(t) {
+  lyr.track = t;
+  lyr.data = null;
+  lyr.active = -1;
+  lyr.userAt = 0;
+  $("lyr-title").textContent = t.title;
+  $("lyr-artist").textContent = t.artist;
+  var tint = getComputedStyle($("player")).getPropertyValue("--pl-tint").trim();
+  if (tint) $("lyr").style.setProperty("--lyr-tint", tint);
+  var art = $("lyr-art"), bg = $("lyr-bg");
+  art.innerHTML = ""; bg.innerHTML = ""; art.style.background = "";
+  // Until the cover comes, and for an album with none: the generated one the player shows.
+  genCover(art, t.album);
+  var img = new Image();
+  img.alt = "";
+  img.onload = function () { art.innerHTML = ""; art.classList.remove("gen"); art.appendChild(img); var b = new Image(); b.alt = ""; b.src = img.src; bg.appendChild(b); };
+  img.src = artUrl(t.albumId);
+  var host = $("lyr-lines");
+  host.innerHTML = '<p class="lyr-note">Finding the lyrics...</p>';
+  $("lyr-src").textContent = "";
+  $("lyr-scroll").scrollTop = 0;
+  lyricsFor(t).then(function (d) { if (lyr.track === t) renderLyrics(d); });
+}
+
+function renderLyrics(d) {
+  var host = $("lyr-lines");
+  host.innerHTML = "";
+  lyr.data = d;
+  lyr.els = []; lyr.gaps = [];
+  function note(big, small) {
+    var b = document.createElement("p"); b.className = "lyr-note"; b.textContent = big; host.appendChild(b);
+    if (small) { var p = document.createElement("p"); p.textContent = small; host.appendChild(p); }
+  }
+  if (d.kind === "none") {
+    if (d.offline) note("Lyrics come when this computer is online", "They are looked up on the internet, then kept on the phone.");
+    else note("No lyrics for this song", "Nobody has added them to LRCLIB yet.");
+  } else if (d.kind === "instrumental") note("Instrumental");
+  else if (d.kind === "plain") {
+    var p = document.createElement("div"); p.className = "lyr-plain"; p.textContent = d.plain; host.appendChild(p);
+  } else {
+    var first = d.lines[0];
+    d.lines.forEach(function (l, i) {
+      // Before the first line, and wherever the singing stops for a while: the dots.
+      var gapFrom = i === 0 ? 0 : d.lines[i - 1].e, gapTo = l.t;
+      if (gapTo - gapFrom > 4500 && (i > 0 || first.t > 4500)) lyr.gaps.push({ from: gapFrom, to: gapTo, el: gapEl(host), before: i });
+      var el = document.createElement("div");
+      el.className = "lyr-line" + (l.bg ? " bg-voc" : "");
+      if (d.kind === "word" && l.words.length) {
+        l.words.forEach(function (w) { var sp = document.createElement("span"); sp.className = "w"; sp.textContent = w.w; el.appendChild(sp); });
+        el.classList.add("words");
+      } else el.textContent = l.text;
+      el.addEventListener("click", function () { lyricsSeek(l.t); });
+      host.appendChild(el);
+      lyr.els.push(el);
+    });
+  }
+  $("lyr-src").innerHTML = d.source === "file" ? "Lyrics from the .lrc file beside the song" + (d.kind === "plain" ? " \u00b7 not timed" : "")
+    : d.source ? 'Lyrics from <a href="https://lrclib.net" target="_blank" rel="noopener">' + d.source + "</a>, kept on the phone beside the song" +
+    (d.kind === "plain" ? " \u00b7 not timed" : "") : "";
+  cancelAnimationFrame(lyr.raf);
+  if (d.lines) lyr.raf = requestAnimationFrame(lyricsTick);
+}
+
+function gapEl(host) {
+  var g = document.createElement("div");
+  g.className = "lyr-gap";
+  g.innerHTML = "<i></i><i></i><i></i>";
+  host.appendChild(g);
+  return g;
+}
+
+function lyricsSeek(ms) {
+  var s = Math.max(0, ms / 1000 - 0.05);
+  if (syncMember()) syncSeek(s); else { $("audio").currentTime = s; if ($("audio").paused) resume(); }
+  lyr.userAt = 0;
+}
+
+function lyricsTick() {
+  if (!lyr.open || !lyr.data || !lyr.data.lines) return;
+  var d = lyr.data, pos = lyricsPos() * 1000, at = pos + LYRICS_LEAD_MS;
+  // The line being sung: the last to have started.
+  var lo = 0, hi = d.lines.length - 1, idx = -1;
+  while (lo <= hi) { var mid = (lo + hi) >> 1; if (d.lines[mid].t <= at) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
+  if (idx >= 0 && at > d.lines[idx].e + 400 && !(idx + 1 < d.lines.length && d.lines[idx + 1].t - d.lines[idx].e < 4500)) idx = idx; // held through short breaths
+  if (idx !== lyr.active) {
+    if (lyr.active >= 0 && lyr.els[lyr.active]) {
+      lyr.els[lyr.active].classList.remove("on");
+      Array.prototype.forEach.call(lyr.els[lyr.active].children, function (w) { w.style.removeProperty("--p"); });
+    }
+    lyr.active = idx;
+    lyr.els.forEach(function (el, k) { el.classList.toggle("far", idx >= 0 && Math.abs(k - idx) > 2); });
+    var cur = lyr.els[idx];
+    if (cur) {
+      cur.classList.add("on");
+      if (performance.now() - lyr.userAt > 3500) {
+        var sc = $("lyr-scroll");
+        sc.scrollTo({ top: cur.offsetTop - sc.clientHeight * 0.3, behavior: "smooth" });
+      }
+    }
+  }
+  // Words fill as they are sung.
+  if (idx >= 0 && d.kind === "word") {
+    var l = d.lines[idx], el = lyr.els[idx];
+    for (var k = 0; k < l.words.length && k < el.children.length; k++) {
+      var w = l.words[k], span = Math.max(1, w.e - w.t);
+      var p = Math.max(0, Math.min(1, (pos - w.t) / span));
+      el.children[k].style.setProperty("--p", (p * 100).toFixed(1) + "%");
+    }
+  }
+  // The dots, in a long pause: lit one by one across it.
+  lyr.gaps.forEach(function (g) {
+    var inGap = pos >= g.from && pos < g.to - 250;
+    g.el.classList.toggle("on", inGap);
+    if (inGap) {
+      var f = (pos - g.from) / (g.to - g.from);
+      Array.prototype.forEach.call(g.el.children, function (dot, k) { dot.classList.toggle("lit", f > (k + 1) / 4); });
+    }
+  });
+  lyr.raf = requestAnimationFrame(lyricsTick);
+}
+
 function showPlayer(t) {
   var pl = $("player");
   pl.hidden = false;
@@ -4466,6 +6033,7 @@ function showPlayer(t) {
   showPlayerArt(t);
   renderStage();
   setPlayerSpace();
+  lyricsTrackChanged(t);
   document.body.style.paddingBottom = (pl.offsetHeight + 110) + "px";
 
   if ("mediaSession" in navigator && typeof MediaMetadata !== "undefined") {
@@ -4500,7 +6068,7 @@ var PAUSE_ICON = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect class=\"
 function setPlayIcon(playing) {
   $("pl-play").innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
   var eq = $("tab-eq");
-  if (eq) eq.hidden = !playing;
+  if (eq && eq.hidden !== !playing) { eq.hidden = !playing; moveTabPill(); }
 }
 
 // ---- keeping the channel clear
@@ -4581,7 +6149,7 @@ function setupPlayer() {
       seek.style.setProperty("--p", pct + "%");
     }
   });
-  seek.addEventListener("input", function () { seeking = true; });
+  seek.addEventListener("input", function () { seeking = true; seek.style.setProperty("--p", seek.value / 10 + "%"); });
   seek.addEventListener("change", function () {
     var t = currentTrack();
     var dur = audio.duration && isFinite(audio.duration) ? audio.duration : (t ? t.durationMs / 1000 : 0);
@@ -4662,13 +6230,36 @@ function setupPlayer() {
   }
 
   // Music-tab controls.
-  var searchTimer = null;
-  $("music-search").addEventListener("input", function () {
+  var searchTimer = null, search = $("music-search");
+  search.addEventListener("input", function () {
     clearTimeout(searchTimer);
     var v = this.value;
+    $("mu-search").classList.toggle("typed", v !== "");
     searchTimer = setTimeout(function () { music.filter = v; music.shown = MUSIC_PAGE; renderMusic(); }, 120);
   });
-  Array.prototype.forEach.call($("music-view").children, function (b) {
+  function clearSearch() {
+    clearTimeout(searchTimer);
+    setSearchText("");
+    if (music.filter) { music.filter = ""; music.shown = MUSIC_PAGE; renderMusic(); }
+  }
+  $("music-clear").onclick = function () { clearSearch(); search.focus(); };
+  // Esc clears what is typed, and a second Esc leaves the search.
+  search.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    if (search.value) clearSearch(); else search.blur();
+  });
+  // / searches the library from anywhere on Music, as on most sites with a search.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || document.body.dataset.tab !== "music") return;
+    var tag = (document.activeElement && document.activeElement.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA" || (document.activeElement && document.activeElement.isContentEditable)) return;
+    e.preventDefault();
+    $("mu-bar").classList.remove("tucked");
+    search.focus();
+    search.select();
+  });
+  Array.prototype.forEach.call($("music-view").querySelectorAll("button"), function (b) {
     b.onclick = function () { music.view = b.dataset.v; music.album = null; music.shown = MUSIC_PAGE; renderMusic(); keepPlace(); };
   });
   $("music-rescan").onclick = function () { musicLoad(true); };
@@ -5130,8 +6721,10 @@ function showApp() {
     buildTabs();
     setupClipboard();
     setupDrop();
+    setupSendTo();
     setupDock();
     setupPlayer();
+    setupLyrics();
     setupBarTuck();
     setupTopBar();
     setupSync();
@@ -5140,6 +6733,7 @@ function showApp() {
     setupMirror();
     setupViewer();
     wireMonitor();
+    setupNav();
     $("measure").addEventListener("click", measure);
     Array.prototype.forEach.call(document.querySelectorAll("[data-theme-choice]"), function (b) {
       b.addEventListener("click", function () { setTheme(b.dataset.themeChoice); });
@@ -5166,6 +6760,7 @@ function pairReset() {
   pairStop();
   $("pair-idle").hidden = false;
   $("pair-wait").hidden = true;
+  $("login").classList.remove("waiting");
 }
 
 function pairError(msg) {
@@ -5191,7 +6786,15 @@ async function pair() {
 
   $("pair-idle").hidden = true;
   $("pair-wait").hidden = false;
-  $("pair-code").textContent = body.code;
+  var codeBox = $("pair-code");
+  codeBox.textContent = "";
+  String(body.code).split("").forEach(function (c, i) {
+    var d = document.createElement("span");
+    d.textContent = c;
+    d.style.setProperty("--i", i);
+    codeBox.appendChild(d);
+  });
+  $("login").classList.add("waiting");
   $("pair-status").textContent = "Waiting for the phone...";
 
   pairStop();
@@ -5208,8 +6811,7 @@ async function pair() {
 }
 
 function setupDrop() {
-  var drop = $("drop"), input = $("file-input"), folderInput = $("folder-input");
-  drop.addEventListener("click", function () { input.click(); });
+  var veil = $("drop"), input = $("file-input"), folderInput = $("folder-input"), depth = 0;
   $("pick-files").addEventListener("click", function (e) { e.stopPropagation(); input.click(); });
   $("pick-folder").addEventListener("click", function (e) { e.stopPropagation(); folderInput.click(); });
   input.addEventListener("change", function () {
@@ -5220,21 +6822,30 @@ function setupDrop() {
     if (folderInput.files && folderInput.files.length) addPickedFolder(folderInput.files);
     folderInput.value = "";
   });
-  ["dragenter", "dragover"].forEach(function (ev) {
-    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
+  // Files dragged anywhere over the page: it blurs and says where they go. Counted, because
+  // dragenter and dragleave fire for every element the pointer crosses.
+  function carriesFiles(e) {
+    var t = e.dataTransfer && e.dataTransfer.types;
+    return !!t && Array.prototype.indexOf.call(t, "Files") >= 0;
+  }
+  function hideVeil() { depth = 0; veil.classList.remove("on"); veil.hidden = true; $("beam").classList.remove("over"); }
+  window.addEventListener("dragenter", function (e) {
+    if (!carriesFiles(e) || $("app").hidden) return;
+    if (depth++ === 0) {
+      $("beam").classList.add("over");
+      $("drop-to").textContent = "to " + sendToName();
+      veil.hidden = false;
+      requestAnimationFrame(function () { veil.classList.add("on"); });
+    }
   });
-  ["dragleave", "drop"].forEach(function (ev) {
-    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
-  });
-  drop.addEventListener("drop", function (e) {
-    // Handled here; the page-wide handler below must not add the same drop again.
-    e.stopPropagation();
-    if (e.dataTransfer) takeDrop(e.dataTransfer);
+  window.addEventListener("dragleave", function (e) {
+    if (carriesFiles(e) && --depth <= 0) hideVeil();
   });
   // Anywhere on the page, so a mis-aimed drop does not navigate away and kill the tab.
   window.addEventListener("dragover", function (e) { e.preventDefault(); });
   window.addEventListener("drop", function (e) {
     e.preventDefault();
+    hideVeil();
     if (e.dataTransfer && e.dataTransfer.files.length) { takeDrop(e.dataTransfer); selectTab("home"); }
   });
 }
@@ -5267,7 +6878,7 @@ $("pair-cancel").addEventListener("click", pairReset);
     var res = await fetch("/api/ping", { credentials: "same-origin" });
     var info = await res.json();
     $("login-device").textContent =
-      (info.device || "The phone") + " will ask you to allow this computer. You only do this once.";
+      (info.device || "The phone") + " will ask you to allow it. You only do this once.";
     info.paired ? showApp() : showLogin();
   } catch (e) { showLogin(); }
 })();
