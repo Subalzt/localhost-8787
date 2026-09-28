@@ -74,8 +74,6 @@ class ServerConfig(
     val laptopLink: () -> String = { "direct" },
     val hotspot: () -> Pair<String, String> = { "" to "" },
     val clipSync: () -> Boolean = { true },
-    /** Videos the laptop pops out into picture-in-picture play on this phone. */
-    val videoPip: () -> Boolean = { true },
     val sessionTtlMs: Long = 30L * 24 * 60 * 60 * 1000,
     val deviceName: String,
 )

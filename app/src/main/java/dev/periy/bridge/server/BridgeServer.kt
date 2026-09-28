@@ -550,7 +550,6 @@ class BridgeServer(
         }
     }
 
-    @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
     private fun io.ktor.server.routing.Route.controlRoutes() {
         // "Phone screen" on the page: the laptop helper opens a window with this phone's screen,
         // to watch and use with the laptop's mouse and keyboard (scrcpy, over adb).
@@ -571,29 +570,6 @@ class BridgeServer(
                 call.respond(ApiResult(false, "Open it on the phone: Control, Second screen"))
                 return@post
             }
-            call.respond(ApiResult(true))
-        }
-        // The helper saw a video popped out into picture-in-picture on the laptop: play it here.
-        // The phone's player listens, then tells the helper (SSE "video start PORT") to send.
-        post("/api/video/open") {
-            if (!config.videoPip()) {
-                call.respond(ApiResult(false, "Laptop videos are turned off in the phone's Settings"))
-                return@post
-            }
-            runCatching {
-                ctx.startActivity(
-                    android.content.Intent().setClassName(ctx, "dev.periy.bridge.ui.VideoPipActivity")
-                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-            }.onFailure {
-                call.respond(ApiResult(false, "The phone could not open the video"))
-                return@post
-            }
-            call.respond(ApiResult(true))
-        }
-        // The laptop's picture-in-picture window was closed there.
-        post("/api/video/close") {
-            dev.periy.bridge.ui.VideoPipActivity.close()
             call.respond(ApiResult(true))
         }
         post("/api/mirror") {

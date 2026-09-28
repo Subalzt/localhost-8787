@@ -100,8 +100,6 @@ dependencies {
     implementation(libs.ktor.serialization.json)
 
     implementation(libs.zxing.core)
-    // Plays a video from the laptop (its picture-in-picture window), sound and picture in step.
-    implementation(libs.media3.exoplayer)
     // Ktor logs through SLF4J. Without a binding every request logs a "no provider"
     // warning; slf4j-simple writes to System.err, which Android routes into logcat.
     implementation(libs.slf4j.simple)

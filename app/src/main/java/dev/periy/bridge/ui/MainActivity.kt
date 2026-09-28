@@ -1550,10 +1550,6 @@ private fun LazyListScope.settingsTab(
                 Toggle(state.clipSync) { vm.setClipSync(it) }
             }
             SettingRow(
-                "Laptop videos here", "From the Play on phone bookmark",
-                icon = BlazeIcons.PlayPause, iconColor = Bridge.Danger,
-            ) { Toggle(state.videoPip) { vm.setVideoPip(it) } }
-            SettingRow(
                 "Notifications on the laptop",
                 if (state.notifAccess) null else "Needs notification access",
                 icon = BlazeIcons.Message, iconColor = Bridge.Danger,

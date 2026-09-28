@@ -150,21 +150,6 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
 
-        <!-- A video popped out on the laptop (the browser's picture-in-picture), playing here in
-             picture-in-picture with its sound. Its own task, so it floats over whatever is open
-             without bringing Localhost 8787's screens along. -->
-        <activity
-            android:name=".ui.VideoPipActivity"
-            android:exported="false"
-            android:label="Laptop video"
-            android:launchMode="singleTask"
-            android:taskAffinity="dev.periy.bridge.video"
-            android:excludeFromRecents="true"
-            android:resizeableActivity="true"
-            android:supportsPictureInPicture="true"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
-            android:theme="@android:style/Theme.Black.NoTitleBar" />
-
         <!-- "Send to laptop" in the menu that appears on selecting text in any app: the words
              go on the shared clipboard at once, without opening Localhost 8787. -->
         <activity

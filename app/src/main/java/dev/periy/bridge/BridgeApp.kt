@@ -93,7 +93,6 @@ class Container(ctx: Context) {
             laptopLink = { prefs.laptopLink },
             hotspot = { prefs.hotspotSsid to prefs.hotspotPass },
             clipSync = { prefs.clipSync },
-            videoPip = { prefs.videoPip },
             deviceName = deviceName(),
         )
         return BridgeServer(app, config, storage, tus, index, clipboard, devices, pairing, music, direct)

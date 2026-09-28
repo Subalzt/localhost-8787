@@ -55,8 +55,6 @@ data class UiState(
     val browsable: Boolean = false,
     /** Clipboard follows between phone and laptop without pressing Send. */
     val clipSync: Boolean = true,
-    /** Videos popped out into picture-in-picture on the laptop play here. */
-    val videoPip: Boolean = true,
     /** New screenshots go on the shared clipboard; and whether Localhost 8787 may read the photos for it. */
     val screenshotClip: Boolean = true,
     val canReadPhotos: Boolean = false,
@@ -159,7 +157,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 musicGranted = app.container.music.granted(),
                 browsable = Build.VERSION.SDK_INT >= 30 && android.os.Environment.isExternalStorageManager(),
                 clipSync = prefs.clipSync,
-                videoPip = prefs.videoPip,
                 screenshotClip = prefs.screenshotClip,
                 canReadPhotos = dev.periy.bridge.server.canReadPhotos(app),
                 watchLogs = dev.periy.bridge.server.ClipWatch.canReadLogs(app),
@@ -318,13 +315,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setClipSync(on: Boolean) {
         getApplication<Application>().container.prefs.clipSync = on
         dev.periy.bridge.server.EventBus.emit("clipsync", if (on) "on" else "off")
-        refresh()
-    }
-
-    @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
-    fun setVideoPip(on: Boolean) {
-        getApplication<Application>().container.prefs.videoPip = on
-        if (!on) dev.periy.bridge.ui.VideoPipActivity.close()
         refresh()
     }
 
