@@ -441,13 +441,45 @@ private fun AlbumPage(
             }
         }
         if (songs.isEmpty()) item(key = "none") { LibraryNote("Nothing matches", {}) }
-        itemsIndexed(songs, key = { _, t -> t.id }) { i, t ->
-            TrackTile(
-                t, a.coverId, current = t.id == playingId, hearted = t.id in hearts, acts = acts,
-                number = if (t.track > 0) t.track else a.tracks.indexOf(t) + 1, inAlbum = true,
-                modifier = Modifier.entrance(shelf.pageEntrance, i + 2),
-            ) { acts.play(songs, i) }
+        // In disc order, an album on more than one disc is split by disc, each under its header.
+        val byDisc = shelf.albumSort == 0 && songs.map { it.disc }.distinct().size > 1
+        songs.forEachIndexed { i, t ->
+            if (byDisc && (i == 0 || songs[i - 1].disc != t.disc)) item(key = "disc-${t.disc}") {
+                DiscHeader(t.disc, songs.filter { it.disc == t.disc }, Modifier.entrance(shelf.pageEntrance, i + 2))
+            }
+            item(key = t.id) {
+                TrackTile(
+                    t, a.coverId, current = t.id == playingId, hearted = t.id in hearts, acts = acts,
+                    number = if (t.track > 0) t.track else a.tracks.indexOf(t) + 1, inAlbum = true,
+                    modifier = Modifier.entrance(shelf.pageEntrance, i + 2),
+                ) { acts.play(songs, i) }
+            }
         }
+    }
+}
+
+/**
+ * Namida's header over one disc of an album: the disc on a tab of the secondary colour, and how
+ * many songs are on it and how long they run, on the right.
+ */
+@Composable
+private fun DiscHeader(disc: Int, tracks: List<TrackDto>, modifier: Modifier = Modifier) {
+    val nc = Nm.c
+    Row(modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+        Row(
+            Modifier.clip(RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
+                .background(nc.secondaryContainer.copy(alpha = 0.5f).compositeOver(nc.bg)).padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Iconsax.Cd, "Disc", tint = nc.icon, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(" $disc", style = Nm.medium)
+        }
+        Text(
+            count(tracks.size, "Track") + " \u2022 " + fmtMinutes(tracks.sumOf { it.durationMs }),
+            style = Nm.small.copy(fontWeight = FontWeight.Medium), maxLines = 1,
+            modifier = Modifier.padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+        )
     }
 }
 
@@ -533,13 +565,14 @@ private fun TrackTile(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Spacer(Modifier.width(12.dp))
-            Box(Modifier.size(70.dp).graphicsLayer { scaleX = shrink; scaleY = shrink }) {
+            // Clipped to the cover's corners, so the number's chip sits flush in its corner.
+            Box(Modifier.size(70.dp).graphicsLayer { scaleX = shrink; scaleY = shrink; shape = RoundedCornerShape(8.dp); clip = true }) {
                 Cover(coverId, t.album, Modifier.fillMaxSize(), radius = 8.dp)
-                if (number != null) Text(
-                    "$number", style = Nm.small,
-                    modifier = Modifier.align(Alignment.BottomEnd).clip(RoundedCornerShape(topStart = 4.dp))
-                        .background(nc.cardColor.copy(alpha = if (nc.dark) 0.85f else 0.8f)).padding(horizontal = 4.dp, vertical = 1.dp),
-                )
+                if (number != null) FrostedChip(
+                    coverId, t.album, 70.dp, Alignment.BottomEnd, RoundedCornerShape(topStart = 4.dp),
+                    androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 1.dp),
+                    Modifier.align(Alignment.BottomEnd),
+                ) { Text("$number", style = Nm.small) }
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
@@ -652,11 +685,12 @@ private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: B
                 Cover(a.coverId, a.title, Modifier.fillMaxSize()
                     .onGloballyPositioned { where[0] = it.boundsInRoot() }
                     .graphicsLayer { alpha = if (shelf.heroFlying && shelf.heroKey == a.key) 0f else 1f }, radius = 10.dp)
-                if (a.year > 0) Text(
-                    "${a.year}", style = Nm.small.copy(fontSize = font(0.18f), fontWeight = FontWeight.Bold), maxLines = 1,
-                    modifier = Modifier.align(Alignment.TopEnd).background(nc.cardColor.copy(alpha = (if (nc.dark) 60 else 140) / 255f + 0.35f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                )
+                // The year, frosted into the cover's corner, as Namida's.
+                if (a.year > 0) FrostedChip(
+                    a.coverId, a.title, img, Alignment.TopEnd, RoundedCornerShape(bottomStart = 8.dp),
+                    androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                    Modifier.align(Alignment.TopEnd),
+                ) { Text("${a.year}", style = Nm.small.copy(fontSize = font(0.18f), fontWeight = FontWeight.Bold), maxLines = 1) }
                 val bgA = (img.value / 200f).coerceIn(0f, 1f)
                 Box(
                     Modifier.align(Alignment.BottomEnd).padding(end = (2f + m).dp, bottom = (2f + m).dp)

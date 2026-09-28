@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -193,5 +194,70 @@ fun Modifier.entrance(entrance: Entrance, order: Int, duration: Int = 400, step:
         val p = progress.value
         alpha = p
         translationY = (1f - p) * 25.dp.toPx()
+    }
+}
+
+/**
+ * Whether a layer can be blurred (Android 12 and later). Namida's frosted chips fall back to a
+ * nearly solid card colour without it, as Namida's own do with its blur switched off.
+ */
+internal var frostBlur: Boolean = runCatching { android.os.Build.VERSION.SDK_INT >= 31 }.getOrDefault(false)
+
+/**
+ * Namida's frosted chip (its NamidaBlurryContainer), set in a corner of a cover: the cover under
+ * it seen blurred (sigma 5), the card colour thinly over that (60 in dark, 140 in light, of 255),
+ * flush in the corner with only its inner corner rounded ([shape]), so it seems part of the
+ * cover. [albumId] and [album] are the cover it sits on, which is [coverSize] square and fills
+ * its parent from the top left; [alignment] is the corner, TopEnd or BottomEnd.
+ */
+@Composable
+internal fun FrostedChip(
+    albumId: String,
+    album: String,
+    coverSize: androidx.compose.ui.unit.Dp,
+    alignment: Alignment,
+    shape: androidx.compose.ui.graphics.Shape,
+    padding: androidx.compose.foundation.layout.PaddingValues,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val nc = Nm.c
+    val img = rememberCover(albumId)
+    val veil = nc.cardColor.copy(alpha = (if (!frostBlur) 220 else if (nc.dark) 60 else 140) / 255f)
+    val madeUp = remember(album) { Covers.madeUp(album) }
+    androidx.compose.foundation.layout.Box(modifier.clip(shape)) {
+        // The cover again, lined up with the one under the chip, and blurred.
+        if (frostBlur) androidx.compose.foundation.layout.Box(
+            Modifier.matchParentSize()
+                .graphicsLayer {
+                    val r = 8.dp.toPx()
+                    renderEffect = androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Clamp)
+                    clip = true
+                }
+                .drawBehind {
+                    val side = coverSize.toPx()
+                    val dx = if (alignment == Alignment.TopEnd || alignment == Alignment.BottomEnd) side - size.width else 0f
+                    val dy = if (alignment == Alignment.BottomEnd || alignment == Alignment.BottomStart) side - size.height else 0f
+                    if (img != null) {
+                        // Cropped to a square from the middle, as the cover is drawn.
+                        val s = minOf(img.width, img.height)
+                        drawImage(
+                            img,
+                            srcOffset = androidx.compose.ui.unit.IntOffset((img.width - s) / 2, (img.height - s) / 2),
+                            srcSize = androidx.compose.ui.unit.IntSize(s, s),
+                            dstOffset = androidx.compose.ui.unit.IntOffset(-dx.toInt(), -dy.toInt()),
+                            dstSize = androidx.compose.ui.unit.IntSize(side.toInt(), side.toInt()),
+                        )
+                    } else drawRect(
+                        androidx.compose.ui.graphics.Brush.linearGradient(
+                            listOf(lerp(madeUp, Color.White, 0.18f), madeUp, lerp(madeUp, Color.Black, 0.45f)),
+                            start = androidx.compose.ui.geometry.Offset(-dx, -dy),
+                            end = androidx.compose.ui.geometry.Offset(side - dx, side - dy),
+                        ),
+                    )
+                },
+        )
+        androidx.compose.foundation.layout.Box(Modifier.matchParentSize().background(veil))
+        androidx.compose.foundation.layout.Box(Modifier.padding(padding)) { content() }
     }
 }
