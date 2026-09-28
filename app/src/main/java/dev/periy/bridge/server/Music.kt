@@ -193,6 +193,18 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
         return bytes.takeIf { it.isNotEmpty() }
     }
 
+    /** A song's own file, where All files access lets it be reached: for the lyrics kept beside it. */
+    fun file(trackId: Long): java.io.File? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !android.os.Environment.isExternalStorageManager()) return null
+        return runCatching {
+            resolver.query(uri(trackId), arrayOf(MediaStore.Audio.Media.RELATIVE_PATH, MediaStore.Audio.Media.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst() && c.getString(0) != null && c.getString(1) != null)
+                    java.io.File(java.io.File(android.os.Environment.getExternalStorageDirectory(), c.getString(0)), c.getString(1))
+                else null
+            }
+        }.getOrNull()
+    }
+
     /** An image kept beside the album's files, as many rips and downloads have one. */
     private fun folderCover(trackId: Long): Bitmap? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !android.os.Environment.isExternalStorageManager()) return null

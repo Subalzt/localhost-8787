@@ -46,6 +46,7 @@ import io.ktor.server.routing.head
 import io.ktor.server.routing.options
 import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import io.ktor.server.sse.SSE
 import io.ktor.server.sse.sse
@@ -122,6 +123,7 @@ class BridgeServer(
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val outbound = OutboundTracker()
+    private val lyrics = LyricsStore(ctx) { music.file(it.id) }
     private val beacon = Control.Beacon(ctx, config.port, config.deviceName)
 
     /** The paired device behind this request, or null. Signature, expiry and revocation. */
@@ -297,6 +299,29 @@ class BridgeServer(
                     type = runCatching { ContentType.parse(track.mime) }.getOrDefault(ContentType.Audio.Any),
                 )
             )
+        }
+
+        // A song's lyrics, as a page found them online and left here; see LyricsStore.
+        get("/api/music/lyrics/{id}") {
+            val track = call.parameters["id"]?.toLongOrNull()?.let { withContext(Dispatchers.IO) { music.find(it) } }
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            val doc = track?.let { withContext(Dispatchers.IO) { lyrics.get(it) } }
+            call.respond(LyricsDto(doc != null, doc))
+        }
+        put("/api/music/lyrics/{id}") {
+            val track = call.parameters["id"]?.toLongOrNull()?.let { withContext(Dispatchers.IO) { music.find(it) } }
+            val declared = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull() ?: 0
+            if (track == null || declared > LyricsStore.MAX_BYTES) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "No such track, or too large"))
+                return@put
+            }
+            val doc = runCatching { call.receive<LyricsDoc>() }.getOrNull()
+            if (doc == null || doc.source.isBlank()) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad lyrics"))
+                return@put
+            }
+            withContext(Dispatchers.IO) { lyrics.put(track, doc) }
+            call.respond(ApiResult(true))
         }
 
         get("/api/music/art/{albumId}") {
