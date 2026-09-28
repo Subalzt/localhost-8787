@@ -359,12 +359,20 @@ else starts at once, and skipping is instant. Media keys and the Windows media o
   (drag along it to choose a place, drag up off it to take the seek back), the colour is the
   cover's, and faint specks drift behind, quicker when the music is loud. `Esc` or Back steps
   back down.
-- **It looks like Namida's too**: fine broken-line icons, the artist large over the song with a
+- **The queue is Namida's**: a sheet with round corners rising under the song, which shrinks to
+  the top as it comes. Its header says where you are in it and the time left, with the sound
+  controls, a menu and a button back down; each song is Namida's tile (cover, title, artist, album
+  and year, its length, a heart, a handle and a menu to take it off). Along its foot, a broom to
+  remove the songs before or after, a button that goes to the song playing (an arrow pointing to
+  it once it is out of view), and **Shuffle**, which shuffles only what is left. When the song
+  changes, its colour passes from one tile to the next.
+- **It looks like Namida's too**: its font (Lexend Deca) and its icons (Iconsax), the artist large over the song with a
   **heart** beside them (kept on the phone, so a song with a heart has it on the phone's player and
   every page), a thin waveform, and a glowing play disc in the cover's colour, which tints the whole
-  player. Along the bottom, a chip with **what the file is** (FLAC, MP3, OPUS..., its bitrate and
-  its sample rate), **repeat**, and the **sound controls** (speed and volume). Shuffle, lyrics and
-  playing in step are on the bar.
+  player. Along the bottom, a chip with **what the file is** (FLAC, MP3, OPUS..., its bitrate, its
+  sample rate and, for a 24-bit file, a Hi-Res badge), **repeat**, and the **sound controls**
+  (Namida's Configure: speed and volume in percent). Shuffle, lyrics and playing in step are on the
+  bar.
 
 | Your albums | Playing, with what is next |
 | --- | --- |
@@ -387,7 +395,13 @@ buttons working.
 - **An album**: its cover in a frame with its name, who it is by and its year, **shuffle** and
   **Play Last**; then its songs, each marked with its number, in the order you choose (disc
   number, title, duration or artist, either way round).
-- **Search** at the top right filters the page you are on (or the album open) as you type.
+- **Search** at the top right filters the page you are on (or the album open) as you type; the
+  box grows out of its icon.
+- **Namida's transitions**: an album opens as a page pushed in from the right (the one under it
+  slides a third aside), its cover flying from the grid into the album's header; songs and albums
+  come in one after another, sliding up as they fade in; the count bar over a page slips away as
+  you scroll down and comes back as you scroll up; and the page sinks back a little as the player
+  opens over it. It is all in Namida's font, Lexend Deca, with Namida's icons.
 
 What is playing floats over the bar as a mini player, the same player as the page's, after
 Namida's:
@@ -403,8 +417,11 @@ Namida's:
   colours from the cover and specks drifting behind. Along the bottom, **what the file is** (FLAC,
   MP3, OPUS..., its bitrate and sample rate), **repeat**, and the **sound controls**: speed, pitch
   and volume, kept for next time.
-- **The queue**: tap a song to play it, drag it by its handle to move it, swipe it away to take it
-  off. Pull the list down from its top and the player comes back down with it.
+- **The queue**: Namida's sheet, rising under the song as the cover shrinks to the top, opening at
+  the song playing. Tap a song to play it, drag it by its handle to move it, swipe it away or use
+  its menu to take it off. The broom removes the songs before or after (or all), **Shuffle**
+  shuffles what is left, and the round button goes back to the song playing. Pull the list down
+  from its top and the player comes back down with it.
 - Pull the mini player down under itself to stop and put it away. The queue is kept for next time,
   paused where it stopped.
 
@@ -564,8 +581,12 @@ For hotspot mode, checked on 26 September 2026:
   hearts are kept on the phone (`/api/music/favourites`, announced to the pages as they change).
 - The player's motion is after [Namida](https://github.com/namidaco/namida)'s: one number from 0
   (mini) through 1 (full) to 2 (queue) that every piece is placed from, and the same settling rules
-  and curves, and its pages and player are drawn after Namida's. It is written anew for Compose and
-  for the page; none of Namida's code is used.
+  and curves, and its pages and player are drawn after Namida's, with its sizes, spacing and
+  colours. It is written anew for Compose and for the page; none of Namida's code is used.
+- The music's font is [Lexend Deca](https://fonts.google.com/specimen/Lexend+Deca) (SIL Open Font
+  License, `app/src/main/assets/fonts/OFL.txt`), bundled in the app and served to the page from
+  `/fonts/`. Its icons are [Iconsax](https://github.com/lusaxweb/iconsax) in its Broken style (MIT
+  licence), drawn from the paths of the `iconsax-react` package.
 - Only computers and phones you allow get in: each gets a signed session you can revoke on the
   phone. Everything stays on the local network: no cloud, no account. Traffic is plain HTTP, so
   treat it like a file share on your own Wi-Fi.

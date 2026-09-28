@@ -268,6 +268,35 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         chainNext()
     }
 
+    /** Takes off every song before the one playing (Namida's queue broom). */
+    fun removeBefore() {
+        val s = _state.value
+        if (s.index <= 0) return
+        val q = s.queue.drop(s.index)
+        unshuffled = unshuffled.filter { t -> q.any { it.id == t.id } }
+        set { it.copy(queue = q, index = 0) }
+        chainNext()
+    }
+
+    /** Takes off every song after the one playing. */
+    fun removeAfter() {
+        val s = _state.value
+        if (s.index < 0 || s.index >= s.queue.lastIndex) return
+        val q = s.queue.take(s.index + 1)
+        unshuffled = unshuffled.filter { t -> q.any { it.id == t.id } }
+        set { it.copy(queue = q) }
+        chainNext()
+    }
+
+    /** Shuffles what comes after the song playing, once, as the queue's Shuffle button does. */
+    fun shuffleUpcoming() {
+        val s = _state.value
+        if (s.index < 0 || s.index >= s.queue.lastIndex) return
+        val q = s.queue.take(s.index + 1) + s.queue.drop(s.index + 1).shuffled()
+        set { it.copy(queue = q) }
+        chainNext()
+    }
+
     /** Plays these after everything queued. */
     fun playLast(tracks: List<TrackDto>) {
         if (tracks.isEmpty()) return

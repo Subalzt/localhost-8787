@@ -1177,6 +1177,21 @@ class BridgeServer(
             call.respondBytes(html, ContentType.Text.Html.withCharset(Charsets.UTF_8))
         }
         get("/favicon.ico") { call.respond(HttpStatusCode.NoContent) }
+        // Lexend Deca (SIL OFL 1.1), the typeface of the page's player, as Namida is set in it.
+        get("/fonts/{name}") {
+            val name = call.parameters["name"].orEmpty()
+            if (!FONT_FILE.matches(name)) {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+            val bytes = withContext(Dispatchers.IO) { runCatching { ctx.assets.open("fonts/$name").use { it.readBytes() } }.getOrNull() }
+            if (bytes == null) {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+            call.response.header(HttpHeaders.CacheControl, "private, max-age=31536000, immutable")
+            call.respondBytes(bytes, ContentType.parse("font/woff2"))
+        }
         // The laptop helper, offered from the page itself so any paired laptop can get it.
         get("/blazeit-pc.bat") {
             val bat = withContext(Dispatchers.IO) { ctx.assets.open("blazeit-pc.bat").use { it.readBytes() } }
@@ -1816,5 +1831,8 @@ class BridgeServer(
         const val BENCH_MAX = 4L * 1024 * 1024 * 1024
 
         val PUBLIC_PATHS = setOf("/", "/api/ping", "/favicon.ico")
+
+        /** The page's font files: Lexend Deca, by script subset and weight. */
+        val FONT_FILE = Regex("""lexend-deca-(latin|latin-ext)-(400|500|600|700)-normal\.woff2""")
     }
 }

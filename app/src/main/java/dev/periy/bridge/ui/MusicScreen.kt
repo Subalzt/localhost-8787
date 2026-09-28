@@ -3,7 +3,27 @@ package dev.periy.bridge.ui
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.runtime.key
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,10 +31,12 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,6 +47,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,12 +81,14 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -82,30 +108,42 @@ import dev.periy.bridge.music.PhonePlayer
 import dev.periy.bridge.server.TrackDto
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.min
 
 /*
- * The phone's Music, full screen, after Namida's library (github.com/namidaco/namida): the
- * Tracks and Albums pages side by side under Namida's bottom bar, an album's own page slid in
- * over them, a search over whichever is showing, and all of it in the colour of the song
- * playing, as Namida's library takes it. Opened from the Music tab; Back returns to the app.
- * What is playing floats over the bar in the player (NowPlaying.kt).
- *
- * Written anew for Compose from how Namida's pages look; none of its code is used.
+ * The phone's Music, full screen, rebuilt to Namida's library (github.com/namidaco/namida):
+ * the Tracks and Albums pages under Namida's bottom bar, an album's own page pushed over them,
+ * a search over whichever is showing, set in Lexend Deca with the Iconsax icons, and coloured
+ * from the song playing as Namida colours itself (NamidaStyle.kt). The sizes, spacing and
+ * colours are Namida's own values; the code is this app's. Back returns to the app.
  */
 
-/** Namida's own colour, for while nothing is playing to take one from. */
-private val NamidaColour = Color(0xFF9C99C1)
-
-/** Namida's bottom bar, over the navigation bar's inset. */
-val MusicBarHeight = 62.dp
-private val HeaderHeight = 56.dp
+/** Namida's bottom bar (a Material bar 64 high) and app bar (56). */
+val MusicBarHeight = 64.dp
+private val AppBarHeight = 56.dp
+/** Namida's count bar over a page. */
+private val CountBarHeight = 48.dp
 
 /** Namida's page change: quick to leave, slow to arrive. */
 private val PageEase = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
 
+/** The iOS push Namida uses for a page (Flutter's linearToEaseOut), and its pop (easeInToLinear). */
+private val LinearToEaseOut = CubicBezierEasing(0.35f, 0.91f, 0.33f, 0.97f)
+private val EaseInToLinear = CubicBezierEasing(0.67f, 0.03f, 0.65f, 0.09f)
+
+/** Where the flying cover is, [p] of the way from the grid to the album's page. */
+private fun heroRect(shelf: MusicShelf, p: Float): androidx.compose.ui.geometry.Rect {
+    val a = shelf.heroFrom ?: androidx.compose.ui.geometry.Rect.Zero
+    val b = shelf.heroTo ?: a
+    return androidx.compose.ui.geometry.Rect(
+        androidx.compose.ui.util.lerp(a.left, b.left, p), androidx.compose.ui.util.lerp(a.top, b.top, p),
+        androidx.compose.ui.util.lerp(a.right, b.right, p), androidx.compose.ui.util.lerp(a.bottom, b.bottom, p),
+    )
+}
+
 /**
- * The Music screen. [miniRoom] is what the mini player takes over the bar while something is
- * queued; [motion] sinks the bar away as the player opens, as the app's tabs do.
+ * The Music screen. [miniRoom] is what the mini player takes above the bar while something is
+ * queued; [motion] sinks the bar away as the player opens, as Namida's does.
  */
 @Composable
 fun MusicScreen(
@@ -121,10 +159,10 @@ fun MusicScreen(
     // The song playing's colour, as the player takes it; Namida's own while nothing plays.
     val cur = now.current
     val cover = if (cur != null) rememberCover(cur.albumId) else null
-    val target = if (cur == null) NamidaColour else (if (cover != null) Covers.tint(cur.albumId) else null) ?: Covers.madeUp(cur.album)
+    val target = if (cur == null) NamidaDefaultColour else (if (cover != null) Covers.tint(cur.albumId) else null) ?: Covers.madeUp(cur.album)
     val tint by animateColorAsState(target, tween(600), label = "tint")
     val base = LocalPalette.current
-    val palette = remember(tint, base) { playerPalette(base, tint) }
+    val nc = remember(tint, base.dark) { namidaColors(tint, base.dark) }
 
     val favourites = LocalContext.current.container.favourites
     val hearts by favourites.ids.collectAsState()
@@ -136,17 +174,54 @@ fun MusicScreen(
     LaunchedEffect(shelf.page) { if (pager.settledPage != shelf.page && !pager.isScrollInProgress) pager.scrollToPage(shelf.page) }
     val pagePos by remember { derivedStateOf { pager.currentPage + pager.currentPageOffsetFraction } }
 
-    val top = statusTop + HeaderHeight
-    val bottom = bottomInset + MusicBarHeight + if (cur != null) miniRoom else 0.dp
+    val top = statusTop + AppBarHeight
+    val bottom = bottomInset + MusicBarHeight + (if (cur != null) miniRoom else 0.dp) + 8.dp
 
-    CompositionLocalProvider(LocalPalette provides palette, LocalTextStyle provides TextStyle(color = palette.text)) {
-        Box(Modifier.fillMaxSize().background(Bridge.Bg)) {
-            // ---- Tracks and Albums, a swipe apart
-            HorizontalPager(pager, Modifier.fillMaxSize(), key = { it }) { page ->
+    // Namida pushes a page the iOS way: in from the right over 400 ms, quick to leave and slow
+    // to arrive, the pages under it drawn a third of the way aside; back, the same in reverse.
+    val push = remember { Animatable(if (shelf.open != null) 1f else 0f) }
+    var shownAlbum by remember { mutableStateOf(shelf.open) }
+    LaunchedEffect(shelf.open) {
+        val target = shelf.open
+        if (target != null) {
+            val fly = shelf.heroKey == target.key && shelf.heroFrom != null
+            shownAlbum = target
+            shelf.heroFlying = fly
+            push.animateTo(1f, tween(400, easing = LinearToEaseOut))
+            shelf.heroFlying = false
+        } else if (shownAlbum != null) {
+            shelf.heroFlying = shelf.heroKey == shownAlbum?.key && shelf.heroFrom != null && shelf.heroTo != null
+            push.animateTo(0f, tween(400, easing = EaseInToLinear))
+            shelf.heroFlying = false
+            shownAlbum = null
+            shelf.heroKey = null
+        }
+    }
+    val widthPx = remember { floatArrayOf(0f) }
+    val origin = remember { floatArrayOf(0f, 0f) }
+    // The pages come in one after another the first time they show, as Namida's do.
+    LaunchedEffect(Unit) { shelf.trackEntrance.restart(); shelf.albumEntrance.restart() }
+
+    CompositionLocalProvider(
+        LocalNamida provides nc,
+        LocalPalette provides nc.asPalette(base),
+        LocalTextStyle provides Nm.medium,
+    ) {
+        // As Namida's pages do, the screen sinks back a little (5%) as the player opens over it.
+        Box(Modifier.fillMaxSize().background(nc.bg)
+            .onGloballyPositioned { c -> widthPx[0] = c.size.width.toFloat(); val o = c.boundsInRoot(); origin[0] = o.left; origin[1] = o.top }
+            .graphicsLayer {
+                if (cur == null) return@graphicsLayer
+                val k = 1f - 0.05f * motion.p.coerceIn(0f, 1f)
+                scaleX = k; scaleY = k
+            }) {
+            // ---- Tracks and Albums, a swipe apart; a third aside while an album is pushed over them
+            HorizontalPager(
+                pager, Modifier.fillMaxSize().offset { IntOffset((-push.value * widthPx[0] / 3f).roundToInt(), 0) },
+                key = { it },
+            ) { page ->
                 Box(Modifier.fillMaxSize().graphicsLayer {
                     val off = abs((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
-                    val s = 1f - 0.05f * off
-                    scaleX = s; scaleY = s
                     alpha = 1f - 0.5f * off
                 }) {
                     if (page == 0) TracksPage(shelf, now, hearts, acts, top, bottom, requestMusic)
@@ -154,28 +229,56 @@ fun MusicScreen(
                 }
             }
 
-            // ---- an album, slid in over them
-            AnimatedVisibility(
-                shelf.open != null,
-                enter = slideInHorizontally(tween(420, easing = PageEase)) { it / 4 } + fadeIn(tween(260)),
-                exit = slideOutHorizontally(tween(300, easing = PageEase)) { it / 4 } + fadeOut(tween(200)),
-            ) {
-                // Kept while it slides out, after it has been closed.
-                val kept = remember { shelf.open }
-                (shelf.open ?: kept)?.let { AlbumPage(it, shelf, now, hearts, acts, top, bottom) }
+            // ---- an album, pushed over them, with the iOS shadow along its left edge
+            shownAlbum?.let { al ->
+                key(al.key) {
+                    Box(
+                        Modifier.fillMaxSize()
+                            .offset { IntOffset(((1f - push.value) * widthPx[0]).roundToInt(), 0) }
+                            .drawBehind {
+                                val w = 18.dp.toPx()
+                                drawRect(
+                                    Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.16f * push.value)), startX = -w, endX = 0f),
+                                    topLeft = Offset(-w, 0f), size = Size(w, size.height),
+                                )
+                            },
+                    ) {
+                        AlbumPage(al, shelf, now, hearts, acts, top, bottom, pushOffset = { (1f - push.value) * widthPx[0] })
+                    }
+                }
             }
 
-            MusicHeader(shelf, statusTop)
+            // ---- the hero: the cover flying between the grid and the album's page
+            // Always there while its album is open, and shown by the same flag, read at drawing, that
+            // hides the covers it stands in for: so no frame shows both, or neither.
+            val heroAlbum = (shelf.open ?: shownAlbum)?.takeIf { it.key == shelf.heroKey }
+            if (heroAlbum != null) {
+                val density = LocalDensity.current
+                Box(
+                    Modifier
+                        .layout { m, _ ->
+                            val r = heroRect(shelf, push.value)
+                            val pl = m.measure(Constraints.fixed(r.width.roundToInt().coerceAtLeast(1), r.height.roundToInt().coerceAtLeast(1)))
+                            layout(pl.width, pl.height) { pl.place((r.left - origin[0]).roundToInt(), (r.top - origin[1]).roundToInt()) }
+                        }
+                        .graphicsLayer {
+                            alpha = if (shelf.heroFlying) 1f else 0f
+                            shape = RoundedCornerShape(with(density) { androidx.compose.ui.util.lerp(10f, 12f, push.value).dp.toPx() })
+                            clip = true
+                        },
+                ) { Cover(heroAlbum.coverId, heroAlbum.title, Modifier.fillMaxSize(), radius = 0.dp, big = true) }
+            }
+
+            AppBar(shelf, statusTop)
 
             // ---- Namida's bottom bar: Tracks and Albums; it sinks away as the player opens
-            MusicBar(
+            NavBar(
                 position = pagePos,
                 bottomInset = bottomInset,
                 modifier = Modifier.align(Alignment.BottomCenter).graphicsLayer {
                     if (cur == null) return@graphicsLayer
                     val cp = motion.p.coerceIn(0f, 1f)
                     translationY = cp * size.height
-                    alpha = 1f - cp
                 },
             ) { i ->
                 shelf.open = null
@@ -184,6 +287,13 @@ fun MusicScreen(
         }
     }
 }
+
+/** The app's palette in Namida's colours, for the few shared pieces drawn on these screens. */
+internal fun NamidaColors.asPalette(base: Palette): Palette = base.copy(
+    bg = bg, surface = card, surface2 = secondaryContainer,
+    text = large, muted = small, faint = small.copy(alpha = small.alpha * 0.6f),
+    outline = onSurface.copy(alpha = 0.12f), accent = primary, onAccent = if (dark) Color.Black else Color.White,
+)
 
 /** What a song's tile and the pages can do with songs. */
 private class TrackActions(val player: PhonePlayer, val shelf: MusicShelf, val favourites: Favourites) {
@@ -209,19 +319,48 @@ private fun TracksPage(
 ) {
     val songs = remember(shelf.tracks, shelf.query) { shelf.songs() }
     val playingId = now.current?.id
-    LazyColumn(Modifier.fillMaxSize(), state = shelf.trackList, contentPadding = PaddingValues(top = top, bottom = bottom + 8.dp)) {
-        item(key = "bar") {
-            CountBar {
-                BarButton(PlayerIcons.Shuffle, "Shuffle every song") { acts.shuffle(songs) }
-                BarButton(PlayerIcons.Play, "Play every song") { acts.play(songs, 0) }
-                Spacer(Modifier.width(6.dp))
-                CountText(count(songs.size, "Track"))
+    val list = shelf.trackList
+    val nearTopPx = with(LocalDensity.current) { CountBarHeight.toPx() }
+    val hider = remember(list) { barHider({ list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset <= nearTopPx }) { shelf.trackBar = it } }
+    Column(Modifier.fillMaxSize().padding(top = top)) {
+        HidingBar(shelf.trackBar) {
+            BarIcon(Iconsax.Shuffle, "Shuffle every song") { acts.shuffle(songs) }
+            Spacer(Modifier.width(10.dp))
+            BarIcon(Iconsax.Play, "Play every song") { acts.play(songs, 0) }
+            Spacer(Modifier.width(10.dp))
+            Text(count(songs.size, "Track"), style = Nm.medium, maxLines = 1)
+        }
+        LazyColumn(Modifier.weight(1f).nestedScroll(hider), state = list, contentPadding = PaddingValues(bottom = bottom)) {
+            noteFor(shelf, songs.isEmpty())?.let { n -> item(key = "note") { LibraryNote(n, requestMusic) } }
+            itemsIndexed(songs, key = { _, t -> t.id }) { i, t ->
+                TrackTile(
+                    t, shelf.coverOf(t), current = t.id == playingId, hearted = t.id in hearts, acts = acts,
+                    modifier = Modifier.entrance(shelf.trackEntrance, i - list.firstVisibleItemIndex),
+                ) { acts.play(songs, i) }
             }
         }
-        noteFor(shelf, songs.isEmpty())?.let { n -> item(key = "note") { LibraryNote(n, requestMusic) } }
-        itemsIndexed(songs, key = { _, t -> t.id }) { i, t ->
-            TrackTile(t, shelf.coverOf(t), current = t.id == playingId, hearted = t.id in hearts, acts = acts) { acts.play(songs, i) }
-        }
+    }
+}
+
+/**
+ * Namida's count bar over a page, which goes while you scroll down and comes back as you scroll
+ * up (or reach the top), folding away over 400 ms.
+ */
+@Composable
+private fun HidingBar(shown: Boolean, content: @Composable RowScope.() -> Unit) {
+    val h by animateDpAsState(if (shown) CountBarHeight else 0.dp, tween(400, easing = FastOutSlowInEasing), label = "bar")
+    val a by animateFloatAsState(if (shown) 1f else 0f, tween(400), label = "barAlpha")
+    Box(Modifier.fillMaxWidth().height(h).clipToBounds().graphicsLayer { alpha = a }, contentAlignment = Alignment.BottomStart) {
+        CountBar(Modifier.requiredHeight(CountBarHeight), content = content)
+    }
+}
+
+/** Shows the count bar on a scroll up and hides it on a scroll down, unless the list is at its top. */
+private fun barHider(nearTop: () -> Boolean, set: (Boolean) -> Unit) = object : NestedScrollConnection {
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        if (consumed.y < -0.5f) set(nearTop())
+        else if (consumed.y > 0.5f || nearTop()) set(true)
+        return Offset.Zero
     }
 }
 
@@ -236,27 +375,40 @@ private fun AlbumsPage(
 ) {
     val albums = remember(shelf.albums, shelf.query) { shelf.albumMatches() }
     val playingKey = now.current?.let { shelf.albumOf[it.id]?.key }
-    LazyVerticalGrid(
-        GridCells.Fixed(3), Modifier.fillMaxSize(), state = shelf.albumGrid,
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = top, bottom = bottom + 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item(key = "bar", span = { GridItemSpan(maxLineSpan) }) {
-            CountBar(Modifier.padding(start = 2.dp)) { CountText(count(albums.size, "Album")) }
+    val quiet = Nm.c.onSecondaryContainer.copy(alpha = 0.8f)
+    val grid = shelf.albumGrid
+    val nearTopPx = with(LocalDensity.current) { CountBarHeight.toPx() }
+    val hider = remember(grid) { barHider({ grid.firstVisibleItemIndex == 0 && grid.firstVisibleItemScrollOffset <= nearTopPx }) { shelf.albumBar = it } }
+    Column(Modifier.fillMaxSize().padding(top = top)) {
+        HidingBar(shelf.albumBar) {
+            Icon(Iconsax.Arrange, null, tint = quiet, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(count(albums.size, "Album"), style = Nm.medium.copy(color = quiet), maxLines = 1)
         }
-        noteFor(shelf, albums.isEmpty())?.let { n -> item(key = "note", span = { GridItemSpan(maxLineSpan) }) { LibraryNote(n, requestMusic) } }
-        items(albums, key = { it.key }) { a ->
-            AlbumCard(a, playing = a.key == playingKey, sounding = now.playing, onOpen = { shelf.openAlbum(a) }, onPlay = { onPlay(a) })
+        LazyVerticalGrid(
+            GridCells.Fixed(3), Modifier.weight(1f).nestedScroll(hider), state = grid,
+            contentPadding = PaddingValues(start = 4.dp, end = 4.dp, bottom = bottom),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            noteFor(shelf, albums.isEmpty())?.let { n -> item(key = "note", span = { GridItemSpan(maxLineSpan) }) { LibraryNote(n, requestMusic) } }
+            itemsIndexed(albums, key = { _, a -> a.key }) { i, a ->
+                // Namida's grid comes in by row and column, each card over 400/3 ms.
+                val first = grid.firstVisibleItemIndex
+                AlbumCard(
+                    a, shelf, playing = a.key == playingKey, sounding = now.playing, onPlay = { onPlay(a) },
+                    modifier = Modifier.entrance(shelf.albumEntrance, (i / 3 - first / 3) + i % 3, duration = 400 / 3),
+                )
+            }
         }
     }
 }
 
 /**
- * An album's page, as Namida's: the cover in a frame with the name, who it is by and the
- * year, shuffle and Play Last; then how many songs and how long, in the order chosen; then
- * its songs, each cover marked with the song's number.
+ * An album's page, as Namida's: the cover in its frame with the name, who it is by and the
+ * year, shuffle and Play Last; then how many songs and how long, in the order chosen; then its
+ * songs, each cover marked with the song's number.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AlbumPage(
     a: Album,
@@ -266,29 +418,26 @@ private fun AlbumPage(
     acts: TrackActions,
     top: Dp,
     bottom: Dp,
+    pushOffset: () -> Float,
 ) {
     val list = remember(a.key) { LazyListState() }
     val songs = remember(a, shelf.albumSort, shelf.albumDesc, shelf.albumQuery) { shelf.albumTracks(a) }
     val playingId = now.current?.id
-    LazyColumn(Modifier.fillMaxSize().background(Bridge.Bg), state = list, contentPadding = PaddingValues(top = top, bottom = bottom + 8.dp)) {
-        item(key = "band") { AlbumBand(a, onShuffle = { acts.shuffle(a.tracks) }, onPlayLast = { acts.last(a.tracks) }) }
-        item(key = "bar") {
-            Row(Modifier.fillMaxWidth().height(50.dp).padding(start = 16.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(PlayerIcons.Note, null, tint = Bridge.Text, modifier = Modifier.size(19.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    count(a.tracks.size, "Track") + " - " + fmtMinutes(a.durationMs),
-                    style = TextStyle(fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-                )
-                SortChip(shelf.albumSort) { shelf.albumSort = it }
-                Box(
-                    Modifier.size(40.dp).clip(CircleShape).clickable { shelf.albumDesc = !shelf.albumDesc },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(PlayerIcons.Order, if (shelf.albumDesc) "Last first" else "First first", tint = Bridge.Text,
-                        modifier = Modifier.size(21.dp).graphicsLayer { scaleY = if (shelf.albumDesc) -1f else 1f })
+    // Under the app bar, so the tracks bar sticks just below it once scrolled to, as Namida's does.
+    LazyColumn(Modifier.fillMaxSize().background(Nm.c.bg).padding(top = top), state = list, contentPadding = PaddingValues(bottom = bottom)) {
+        item(key = "head") { AlbumHead(a, shelf, pushOffset, onShuffle = { acts.shuffle(a.tracks) }, onPlayLast = { acts.last(a.tracks) }) }
+        stickyHeader(key = "bar") {
+            CountBar(Modifier.background(Nm.c.bg)) {
+                Icon(Iconsax.Note, null, tint = Nm.c.icon, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(count(a.tracks.size, "Track") + " - " + fmtMinutes(a.durationMs), style = Nm.medium, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                SortButton(shelf.albumSort) { shelf.albumSort = it }
+                BarIcon(if (shelf.albumDesc) Iconsax.Up else Iconsax.Down, if (shelf.albumDesc) "Last first" else "First first", size = 20.dp) {
+                    shelf.albumDesc = !shelf.albumDesc
                 }
+                Spacer(Modifier.width(6.dp))
+                BarIcon(Iconsax.Search, "Search this album", size = 20.dp) { shelf.albumSearching = true }
             }
         }
         if (songs.isEmpty()) item(key = "none") { LibraryNote("Nothing matches", {}) }
@@ -296,6 +445,7 @@ private fun AlbumPage(
             TrackTile(
                 t, a.coverId, current = t.id == playingId, hearted = t.id in hearts, acts = acts,
                 number = if (t.track > 0) t.track else a.tracks.indexOf(t) + 1, inAlbum = true,
+                modifier = Modifier.entrance(shelf.pageEntrance, i + 2),
             ) { acts.play(songs, i) }
         }
     }
@@ -303,22 +453,19 @@ private fun AlbumPage(
 
 // ---------------------------------------------------------------------------- pieces
 
-/** The row over a page: how many there are, with what can be done to all of them. */
+/** Namida's bar over a page: 48 high, 18 in from the left; what can be done to all, and how many. */
 @Composable
 private fun CountBar(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
-    Row(modifier.fillMaxWidth().height(50.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, content = content)
+    Row(modifier.fillMaxWidth().height(CountBarHeight).padding(start = 18.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically, content = content)
 }
 
+/** Namida's icon button: the icon alone, in its icon colour, with a little room around it. */
 @Composable
-private fun CountText(text: String) {
-    Text(text, style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text, maxLines = 1)
-}
-
-@Composable
-private fun BarButton(icon: ImageVector, description: String, onClick: () -> Unit) {
-    Box(Modifier.size(40.dp).pressable(CircleShape, scaleTo = 0.88f, onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, description, tint = Bridge.Text, modifier = Modifier.size(22.dp))
-    }
+private fun BarIcon(icon: ImageVector, description: String, size: Dp = 18.dp, tint: Color = Nm.c.icon, onClick: () -> Unit) {
+    Box(
+        Modifier.clip(CircleShape).clickable(onClick = onClick).padding(horizontal = 2.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, description, tint = tint, modifier = Modifier.size(size)) }
 }
 
 private fun count(n: Int, one: String) = "%,d %s".format(n, if (n == 1) one else one + "s")
@@ -336,23 +483,27 @@ private fun noteFor(shelf: MusicShelf, nothing: Boolean): String? = when {
 
 @Composable
 private fun LibraryNote(note: String, requestMusic: () -> Unit) {
-    if (note == PERMISSION) Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).card().padding(18.dp)) {
+    val nc = Nm.c
+    if (note == PERMISSION) Column(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).clip(RoundedCornerShape(14.dp)).background(nc.card).padding(18.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            AppIcon(PlayerIcons.Note, Bridge.Accent)
+            Icon(Iconsax.Note, null, tint = nc.icon, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(12.dp))
-            Text("Localhost 8787 needs to read your music", style = TitleStyle, color = Bridge.Text)
+            Text("Localhost 8787 needs to read your music", style = Nm.large)
         }
-        RowNote("Only music: not your photos or your other files. The same permission lets the laptop play it.")
+        Spacer(Modifier.height(6.dp))
+        Text("Only music: not your photos or your other files. The same permission lets the laptop play it.", style = Nm.small)
         Spacer(Modifier.height(14.dp))
-        BridgeButton("Allow music access", Modifier.fillMaxWidth(), onClick = requestMusic)
+        NamidaButton("Allow music access", null, Modifier.fillMaxWidth(), onClick = requestMusic)
     }
-    else Text(note, style = BodyStyle, color = Bridge.Muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(28.dp))
+    else Text(note, style = Nm.medium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(28.dp))
 }
 
 /**
- * A song, as Namida lists one: the cover, the name, who it is by and the album and year under
- * it; how long it is and its heart on the right; and a menu. The song playing is lit with a
- * wash of the colour. On an album's page, the cover carries the song's [number].
+ * A song, as Namida lists one: the cover (70), the title, who it is by, the album and year;
+ * how long it is and its heart on the right; and the menu. On the tile colour; the song playing
+ * is lit in the song's colour with white words, and its cover gives a little.
  */
 @Composable
 private fun TrackTile(
@@ -363,150 +514,197 @@ private fun TrackTile(
     acts: TrackActions,
     number: Int? = null,
     inAlbum: Boolean = false,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val lit = Bridge.Accent
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 6.dp).height(76.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .then(if (current) Modifier.background(Brush.horizontalGradient(listOf(lit.copy(alpha = 0.30f), lit.copy(alpha = 0.06f)))) else Modifier)
-            .clickable(onClick = onClick)
-            .padding(start = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(58.dp)) {
-            Cover(coverId, t.album, Modifier.fillMaxSize(), radius = 10.dp)
-            if (number != null) Text(
-                "$number",
-                style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), color = Color.White,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(3.dp).clip(RoundedCornerShape(6.dp))
-                    .background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 5.dp, vertical = 1.dp),
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(t.title, style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
-                color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(t.artist, style = TextStyle(fontSize = 13.sp), color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(t.album, t.year.takeIf { it > 0 }?.toString()).joinToString(" • "),
-                style = TextStyle(fontSize = 12.sp), color = Bridge.Muted.copy(alpha = 0.78f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Spacer(Modifier.width(6.dp))
-        Column(horizontalAlignment = Alignment.End) {
-            Text(fmtTime(t.durationMs), style = TextStyle(fontSize = 12.5.sp, fontFeatureSettings = "tnum"), color = Bridge.Muted)
-            Box(Modifier.size(30.dp).clip(CircleShape).clickable { acts.heart(t) }, contentAlignment = Alignment.CenterEnd) {
-                Icon(if (hearted) PlayerIcons.HeartOn else PlayerIcons.Heart, if (hearted) "Take the heart off" else "Give it a heart",
-                    tint = if (hearted) lit else Bridge.Muted.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+    val nc = Nm.c
+    val white = Color.White
+    // Lit and unlit over 300 ms, the cover giving a little over 400, as Namida's tiles change.
+    val lit by animateFloatAsState(if (current) 1f else 0f, tween(300), label = "lit")
+    val card = nc.card.copy(alpha = 0.9f)
+    val bg = if (lit > 0f) Brush.linearGradient(0.6f to lerp(card, nc.main, lit), 1f to lerp(card, nc.tint.copy(alpha = 0.4f), lit))
+    else SolidColor(card)
+    val shrink by animateFloatAsState(if (current) 0.96f else 1f, tween(400, easing = FastOutSlowInEasing), label = "thumb")
+    fun ink(normal: Color, a: Int) = lerp(normal, white.copy(alpha = a / 255f), lit)
+    val heartTint = ink(nc.main.copy(alpha = 0.4f).compositeOver(nc.medium.copy(alpha = nc.medium.alpha * 140 / 255f * 0.4f)), 140)
+    Box(modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+        Row(
+            Modifier.fillMaxWidth().height(82.dp).background(bg).clickable(onClick = onClick).padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Spacer(Modifier.width(12.dp))
+            Box(Modifier.size(70.dp).graphicsLayer { scaleX = shrink; scaleY = shrink }) {
+                Cover(coverId, t.album, Modifier.fillMaxSize(), radius = 8.dp)
+                if (number != null) Text(
+                    "$number", style = Nm.small,
+                    modifier = Modifier.align(Alignment.BottomEnd).clip(RoundedCornerShape(topStart = 4.dp))
+                        .background(nc.cardColor.copy(alpha = if (nc.dark) 0.85f else 0.8f)).padding(horizontal = 4.dp, vertical = 1.dp),
+                )
             }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                Text(t.title, style = Nm.medium.copy(color = ink(nc.medium, 170)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(t.artist, style = Nm.small.copy(fontWeight = FontWeight.Medium, color = ink(nc.small, 140)),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(listOfNotNull(t.album, t.year.takeIf { it > 0 }?.toString()).joinToString(" • "),
+                    style = Nm.small.copy(color = ink(nc.small, 130)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.width(6.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text(fmtTime(t.durationMs), style = Nm.small.copy(fontWeight = FontWeight.Medium, color = ink(nc.small, 170)))
+                Box(Modifier.size(30.dp).clip(CircleShape).clickable { acts.heart(t) }, contentAlignment = Alignment.Center) {
+                    Icon(if (hearted) Iconsax.HeartOn else Iconsax.Heart, if (hearted) "Take the heart off" else "Give it a heart",
+                        tint = heartTint, modifier = Modifier.size(22.dp))
+                }
+            }
+            Spacer(Modifier.width(2.dp))
+            TrackMenu(t, acts, inAlbum, ink(nc.icon, 160))
+            Spacer(Modifier.width(4.dp))
         }
-        TrackMenu(t, acts, inAlbum)
     }
 }
 
-/** A song's menu: play it next, play it last, or go to its album. */
+/** A song's menu, from Namida's "more" turned upright: play it next, play it last, or go to its album. */
 @Composable
-private fun TrackMenu(t: TrackDto, acts: TrackActions, inAlbum: Boolean) {
+private fun TrackMenu(t: TrackDto, acts: TrackActions, inAlbum: Boolean, tint: Color) {
     var open by remember { mutableStateOf(false) }
     Box {
-        Box(Modifier.size(width = 38.dp, height = 56.dp).clip(CircleShape).clickable { open = true }, contentAlignment = Alignment.Center) {
-            Icon(PlayerIcons.Dots, "More for ${t.title}", tint = Bridge.Muted, modifier = Modifier.size(20.dp))
+        Box(Modifier.clip(RoundedCornerShape(4.dp)).clickable { open = true }.padding(6.dp), contentAlignment = Alignment.Center) {
+            Icon(Iconsax.More, "More for ${t.title}", tint = tint, modifier = Modifier.size(18.dp).rotate(90f))
         }
         if (open) PopupMenu(onDismiss = { open = false }) {
-            MenuRow(PlayerIcons.AddNext, "Play next") { open = false; acts.next(t) }
-            MenuRow(PlayerIcons.AddLast, "Play last") { open = false; acts.last(listOf(t)) }
-            if (!inAlbum) MenuRow(PlayerIcons.Disc, "Go to album") { open = false; acts.album(t) }
+            MenuRow(Iconsax.Next, "Play next") { open = false; acts.next(t) }
+            MenuRow(Iconsax.PlayLast, "Play last") { open = false; acts.last(listOf(t)) }
+            if (!inAlbum) MenuRow(Iconsax.Albums, "Go to album") { open = false; acts.album(t) }
         }
     }
 }
 
+/** Namida's popup menu: its card colour laid over black (white, in light), rounded 16. */
 @Composable
 private fun PopupMenu(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    val nc = Nm.c
+    val colour = nc.cardColor.copy(alpha = 180 / 255f).compositeOver(if (nc.dark) Color.Black else Color.White)
     androidx.compose.ui.window.Popup(
         alignment = Alignment.TopEnd,
-        offset = IntOffset(0, with(LocalDensity.current) { 44.dp.roundToPx() }),
+        offset = IntOffset(0, with(LocalDensity.current) { 36.dp.roundToPx() }),
         onDismissRequest = onDismiss,
     ) {
-        Column(Modifier.width(210.dp).floating(RoundedCornerShape(16.dp)).background(Bridge.Surface).padding(vertical = 6.dp)) { content() }
+        CompositionLocalProvider(LocalNamida provides nc) {
+            Column(
+                Modifier.width(210.dp).shadow(12.dp, RoundedCornerShape(16.dp), ambientColor = nc.shadow, spotColor = nc.shadow)
+                    .clip(RoundedCornerShape(16.dp)).background(colour).padding(vertical = 6.dp),
+            ) { content() }
+        }
     }
 }
 
 @Composable
 private fun MenuRow(icon: ImageVector?, label: String, on: Boolean = false, onClick: () -> Unit) {
+    val nc = Nm.c
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) {
-            Icon(icon, null, tint = Bridge.Text, modifier = Modifier.size(20.dp))
+            Icon(icon, null, tint = nc.icon, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
         }
-        Text(label, style = TextStyle(fontSize = 15.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal),
-            color = if (on) Bridge.Accent else Bridge.Text, modifier = Modifier.weight(1f))
+        Text(label, style = Nm.medium.copy(color = if (on) nc.primary else nc.medium), modifier = Modifier.weight(1f))
     }
 }
 
 /**
- * An album in the grid, as Namida's: the cover with the year in a chip at its corner and a
- * play button at the other, and under it the name, who it is by, and how many songs and how long.
+ * An album in the grid, as Namida's card: on the card colour, rounded 12, with a soft shadow;
+ * the cover with the year in a frosted corner and a play button in the other; under it the
+ * name, who it is by, and how many songs and how long, sized to the card.
  */
 @Composable
-private fun AlbumCard(a: Album, playing: Boolean, sounding: Boolean, onOpen: () -> Unit, onPlay: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
-    Column(Modifier.fillMaxWidth().pressable(shape, scaleTo = 0.96f, onClick = onOpen)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
-            Cover(a.coverId, a.title, Modifier.fillMaxSize(), radius = 12.dp)
-            if (a.year > 0) Text(
-                "${a.year}", style = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = Color.White,
-                modifier = Modifier.align(Alignment.TopEnd).padding(5.dp).clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black.copy(alpha = 0.42f)).padding(horizontal = 6.dp, vertical = 2.dp),
-            )
-            Box(
-                Modifier.align(Alignment.BottomEnd).padding(5.dp).size(28.dp)
-                    .pressable(CircleShape, scaleTo = 0.86f, onClick = onPlay)
-                    .background(Color.Black.copy(alpha = 0.42f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (playing) PlayingBars(Color.White, sounding, Modifier.size(12.dp))
-                else Icon(PlayerIcons.Play, "Play ${a.title}", tint = Color.White, modifier = Modifier.size(16.dp))
+private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: Boolean, onPlay: () -> Unit, modifier: Modifier = Modifier) {
+    val nc = Nm.c
+    // Where the cover is, for the hero when it is tapped; it hides while its hero is flying.
+    val where = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
+    val onOpen = { shelf.openAlbum(a, where[0]) }
+    BoxWithConstraints(modifier.fillMaxWidth().aspectRatio(0.75f).padding(horizontal = 4.dp)) {
+        val cardW = maxWidth
+        val img = cardW
+        val left = maxHeight - img
+        val m = img.value * 0.015f
+        fun font(k: Float) = min(left.value * k * 0.9f, 15f).sp
+        val shape = RoundedCornerShape(12.dp)
+        Column(
+            Modifier.fillMaxSize().shadow(6.dp, shape, ambientColor = nc.shadow.copy(alpha = 50 / 255f), spotColor = nc.shadow.copy(alpha = 50 / 255f))
+                .clip(shape).background(nc.cardColor.copy(alpha = 0.9f)).clickable(onClick = onOpen),
+        ) {
+            Box(Modifier.size(img).clip(RoundedCornerShape(10.dp))) {
+                Cover(a.coverId, a.title, Modifier.fillMaxSize()
+                    .onGloballyPositioned { where[0] = it.boundsInRoot() }
+                    .graphicsLayer { alpha = if (shelf.heroFlying && shelf.heroKey == a.key) 0f else 1f }, radius = 10.dp)
+                if (a.year > 0) Text(
+                    "${a.year}", style = Nm.small.copy(fontSize = font(0.18f), fontWeight = FontWeight.Bold), maxLines = 1,
+                    modifier = Modifier.align(Alignment.TopEnd).background(nc.cardColor.copy(alpha = (if (nc.dark) 60 else 140) / 255f + 0.35f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+                val bgA = (img.value / 200f).coerceIn(0f, 1f)
+                Box(
+                    Modifier.align(Alignment.BottomEnd).padding(end = (2f + m).dp, bottom = (2f + m).dp)
+                        .shadow(3.dp, RoundedCornerShape(min(8f, img.value * 0.07f).dp), ambientColor = nc.cardColor, spotColor = nc.cardColor)
+                        .clip(RoundedCornerShape(min(8f, img.value * 0.07f).dp)).background(nc.cardColor.copy(alpha = bgA))
+                        .clickable(onClick = onPlay).padding((2.5f + m).dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val sz = (8.5f + 3f * m).dp
+                    if (playing) PlayingBars(nc.icon, sounding, Modifier.size(sz))
+                    else Icon(Iconsax.Play, "Play ${a.title}", tint = nc.icon, modifier = Modifier.size(sz))
+                }
+            }
+            Column(Modifier.fillMaxWidth().height(left).padding(horizontal = 8.dp), verticalArrangement = Arrangement.Center) {
+                Text(a.title, style = Nm.medium.copy(fontSize = font(0.28f), color = if (playing) nc.primary else nc.medium), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                Text(a.artist, style = Nm.small.copy(fontSize = font(0.23f)), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                Text(count(a.tracks.size, "Track") + " • " + fmtMinutes(a.durationMs), style = Nm.small.copy(fontSize = font(0.23f)),
+                    maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Text(a.title, style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.1).sp),
-            color = if (playing) Bridge.Accent else Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(a.artist, style = TextStyle(fontSize = 11.5.sp), color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(count(a.tracks.size, "Track") + " • " + fmtMinutes(a.durationMs),
-            style = TextStyle(fontSize = 11.sp), color = Bridge.Muted.copy(alpha = 0.78f), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
-/** The top of an album's page: the cover in its frame, what it is, and shuffle and Play Last. */
+/**
+ * The top of an album's page, as Namida's: the cover in its frame (a rim of the card colour,
+ * rounded 18, with a shadow) and beside it the name, who it is by and the year, sized to the
+ * room, then shuffle and Play Last.
+ */
 @Composable
-private fun AlbumBand(a: Album, onShuffle: () -> Unit, onPlayLast: () -> Unit) {
-    val glow = Covers.tint(a.coverId) ?: Covers.madeUp(a.title)
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clip(RoundedCornerShape(24.dp))
-            .background(Brush.verticalGradient(listOf(lerp(Bridge.Surface, glow, 0.16f), Bridge.Surface)))
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val frame = RoundedCornerShape(20.dp)
-        Box(
-            Modifier.size(136.dp).shadow(14.dp, frame, ambientColor = glow.copy(alpha = 0.5f), spotColor = glow)
-                .clip(frame).background(Bridge.Chip).padding(6.dp),
-        ) { Cover(a.coverId, a.title, Modifier.fillMaxSize(), radius = 14.dp, big = true) }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(a.title, style = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp, lineHeight = 23.sp),
-                color = Bridge.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(3.dp))
-            Text(a.artist, style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 18.sp), color = Bridge.Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (a.year > 0) Text("${a.year}", style = TextStyle(fontSize = 13.sp, fontFeatureSettings = "tnum"), color = Bridge.Muted.copy(alpha = 0.8f))
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.height(36.dp).width(48.dp).pressable(ButtonShape, scaleTo = 0.92f, onClick = onShuffle).background(Bridge.Chip),
-                    contentAlignment = Alignment.Center) {
-                    Icon(PlayerIcons.Shuffle, "Shuffle ${a.title}", tint = Bridge.Text, modifier = Modifier.size(20.dp))
+private fun AlbumHead(a: Album, shelf: MusicShelf, pushOffset: () -> Float, onShuffle: () -> Unit, onPlayLast: () -> Unit) {
+    val nc = Nm.c
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 16.dp).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 4.dp)) {
+        val imgMax = min(maxWidth.value * 0.4f, 260f)
+        val infoW = maxWidth.value - imgMax
+        fun font(p: Float, lo: Float, hi: Float) = (infoW * 0.2f * p).coerceIn(lo, hi).sp
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val frame = RoundedCornerShape(18.dp)
+            Box(
+                Modifier.padding(horizontal = 12.dp).size((imgMax - 24f).dp)
+                    .shadow(8.dp, frame, ambientColor = nc.shadow, spotColor = nc.shadow)
+                    .clip(frame).background(nc.card.copy(alpha = 180 / 255f)).padding(3.dp),
+            ) {
+                // Where the hero lands: as it will be once the page has slid in. Hidden while it flies.
+                Cover(a.coverId, a.title, Modifier.fillMaxSize()
+                    .onGloballyPositioned { shelf.heroTo = it.boundsInRoot().translate(-pushOffset(), 0f) }
+                    .graphicsLayer { alpha = if (shelf.heroFlying && shelf.heroKey == a.key) 0f else 1f }, radius = 12.dp, big = true)
+            }
+            Column(Modifier.weight(1f)) {
+                Spacer(Modifier.height(18.dp))
+                Text(a.title, style = Nm.large.copy(fontSize = font(0.4f, 10f, 32f)), maxLines = 1, softWrap = false,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 14.dp))
+                Spacer(Modifier.height(2.dp))
+                Text(a.artist, style = Nm.medium.copy(fontSize = font(0.28f, 10f, 24f)), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 14.dp))
+                if (a.year > 0) {
+                    Spacer(Modifier.height(2.dp))
+                    Text("${a.year}", style = Nm.small.copy(fontSize = font(0.25f, 10f, 22f)), maxLines = 1, modifier = Modifier.padding(start = 14.dp))
                 }
-                Row(Modifier.height(36.dp).pressable(ButtonShape, scaleTo = 0.94f, onClick = onPlayLast).background(Bridge.Chip).padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("Play Last", style = TextStyle(fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text, maxLines = 1)
+                Spacer(Modifier.height(18.dp))
+                Row(Modifier.padding(start = 6.dp)) {
+                    NamidaButton(null, Iconsax.Shuffle, onClick = onShuffle)
+                    Spacer(Modifier.width(6.dp))
+                    NamidaButton("Play Last", Iconsax.PlayLast, onClick = onPlayLast)
                 }
             }
         }
@@ -515,19 +713,15 @@ private fun AlbumBand(a: Album, onShuffle: () -> Unit, onPlayLast: () -> Unit) {
 
 private val SORTS = listOf("Disc Number", "Title", "Duration", "Artist")
 
-/** How the album's songs are ordered, in a chip; a tap offers the others. */
+/** Namida's sort button: the order's name as a text button; a tap offers the others. */
 @Composable
-private fun SortChip(sort: Int, onSort: (Int) -> Unit) {
+private fun SortButton(sort: Int, onSort: (Int) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        Row(
-            Modifier.height(32.dp).clip(ButtonShape).background(Bridge.Chip).clickable { open = true }.padding(start = 12.dp, end = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(SORTS[sort], style = TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text, maxLines = 1)
-            Spacer(Modifier.width(4.dp))
-            Icon(PlayerIcons.Down, null, tint = Bridge.Text, modifier = Modifier.size(14.dp))
-        }
+        Text(
+            SORTS[sort], style = Nm.medium.copy(fontSize = (15f * 0.95f).sp, color = Nm.c.primary), maxLines = 1,
+            modifier = Modifier.padding(horizontal = 4.dp).clip(RoundedCornerShape(8.dp)).clickable { open = true }.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
         if (open) PopupMenu(onDismiss = { open = false }) {
             SORTS.forEachIndexed { i, s -> MenuRow(null, s, on = i == sort) { open = false; onSort(i) } }
         }
@@ -535,83 +729,101 @@ private fun SortChip(sort: Int, onSort: (Int) -> Unit) {
 }
 
 /**
- * The top of the screen: the search on the right (and, on an album, back on the left); with
- * the search open, the field across it, filtering the page under it as you type.
+ * Namida's app bar: 56 high on the page colour; back on the left inside a page, the search on
+ * the right. With the search open, Namida's search box across it, filtering as you type.
  */
 @Composable
-private fun MusicHeader(shelf: MusicShelf, statusTop: Dp) {
+private fun AppBar(shelf: MusicShelf, statusTop: Dp) {
     val album = shelf.open
     val searching = if (album != null) shelf.albumSearching else shelf.searching
-    Box(Modifier.fillMaxWidth().background(Bridge.Bg).padding(top = statusTop).height(HeaderHeight)) {
-        AnimatedContent(
-            Triple(album != null, searching, album?.key),
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(140)) },
-            label = "header",
-        ) { (inAlbum, on, _) ->
-            Row(Modifier.fillMaxSize().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (on) {
-                    HeaderButton(PlayerIcons.Back, "Close the search") { shelf.back() }
-                    val value = if (inAlbum) shelf.albumQuery else shelf.query
-                    val set: (String) -> Unit = { if (inAlbum) shelf.albumQuery = it else shelf.query = it }
-                    SearchBox(value, set, when { inAlbum -> "Search this album"; shelf.page == 0 -> "Search tracks"; else -> "Search albums" }, Modifier.weight(1f))
-                    if (value.isNotEmpty()) HeaderButton(PlayerIcons.Close, "Clear the search") { set("") }
-                } else {
-                    if (inAlbum) HeaderButton(PlayerIcons.Back, "Back") { shelf.back() }
-                    Spacer(Modifier.weight(1f))
-                    HeaderButton(PlayerIcons.Search, "Search") { if (inAlbum) shelf.albumSearching = true else shelf.searching = true }
+    val nc = Nm.c
+    val inAlbum = album != null
+    // Namida's search: the box grows leftwards out of the search button over 400 ms, and back.
+    val open by animateFloatAsState(if (searching) 1f else 0f, tween(400, easing = PageEase), label = "search")
+    val back by animateFloatAsState(if (inAlbum || searching) 1f else 0f, tween(300), label = "back")
+    val value = if (inAlbum) shelf.albumQuery else shelf.query
+    val set: (String) -> Unit = { if (inAlbum) shelf.albumQuery = it else shelf.query = it }
+    Box(Modifier.fillMaxWidth().background(nc.bg).padding(top = statusTop).height(AppBarHeight)) {
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(AppBarHeight).graphicsLayer { alpha = back }) {
+                if (back > 0f) AppBarIcon(Iconsax.Back, if (searching) "Close the search" else "Back") { shelf.back() }
+            }
+            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterEnd) {
+                if (open > 0.01f) SearchBox(
+                    value, set, when { inAlbum -> "Search this album"; shelf.page == 0 -> "Search tracks"; else -> "Search albums" },
+                    Modifier.width(maxWidth * open).graphicsLayer { alpha = (open * 2f).coerceAtMost(1f) },
+                )
+            }
+            Box(contentAlignment = Alignment.Center) {
+                Box(Modifier.graphicsLayer { alpha = 1f - open; rotationZ = -90f * open }) {
+                    AppBarIcon(Iconsax.Search, "Search") { if (inAlbum) shelf.albumSearching = true else shelf.searching = true }
+                }
+                if (open > 0f) Box(Modifier.graphicsLayer { alpha = open; rotationZ = 90f * (1f - open) }) {
+                    AppBarIcon(Iconsax.Clear, "Clear the search") { if (value.isEmpty()) shelf.back() else set("") }
                 }
             }
+            Spacer(Modifier.width(4.dp))
         }
     }
 }
 
 @Composable
-private fun HeaderButton(icon: ImageVector, description: String, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.88f, onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, description, tint = Bridge.Text, modifier = Modifier.size(23.dp))
+private fun AppBarIcon(icon: ImageVector, description: String, onClick: () -> Unit) {
+    Box(Modifier.size(AppBarHeight).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, description, tint = Nm.c.icon, modifier = Modifier.size(24.dp))
     }
 }
 
+/** Namida's search box: the card colour, the hint in its small style at 17, what is typed in its medium one. */
 @Composable
 private fun SearchBox(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier) {
+    val nc = Nm.c
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    Box(modifier.height(42.dp).clip(RoundedCornerShape(14.dp)).background(Bridge.Chip).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
-        if (value.isEmpty()) Text(placeholder, style = TextStyle(fontSize = 15.sp), color = Bridge.Muted.copy(alpha = 0.7f), maxLines = 1)
+    val box = if (nc.dark) nc.cardColor.copy(alpha = 200 / 255f) else nc.cardColor.copy(alpha = 200 / 255f).compositeOver(nc.onSurface.copy(alpha = 40 / 255f))
+    Box(modifier.height(42.dp).clip(CircleShape).background(box).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
+        if (value.isEmpty()) Text(placeholder, style = Nm.small.copy(fontSize = 17.sp), maxLines = 1)
         BasicTextField(
             value, onChange, singleLine = true,
-            textStyle = TextStyle(fontSize = 15.sp, color = Bridge.Text),
-            cursorBrush = SolidColor(Bridge.Accent),
+            textStyle = Nm.medium,
+            cursorBrush = SolidColor(nc.onSurface),
             modifier = Modifier.fillMaxWidth().focusRequester(focus),
         )
     }
 }
 
 /**
- * Namida's bottom bar, with only Tracks and Albums: each an icon over its name, the one showing
- * with a pill of the colour behind its icon, which grows from the middle as a swipe reaches it.
+ * Namida's bottom bar, a Material bar 64 high with only Tracks and Albums: the one showing has
+ * its icon on a pill of the indicator colour, which grows from the middle as a swipe reaches it,
+ * and its name under it; the other shows its icon alone.
  */
 @Composable
-private fun MusicBar(position: Float, bottomInset: Dp, modifier: Modifier, onSelect: (Int) -> Unit) {
+private fun NavBar(position: Float, bottomInset: Dp, modifier: Modifier, onSelect: (Int) -> Unit) {
+    val nc = Nm.c
     Row(
-        modifier.fillMaxWidth().background(Bridge.Surface).padding(bottom = bottomInset).height(MusicBarHeight),
+        modifier.fillMaxWidth().shadow(22.dp, RoundedCornerShape(0.dp), ambientColor = nc.shadow, spotColor = nc.shadow)
+            .background(nc.bar).padding(bottom = bottomInset).height(MusicBarHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        listOf("Tracks" to PlayerIcons.Note, "Albums" to PlayerIcons.Disc).forEachIndexed { i, (label, icon) ->
+        listOf("Tracks" to Iconsax.Tracks, "Albums" to Iconsax.Albums).forEachIndexed { i, (label, icon) ->
             val on = (1f - abs(position - i)).coerceIn(0f, 1f)
-            Column(
+            Box(
                 Modifier.weight(1f).fillMaxHeight()
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+                contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.size(width = 60.dp, height = 30.dp), contentAlignment = Alignment.Center) {
-                    Box(Modifier.fillMaxSize().graphicsLayer { scaleX = 0.4f + 0.6f * on; alpha = on }.clip(ButtonShape).background(Bridge.Accent.copy(alpha = 0.24f)))
-                    Icon(icon, label, tint = lerp(Bridge.Muted, Bridge.Text, on), modifier = Modifier.size(22.dp))
+                Column(
+                    Modifier.graphicsLayer { translationY = (1f - on) * 9.dp.toPx() },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(Modifier.size(width = 64.dp, height = 32.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.fillMaxSize().graphicsLayer { scaleX = on; alpha = if (on > 0.02f) 1f else 0f }.clip(RoundedCornerShape(16.dp)).background(nc.indicator))
+                        Icon(icon, label, tint = lerp(nc.icon, Color.White.copy(alpha = 0.75f), on), modifier = Modifier.size(24.dp))
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(label, style = TextStyle(fontFamily = LexendDeca, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = nc.onSurface),
+                        modifier = Modifier.graphicsLayer { alpha = on })
                 }
-                Spacer(Modifier.height(4.dp))
-                Text(label, style = TextStyle(fontSize = 12.sp, fontWeight = if (on > 0.5f) FontWeight.SemiBold else FontWeight.Medium),
-                    color = lerp(Bridge.Muted, Bridge.Text, on))
             }
         }
     }

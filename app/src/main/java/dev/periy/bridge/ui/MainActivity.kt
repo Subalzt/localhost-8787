@@ -265,8 +265,8 @@ private val HeaderHeight = 60.dp
 /** The tabs along the bottom: the capsule, and the room around it. */
 private val TabsHeight = 74.dp
 
-/** The mini player, and the gap over it: what every page leaves free at its foot while music is queued. */
-private val MiniRoom = 64.dp + 10.dp
+/** The mini player (Namida's, 82 high), and the gap over it: what every page leaves free at its foot while music is queued. */
+private val MiniRoom = 82.dp + 12.dp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -573,11 +573,16 @@ private fun BlazeItUi(vm: MainViewModel) {
             )
         }
 
-        // What is playing: the mini player over the tabs (or Music's bar), dragged up to full screen and on to the queue.
+        // What is playing: the mini player over the tabs, or 12 above Namida's bar in Music (it
+        // glides between the two), dragged up to full screen and on to the queue.
+        val miniLift by androidx.compose.animation.core.animateDpAsState(
+            if (shelf.showing) bottomInset + MusicBarHeight + 12.dp else bottomInset + 66.dp, tween(320), label = "lift",
+        )
         if (hasPlayer) NowPlaying(
             player, now, motion, ctx.container.loudness,
-            statusTop = statusTop, navBottom = bottomInset, lift = bottomInset + 66.dp,
+            statusTop = statusTop, navBottom = bottomInset, lift = miniLift,
             onOpenAlbum = { t -> shelf.albumOf[t.id]?.let { shelf.openAlbum(it) }; shelf.showing = true },
+            onAddSongs = { motion.collapse(); shelf.open = null; shelf.page = 0; shelf.showing = true },
         )
 
         // A linked phone's files slide in over the app, as a folder does in Files.

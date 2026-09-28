@@ -1488,13 +1488,32 @@
      pieces here are laid out at their full size and only scaled on the way. */
   /* Everything in it takes the cover's colour, as Namida's player does: the ground a deep (in
      light, a pale) shade of it, the quiet text and the surfaces faintly tinted by it. */
-  .np { position: fixed; inset: 0; z-index: 44; pointer-events: none; color: var(--txt); --pl-tint: #48484F;
-    --np-sub: color-mix(in srgb, var(--pl-tint) 22%, var(--sub)); --np-surface: color-mix(in srgb, var(--pl-tint) 20%, var(--surface));
-    --np-chip: color-mix(in srgb, var(--pl-tint) 26%, var(--surface-2)); }
+  /* Lexend Deca (SIL OFL 1.1), the typeface Namida is set in, from the phone. */
+  @font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/lexend-deca-latin-ext-400-normal.woff2) format("woff2");
+    unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/lexend-deca-latin-400-normal.woff2) format("woff2");
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/lexend-deca-latin-ext-500-normal.woff2) format("woff2");
+    unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/lexend-deca-latin-500-normal.woff2) format("woff2");
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/lexend-deca-latin-ext-600-normal.woff2) format("woff2");
+    unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/lexend-deca-latin-600-normal.woff2) format("woff2");
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 700; font-display: swap; src: url(/fonts/lexend-deca-latin-ext-700-normal.woff2) format("woff2");
+    unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 700; font-display: swap; src: url(/fonts/lexend-deca-latin-700-normal.woff2) format("woff2");
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  /* The --nm-* colours are Namida's theme worked out from the cover (npNamidaColours), as the phone's player does. */
+  .np { position: fixed; inset: 0; z-index: 44; pointer-events: none; color: var(--nm-medium, var(--txt)); --pl-tint: #48484F;
+    font-family: "Lexend Deca", var(--font, system-ui), sans-serif;
+    --np-sub: var(--nm-small, color-mix(in srgb, var(--pl-tint) 22%, var(--sub))); --np-surface: var(--nm-bg, color-mix(in srgb, var(--pl-tint) 20%, var(--surface)));
+    --np-chip: var(--nm-sec, color-mix(in srgb, var(--pl-tint) 26%, var(--surface-2))); }
   .np-panel { position: absolute; left: 0; top: 0; overflow: hidden; pointer-events: auto; touch-action: none;
     background:
-      linear-gradient(180deg, color-mix(in srgb, var(--pl-tint) 38%, var(--bg)) 0%, color-mix(in srgb, var(--pl-tint) 22%, var(--bg)) 55%,
-        color-mix(in srgb, var(--pl-tint) 15%, var(--bg)) 100%); }
+      linear-gradient(180deg, var(--nm-wash-top, transparent), var(--nm-wash-bottom, transparent)),
+      var(--nm-bg, color-mix(in srgb, var(--pl-tint) 22%, var(--bg))); }
   .np-specks { position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; pointer-events: none; }
   .np-slots { position: absolute; inset: 0; pointer-events: none; }
   .np-el { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform, opacity; }
@@ -1507,25 +1526,29 @@
   .np-line.a { color: var(--np-sub); }
   /* Open, the two lines trade places as Namida has them: the artist large and bold, the song under it.
      They cross while faded out, and change weight there, unseen. */
-  .np-slots.full .np-line.t { font-weight: 600; letter-spacing: -.01em; color: color-mix(in srgb, var(--txt) 82%, transparent); }
-  .np-slots.full .np-line.a { font-weight: 700; letter-spacing: -.02em; color: var(--txt); }
+  /* Open, both are in Namida's medium style (600, the text colour at 180/255): the artist at 20, the song at 15. */
+  .np-slots.full .np-line.t, .np-slots.full .np-line.a { font-weight: 600; letter-spacing: 0; color: var(--nm-medium, var(--txt)); }
   .np-slots.bare .np-line.a i { display: none; }
   /* The bar says the album after the artist; the player does not: that part fades as it grows. */
   .np-line.a i { font-style: normal; opacity: var(--more, 0); }
   .np-hit { pointer-events: auto; }
   .np-btn { width: 100%; height: 100%; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none;
-    color: var(--txt); cursor: pointer; transition: transform .25s cubic-bezier(.3,1.4,.5,1), background .15s; }
+    color: var(--nm-icon, var(--txt)); cursor: pointer; transition: transform .25s cubic-bezier(.3,1.4,.5,1), background .15s; }
   .np-btn:hover { background: color-mix(in srgb, var(--txt) 8%, transparent); }
   .np-btn:active { transform: scale(.88); }
-  /* Namida's icons: fine outlines with rounded ends, each broken once along its line. */
-  .np-btn svg { width: 50%; height: 50%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  /* Iconsax, in its Broken style, as Namida draws its icons: a 1.5 line with rounded ends. */
+  .np-btn svg { width: 47%; height: 47%; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
   .np-btn svg .fill { fill: currentColor; stroke: none; }
-  .np-btn.on { color: color-mix(in srgb, var(--pl-tint) 62%, var(--txt)); }
-  .np-heart .np-btn { color: color-mix(in srgb, var(--np-sub) 85%, transparent); }
-  .np-heart .np-btn svg { width: 60%; height: 60%; }
+  .np-btn.on { color: var(--nm-primary, color-mix(in srgb, var(--pl-tint) 62%, var(--txt))); }
+  .np-row .np-btn { color: var(--nm-on-sec, var(--txt)); }
+  .np-heart .np-btn { color: var(--nm-icon, var(--txt)); }
+  .np-heart .np-btn svg { width: 67%; height: 67%; }
+  .np-btn > span, .np-btn > i { display: grid; place-items: center; width: 100%; height: 100%; font-style: normal; }
+  .np-btn > span svg, .np-btn > i svg { width: 47%; height: 47%; }
+  .np-heart .np-btn > span svg { width: 67%; height: 67%; }
   .np-heart .np-btn .on { display: none; }
-  .np-heart .np-btn.on { color: color-mix(in srgb, var(--pl-tint) 70%, #FFFFFF); }
-  .np-heart .np-btn.on .on { display: inline; } .np-heart .np-btn.on .off { display: none; }
+  .np-heart .np-btn.on { color: var(--nm-icon, var(--txt)); }
+  .np-heart .np-btn.on .on { display: grid; } .np-heart .np-btn.on .off { display: none; }
   .np-heart .np-btn.pop { animation: np-pop .5s cubic-bezier(.3,1.8,.5,1); }
   @keyframes np-pop { from { transform: scale(.72); } }
   /* The play button: a disc in the cover's colour, lit from the top left, glowing onto the page. */
@@ -1534,16 +1557,17 @@
   /* As Namida's: the disc in the cover's colour going grey towards its lower right, glowing onto
      the player in the same colour, with the outline of play or pause on it. */
   .np-play .np-btn { position: relative; overflow: hidden; background: var(--txt); color: var(--surface);
-    box-shadow: 0 10px 30px -6px color-mix(in srgb, var(--pl-tint) calc(var(--k, 1) * 95%), transparent); }
+    box-shadow: 0 2px 8px 1px color-mix(in srgb, var(--nm-main, var(--pl-tint)) calc(var(--k, 1) * 63%), transparent); }
   .np-play .np-btn::before { content: ""; position: absolute; inset: 0; border-radius: 50%; opacity: var(--k, 1);
-    background: linear-gradient(135deg, var(--pl-tint) 0%, color-mix(in srgb, var(--pl-tint) 78%, #9E9E9E) 70%); }
+    background: linear-gradient(135deg, var(--nm-main, var(--pl-tint)) 0%, var(--nm-main-grey, color-mix(in srgb, var(--pl-tint) 78%, #9E9E9E)) 70%); }
   .np-play .np-btn:hover { background: var(--txt); filter: brightness(1.06); }
   .np-play .np-btn:active { transform: scale(.97); }
   .np-play .np-btn .i0, .np-play .np-btn .i1 { position: absolute; inset: 0; display: grid; place-items: center; }
   .np-play .np-btn .i0 { opacity: calc(1 - var(--k, 1)); }
-  .np-play .np-btn .i1 { opacity: var(--k, 1); color: rgba(255,255,255,.78); }
+  .np-play .np-btn .i1 { opacity: var(--k, 1); color: rgba(255,255,255,.706); }
   .np-play .np-btn svg { position: relative; width: 40%; height: 40%; }
-  .np-play .np-btn .i1 svg { width: 44%; height: 44%; stroke-width: 1.6; }
+  /* Namida's disc: a 40 icon on a 68 disc. */
+  .np-play .np-btn .i1 svg { width: 59%; height: 59%; stroke-width: 1.5; }
   .np-row { display: flex; align-items: center; gap: 6px; padding: 0 12px; pointer-events: auto; }
   .np-row .np-sq { width: 44px; height: 44px; flex: 0 0 44px; }
   .np-where { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 10px; border: 0;
@@ -1551,85 +1575,130 @@
   .np-where:hover { background: color-mix(in srgb, var(--txt) 7%, transparent); }
   .np-where span { font-size: 12px; font-weight: 550; color: var(--sub); font-variant-numeric: tabular-nums; }
   .np-where b { max-width: 100%; font-size: 15.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* Namida's chip: the headphones in a disc, and "Audio"; a click opens the sound controls. */
-  .np-chip { display: inline-flex; align-items: center; gap: 10px; min-width: 0; margin-right: auto; padding: 4px 14px 4px 2px; border: 0; border-radius: 999px;
-    background: none; color: var(--txt); font: inherit; font-size: 15.5px; font-weight: 650; white-space: nowrap; cursor: pointer; transition: background .15s; }
+  /* Namida's chip: the headphones in a disc of the secondary colour, "Audio" and after it what the
+     file is, small in the lit colour, with the bit depth in a badge; one text of up to two lines. */
+  .np-chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: calc(100% - 110px); margin-right: auto; padding: 4px 8px 4px 4px;
+    border: 0; border-radius: 12px; background: none; color: var(--nm-on-sec, var(--txt)); font: inherit; cursor: pointer; transition: background .15s; text-align: left; }
   .np-chip:hover { background: color-mix(in srgb, var(--txt) 7%, transparent); }
-  .np-chip .disc { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--np-chip); }
-  .np-chip svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-  #np-chip-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  #np-chip-t b { font-weight: 750; }
-  #np-chip-t small { margin-left: 8px; font-size: 13px; font-weight: 550; color: color-mix(in srgb, var(--txt) 72%, transparent); font-variant-numeric: tabular-nums; }
-  #np-repeat .one, #np-repeat.one .all { display: none; }
-  #np-repeat.one .one { display: block; }
+  .np-chip .disc { flex: 0 0 30px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--nm-sec, var(--surface-2)); }
+  .np-chip .disc i { display: grid; place-items: center; }
+  .np-chip svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  #np-chip-t { min-width: 0; font-size: 15px; font-weight: 500; line-height: 17px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  #np-chip-t small { font-size: 11px; font-weight: 400; color: var(--nm-primary, var(--sub)); font-variant-numeric: tabular-nums; }
+  #np-chip-t .bits { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; padding: 1px 4px; border-radius: 4px; vertical-align: 1px;
+    background: color-mix(in srgb, var(--nm-cardc, var(--surface)) 24%, transparent); font-size: 11px; font-weight: 400; color: var(--nm-primary, var(--sub)); }
+  #np-chip-t .bits svg { width: 12px; height: 12px; }
+  /* Namida's repeat: off, all, or this one song, each its own icon. */
+  #np-repeat .r-all, #np-repeat .r-one, #np-repeat.all .r-off, #np-repeat.one .r-off { display: none; }
+  #np-repeat.all .r-all, #np-repeat.one .r-one { display: grid; }
   .np-wave { pointer-events: auto; touch-action: none; cursor: pointer; }
   .np-wave canvas { width: 100%; height: 100%; display: block; }
   .np-seek { display: block; text-align: center; font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; pointer-events: none; }
-  .np-times { display: flex; justify-content: space-between; font-size: 13px; font-weight: 550; color: color-mix(in srgb, var(--txt) 78%, transparent);
+  .np-times { display: flex; justify-content: space-between; font-size: 13px; font-weight: 550; color: var(--nm-small, color-mix(in srgb, var(--txt) 78%, transparent));
     font-variant-numeric: tabular-nums; pointer-events: none; }
-  /* The sound controls: a card rising over the player, a slider for each, with its value. */
+  /* Namida's sound controls: a dialog, Configure, rounded 24 on its dialog colour, each control an
+     icon, its name and its percentage over a Material slider (a thick track, a thin upright thumb). */
   .np-sheet { position: absolute; inset: 0; pointer-events: auto; z-index: 3; }
-  .np-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .3s; }
-  .np-card { position: absolute; left: 50%; bottom: 12px; width: min(460px, calc(100% - 20px)); padding: 18px 20px; border-radius: 28px;
-    background: var(--np-surface); box-shadow: var(--float-shadow); transform: translate(-50%, 110%); transition: transform .42s cubic-bezier(.05,.7,.1,1); }
-  .np-sheet.in .np-scrim { opacity: 1; } .np-sheet.in .np-card { transform: translate(-50%, 0); }
-  .np-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-  .np-card-head svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
-  .np-card-head b { flex: 1 1 auto; font-size: 19px; font-weight: 750; }
-  .np-card-head button { padding: 6px 10px; border: 0; border-radius: 999px; background: none; font: inherit; font-size: 15px; font-weight: 650;
-    color: color-mix(in srgb, var(--pl-tint) 60%, var(--txt)); cursor: pointer; }
-  .np-card-head button:disabled { color: var(--np-sub); opacity: .6; cursor: default; }
-  .np-slider { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 4px; padding: 8px 0; }
-  .np-slider span { font-size: 15px; font-weight: 550; }
-  .np-slider em { font-style: normal; font-size: 14px; font-weight: 650; color: var(--np-sub); font-variant-numeric: tabular-nums; }
-  .np-slider input { grid-column: 1 / -1; -webkit-appearance: none; appearance: none; width: 100%; height: 30px; margin: 0; background: none; cursor: pointer; }
-  .np-slider input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
-    background: linear-gradient(to right, color-mix(in srgb, var(--pl-tint) 75%, var(--txt)) var(--p, 50%), var(--np-chip) var(--p, 50%)); }
-  .np-slider input::-moz-range-track { height: 4px; border-radius: 2px; background: var(--np-chip); }
-  .np-slider input::-moz-range-progress { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--pl-tint) 75%, var(--txt)); }
-  .np-slider input::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px; border-radius: 50%;
-    background: color-mix(in srgb, var(--pl-tint) 75%, var(--txt)); box-shadow: inset 0 0 0 6px color-mix(in srgb, var(--pl-tint) 75%, var(--txt)), inset 0 0 0 20px rgba(255,255,255,.9); }
-  .np-slider input::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--pl-tint) 75%, var(--txt)); }
+  .np-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .25s; }
+  .np-card { position: absolute; left: 50%; top: 50%; width: min(420px, calc(100% - 76px)); padding: 18px 20px 10px; border-radius: 24px;
+    background: var(--nm-dialog, var(--surface)); box-shadow: var(--float-shadow); transform: translate(-50%, -50%) scale(.92); opacity: 0;
+    transition: transform .32s cubic-bezier(.05,.7,.1,1), opacity .2s; }
+  .np-sheet.in .np-scrim { opacity: 1; } .np-sheet.in .np-card { transform: translate(-50%, -50%); opacity: 1; }
+  .np-card-title { display: block; margin-bottom: 10px; font-size: 20px; font-weight: 700; color: var(--nm-large, var(--txt)); }
+  .np-slider { display: block; padding: 6px 0; }
+  .np-sl-head { display: flex; align-items: center; gap: 12px; }
+  .np-sl-head i { display: grid; place-items: center; color: var(--nm-icon, var(--txt)); }
+  .np-sl-head svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .np-sl-head b { font-size: 17px; font-weight: 700; color: var(--nm-large, var(--txt)); }
+  .np-sl-head em { margin-left: -4px; font-style: normal; font-size: 15px; font-weight: 600; color: var(--nm-medium, var(--sub)); font-variant-numeric: tabular-nums; }
+  .np-slider input { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 40px; margin: 0; background: none; cursor: pointer; }
+  .np-slider input::-webkit-slider-runnable-track { height: 6px; border-radius: 3px;
+    background: linear-gradient(to right, var(--nm-primary-85, var(--txt)) calc(var(--p, 50%) - 6px), transparent calc(var(--p, 50%) - 6px),
+      transparent calc(var(--p, 50%) + 6px), var(--nm-secondary-20, var(--surface-3)) calc(var(--p, 50%) + 6px)); }
+  .np-slider input::-moz-range-track { height: 6px; border-radius: 3px; background: var(--nm-secondary-20, var(--surface-3)); }
+  .np-slider input::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--nm-primary-85, var(--txt)); }
+  .np-slider input::-webkit-slider-thumb { -webkit-appearance: none; width: 5px; height: 24px; margin-top: -9px; border-radius: 3px; background: var(--nm-primary-85, var(--txt)); }
+  .np-slider input::-moz-range-thumb { width: 5px; height: 24px; border: 0; border-radius: 3px; background: var(--nm-primary-85, var(--txt)); }
   .np-slider input:disabled { opacity: .45; cursor: default; }
-  .np-note { margin: -4px 0 4px; font-size: 12.5px; color: var(--np-sub); }
-  .np-done { width: 100%; height: 48px; margin-top: 12px; border: 0; border-radius: 999px; font: inherit; font-size: 16px; font-weight: 650; cursor: pointer;
-    background: color-mix(in srgb, var(--pl-tint) 30%, var(--txt)); color: var(--bg); }
-  /* The queue: under the mini row at the top, every song in the order it will play. */
-  .np-queue { display: flex; flex-direction: column; overflow: hidden; border-radius: 26px 26px 0 0; background: var(--np-surface); pointer-events: auto;
+  .np-note { margin: -4px 0 4px; font-size: 12.5px; color: var(--nm-small, var(--sub)); }
+  .np-card-actions { display: flex; justify-content: flex-end; align-items: center; gap: 4px; padding-top: 6px; }
+  .np-card-actions .np-reset { width: 44px; height: 44px; flex: 0 0 44px; }
+  .np-card-actions .np-reset svg { width: 22px; height: 22px; }
+  .np-done { min-height: 36px; padding: 8px 24px; border: 0.5px solid color-mix(in srgb, var(--nm-primary, var(--txt)) 48%, transparent); border-radius: 20px;
+    font: inherit; font-size: 15.5px; font-weight: 600; cursor: pointer; background: color-mix(in srgb, var(--nm-primary, var(--txt)) 24%, transparent); color: var(--nm-icon, var(--txt)); }
+  /* Namida's queue: a sheet with corners of 32; its header washed in the song's colour ("Queue", where
+     in it and the time left, round buttons, and back down); its songs as Namida's tiles; and a row
+     along its foot to clear some of it, go to the song playing, and shuffle what is left. */
+  .np-queue { display: flex; flex-direction: column; overflow: hidden; border-radius: 32px 32px 0 0; background: var(--nm-bg, var(--surface)); pointer-events: auto;
     box-shadow: 0 -20px 50px -30px rgba(0,0,0,.5); }
-  .np-qlist { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 10px 0 110px; scrollbar-width: thin; }
-  .np-qrow { position: relative; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto 34px 34px; align-items: center; gap: 12px;
-    height: 62px; padding: 0 10px 0 16px; cursor: pointer; background: var(--np-surface); transition: background .15s; user-select: none; }
-  .np-qrow:hover { background: color-mix(in srgb, var(--txt) 5%, var(--np-surface)); }
-  .np-qrow.now { background: color-mix(in srgb, var(--pl-tint) 16%, var(--np-surface)); }
-  .np-qrow.now b { color: color-mix(in srgb, var(--pl-tint) 65%, var(--txt)); }
-  .np-qrow.done { opacity: .55; }
+  .np-qhead { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; min-height: 42px; padding: 12px 20px 12px 18px; background: var(--nm-qhead, transparent); }
+  .np-qtitle { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  .np-qtitle b { font-size: 15px; font-weight: 600; color: var(--nm-medium, var(--txt)); }
+  .np-qtitle span { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; font-weight: 600; color: var(--nm-small, var(--sub)); font-variant-numeric: tabular-nums; }
+  .np-qtitle span svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2; }
+  .np-qact { width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+    background: color-mix(in srgb, var(--nm-sec, var(--surface-2)) 60%, transparent); color: var(--nm-on-sec, var(--txt)); transition: transform .2s; }
+  .np-qact:active { transform: scale(.9); }
+  .np-qact svg, .np-pill svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .np-qdown { width: 44px; height: 44px; flex: 0 0 44px; }
+  .np-qdown svg { width: 24px; height: 24px; }
+  .np-qlist { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0 0 70px; scrollbar-width: thin; }
+  .np-qrow { position: relative; display: grid; grid-template-columns: 70px minmax(0, 1fr) auto 40px 30px; align-items: center; gap: 0 10px;
+    height: 82px; margin-bottom: 4px; padding: 4px 4px 4px 12px; cursor: pointer; user-select: none; transition: background .3s;
+    background: color-mix(in srgb, var(--nm-card, var(--surface)) 90%, transparent); }
+  .np-qrow:hover { background: color-mix(in srgb, var(--txt) 5%, var(--nm-card, var(--surface))); }
+  /* The song playing's colour is a layer that fades in, so it passes from one tile to the next when the song changes. */
+  .np-qrow { isolation: isolate; }
+  .np-qrow::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity .3s;
+    background: linear-gradient(135deg, var(--nm-now, var(--pl-tint)) 60%, var(--nm-tint40, transparent)); }
+  .np-qrow.now::before { opacity: 1; }
+  .np-qrow .t b, .np-qrow .t span, .np-qrow .d, .np-qh, .np-qx, .np-qheart { transition: color .3s; }
+  .np-qrow.now .t b, .np-qrow.now .d { color: rgba(255,255,255,.667); }
+  .np-qrow.now .t span { color: rgba(255,255,255,.55); }
+  .np-qrow.now .t span + span { color: rgba(255,255,255,.51); }
+  .np-qrow.now .np-qh, .np-qrow.now .np-qx, .np-qrow.now .np-qheart { color: rgba(255,255,255,.63); }
+  .np-qside { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .np-qheart { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer;
+    color: var(--nm-icon, var(--faint)); transition: transform .2s; }
+  .np-qheart:active { transform: scale(.85); }
+  .np-qheart svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; }
   .np-qrow.dragging { z-index: 2; box-shadow: var(--float-shadow); transition: none; }
-  .np-qrow .cover { position: relative; width: 46px; height: 46px; border-radius: 8px; overflow: hidden; font-size: 15px; }
+  .np-qrow .cover { position: relative; width: 70px; height: 70px; border-radius: 8px; overflow: hidden; font-size: 22px; transition: transform .4s ease-in-out; }
+  .np-qrow.now .cover { transform: scale(.96); }
   .np-qrow .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .np-qrow .cover .eq { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 2px; padding: 14px 13px;
-    background: rgba(0,0,0,.45); }
-  .np-qrow .cover .eq b { flex: 1 1 0; height: 30%; border-radius: 1px; background: #FFFFFF; animation: np-eq .55s ease-in-out infinite alternate; }
-  .np-qrow .cover .eq b:nth-child(2) { animation-delay: -.2s; } .np-qrow .cover .eq b:nth-child(3) { animation-delay: -.38s; }
-  .np-qlist.paused .eq b { animation-play-state: paused; }
-  @keyframes np-eq { to { height: 100%; } }
+  .np-qrow .cover .eq { display: none; }
   .np-qrow .t { min-width: 0; display: flex; flex-direction: column; }
-  .np-qrow .t b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .np-qrow .t span { font-size: 13px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .np-qrow .d { font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; }
-  .np-qx, .np-qh { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none;
-    color: var(--faint); cursor: pointer; }
-  .np-qx { opacity: 0; transition: opacity .15s, background .15s, color .15s; }
-  .np-qrow:hover .np-qx { opacity: 1; }
-  .np-qx:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+  .np-qrow .t b { font-size: 15px; font-weight: 600; color: var(--nm-medium, var(--txt)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .np-qrow .t span { font-size: 13px; font-weight: 500; color: var(--nm-small, var(--sub)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .np-qrow .t span + span { font-weight: 400; }
+  .np-qrow .d { font-size: 13px; font-weight: 500; color: var(--nm-small, var(--sub)); font-variant-numeric: tabular-nums; }
+  .np-qx, .np-qh { width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: none;
+    color: var(--nm-icon, var(--faint)); cursor: pointer; }
+  .np-qx { width: 30px; }
+  .np-qx:hover { background: color-mix(in srgb, var(--txt) 7%, transparent); }
   .np-qh { cursor: grab; touch-action: none; }
   .np-qh:active { cursor: grabbing; }
-  .np-qx svg, .np-qh svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .np-qx svg, .np-qh svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .np-qx svg { width: 18px; height: 18px; transform: rotate(90deg); }
   .np-qlist.locked .np-qx, .np-qlist.locked .np-qh { display: none; }
-  .np-qbar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px;
-    padding: 5px 6px 5px 18px; border-radius: 999px; background: var(--np-surface); box-shadow: var(--float-shadow); white-space: nowrap; }
-  .np-qbar span { font-size: 13.5px; font-weight: 650; margin-right: 6px; }
-  .np-qbar .np-btn { width: 40px; height: 40px; }
+  .np-qbar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: flex-end; align-items: center; gap: 8px; height: 48px;
+    padding: 4px 8px; border-radius: 12px 12px 0 0; background: var(--nm-bg, var(--surface)); }
+  /* Namida's button: a faint wash of the lit colour with a hairline edge in it, the icon in its icon colour. */
+  .np-pill { min-height: 36px; min-width: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; border-radius: 20px;
+    border: .5px solid color-mix(in srgb, var(--nm-primary, var(--txt)) 18%, transparent); background: color-mix(in srgb, var(--nm-primary, var(--txt)) 6%, transparent);
+    color: var(--nm-icon, var(--txt)); font: inherit; font-size: 15.5px; font-weight: 600; cursor: pointer; transition: transform .2s; }
+  .np-pill:active { transform: scale(.94); }
+  .np-pill.wide { padding: 8px 18px; }
+  .np-pill span { display: grid; place-items: center; }
+  .np-qclear { position: relative; }
+  .np-qmenu { position: absolute; left: 0; bottom: 44px; z-index: 4; min-width: 220px; white-space: nowrap; padding: 6px 0; border-radius: 16px; box-shadow: var(--float-shadow);
+    opacity: 0; transform: scale(.94); transform-origin: bottom left; transition: opacity .18s, transform .3s cubic-bezier(.05,.7,.1,1);
+    background: color-mix(in srgb, var(--nm-cardc, var(--surface)) 70%, #000); }
+  .np-qmenu button { display: block; width: 100%; padding: 12px 16px; border: 0; background: none; font: inherit; font-size: 15px; font-weight: 600; text-align: left;
+    color: var(--nm-medium, var(--txt)); cursor: pointer; }
+  .np-qmenu button:hover { background: color-mix(in srgb, var(--txt) 7%, transparent); }
+  .np-qmenu.in { opacity: 1; transform: none; }
+  .np-rowmenu { transform-origin: top right; }
   /* While it is open, the bar's own cover, title and buttons are the ones flying. */
   .player.np-hide #pl-art, .player.np-hide .pl-meta, .player.np-hide #pl-prev, .player.np-hide #pl-play, .player.np-hide #pl-next { visibility: hidden; }
   .player { touch-action: none; }
@@ -2060,37 +2129,53 @@
   <div class="np-el np-wave" id="np-wave" title="Drag to go to a place in the song; drag up off it to cancel"><canvas id="np-wave-c"></canvas></div>
   <span class="np-el np-seek" id="np-seek"></span>
   <div class="np-el np-times" id="np-times"><span id="np-cur">0:00</span><span id="np-dur">0:00</span></div>
-  <div class="np-el np-hit" id="np-prev-w"><button class="np-btn" id="np-prev" type="button" title="Previous" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 15.6V7.4c0-1.3-1.4-2.1-2.5-1.4L9.2 10.6c-1 .7-1 2.1 0 2.8l1.7 1.1M13.6 16.1l2.9 1.9c1.1.7 2.5-.1 2.5-1.4M5.5 6.3v8.2M5.5 17.4v.3"/></svg></button></div>
+  <div class="np-el np-hit" id="np-prev-w"><button class="np-btn" data-nx="prev" id="np-prev" type="button" title="Previous" aria-label="Previous"></button></div>
   <div class="np-el np-hit np-play" id="np-play-w"><button class="np-btn" id="np-play" type="button" title="Play / pause (space)" aria-label="Play or pause"></button></div>
-  <div class="np-el np-hit" id="np-next-w"><button class="np-btn" id="np-next" type="button" title="Next" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 15.6V7.4c0-1.3 1.4-2.1 2.5-1.4l7.3 4.6c1 .7 1 2.1 0 2.8l-1.7 1.1M10.4 16.1 7.5 18c-1.1.7-2.5-.1-2.5-1.4M18.5 6.3v8.2M18.5 17.4v.3"/></svg></button></div>
+  <div class="np-el np-hit" id="np-next-w"><button class="np-btn" data-nx="next" id="np-next" type="button" title="Next" aria-label="Next"></button></div>
   <!-- The heart beside the two lines: kept on the phone, the same on the phone's player. -->
-  <div class="np-el np-hit np-heart" id="np-heart-w"><button class="np-btn" id="np-heart" type="button" title="Give it a heart" aria-label="Give it a heart" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="off" d="M16.4 17.2c-1.4 1.3-2.9 2.3-3.6 2.7-.5.3-1.1.3-1.6 0C9 18.6 3.5 14.9 3.5 9.7 3.5 7.1 5.6 5 8.2 5c1.5 0 2.9.7 3.8 1.9.9-1.2 2.3-1.9 3.8-1.9 2.6 0 4.7 2.1 4.7 4.7 0 1.7-.6 3.3-1.5 4.6"/><path class="fill on" d="M12 19.9c-.3 0-.5-.1-.8-.2C9 18.6 3.5 14.9 3.5 9.7 3.5 7.1 5.6 5 8.2 5c1.5 0 2.9.7 3.8 1.9.9-1.2 2.3-1.9 3.8-1.9 2.6 0 4.7 2.1 4.7 4.7 0 5.2-5.5 8.9-7.7 10-.3.1-.5.2-.8.2Z"/></svg></button></div>
+  <div class="np-el np-hit np-heart" id="np-heart-w"><button class="np-btn" id="np-heart" type="button" title="Give it a heart" aria-label="Give it a heart" aria-pressed="false"><span class="off" data-nx="heart"></span><span class="on" data-nx="heartOn"></span></button></div>
   <div class="np-el np-row" id="np-top">
-    <div class="np-sq"><button class="np-btn" id="np-close" type="button" title="Close (Esc)" aria-label="Close the player"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 9.2l-6.2 6.2c-.7.7-1.8.7-2.5 0L9 13.7M7.3 12 4.6 9.2"/></svg></button></div>
+    <div class="np-sq"><button class="np-btn" data-nx="down" id="np-close" type="button" title="Close (Esc)" aria-label="Close the player"></button></div>
     <button class="np-where" id="np-where" type="button" title="Show it in its album"><span id="np-count"></span><b id="np-album"></b></button>
     <div class="np-sq" aria-hidden="true"></div>
   </div>
   <div class="np-el np-row" id="np-bottom">
-    <button class="np-chip" id="np-chip" type="button" title="Sound: speed and volume"><span class="disc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 17.8v-5.5a6.5 6.5 0 0 1 12.2-3.1M18.5 12v5.8M5.5 14.2h1.2c.9 0 1.6.7 1.6 1.6v2.6c0 .9-.7 1.6-1.6 1.6H5.6c-1 0-1.6-.7-1.6-1.6v-2.6c0-.9.7-1.6 1.5-1.6ZM18.5 14.2h-1.2c-.9 0-1.6.7-1.6 1.6v2.6c0 .9.7 1.6 1.6 1.6h1.1c1 0 1.6-.7 1.6-1.6v-2.6c0-.9-.7-1.6-1.5-1.6Z"/></svg></span><span id="np-chip-t">Audio</span></button>
-    <div class="np-sq"><button class="np-btn" id="np-repeat" type="button" title="Repeat" aria-label="Repeat"><svg class="all" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 12.4V9.8c0-1.8 1.4-3.3 3.3-3.3h13.5M17.6 3.7l2.8 2.8-2.8 2.8M20.4 11.6v2.6c0 1.8-1.4 3.3-3.3 3.3H10M6.4 20.3l-2.8-2.8 2.8-2.8M7 17.5h-.6"/></svg><svg class="one" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 12.4V9.8c0-1.8 1.4-3.3 3.3-3.3h13.5M17.6 3.7l2.8 2.8-2.8 2.8M20.4 11.6v2.6c0 1.8-1.4 3.3-3.3 3.3H3.6M6.4 20.3l-2.8-2.8 2.8-2.8M11.3 11 12.4 10v5"/></svg></button></div>
-    <div class="np-sq"><button class="np-btn" id="np-sound" type="button" title="Sound: speed and volume" aria-label="Sound: speed and volume"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 9.5v5M9.8 4.5v5.6M9.8 13v6.5M14.2 7.5v9M18.5 10.5v3"/></svg></button></div>
+    <button class="np-chip" id="np-chip" type="button" title="Sound: speed and volume"><span class="disc"><i data-nx="headphone"></i></span><span id="np-chip-t">Audio</span></button>
+    <div class="np-sq"><button class="np-btn" id="np-repeat" type="button" title="Repeat" aria-label="Repeat"><span class="r-off" data-nx="repeatOff"></span><span class="r-all" data-nx="repeatAll"></span><span class="r-one" data-nx="repeatOne"></span></button></div>
+    <div class="np-sq"><button class="np-btn" data-nx="sound" id="np-sound" type="button" title="Sound: speed and volume" aria-label="Sound: speed and volume"></button></div>
   </div>
   <div class="np-el np-queue" id="np-queue">
+    <!-- Namida's queue header: where in it and the time left, its round buttons, and back down to the player. -->
+    <div class="np-qhead">
+      <div class="np-qtitle"><b>Queue</b><span id="np-qinfo"></span></div>
+      <button class="np-qact" id="np-qconf" type="button" title="Sound: speed and volume" aria-label="Sound: speed and volume" data-nx="configure"></button>
+      <button class="np-qact" id="np-qmore" type="button" title="More" aria-label="More for the queue" data-nx="more"></button>
+      <button class="np-btn np-qdown" id="np-qdown" type="button" title="Back to the player" aria-label="Back to the player" data-nx="down"></button>
+    </div>
     <div class="np-qlist" id="np-qlist"></div>
-    <div class="np-qbar"><span id="np-qcount"></span>
-      <button class="np-btn" id="np-qshuffle" type="button" title="Shuffle" aria-label="Shuffle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c2.5 0 3.8 1.3 5.3 4.2l.4.6c1.5 2.9 2.8 4.2 5.3 4.2H21"/><path d="M3 17h3.5c1.4 0 2.4-.4 3.3-1.2M14.2 8.2C15.1 7.4 16.1 7 17.5 7H21"/><path d="m18.5 4.5 2.5 2.5-2.5 2.5M18.5 13.5l2.5 2.5-2.5 2.5"/></svg></button>
-      <button class="np-btn" id="np-qjump" type="button" title="Go to the song playing" aria-label="Go to the song playing"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/></svg></button>
+    <!-- Namida's row along the foot: clear some of it, go to the song playing, shuffle what is left. -->
+    <div class="np-qbar">
+      <div class="np-qclear">
+        <button class="np-pill" id="np-qbroom" type="button" title="Clear some of the queue" aria-label="Clear some of the queue" data-nx="broom"></button>
+        <div class="np-qmenu" id="np-qmenu" hidden>
+          <button type="button" data-clear="before">Remove the songs before</button>
+          <button type="button" data-clear="after">Remove the songs after</button>
+          <button type="button" data-clear="others">Keep only the song playing</button>
+        </div>
+      </div>
+      <button class="np-pill" id="np-qjump" type="button" title="Go to the song playing" aria-label="Go to the song playing" data-nx="cd"></button>
+      <button class="np-pill wide" id="np-qshuffle" type="button" title="Shuffle what is left" aria-label="Shuffle what is left"><span data-nx="shuffle"></span>Shuffle</button>
     </div>
   </div>
-  <!-- The sound controls, from the bottom row: how fast and how loud it plays. -->
+  <!-- Namida's sound controls: a dialog, Configure, with the speed and the volume. -->
   <div class="np-sheet" id="np-sheet" hidden>
     <div class="np-scrim" id="np-scrim"></div>
-    <div class="np-card" role="dialog" aria-label="Sound">
-      <div class="np-card-head"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 9.5v5M9.8 4.5v5.6M9.8 13v6.5M14.2 7.5v9M18.5 10.5v3"/></svg><b>Sound</b><button type="button" id="np-reset">Reset</button></div>
-      <label class="np-slider"><span>Speed</span><em id="np-speed-v">1&times;</em><input id="np-speed" type="range" min="0.5" max="2" step="0.05" value="1"></label>
+    <div class="np-card" role="dialog" aria-label="Configure">
+      <b class="np-card-title">Configure</b>
+      <label class="np-slider"><span class="np-sl-head"><i data-nx="speed"></i><b>Speed</b><em id="np-speed-v">100%</em></span><input id="np-speed" type="range" min="0.5" max="2" step="0.01" value="1"></label>
       <p class="np-note" id="np-speed-note" hidden>Songs play at their own speed while in step with other devices.</p>
-      <label class="np-slider"><span>Volume</span><em id="np-vol-v">100%</em><input id="np-vol" type="range" min="0" max="100" step="1" value="100"></label>
-      <button type="button" class="np-done" id="np-done">Done</button>
+      <label class="np-slider"><span class="np-sl-head"><i data-nx="volume" id="np-vol-i"></i><b>Volume</b><em id="np-vol-v">100%</em></span><input id="np-vol" type="range" min="0" max="100" step="1" value="100"></label>
+      <div class="np-card-actions"><button type="button" class="np-btn np-reset" id="np-reset" title="Put them back" aria-label="Put them back" data-nx="reset"></button><button type="button" class="np-done" id="np-done">Done</button></div>
     </div>
   </div>
 </div>
@@ -4749,6 +4834,7 @@ function applyTheme(theme) {
   });
   try { localStorage.setItem("blazeit.theme", theme); } catch (e) {}
   if (!$("mon-sheet").hidden) pollMonitor();
+  if (typeof npNamidaColours === "function") npNamidaColours();
 }
 
 /**
@@ -5694,6 +5780,7 @@ function setPlayerTint(c) {
   $("player").style.setProperty("--pl-tint", c);
   $("np").style.setProperty("--pl-tint", c);
   np.tintRgb = npRgb(c, np.tintRgb);
+  npNamidaColours();
 }
 
 /**
@@ -6906,15 +6993,15 @@ function npDrawWave() {
     }
     x.fill();
   }
-  var tx = np.txtRgb, tn = np.tintRgb;
-  draw("rgba(" + tx[0] + "," + tx[1] + "," + tx[2] + ",.16)");
+  // Namida's colours: the text colour faint behind; what has played, the main colour over it.
+  var nm = np.nm || { base: np.tintRgb, onSurface: np.txtRgb }, on = nm.onSurface, base = nm.base;
+  draw("rgba(" + on.join(",") + "," + (40 / 255).toFixed(3) + ")");
   if (played > 0) {
     x.save();
     x.beginPath(); x.rect(0, 0, played, h); x.clip();
-    var mix = function (k) { return tx.map(function (v, i) { return Math.round(v + (tn[i] - v) * k); }).join(","); };
-    var gr = x.createLinearGradient(0, 0, Math.max(1, played), 0);
-    gr.addColorStop(0, "rgba(" + mix(0.7) + ",.62)");
-    gr.addColorStop(1, "rgba(" + mix(0.55) + ",.62)");
+    var gr = x.createLinearGradient(0, 0, Math.max(1, played), 0), a = (110 / 255).toFixed(3);
+    gr.addColorStop(0, "rgba(" + npOver(base, 180 / 255, on).join(",") + "," + a + ")");
+    gr.addColorStop(1, "rgba(" + npOver(base, 140 / 255, on).join(",") + "," + a + ")");
     draw(gr);
     x.restore();
   }
@@ -7001,14 +7088,14 @@ function npText() {
   // The chip: the kind of file, then its bitrate and sample rate (and the speed, when changed).
   var info = np.info[t.id], chip = $("np-chip-t");
   var details = [info ? npFileDetails(info) : "", np.speed !== 1 ? npSpeedText(np.speed) : ""].filter(Boolean).join(" \u2022 ");
-  chip.textContent = "";
-  var kind = document.createElement("b");
-  kind.textContent = (info && info.format) || formatBadge(t.mime) || "Audio";
-  chip.appendChild(kind);
-  if (details) { var more = document.createElement("small"); more.textContent = details; chip.appendChild(more); }
-  $("np-qshuffle").classList.toggle("on", player.shuffle);
-  $("np-repeat").classList.toggle("on", player.repeat !== "off");
+  // As Namida writes it: "Audio", then the details small in the lit colour, then the bit depth.
+  chip.textContent = "Audio";
+  if (details) { var more = document.createElement("small"); more.textContent = " \u2022 " + details; chip.appendChild(more); }
+  var bits = info ? npBitsBadge(info) : "";
+  if (bits) { var badge = document.createElement("span"); badge.className = "bits"; badge.innerHTML = nx("wind"); badge.appendChild(document.createTextNode(bits)); chip.appendChild(badge); }
+  $("np-repeat").classList.toggle("all", player.repeat === "all");
   $("np-repeat").classList.toggle("one", player.repeat === "one");
+  npQueueInfo();
   $("np-repeat").title = player.repeat === "one" ? "Repeat this song" : player.repeat === "all" ? "Repeat all" : "Repeat";
   var hearted = favourites.has(String(t.id)), heart = $("np-heart");
   heart.classList.toggle("on", hearted);
@@ -7017,12 +7104,34 @@ function npText() {
   heart.setAttribute("aria-label", heart.title);
 }
 
-/** A file's details, after its kind: 1,411 kbps • 44.1 kHz. */
+/** What a file is, as Namida's chip has it: FLAC • 1411 kb/s • 44.1 kHz (channels only when not stereo). */
 function npFileDetails(info) {
   var out = [];
-  if (info.kbps > 0) out.push(info.kbps.toLocaleString() + " kbps");
-  if (info.sampleRate > 0) out.push((info.sampleRate % 1000 === 0 ? info.sampleRate / 1000 : (info.sampleRate / 1000).toFixed(1)) + " kHz");
+  if (info.format) out.push(info.format);
+  if (info.channels > 0 && info.channels !== 2) out.push(info.channels + " ch");
+  if (info.kbps > 0) out.push(info.kbps + " kb/s");
+  if (info.sampleRate > 0) out.push((info.sampleRate % 1000 === 0 ? (info.sampleRate / 1000).toFixed(1) : String(info.sampleRate / 1000)) + " kHz");
   return out.join(" \u2022 ");
+}
+
+/** Namida's badge after the details: 24-bit Hi-Res Lossless. */
+function npBitsBadge(info) {
+  if (!(info.bits > 0)) return "";
+  var lossless = ["FLAC", "ALAC", "WAV", "APE", "DSD", "AIFF", "WV"].indexOf(String(info.format).toUpperCase()) >= 0;
+  return [info.bits + "-bit", info.bits >= 24 ? "Hi-Res" : "", lossless ? "Lossless" : ""].filter(Boolean).join(" ");
+}
+
+/** The queue's header: where in it, and the time left from the song playing. */
+function npQueueInfo() {
+  var el = $("np-qinfo");
+  if (!el) return;
+  var left = 0;
+  for (var i = Math.max(0, player.pos); i < player.order.length; i++) { var t = player.queue[player.order[i]]; if (t) left += t.durationMs || 0; }
+  var min = Math.round(left / 60000);
+  el.innerHTML = "";
+  el.appendChild(document.createTextNode((player.pos + 1) + "/" + player.order.length + " \u2022"));
+  el.insertAdjacentHTML("beforeend", nx("timer"));
+  el.appendChild(document.createTextNode(min >= 60 ? Math.floor(min / 60) + "h " + (min % 60) + "min" : min + "min"));
 }
 
 function npSpeedText(v) { return (Math.round(v * 100) / 100).toString() + "\u00d7"; }
@@ -7046,6 +7155,7 @@ var favourites = new Set();
 function setFavourites(list) {
   favourites = new Set((list || []).map(String));
   if (npTrack()) npText();
+  if (np.shown && npTerms().qp > 0) npQueueRender();
 }
 
 function loadFavourites() {
@@ -7056,6 +7166,7 @@ function toggleFavourite(id) {
   var key = String(id), on = !favourites.has(key);
   if (on) favourites.add(key); else favourites.delete(key);
   npText();
+  if (np.shown && npTerms().qp > 0) npQueueRender();
   var b = $("np-heart");
   b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop");
   api("/api/music/favourites/" + id, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on: on }) })
@@ -7074,7 +7185,7 @@ function npApplySpeed() {
 }
 
 function npSetSpeed(v) {
-  np.speed = Math.max(0.5, Math.min(2, Math.round(v * 20) / 20));
+  np.speed = Math.max(0.5, Math.min(2, Math.round(v * 100) / 100));
   try { localStorage.setItem("blazeit.speed", String(np.speed)); } catch (e) {}
   npApplySpeed();
   npSoundPaint();
@@ -7087,8 +7198,10 @@ function npSoundPaint() {
   sp.value = np.speed; vo.value = v;
   sp.style.setProperty("--p", ((np.speed - 0.5) / 1.5 * 100).toFixed(1) + "%");
   vo.style.setProperty("--p", v + "%");
-  $("np-speed-v").textContent = npSpeedText(np.speed);
+  $("np-speed-v").textContent = Math.round(np.speed * 100) + "%";
   $("np-vol-v").textContent = v + "%";
+  var vi = $("np-vol-i"), vn = v === 0 ? "mute" : "volume";
+  if (vi.dataset.nx !== vn) { vi.dataset.nx = vn; vi.innerHTML = nx(vn); }
   sp.disabled = sync;
   $("np-speed-note").hidden = !sync;
   $("np-reset").disabled = np.speed === 1 && v === 100;
@@ -7126,9 +7239,119 @@ function npTrackChanged(t) {
   npWake();
 }
 
-/** Namida's play and pause: outlines broken once, on the disc. */
-var NP_PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.8 11V7.3c0-1.6 1.7-2.6 3.1-1.8l7.8 4.6c1.4.8 1.4 2.9 0 3.7l-2.4 1.4M12.4 16.9l-2.5 1.5c-1.4.8-3.1-.2-3.1-1.8v-1.4"/></svg>';
-var NP_PAUSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.4 17.6V6.4c0-1.1-.5-1.9-1.8-1.9H7.3c-1.3 0-1.8.8-1.8 1.9v11.2c0 1.1.5 1.9 1.8 1.9h1.3c1.3 0 1.8-.8 1.8-1.9ZM18.5 9.4v8.2c0 1.1-.5 1.9-1.8 1.9h-1.3c-1.3 0-1.8-.8-1.8-1.9V6.4c0-1.1.5-1.9 1.8-1.9h1.3c1 0 1.5.5 1.7 1.3"/></svg>';
+/**
+ * Iconsax (github.com/lusaxweb/iconsax, MIT licence), in its Broken style: the icons Namida draws
+ * with, the same set the phone's player uses. Path data from the iconsax-react package.
+ */
+var NX = {
+  prev: '<path d="m12.269 7.392 4.15-2.39c1.7-.98 3.83.24 3.83 2.21v9.57c0 1.96-2.13 3.19-3.83 2.21l-4.15-2.39-4.15-2.4c-1.7-.98-1.7-3.43 0-4.41M3.762 18.18V17M3.762 14V5.82" stroke-linecap="round" stroke-linejoin="round"/>',
+  next: '<path d="m11.73 7.392-4.15-2.39c-1.7-.98-3.83.24-3.83 2.21v9.57c0 1.96 2.13 3.19 3.83 2.21l4.15-2.39 4.15-2.4c1.7-.98 1.7-3.43 0-4.41M20.238 18.18V17M20.238 14V5.82" stroke-linecap="round" stroke-linejoin="round"/>',
+  play: '<path d="M17.13 7.98c3.83 2.21 3.83 5.83 0 8.04l-3.09 1.78-3.09 1.78C7.13 21.79 4 19.98 4 15.56V8.44c0-4.42 3.13-6.23 6.96-4.02l2.25 1.3" stroke-linecap="round" stroke-linejoin="round"/>',
+  pause: '<path d="M5.01 3C3.57 3 3 3.54 3 4.89v14.22C3 20.46 3.57 21 5.01 21h3.63c1.43 0 2.01-.54 2.01-1.89V4.89c0-1.35-.57-1.89-2.01-1.89M18.992 21c1.43 0 2.01-.54 2.01-1.89V4.89c0-1.35-.57-1.89-2.01-1.89h-3.63c-1.43 0-2.01.54-2.01 1.89v14.22c0 1.35.57 1.89 2.01 1.89" stroke-linecap="round" stroke-linejoin="round"/>',
+  heart: '<path d="M20.59 4.972c.88.99 1.41 2.29 1.41 3.72 0 7-6.48 11.13-9.38 12.13-.34.12-.9.12-1.24 0-2.9-1-9.38-5.13-9.38-12.13 0-3.09 2.49-5.59 5.56-5.59 1.82 0 3.43.88 4.44 2.24a5.53 5.53 0 0 1 4.44-2.24" stroke-linecap="round" stroke-linejoin="round"/>',
+  heartOn: '<path d="M16.44 3.102c-1.81 0-3.43.88-4.44 2.23a5.549 5.549 0 0 0-4.44-2.23c-3.07 0-5.56 2.5-5.56 5.59 0 1.19.19 2.29.52 3.31 1.58 5 6.45 7.99 8.86 8.81.34.12.9.12 1.24 0 2.41-.82 7.28-3.81 8.86-8.81.33-1.02.52-2.12.52-3.31 0-3.09-2.49-5.59-5.56-5.59Z" fill="currentColor" stroke="none"/>',
+  headphone: '<path d="M2 12.22C1.89 6.6 6.33 2.05 11.95 2.05 17.57 2.05 22 6.6 22 12.11v6.16c0 1.95-1.62 3.57-3.57 3.57-1.95 0-3.57-1.62-3.57-3.57v-2.81c0-.97.76-1.84 1.84-1.84.97 0 1.84.76 1.84 1.84v3.03" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.46 18.49v-2.92c0-.97.76-1.84 1.84-1.84.97 0 1.84.76 1.84 1.84v2.81c0 1.95-1.62 3.57-3.57 3.57-1.95 0-3.57-1.63-3.57-3.57V16" stroke-linecap="round" stroke-linejoin="round"/>',
+  repeatOff: '<path d="m9.999 20.999-2.44-2.34 7.95.02c3.57 0 6.5-2.93 6.5-6.52 0-1.79-.73-3.42-1.91-4.6M9 12h6M8.559 4.98c-3.57 0-6.5 2.93-6.5 6.52 0 1.79.73 3.42 1.91 4.6M14.058 2.66 16.498 5l-3.51-.01" stroke-linecap="round" stroke-linejoin="round"/>',
+  repeatAll: '<path d="M17.42 5.16c1.66 0 3 1.34 3 3v3.32M3.58 5.16h9.41M6.74 2L3.58 5.16l3.16 3.16M20.42 18.84H6.58c-1.66 0-3-1.34-3-3v-3.32" stroke-linecap="round" stroke-linejoin="round"/><path d="M17.26 22l3.16-3.16-3.16-3.16" stroke-linecap="round" stroke-linejoin="round"/>',
+  repeatOne: '<path d="M8.5 5.32C4.93 5.32 2 8.25 2 11.84c0 1.79.73 3.42 1.91 4.6M14 3l2.44 2.34-3.51-.01M9.999 20.999l-2.44-2.34 7.95.02c3.57 0 6.5-2.93 6.5-6.52 0-1.79-.73-3.42-1.91-4.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.25 14.668v-5.34l-1.5 1.67" stroke-linecap="round" stroke-linejoin="round"/>',
+  sound: '<path d="M3 8.25v7.5M7.5 5.75v12.5M12 9.96v10.79M12 3.25v2.72M16.5 5.75v12.5M21 8.25v7.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  down: '<path d="M16.01 12.85l-2.62 2.62c-.77.77-2.03.77-2.8 0L4.08 8.95M19.92 8.95l-1.04 1.04" stroke-linecap="round" stroke-linejoin="round"/>',
+  back: '<path d="M11.19 7.94l-2.62 2.62c-.77.77-.77 2.03 0 2.8l6.52 6.52M15.09 4.04l-1.04 1.04" stroke-linecap="round" stroke-linejoin="round"/>',
+  up: '<path d="M17.69 12.78c1.66 2.87.3 5.22-3.01 5.22H9.33c-3.31 0-4.67-2.35-3.01-5.22l1.34-2.31L9 8.16c1.66-2.87 4.37-2.87 6.03 0" stroke-linecap="round" stroke-linejoin="round"/>',
+  search: '<path d="M11 2a9 9 0 1 1-4.07.97M19.071 20.97c.53 1.6 1.74 1.76 2.67.36.86-1.28.3-2.33-1.24-2.33-1.15 0-1.79.89-1.43 1.97Z" stroke-linecap="round" stroke-linejoin="round"/>',
+  more: '<path d="M5 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2ZM19 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2Z" fill="currentColor" stroke="none"/><path d="M10 12c0 1.1.9 2 2 2s2-.9 2-2-.9-2-2-2" stroke-linecap="round" stroke-linejoin="round"/>',
+  shuffle: '<path d="m16.45 6 4.55.02M3 17.98l2.55.01c.91 0 1.76-.45 2.26-1.2l1.18-1.77.76-1.14L13.67 8M19 19.98l2-2M8.89 8.62l-1.08-1.5A2.675 2.675 0 0 0 5.61 6L3 6.01M12.969 15.379l1.22 1.57c.51.66 1.31 1.05 2.15 1.05l4.67-.02M21 6.02l-2-2" stroke-linecap="round" stroke-linejoin="round"/>',
+  tracks: '<path d="M2.578 8.67a9.993 9.993 0 0 1 3.14-4.44M2 12c0 1.17.21 2.29.58 3.33M9.09 21.568c.92.28 1.9.43 2.91.43 5.52 0 10-4.48 10-10 0-.6-.06-1.19-.16-1.76M5.718 19.748c-.47-.38-.92-.8-1.32-1.26M20.24 6.34A9.982 9.982 0 0 0 12 2c-1.01 0-1.99.15-2.91.43M8.59 17.11a1.59 1.59 0 1 0 0-3.18 1.59 1.59 0 0 0 0 3.18Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.002 14.46V8.25c0-1.32-.83-1.51-1.67-1.28l-3.18.87c-.58.16-.98.61-.98 1.28v6.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.41 16.051a1.59 1.59 0 1 0 0-3.18 1.59 1.59 0 0 0 0 3.18ZM10.18 10.762 16 9.172" stroke-linecap="round" stroke-linejoin="round"/>',
+  albums: '<path d="M2 9c0-5 2-7 7-7h6c5 0 7 2 7 7v6c0 5-2 7-7 7H9c-5 0-7-2-7-7v-1.41M7 2.5v19" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.47 16.8a1.49 1.49 0 1 0 0-2.98 1.49 1.49 0 0 0 0 2.98Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.43 14.31V8.48c0-1.24-.78-1.41-1.57-1.2l-2.98.81c-.54.15-.92.58-.92 1.2v6.01" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.931 15.8a1.49 1.49 0 1 0 0-2.98 1.49 1.49 0 0 0 0 2.98ZM12.96 11.04l5.47-1.49" stroke-linecap="round" stroke-linejoin="round"/>',
+  playLast: '<path d="M19.07 19.07c3.91-3.91 3.91-10.24 0-14.14M4.929 4.93c-3.91 3.91-3.91 10.24 0 14.14M8.7 21.41c1.07.37 2.18.55 3.3.55 1.12-.01 2.23-.18 3.3-.55M8.7 2.59c1.07-.37 2.18-.55 3.3-.55 1.12 0 2.23.18 3.3.55" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.738 10.33c0-2.08 1.47-2.93 3.27-1.89l1.45.84 1.45.84c1.8 1.04 1.8 2.74 0 3.78l-1.45.84-1.45.84c-1.8 1.04-3.27.19-3.27-1.89" stroke-linecap="round" stroke-linejoin="round"/>',
+  arrange: '<path d="M10.18 17.15l-3.04-3.04M10.18 6.85v10.3M13.82 6.85l3.04 3.04M13.82 14.11V6.85M13.82 17.15v-.52" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85" stroke-linecap="round" stroke-linejoin="round"/>',
+  note: '<path d="M4.109 16.98c-.09.32-.14.67-.14 1.02 0 2.21 1.79 4 4 4s4-1.79 4-4a3.999 3.999 0 0 0-5.02-3.87M11.969 18V4M14.61 2.11l4.42 1.47c1.07.36 1.95 1.57 1.95 2.7v1.17c0 1.53-1.18 2.38-2.63 1.9l-4.42-1.47c-1.07-.36-1.95-1.57-1.95-2.7V4c-.01-1.52 1.18-2.38 2.63-1.89Z" stroke-linecap="round" stroke-linejoin="round"/>',
+  clear: '<path d="m13.99 10.012.84-.84M9.17 14.828l2.75-2.75M14.83 14.832l-5.66-5.66M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85" stroke-linecap="round" stroke-linejoin="round"/>',
+  wind: '<path d="M9.5 11.6c1.54.92 3.46.92 5 0s3.46-.92 5 0l2.5 1.5M2 13.1l2.5-1.5c.46-.28.96-.47 1.47-.58M2 3.898l2.5 1.5c1.54.92 3.46.92 5 0s3.46-.92 5 0 3.46.92 5 0l2.5-1.5M2 20.1l2.5-1.5c1.54-.92 3.46-.92 5 0s3.46.92 5 0 3.46-.92 5 0l2.5 1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  pitch: '<path d="M6.72 9.56h-.94A3.79 3.79 0 0 1 2 5.78C2 3.7 3.7 2 5.78 2h1.89a2.84 2.84 0 0 1 2.83 2.83V17.1c0 1.04-.85 1.89-1.89 1.89s-1.89-.85-1.89-1.89V9.56Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.78 6.72a.939.939 0 1 1 0-1.88M17.28 13.52V9.56h.94c2.08 0 3.78-1.7 3.78-3.78S20.3 2 18.22 2h-1.89a2.84 2.84 0 0 0-2.83 2.83V17.1c0 1.04.85 1.89 1.89 1.89s1.89-.85 1.89-1.89" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.22 6.72a.939.939 0 1 0 0-1.88M8.5 22v-3M15.5 22v-3" stroke-linecap="round" stroke-linejoin="round"/>',
+  speed: '<path d="M2 8.34v7.32c0 1.5 1.63 2.44 2.93 1.69l3.17-1.82 3.17-1.83c.2-.12.36-.25.49-.41v-2.56c-.13-.16-.29-.29-.49-.41L8.1 8.49 4.93 6.67C3.63 5.9 2 6.84 2 8.34Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.68 6.65c-1.3-.75-2.93.19-2.93 1.69v7.32c0 1.5 1.63 2.44 2.93 1.69l3.17-1.82 3.17-1.83c1.3-.75 1.3-2.62 0-3.38l-2.18-1.26" stroke-linecap="round" stroke-linejoin="round"/>',
+  volume: '<path d="M15 7.412c0-2.98-2.07-4.12-4.59-2.54l-2.92 1.83c-.32.19-.69.3-1.06.3H5c-2 0-3 1-3 3v4c0 2 1 3 3 3h1.43c.37 0 .74.11 1.06.3l2.92 1.83c2.52 1.58 4.59.43 4.59-2.54v-5.12M18 8a6.66 6.66 0 0 1 0 8M19.828 18.5c1.45-1.93 2.17-4.21 2.17-6.5M19.828 5.5c.59.78 1.05 1.62 1.4 2.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  mute: '<path d="M2 14c0 2 1 3 3 3h2M15 8.372v-.96c0-2.98-2.07-4.12-4.59-2.54l-2.92 1.83c-.32.19-.69.3-1.06.3H5c-2 0-3 1-3 3M10.41 19.13c2.52 1.58 4.59.43 4.59-2.54v-3.64M18.81 9.422c.9 2.15.63 4.66-.81 6.58M20.78 17c-.27.52-.58 1.02-.94 1.5M21.148 7.8c.83 1.97 1.05 4.13.66 6.2M22 2 2 22" stroke-linecap="round" stroke-linejoin="round"/>',
+  reset: '<path d="M18.01 19.99A9.964 9.964 0 0112 22c-5.52 0-8.89-5.56-8.89-5.56m0 0h4.52m-4.52 0v5M22 12c0 1.82-.49 3.53-1.34 5M6.03 3.97A9.921 9.921 0 0112 2c6.67 0 10 5.56 10 5.56m0 0v-5m0 5h-4.44M2 12c0-1.82.48-3.53 1.33-5" stroke-linecap="round" stroke-linejoin="round"/>',
+  handle: '<path d="M3 7h18M9.49 12H21M3 12h2.99M3 17h18" stroke-linecap="round"/>',
+  trash: '<path d="M21 5.98c-3.33-.33-6.68-.5-10.02-.5-1.98 0-3.96.1-5.94.3L3 5.98M8.5 4.97l.22-1.31C8.88 2.71 9 2 10.69 2h2.62c1.69 0 1.82.75 1.97 1.67l.22 1.3M15.21 22H8.79C6 22 5.91 20.78 5.8 19.21L5.15 9.14M18.85 9.14l-.65 10.07M10.33 16.5h3.33M12.82 12.5h1.68M9.5 12.5h.83" stroke-linecap="round" stroke-linejoin="round"/>',
+  jump: '<path d="M4.87 4.99A9.936 9.936 0 002 12c0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-.69 0-1.36.07-2.02.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.47 10.74L12 14.26l3.53-3.52" stroke-linecap="round" stroke-linejoin="round"/>',
+  configure: '<path d="M22 6.5h-6M6 6.5H2M13.5 6.5c0 1.93-1.57 3.5-3.5 3.5S6.5 8.43 6.5 6.5a3.504 3.504 0 0 1 4.48-3.36M22 17.5h-4M8 17.5H2M14 21a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke-linecap="round" stroke-linejoin="round"/>',
+  broom: '<path d="m9.87 5.671-3.42 2.08-1.56-2.56a2.01 2.01 0 0 1 .67-2.75 2.01 2.01 0 0 1 2.75.67l1.56 2.56ZM9.2 20.44c.66 1.35 2.26 1.82 3.54 1.03l6.43-3.91c1.29-.78 1.6-2.41.71-3.62l-2.77-3.74c-1.2-1.61-3.46-2.16-5.29-1.04l-3.16 1.92a3.978 3.978 0 0 0-1.51 5.18" stroke-linecap="round" stroke-linejoin="round"/><path d="m10.757 5.098-5.124 3.12 2.08 3.417 5.125-3.12-2.08-3.417ZM14.31 16.809l1.65 2.71M11.75 18.371l1.65 2.71M16.87 15.25l1.65 2.71" stroke-linecap="round" stroke-linejoin="round"/>',
+  timer: '<path d="m9.61 9.83 7.65 6.95C19.29 18.62 19 22 15.24 22H8.76C5 22 4.71 18.62 6.74 16.78l10.52-9.56C19.29 5.38 19 2 15.24 2H8.76C5 2 4.71 5.38 6.74 7.22" stroke-linecap="round" stroke-linejoin="round"/>',
+  add: '<path d="M12 16V8M14.99 12H16M8 12h3.81M12 16V8M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85" stroke-linecap="round" stroke-linejoin="round"/>',
+  arrowUp: '<path d="M18.07 9.57L12 3.5 5.93 9.57M12 12V3.67M12 20.5v-4.53" stroke-linecap="round" stroke-linejoin="round"/>',
+  arrowDown: '<path d="M18.07 14.43L12 20.5l-6.07-6.07M12 12v8.33M12 3.5v4.53" stroke-linecap="round" stroke-linejoin="round"/>',
+  cd: '<path d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85" stroke-linecap="round" stroke-linejoin="round"/>'
+};
+function nx(name) { return NX[name] ? '<svg viewBox="0 0 24 24" aria-hidden="true">' + NX[name] + "</svg>" : ""; }
+/** Puts each [data-nx] element's icon into it. */
+function nxFill(root) {
+  Array.prototype.forEach.call((root || document).querySelectorAll("[data-nx]"), function (el) { el.innerHTML = nx(el.dataset.nx); });
+}
+
+/** Namida's play and pause, on the disc. */
+var NP_PLAY_ICON = nx("play");
+var NP_PAUSE_ICON = nx("pause");
+
+// ---- Namida's colours, worked out from the cover as Namida works out its theme (and as the
+// phone's player does, NamidaStyle.kt): the colour at 40% lightness for what is lit, a card grey
+// tinted by it, the Material roles for the chips, and its text colours.
+
+function npHsl(rgb) {
+  var r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (d < 1e-6) return [0, 0, l];
+  var s = d / (1 - Math.abs(2 * l - 1)), h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, s, l];
+}
+function npRgbOf(h, s, l) {
+  var c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2, r, g, b;
+  if (h < 60) { r = c; g = x; b = 0; } else if (h < 120) { r = x; g = c; b = 0; } else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; } else if (h < 300) { r = x; g = 0; b = c; } else { r = c; g = 0; b = x; }
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+/** [top] at [a] laid over [under]. */
+function npOver(top, a, under) { return top.map(function (v, i) { return Math.round(v * a + under[i] * (1 - a)); }); }
+function npIsDark() {
+  var bg = npRgb(getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#000", [0, 0, 0]);
+  return (bg[0] * 0.299 + bg[1] * 0.587 + bg[2] * 0.114) < 128;
+}
+function npNamidaColours() {
+  var el = $("np");
+  if (!el) return;
+  var dark = npIsDark(), hsl = npHsl(np.tintRgb || [72, 72, 80]), h = hsl[0], s = Math.min(1, hsl[1]);
+  function tone(k, l) { return npRgbOf(h, Math.min(1, s * k), l); }
+  var base = npRgbOf(h, s, 0.4), mainA = dark ? 200 / 255 : 120 / 255, white = [255, 255, 255];
+  var ground = dark ? [35, 35, 35] : white;
+  var onSurface = dark ? tone(0.1, 0.9) : tone(0.1, 0.1), primary = dark ? tone(1, 0.78) : tone(1, 0.36), secondary = dark ? tone(0.35, 0.76) : tone(0.35, 0.4);
+  var bg = dark ? tone(0.18, 0.065) : npOver(base, 60 / 255, white);
+  // The main colour, see-through, laid over the text colour (as Namida's wash is): its colour and alpha.
+  function washOf(a) { var al = a + mainA * (1 - a); return npOver(onSurface, a / al, base); }
+  function css(rgb, a) { return a == null || a >= 1 ? "rgb(" + rgb.join(",") + ")" : "rgba(" + rgb.join(",") + "," + a.toFixed(3) + ")"; }
+  var set = function (k, v) { el.style.setProperty(k, v); };
+  set("--nm-main", css(base, mainA));
+  // The song playing, in the queue: the main colour, held stronger in light mode so its white type reads.
+  set("--nm-now", css(base, dark ? mainA : 220 / 255));
+  set("--nm-main-grey", css(npOver(base, 200 / 255, [158, 158, 158])));
+  set("--nm-tint40", css(np.tintRgb || base, 0.4));
+  set("--nm-bg", css(bg));
+  set("--nm-card", css(npOver(base, 36 / 255, ground)));
+  set("--nm-cardc", css(npOver(base, 28 / 255, ground)));
+  set("--nm-primary", css(primary));
+  set("--nm-primary-85", css(primary, 0.85));
+  set("--nm-secondary-20", css(secondary, 0.2));
+  set("--nm-sec", css(dark ? tone(0.35, 0.26) : tone(0.45, 0.88)));
+  set("--nm-on-sec", css(dark ? tone(0.4, 0.88) : tone(0.4, 0.12)));
+  set("--nm-icon", dark ? "rgba(233,233,233,.784)" : "rgba(40,40,40,.784)");
+  set("--nm-large", dark ? "rgba(255,255,255,.824)" : "rgba(0,0,0,.627)");
+  set("--nm-medium", dark ? "rgba(255,255,255,.706)" : "rgba(0,0,0,.588)");
+  set("--nm-small", dark ? "rgba(255,255,255,.667)" : "rgba(0,0,0,.471)");
+  set("--nm-dialog", css(dark ? npOver(base, 16 / 255, [12, 12, 12]) : npOver(base, 48 / 255, white)));
+  set("--nm-wash-top", css(washOf(100 / 255), 0.38));
+  set("--nm-wash-bottom", css(washOf(40 / 255), 0.10));
+  set("--nm-qhead", "linear-gradient(135deg, " + css(npOver(bg, 0.9, np.tintRgb || base), 0.5) + ", " + css(npOver(bg, 0.65, np.tintRgb || base), 0.5) + ")");
+  np.nm = { base: base, onSurface: onSurface, dark: dark };
+}
 
 /** The play button's icon follows the player. */
 function npPlayIcon(playing) {
@@ -7155,6 +7378,7 @@ function npShow() {
   np.txtRgb = npRgb(getComputedStyle(document.body).color, np.txtRgb);
   np.tintRgb = npRgb(getComputedStyle(pl).getPropertyValue("--pl-tint").trim() || "#48484F", np.tintRgb);
   $("np").style.setProperty("--pl-tint", getComputedStyle(pl).getPropertyValue("--pl-tint").trim() || "#48484F");
+  npNamidaColours();
   npFill();
   npText();
   npPlayIcon(isPlaying());
@@ -7216,7 +7440,10 @@ function npDragStart() {
 }
 
 function npDragBy(dy) {
+  var was = np.p;
   np.p = npClamp(np.p + dy / np.g.H, -NP_HEAD, 2);
+  // Dragged past full towards the queue: it is filled in and at the song playing as it rises.
+  if (was <= 1 && np.p > 1) { npQueueRender(); npQueueToCurrent(); }
   npRender();
 }
 
@@ -7299,38 +7526,65 @@ function npToSong(dir) {
 function npQueueRender() {
   var host = $("np-qlist"), locked = syncFollower() || !currentTrack();
   host.classList.toggle("locked", locked);
+  // The same songs in the same order: only which is playing (and the hearts) changes, in place, so it glides.
+  var key = player.order.map(function (qi) { var t = player.queue[qi]; return t ? t.id : "-"; }).join(",") + "|" + locked;
+  if (host.dataset.key === key && host.children.length) {
+    Array.prototype.forEach.call(host.children, function (row, i) {
+      row.classList.toggle("now", i === player.pos);
+      row.classList.toggle("done", i < player.pos);
+      var t = player.queue[player.order[i]], hb = row.querySelector(".np-qheart"), on = !!t && favourites.has(String(t.id));
+      if (hb && hb.classList.contains("on") !== on) {
+        hb.classList.toggle("on", on);
+        hb.title = hb.ariaLabel = on ? "Take the heart off" : "Give it a heart";
+        hb.innerHTML = nx(on ? "heartOn" : "heart");
+      }
+    });
+    host.classList.toggle("paused", !isPlaying());
+    npQueueInfo();
+    npJumpIcon();
+    return;
+  }
+  host.dataset.key = key;
   host.innerHTML = "";
-  var frag = document.createDocumentFragment(), total = 0;
-  var X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>';
-  var HANDLE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9h12M6 12h12M6 15h12"/></svg>';
+  var frag = document.createDocumentFragment();
+  // Namida's track tile: the cover, three lines (title, artist, album and year), the length over
+  // a heart, the handle to move it, and "more" to take it off.
   player.order.forEach(function (qi, i) {
     var t = player.queue[qi];
     if (!t) return;
-    total += t.durationMs || 0;
     var row = document.createElement("div");
     row.className = "np-qrow" + (i === player.pos ? " now" : i < player.pos ? " done" : "");
     row.dataset.i = i;
     var cv = coverEl("cover", (music.albumByKey[t.ak] || {}).coverId || t.albumId, t.album);
-    if (i === player.pos) cv.insertAdjacentHTML("beforeend", '<span class="eq"><b></b><b></b><b></b></span>');
     row.appendChild(cv);
     var tx = document.createElement("div");
     tx.className = "t";
-    tx.innerHTML = "<b></b><span></span>";
-    tx.firstChild.textContent = t.title;
-    tx.lastChild.textContent = t.artist;
+    tx.innerHTML = "<b></b><span></span><span></span>";
+    tx.children[0].textContent = t.title;
+    tx.children[1].textContent = t.artist;
+    tx.children[2].textContent = [t.album, t.year > 0 ? String(t.year) : ""].filter(Boolean).join(" \u2022 ");
     row.appendChild(tx);
+    var side = document.createElement("div");
+    side.className = "np-qside";
     var d = document.createElement("span");
     d.className = "d";
     d.textContent = fmtTime(t.durationMs / 1000);
-    row.appendChild(d);
-    var x = document.createElement("button");
-    x.type = "button"; x.className = "np-qx"; x.title = "Take it off the queue"; x.innerHTML = X;
-    x.onclick = function (e) { e.stopPropagation(); npRemove(+row.dataset.i); };
-    row.appendChild(x);
+    side.appendChild(d);
+    var on = favourites.has(String(t.id)), hb = document.createElement("button");
+    hb.type = "button"; hb.className = "np-qheart" + (on ? " on" : "");
+    hb.title = hb.ariaLabel = on ? "Take the heart off" : "Give it a heart";
+    hb.innerHTML = nx(on ? "heartOn" : "heart");
+    hb.onclick = function (e) { e.stopPropagation(); toggleFavourite(t.id); };
+    side.appendChild(hb);
+    row.appendChild(side);
     var h = document.createElement("span");
-    h.className = "np-qh"; h.title = "Drag to move it"; h.innerHTML = HANDLE;
+    h.className = "np-qh"; h.title = "Drag to move it"; h.innerHTML = nx("handle");
     h.addEventListener("pointerdown", function (e) { npQueueDrag(e, row); });
     row.appendChild(h);
+    var x = document.createElement("button");
+    x.type = "button"; x.className = "np-qx"; x.title = "Take it off the queue"; x.ariaLabel = "More for " + t.title; x.innerHTML = nx("more");
+    x.onclick = function (e) { e.stopPropagation(); npRowMenu(x, +row.dataset.i); };
+    row.appendChild(x);
     row.onclick = function () {
       if (locked) return;
       player.pos = +row.dataset.i;
@@ -7340,14 +7594,67 @@ function npQueueRender() {
   });
   host.appendChild(frag);
   host.classList.toggle("paused", !isPlaying());
-  var min = Math.round(total / 60000);
-  $("np-qcount").textContent = player.order.length + (player.order.length === 1 ? " song" : " songs") + " · " + (min >= 60 ? Math.floor(min / 60) + " h " + (min % 60) + " min" : min + " min");
+  npQueueInfo();
+  npJumpIcon();
 }
 
-/** The list at the song playing, a couple of songs down from the top. */
+/** Namida's tile height: 82, and 4 under it. */
+var NP_ROW_H = 86;
+
+/** The list with the song playing at its top, as Namida opens its queue. */
 function npQueueToCurrent(smooth) {
-  var host = $("np-qlist"), y = Math.max(0, (player.pos - 2) * 62);
+  var host = $("np-qlist"), y = Math.max(0, player.pos * NP_ROW_H);
   if (smooth && host.scrollTo) host.scrollTo({ top: y, behavior: "smooth" }); else host.scrollTop = y;
+  npJumpIcon();
+}
+
+/** The button to go back to the song playing: a disc while it is in view, else an arrow to where it is. */
+function npJumpIcon() {
+  var host = $("np-qlist"), b = $("np-qjump");
+  if (!host || !b) return;
+  var top = player.pos * NP_ROW_H, h = host.clientHeight || 1, name = "cd";
+  if (top + NP_ROW_H <= host.scrollTop) name = "arrowUp";
+  else if (top >= host.scrollTop + h - 70) name = "arrowDown";
+  if (b.dataset.nx !== name) { b.dataset.nx = name; b.innerHTML = nx(name); }
+}
+
+/** A song's "more": a small menu under its button, to take it off the queue. */
+function npRowMenu(btn, i) {
+  npMenusClose();
+  var m = document.createElement("div");
+  m.className = "np-qmenu np-rowmenu";
+  m.innerHTML = '<button type="button">Take it off the queue</button>';
+  m.firstChild.onclick = function (e) { e.stopPropagation(); npMenusClose(); npRemove(i); };
+  var q = $("np-queue"), r = btn.getBoundingClientRect(), qr = q.getBoundingClientRect();
+  m.style.left = "auto";
+  m.style.right = Math.max(8, qr.right - r.right) + "px";
+  m.style.top = (r.bottom - qr.top + 4) + "px";
+  m.style.bottom = "auto";
+  q.appendChild(m);
+  requestAnimationFrame(function () { m.classList.add("in"); });
+}
+
+function npMenusClose() {
+  Array.prototype.forEach.call(document.querySelectorAll(".np-rowmenu"), function (m) { m.remove(); });
+  var qm = $("np-qmenu");
+  if (qm && !qm.hidden) { qm.classList.remove("in"); qm.hidden = true; }
+}
+
+/** Takes off the songs before the one playing, or after it. */
+function npClearSide(side) {
+  if (syncFollower() || !currentTrack()) return;
+  if (side === "before") { player.order.splice(0, player.pos); player.pos = 0; }
+  else player.order.splice(player.pos + 1);
+  npQueueChanged();
+}
+
+/** Shuffles what is left after the song playing, as Namida's Shuffle in the queue does. */
+function npShuffleUpcoming() {
+  if (syncFollower() || !currentTrack()) return;
+  var rest = player.order.slice(player.pos + 1);
+  for (var i = rest.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), x = rest[i]; rest[i] = rest[j]; rest[j] = x; }
+  player.order = player.order.slice(0, player.pos + 1).concat(rest);
+  npQueueChanged();
 }
 
 /** The queue changed here: what follows is fetched again, and everything showing the queue follows. */
@@ -7557,7 +7864,57 @@ function setupFullPlayer() {
   $("np-next").onclick = function () { npToSong(1); };
   $("np-close").onclick = npCollapse;
   $("np-where").onclick = function () { npCollapse(); revealPlaying(); };
-  $("np-qshuffle").onclick = function () { $("pl-shuffle").click(); npQueueChanged(); };
+  // The queue's header and foot, as Namida's: sound, more, back down; clear some, go to the song playing, shuffle what is left.
+  $("np-qshuffle").onclick = npShuffleUpcoming;
+  $("np-qconf").onclick = npSoundOpen;
+  $("np-qdown").onclick = function () { npMenusClose(); npGo(1); };
+  $("np-qmore").onclick = function (e) {
+    e.stopPropagation();
+    var had = !!document.querySelector(".np-rowmenu.head");
+    npMenusClose();
+    if (had) return;
+    var m = document.createElement("div");
+    m.className = "np-qmenu np-rowmenu head";
+    m.innerHTML = '<button type="button" data-a="album">Show the song in its album</button><button type="button" data-a="others">Keep only the song playing</button>';
+    m.onclick = function (ev) {
+      var b = ev.target.closest("button");
+      if (!b) return;
+      ev.stopPropagation();
+      npMenusClose();
+      if (b.dataset.a === "album") { npCollapse(); revealPlaying(); }
+      else { npClearSide("after"); npClearSide("before"); }
+    };
+    var q = $("np-queue"), r = this.getBoundingClientRect(), qr = q.getBoundingClientRect();
+    m.style.left = "auto"; m.style.bottom = "auto";
+    m.style.right = Math.max(8, qr.right - r.right) + "px";
+    m.style.top = (r.bottom - qr.top + 4) + "px";
+    q.appendChild(m);
+    requestAnimationFrame(function () { m.classList.add("in"); });
+  };
+  $("np-qbroom").onclick = function (e) {
+    e.stopPropagation();
+    var m = $("np-qmenu"), open = m.hidden;
+    npMenusClose();
+    if (!open) return;
+    m.hidden = false;
+    requestAnimationFrame(function () { m.classList.add("in"); });
+  };
+  $("np-qmenu").onclick = function (e) {
+    var b = e.target.closest("button[data-clear]");
+    if (!b) return;
+    e.stopPropagation();
+    npMenusClose();
+    if (b.dataset.clear === "others") { npClearSide("after"); npClearSide("before"); }
+    else npClearSide(b.dataset.clear);
+  };
+  $("np").addEventListener("pointerdown", function (e) { if (!e.target.closest(".np-qmenu, #np-qbroom, #np-qmore, .np-qx")) npMenusClose(); });
+  $("np-qlist").addEventListener("scroll", npJumpIcon, { passive: true });
+  if (window.matchMedia) {
+    var scheme = window.matchMedia("(prefers-color-scheme: dark)");
+    var recolour = function () { npNamidaColours(); if (np.shown) npRender(); };
+    if (scheme.addEventListener) scheme.addEventListener("change", recolour); else if (scheme.addListener) scheme.addListener(recolour);
+  }
+  nxFill(document);
   $("np-repeat").onclick = function () { $("pl-repeat").click(); npText(); if (!np.frozen) npFill(); };
   $("np-heart").onclick = function () { var t = npTrack(); if (t) toggleFavourite(t.id); };
   // The sound controls: from the chip or the button beside repeat.

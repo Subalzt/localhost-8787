@@ -80,6 +80,24 @@ class MusicShelf {
     val trackList = LazyListState()
     val albumGrid = LazyGridState()
 
+    /** Namida's count bar over each page: hidden while you scroll down, back as you scroll up. */
+    var trackBar by mutableStateOf(true)
+    var albumBar by mutableStateOf(true)
+
+    /** When each page's items came on screen, for Namida's staggered entrance. */
+    val trackEntrance = Entrance()
+    val albumEntrance = Entrance()
+    val pageEntrance = Entrance()
+
+    /**
+     * Namida's hero: the album tapped in the grid, where its cover was on screen, where the
+     * album's page puts it, and whether it is flying between the two.
+     */
+    var heroKey by mutableStateOf<String?>(null)
+    var heroFrom by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
+    var heroTo: androidx.compose.ui.geometry.Rect? = null
+    var heroFlying by mutableStateOf(false)
+
     suspend fun load(library: MusicLibrary, refresh: Boolean) {
         if (loading) return
         loading = true
@@ -125,10 +143,15 @@ class MusicShelf {
     /** The cover a song is shown with: its album's, however the files split the album up. */
     fun coverOf(t: TrackDto): String = albumOf[t.id]?.coverId ?: t.albumId
 
-    fun openAlbum(a: Album) {
+    /** Opens an album's page; [from] is where its cover was, when it was tapped in the grid, for the hero. */
+    fun openAlbum(a: Album, from: androidx.compose.ui.geometry.Rect? = null) {
+        heroKey = if (from != null) a.key else null
+        heroFrom = from
+        heroTo = null
         open = a
         albumSearching = false
         albumQuery = ""
+        pageEntrance.restart()
     }
 
     /** One step back: a search closes, then the album, then the screen. */
@@ -194,17 +217,6 @@ private fun albumArtistOf(ts: List<TrackDto>): String {
 }
 
 fun formatBadge(mime: String): String = dev.periy.bridge.server.formatName(mime).takeIf { it.isNotEmpty() && it != "*" }.orEmpty()
-
-/**
- * A file's details as the player's chip shows them, after the kind of file: 1,411 kbps • 44.1 kHz.
- */
-fun fileDetails(info: dev.periy.bridge.server.TrackInfoDto): String = listOfNotNull(
-    info.kbps.takeIf { it > 0 }?.let { "%,d kbps".format(it) },
-    info.sampleRate.takeIf { it > 0 }?.let { r ->
-        val k = r / 1000.0
-        (if (r % 1000 == 0) "%d".format(r / 1000) else "%.1f".format(k)) + " kHz"
-    },
-).joinToString(" \u2022 ")
 
 fun fmtTime(ms: Long): String {
     val s = (ms / 1000).coerceAtLeast(0)
