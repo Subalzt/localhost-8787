@@ -14,12 +14,12 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/web-home.png" width="760" alt="The page on the laptop, Theatre style">
+  <img src="docs/images/web-home.png" width="760" alt="The page on the laptop">
 </p>
 
-| Phone: Home | Phones | Control | Settings |
+| Home | Devices | Control | Settings |
 | --- | --- | --- | --- |
-| <img src="docs/images/phone-home.png" width="190"> | <img src="docs/images/phone-phones.png" width="190"> | <img src="docs/images/phone-control.png" width="190"> | <img src="docs/images/phone-settings.png" width="190"> |
+| <img src="docs/images/phone-home.png" width="190"> | <img src="docs/images/phone-devices.png" width="190"> | <img src="docs/images/phone-control.png" width="190"> | <img src="docs/images/phone-settings.png" width="190"> |
 
 ---
 
@@ -37,174 +37,419 @@ and thrown away on the spot so only the connection counts. A USB 2 cable (most c
 tops out near 40 MB/s, and the app says so when that happens. The router here runs a narrow
 20 MHz channel, which is why it is the slowest; see [Faster over the air](#faster-over-the-air).
 
+The app itself is not what limits these. Measured on 27 September against a bare TCP connection
+with no app at all, it matches the connection both ways, on the cable and on the hotspot, and a
+real 2 GB file, written to the phone's storage, moved at 238 MB/s to the phone and 230 MB/s back
+over the cable.
+
+---
+
+## 🔗 Every way to connect
+
+Laptops and phones can reach each other in the ways below, from the simplest up. Each line is
+the short version; **click it for the full explanation.** Nothing ever goes through a server on
+the internet: every byte travels between your own devices.
+
+### Laptop and phone
+
+<details>
+<summary><b>1. The same Wi-Fi.</b> Both on your router. Nothing to set up; the slowest way.</summary>
+
+<br>
+
+**Path:** laptop → router → phone. Two hops through the air.
+
+Turn the switch on at the top of the phone's Home and open the address it shows (for example
+`10.117.25.178:8787`) in any browser on the laptop. It works on any Wi-Fi where devices can see
+each other: your home router, an office network. Every byte crosses the air twice, once to the
+router and once from it, and the slower of the two links decides the speed. Here that is about
+7 MB/s, because the router uses a narrow channel.
+
+Some Wi-Fi networks (guest networks, most campus and hotel networks) keep devices from seeing
+each other. There the page will not open; use the hotspot or a cable instead.
+
+</details>
+
+<details>
+<summary><b>2. The phone's hotspot.</b> The laptop joins the phone's hotspot and stays online through it. About 65 MB/s.</summary>
+
+<br>
+
+**Path:** laptop → phone. One hop through the air.
+
+Turn on the phone's ordinary hotspot and join it from the laptop. The phone is now the laptop's
+router, so there is only one hop between them, and the laptop keeps its internet through the
+phone. Home shows the hotspot address with its speed; the page shows *Phone's hotspot* as a badge.
+
+*Settings → Speed → Laptop link* shows the hotspot's name and password, so the laptop helper can
+join it by itself.
+
+</details>
+
+<details>
+<summary><b>3. A USB-C cable.</b> USB tethering on. About 250 MB/s, the fastest by far.</summary>
+
+<br>
+
+**Path:** laptop ⇄ phone over the cable, no radio at all.
+
+Plug in and turn on USB tethering (Home offers the button as soon as a cable is plugged in). The
+phone becomes a network adapter on the laptop, at USB speed: 224–271 MB/s with a USB 3 cable. The
+laptop keeps its internet through the phone. Most charging cables are USB 2, which tops out near
+40 MB/s; the app tells the two apart and says so.
+
+</details>
+
+<details>
+<summary><b>4. The direct link.</b> A private network the phone starts by itself. 55–115 MB/s, no internet.</summary>
+
+<br>
+
+**Path:** laptop → phone. One hop, on a network only the two of you are on.
+
+*Settings → Speed → Laptop link → Direct link → Start.* The phone starts a network of its own
+(Android's local-only hotspot) with a random name and password; the laptop helper joins it without
+asking. It is as fast as the hotspot or faster, but it has no internet, so the laptop is offline
+until it stops. Android allows one hotspot at a time: the app says when the ordinary hotspot is in
+the way.
+
+</details>
+
+<details>
+<summary><b>5. USB debugging.</b> The helper's last resort: works with no network between them at all.</summary>
+
+<br>
+
+**Path:** laptop → adb over the cable → phone.
+
+When the laptop cannot reach the phone over any network (the phone on another Wi-Fi, tethering
+off) but the cable is in and *USB debugging* is on, the laptop helper forwards a port through
+`adb` and serves the phone at `127.0.0.2` as if it were on the network. The page, the clipboard
+and the trackpad work; the second screen needs a real network. It is slower than tethering, and
+the page says *turn on USB tethering for full speed*. The helper uses the Android SDK's `adb`, or
+the one that comes with scrcpy.
+
+</details>
+
+<details>
+<summary><b>6. The laptop helper.</b> One address, <code>localhost:8787</code>, always on the fastest of the above.</summary>
+
+<br>
+
+**Path:** browser → the helper on the laptop → whichever way above is fastest → phone.
+
+Double-click **blazeit-pc.bat** (from the page's Settings; nothing is installed). It finds the
+phone by itself, over the cable, the hotspot, the direct link, Wi-Fi or USB debugging, and moves
+to a faster way the moment one appears and back when it goes. The page stays at
+`http://localhost:8787` whichever it is, so bookmarks and open tabs never change. Starting it
+again replaces the running copy. Windows only.
+
+<img src="docs/images/web-settings.png" width="620" alt="The helper, running, in the page's Settings">
+
+</details>
+
+### Phone and phone
+
+<details>
+<summary><b>7. Finding and linking phones.</b> Phones on the same Wi-Fi find each other; one code links them both ways.</summary>
+
+<br>
+
+**Path:** phone ⇄ phone over the network they share (a router, or one phone's hotspot).
+
+The **Devices** tab looks for other phones running Localhost 8787 on the same network (they
+announce themselves, as printers do). Tap one, compare the 4-digit code, and tap **Allow** on the
+other phone. That one approval links the two **both ways**: each can now reach the other without
+asking again, for a year, renewed on its own. A phone the search cannot see (another network
+that still routes to this one) can be added with **Connect by address**.
+
+<img src="docs/images/phone-devices.png" width="240" alt="The Devices tab: computers, and looking for phones">
+
+</details>
+
+<details>
+<summary><b>8. Each other's files.</b> A linked phone's folders open on this phone and on the laptop.</summary>
+
+<br>
+
+**Path:** this phone (or its laptop) → this phone → the linked phone.
+
+Tap a linked phone in *Devices* to browse its folders, with thumbnails, and save a file or a whole
+folder here. On the laptop page, the **Phone** tab has a chip for each linked phone, so a laptop
+connected to one phone can browse and download from the other. Read-only, as the laptop's view of
+the phone is.
+
+</details>
+
+<details>
+<summary><b>9. One clipboard.</b> Copy on one phone, paste on the other.</summary>
+
+<br>
+
+**Path:** phone → phone, then on to each phone's laptop.
+
+With *Sync clipboard* on, whatever is copied on one phone (text, a picture, a file) goes to every
+linked phone, and from there to the laptops on it. The newest copy wins; a copy that came from a
+phone is not sent back to it.
+
+</details>
+
+<details>
+<summary><b>10. Sending between phones.</b> Share a file to the other phone; big ones go over several connections at once.</summary>
+
+<br>
+
+**Path:** phone → phone.
+
+Send files from Home, from any app's Share menu, or from a linked phone's row in *Devices*. Files
+over 16 MB are split over up to 8 connections at once, in 64 MB pieces, and land in the other
+phone's received-files folder.
+
+</details>
+
+### Laptop and laptop
+
+<details>
+<summary><b>11. Through one phone.</b> Two laptops on the same phone: the file streams through it, kept nowhere.</summary>
+
+<br>
+
+**Path:** laptop → phone → laptop. The phone only passes it on.
+
+On the page, the **to …** menu on *Send files* lists every computer with the page open. Pick one:
+the other laptop gets a card with **Save** and **Decline**, and on Save the file streams through the
+phone as it is read. It is never written to the phone's storage, so a 50 GB file needs no room
+there. The speed is that of the slower link, and when both laptops share the phone's hotspot they
+share its air time too.
+
+| Where to send | A file arriving |
+| --- | --- |
+| <img src="docs/images/web-send-to.png" width="420" alt="Where to send: this phone, or a computer with the page open"> | <img src="docs/images/web-incoming.png" width="420" alt="A file arriving from another laptop, to Save or Decline"> |
+
+</details>
+
+<details>
+<summary><b>12. Through two phones.</b> Each laptop on its own phone, the phones linked: laptop → phone → phone → laptop.</summary>
+
+<br>
+
+**Path:** laptop → its phone → the linked phone → that phone's laptop.
+
+The menu lists the computers on linked phones too (*a laptop · through the other phone*), and
+the other phone itself. The file streams across both phones in one go and is stored on neither.
+This is how two laptops on two different hotspots reach each other.
+
+</details>
+
+<details>
+<summary><b>13. Direct, browser to browser.</b> When the two laptops can reach each other, the file skips the phones entirely.</summary>
+
+<br>
+
+**Path:** laptop → laptop. The phones only introduce them.
+
+Before streaming through the phone (11 or 12), the two pages try to connect to each other
+directly (WebRTC). The phones carry only the introductions, a few kilobytes: an offer, an answer,
+and the addresses each side can be reached at. Each phone answers STUN on UDP port 3478, which
+tells each browser its own address as seen from the network. If the laptops share a network (the
+same router, the same hotspot, a cable between them), the data then flows straight from one
+browser to the other and the phones carry none of it. If they cannot reach each other within
+8 seconds, the file goes through the phones as in 11 or 12, by itself.
+
+In Chrome and Edge the receiving laptop picks where to save, and the file is written as it
+arrives. Browsers without that (Firefox, Safari) take a direct send of up to 512 MB in memory;
+larger ones go through the phone as a normal download.
+
+</details>
+
+### Different networks
+
+<details>
+<summary><b>14. What works across different networks, and what does not.</b></summary>
+
+<br>
+
+Everything above needs a path between the devices on a local network. In short:
+
+| Situation | Works? |
+| :--- | :--- |
+| Laptop and phone on the same Wi-Fi, hotspot or cable | Yes |
+| Laptop and phone on different networks, cable plugged in | Yes, through USB debugging (5) |
+| Two phones on different Wi-Fi networks | Only if one can reach the other's address; else put one phone on the other's hotspot |
+| Two laptops, each on its own phone's hotspot | Yes, through both phones (12), once the phones are linked |
+| Phones on mobile data only | No: carriers block incoming connections |
+| Devices in different places, across the internet | No |
+| Guest or campus Wi-Fi that hides devices from each other | No; use a hotspot or a cable |
+
+There is no server in the middle, on purpose. A small introduction server on the internet could
+let devices in different places find each other while the data still went directly between them,
+but it is not built.
+
+</details>
+
 ---
 
 ## Features
 
-### 1. Two looks: Theatre and Studio
+### 1. Turn it on and connect a computer
 
-Pick one in *Settings → Appearance*; the phone and every open laptop page switch together.
-
-- **Theatre**: a night-blue banner across the top, edge to edge, with the tabs as pills over
-  it; wide cards. Shown in all the pictures above.
-- **Studio**: white or black, big bold titles, the tabs along the bottom on the phone and in a
-  sidebar on the laptop.
-
-**Colour**: Automatic (black and white, with the night-blue banner) or red, orange, yellow,
-green, mint, blue or purple. The colour marks the tab you are on and the main buttons; nothing
-else is tinted. **Light, dark or automatic** sits underneath. On the phone, **swipe left or
-right** to move between tabs.
-
-| Studio with red, phone | Studio with red, laptop |
-| --- | --- |
-| <img src="docs/images/phone-home-studio.png" width="190"> | <img src="docs/images/web-home-studio.png" width="560"> |
-
-### 2. Turn it on and connect a computer
-
-Flip the switch at the top of Home. The phone shows its address in large type, for example
-`10.117.25.178:8787`; tap it to copy, or show a QR code. Open that address on the laptop,
-click **Ask to connect**, and tap **Allow** on the phone (both show the same 4-digit code).
-No account, no password. The phone lists every computer and phone allowed in and can remove any.
+Flip the switch at the top of Home. The phone shows its address in large type; tap it to copy, or
+show a QR code. Open that address on the laptop, click **Ask to connect**, and tap **Allow** on the
+phone (both show the same 4-digit code). No account, no password. The phone lists every computer
+and phone allowed in and can remove any.
 
 <img src="docs/images/web-login.png" width="480" alt="Connect this computer">
 
-### 3. Every way in, fastest first
+### 2. One clipboard for both
 
-Under the address, Home lists the ways a computer can reach the phone, with their speed:
-**USB** (250 MB/s), **Hotspot** (65 MB/s) or **Direct** link, and **Wi-Fi** (through your
-router). Tap one to show its address; tap one that is off to open the setting that turns it on.
-The laptop page shows which one it is using as a badge (*USB cable · up to 250 MB/s*, or
-*Wi-Fi · USB is faster*).
-
-- **USB cable**: plug in and turn on USB tethering. Fastest by far.
-- **Hotspot**: the phone's normal hotspot. The laptop stays online through the phone.
-- **Direct link**: a private network the phone starts by itself (*Settings → Speed → Laptop
-  link*: choose *Direct link*, then *Start*). No internet on it. Android allows only one hotspot at a time, so the app
-  tells you when the normal hotspot is in the way.
-
-### 4. One clipboard for both
-
-Copy on one, paste on the other: text, pictures and files up to 50 MB. The box on Home shows
-what is shared, **History** brings back the last 30 items, and **Clear** empties it everywhere.
-With the laptop helper running it happens by itself both ways, including **every screenshot**
-you take on the phone. To send copies from any phone app straight away, allow two things once
-over USB:
+Copy on one, paste on the other: text, pictures and files up to 50 MB. The box on Home shows what
+is shared, and under its title **Shared with** names every machine it reaches right now, on the
+phone and on every page: *Shared with Xiaomi 15, LEGION_7I and Linux*. Machines go by their name,
+never their browser; a browser in WSL is *Linux*. **History** (the clock) brings back the last 30
+items and closes by itself after ten seconds; with nothing in it, the clock just says *Nothing to
+clear*. **Clear history** empties the history and the clipboard everywhere. With the laptop
+helper running it all happens by itself both ways, including **every screenshot** you take on
+the phone. To send copies from any phone app straight away, allow two things once over USB:
 
 ```bash
 adb shell pm grant dev.periy.bridge.debug android.permission.READ_LOGS
 adb shell appops set dev.periy.bridge.debug SYSTEM_ALERT_WINDOW allow
 ```
 
-### 5. Send files and whole folders
+### 3. Send files and whole folders
 
-- **Laptop → phone**: drop files or folders on the page. Big files go over several connections
-  at once and carry on where they stopped if the connection drops.
+- **Laptop → phone**: drop files or folders on the page. Big files go over several connections at
+  once and carry on where they stopped if the connection drops.
+- **Laptop → another computer or phone**: the **to …** menu on *Send files* (see
+  [Laptop and laptop](#laptop-and-laptop)).
 - **Phone → laptop**: share anything to Localhost 8787 from any app, or tap *Send files* on Home.
   It appears under *On the phone* on the page.
 - Nothing can be deleted from the laptop. On the phone, *Clear* takes files off the list only.
 
-### 6. Browse the phone from the laptop
+### 4. Browse the phone from the laptop
 
-The page's **Phone** tab shows the phone's folders (camera, downloads, documents...) with
-thumbnails. Click a file to see it before downloading: photos (HEIC too), videos, music, PDFs,
-text and Office files, full screen with arrows to step through. Download one file or a whole
-folder as a zip. Read-only, and off until you allow it on the phone.
+The page's **Phone** tab shows the phone's folders with thumbnails, and those of linked phones.
+Click a file to see it before downloading: photos (HEIC too), videos, music, PDFs, text and Office
+files, full screen with arrows to step through. Download one file or a whole folder as a zip.
+Read-only, and off until you allow it on the phone.
 
-<img src="docs/images/web-viewer.png" width="620" alt="A photo from the phone, previewed">
+| The phone's folders | A photo, previewed |
+| --- | --- |
+| <img src="docs/images/web-phone.png" width="420"> | <img src="docs/images/web-viewer.png" width="420"> |
 
-### 7. Your music, from the phone
+### 5. Your music, from the phone
 
-The page's **Music** tab opens on your albums, largest first, each with its cover (albums
-without one get one found online or drawn for them). Songs stream straight from the phone, so
-FLAC and everything else starts at once, and skipping is instant. Media keys and the Windows
-media overlay work.
+The page's **Music** tab opens on your albums, each with its cover (albums without one get one
+found online or drawn for them). Songs stream straight from the phone, so FLAC and everything
+else starts at once, and skipping is instant. Media keys and the Windows media overlay work.
 
-- **The banner** at the top always shows what is playing: its album, and beside it the next
-  three songs with their covers and file type, marked *Ready* once they are loaded. Click one to
-  play it now.
-- **Play** on an album plays it in order, **Shuffle** shuffles; a song you click plays on
-  through the list it is in. The banner says where the music comes from.
-- **The cover in the player bar** takes you to the song in its album, or, for a single, back to
-  where you played it.
+- **Search and filter**: *Albums* or *Songs* with their counts, and a search box (`/` to jump to
+  it, `Esc` to clear).
+- **The banner** shows what is playing: its album, and the next three songs with their covers and
+  file type, marked *Ready* once loaded. Click one to play it now. **Go to album** opens the album.
+- While a song plays, a small note sits beside *Music* in the tabs.
 
-| Playing, with what is next | An album |
+| Your albums | Playing, with what is next |
 | --- | --- |
 | <img src="docs/images/web-music.png" width="420"> | <img src="docs/images/web-album.png" width="420"> |
 
-### 8. Play in sync on several devices
+### 6. Lyrics, found and saved by themselves
+
+Press the lyrics button in the player: the words scroll with the song, the line being sung in
+white, the rest waiting in grey. Click a line to jump there. With word timing, each word fills as
+it is sung; in a long instrumental gap, three dots swell until the singing starts again.
+
+- **Looked up by themselves.** When a song starts and the phone has no lyrics for it, the browser
+  looks them up on [LRCLIB](https://lrclib.net), a free, open lyrics library, provided the laptop
+  has internet. Nothing is typed and nothing is sent but the song's title, artist, album and length.
+- **Downloaded and kept.** What is found is saved on the phone twice: in the app, and as a
+  standard `.lrc` file **beside the song** in its music folder (for example `Music/Song.lrc`), which
+  other players read too. Next time the lyrics come from the phone, with or without internet.
+- **Your own files first.** A `.lrc` file already beside a song is used as it is and never
+  overwritten.
+- Saving `.lrc` files beside songs needs *All files access* for Localhost 8787 on the phone.
+
+| On the laptop | At phone width |
+| --- | --- |
+| <img src="docs/images/web-lyrics.png" width="520"> | <img src="docs/images/web-lyrics-phone.png" width="200"> |
+
+### 7. Play in sync on several devices
 
 The **Sync** button in the player lists the phone's speaker and every other computer with the
-page open. Switch them on and they all play the same song at the same moment: pause, skip or
-seek on any one and the rest follow. In tests the laptops stay within 0.1 ms of each other and
-the phone within a few milliseconds.
+page open. Switch them on and they all play the same song at the same moment: pause, skip or seek
+on any one and the rest follow. In tests the laptops stay within 0.1 ms of each other and the
+phone within a few milliseconds.
 
-### 9. The phone's notifications on the laptop
+### 8. The phone's notifications on the laptop
 
-The page's **Alerts** tab shows all of the phone's notifications, each on its own card folded
-to one line like Android's. Click to open it, reply to a message, or press its buttons (*Mark as
-read*), and it happens on the phone. Ongoing ones (music, downloads) sit apart and never pop up.
-Needs *Notification access* on the phone (*Settings → Notifications on the laptop*).
+The page's **Alerts** tab shows the phone's notifications. Reply to a message, press their
+buttons (*Mark as read*), or clear them, and it happens on the phone. Ongoing ones (music,
+downloads) sit apart and never pop up. Needs *Notification access* on the phone.
 
 <img src="docs/images/web-alerts.png" width="620" alt="Alerts">
 
-### 10. The phone as trackpad and keyboard
+### 9. The phone as trackpad and keyboard
 
 The phone's **Control** tab is a trackpad for the laptop, with Windows gestures (two fingers to
 scroll, three for Task View, four to switch desktops), the phone's keyboard typing into the
-laptop, and the laptop's volume and play/pause/next keys. It opens **locked**: tap once to use
-it, so a swipe across it changes tab instead. It locks again when you leave.
+laptop, and the laptop's volume and play/pause/next keys. It opens **locked**: tap once to use it,
+so a swipe across it changes tab instead. It locks again when you leave.
 
-### 11. The phone's screen on the laptop
+### 10. The phone's screen on the laptop
 
 *Phone screen* on the page opens the phone in a window on the laptop, to use with the mouse and
-keyboard, sound included (via [scrcpy](https://github.com/Genymobile/scrcpy); the phone needs
-USB debugging on). It uses the cable when one is plugged in.
+keyboard, sound included (via [scrcpy](https://github.com/Genymobile/scrcpy); the phone needs USB
+debugging on). It uses the cable when one is plugged in.
 
-### 12. The phone as a second screen
+### 11. The phone as a second screen
 
 *Use as a second screen* on the Control tab shows the laptop's desktop on the phone; taps on it
 click there. With a virtual-display driver on the laptop it is a real extra monitor. Protected
 video (Netflix, Prime Video) shows black, as it does for any screen capture.
 
-### 13. Laptop videos on the phone
-
-A **Play on phone** bookmark sends the video playing on a page (YouTube and the like) to the
-phone's picture-in-picture player. Get it from `http://localhost:8787/blazeit/video` with the
-helper running.
-
-### 14. Phone to phone
-
-The **Phones** tab finds other phones running Localhost 8787 on the same Wi-Fi. Connect once
-(same 4-digit code), then send files or text with a tap. With *Send over a direct link* on,
-the two phones link to each other directly for the transfer.
-
-### 15. A live monitor
+### 12. A live monitor
 
 The pulse button shows a small floating pill: speed each way, ping and signal, over any screen.
-Tap it for the full picture: history, how full the connection is and with what, both ends of the
-Wi-Fi link. On the laptop, *Monitor* docks it beside the page.
+Tap it for the full picture: the last minute, how full the link is and with what, and the
+session's peak and total. On the laptop, *Monitor* docks it down the right side.
 
 | On the phone | Docked beside the page |
 | --- | --- |
 | <img src="docs/images/phone-monitor.png" width="190"> | <img src="docs/images/web-monitor.png" width="560"> |
 
-A minute over the phone's hotspot: the laptop downloading, then uploading, then downloading
-again, filling the link at about 71 MB/s.
+The laptop downloading from the phone over shared Wi-Fi (both on channel 36, so every byte crosses
+the air twice) at about 10 MB/s: 57% of what that link carries.
 
-### 16. Measure the connection
+### 13. Measure the connection
 
-*Settings → Measure* on the page tests the connection alone for five seconds each way. Compare
-it with a real transfer: close means the network is the limit, far below means storage is.
+*Settings → Measure* on the page tests the connection alone for five seconds each way. Compare it
+with a real transfer: close means the network is the limit, far below means storage is.
 
-<img src="docs/images/web-settings.png" width="620" alt="Settings on the page">
+### 14. Back works as in an app
 
-### 17. The laptop helper
+- **On the phone**, Back closes whatever is open (a linked phone's files, the clipboard's
+  history), then returns to Home; at Home it sends the app to the background, as Home does. It
+  never closes the app, and the server keeps running.
+- **On the laptop**, the browser's Back steps back through the page: it closes the lyrics, a file
+  being viewed or the monitor, then returns to the tab before. It leaves the page only from where
+  you opened it. Each tab has its own address (`#music`), so a reload or a bookmark opens it.
 
-One file, **blazeit-pc.bat**, from the page's Settings. Double-click it; nothing is installed.
-It finds the phone by itself, moves to the fastest connection (cable, hotspot, direct link or
-Wi-Fi) and back when one goes, keeps the clipboard in step, runs the trackpad, the second screen
-and the phone's screen, and serves the page at `http://localhost:8787` so downloads use every
-connection. Starting it again replaces the running copy. Windows only for now.
+### 15. Any browser, any computer
+
+The page is one file with no dependencies and works in Chrome, Edge, Brave, Opera, Firefox and
+Safari, on Windows, macOS, Linux, ChromeOS, Android and iPad. It is checked in Edge and Firefox,
+including over plain `http://` (a "not secure" address), where browsers switch off some features:
+there the page falls back by itself (copying still works, a direct laptop-to-laptop file is
+held in memory or goes through the phone). Only the laptop helper is Windows-only; everything
+else needs just a browser.
+
+### 16. The look
+
+After the Apple TV app, the same on the phone and the laptop: the app's own icon, a night-blue banner, large titles,
+capsule buttons, and on the phone the tabs float along the bottom within reach of a thumb.
+**Swipe left or right** to move between tabs. **Colour** (*Settings → Appearance*, shared by the
+phone and every open page): Automatic (black and white) or red, orange, yellow, green, mint, blue
+or purple. **Light, dark or automatic** sits underneath.
 
 ---
 
@@ -214,22 +459,21 @@ connection. Starting it again replaces the running copy. Windows only for now.
 2. Open **Localhost 8787**, go to **Settings**, choose where received files go, and allow
    notifications (and music, if you want the Music tab).
 3. Flip the switch on **Home** and open the address it shows on the laptop. Tap **Allow**.
-4. For full speed and the extras, get **blazeit-pc.bat** from the page's **Settings** and run it.
+4. On Windows, for full speed and the extras, get **blazeit-pc.bat** from the page's **Settings**
+   and run it. Other computers need only the browser.
 5. For the most speed, plug in a USB-C cable and turn on USB tethering, or use the hotspot.
 
 Settings on the phone, top to bottom:
 
-| Look and receiving | Speed | Laptop access and music | Keep running and pairing |
-| --- | --- | --- | --- |
-| <img src="docs/images/phone-settings.png" width="190"> | <img src="docs/images/phone-settings-2.png" width="190"> | <img src="docs/images/phone-settings-3.png" width="190"> | <img src="docs/images/phone-settings-4.png" width="190"> |
+| Look, receiving and speed | The laptop link | Laptop access, music, keep running |
+| --- | --- | --- |
+| <img src="docs/images/phone-settings.png" width="190"> | <img src="docs/images/phone-settings-2.png" width="190"> | <img src="docs/images/phone-settings-3.png" width="190"> |
 
 ## Faster over the air
 
 For hotspot mode, checked on 26 September 2026:
 
 - The phone's hotspot already runs at its best here: 5 GHz, 80 MHz wide, Wi-Fi 6.
-- **Try turning the phone's own Wi-Fi off** while the laptop is on its hotspot. The hotspot then
-  has the radio and a channel to itself (the laptop's internet comes over mobile data instead).
 - Keep the phone close to the laptop and not face down.
 - On the laptop (Device Manager → Wi-Fi adapter → Advanced): turn *Leisure Power Save* off and
   set *Roaming Aggressiveness* to lowest.
@@ -238,7 +482,8 @@ For hotspot mode, checked on 26 September 2026:
 - 6 GHz Wi-Fi was opened in India in January 2026. Once the phone's software supports it there,
   the hotspot can move to a wider, emptier channel.
 - Tried and not worth it: 160 MHz or Wi-Fi 7 on the phone's hotspot (switched off by the
-  maker), two links at once, Wi-Fi Direct, and more parallel connections.
+  maker), two links at once, Wi-Fi Direct, more parallel connections, and turning the phone's
+  own Wi-Fi off while the laptop is on its hotspot (measured the same either way).
 
 ## Under the hood
 
@@ -246,6 +491,13 @@ For hotspot mode, checked on 26 September 2026:
   it serves. Live updates reach the page over a single event stream.
 - Uploads use the resumable [tus](https://tus.io) protocol, split over parallel connections
   into one pre-allocated file. Downloads use byte ranges, so they resume too.
+- Phones find each other with DNS-SD (`_blazeit._tcp`) on the local network and link with the
+  same pairing as computers, once each way.
+- A file sent to another computer or phone is a *pipe*: offered, accepted, then streamed through
+  in one pass and never stored. A direct send uses WebRTC data channels; the phone passes the
+  introductions along the pipe and answers STUN on UDP 3478.
+- Lyrics come from [LRCLIB](https://lrclib.net), fetched by the browser (the phone may have no
+  internet) and stored on the phone with a `.lrc` file beside the song.
 - Only computers and phones you allow get in: each gets a signed session you can revoke on the
   phone. Everything stays on the local network: no cloud, no account. Traffic is plain HTTP, so
   treat it like a file share on your own Wi-Fi.
@@ -255,20 +507,26 @@ For hotspot mode, checked on 26 September 2026:
 JDK 17+ and the Android SDK (platform 36).
 
 ```bash
-./gradlew :app:assembleDebug        # Windows: gradlew.bat :app:assembleDebug
+./gradlew :app:assembleDebug
+```
+
+```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 Kotlin and Jetpack Compose on the phone (Android 10+), Ktor 3 for the server; the page has no
 build step and no dependencies. The code lives in `app/src/main/`: `assets/bridge.html` (the
 page), `assets/blazeit-pc.bat` (the helper), and `java/dev/periy/bridge/` (`server/` for the
-routes, uploads, music, sync and notifications, `ui/` for the app's screens and the two styles,
-`net/` for addresses and the direct link).
+routes, uploads, music, lyrics, linked phones, pipes and notifications, `ui/` for the app's
+screens, `net/` for addresses, the direct link and STUN).
 
 ## Known limits
 
 - Over the air, 80 MHz Wi-Fi 6 is the most this phone's hotspot offers; for more, use a cable.
 - On the direct link the laptop has no internet until the link stops.
 - The helper, laptop control and the second screen are Windows only.
-- Protected video cannot be shown on the second screen or sent with *Play on phone*.
+- Devices must share a local network (or a cable); nothing works across the internet.
+- Lyrics need internet on the laptop the first time a song is played; after that they are on
+  the phone.
+- Protected video cannot be shown on the second screen.
 - Apple Lossless (ALAC) does not play in browsers. Empty folders are not created.
