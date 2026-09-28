@@ -121,6 +121,7 @@ class BridgeServer(
     private val direct: dev.periy.bridge.net.DirectLink,
     private val peers: PeerManager,
     private val loudness: dev.periy.bridge.music.Loudness,
+    private val favourites: dev.periy.bridge.music.Favourites,
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val outbound = OutboundTracker()
@@ -338,6 +339,33 @@ class BridgeServer(
             // The same song always sounds the same: kept for good.
             call.response.header(HttpHeaders.CacheControl, "private, max-age=31536000, immutable")
             call.respondBytes(bytes, ContentType.Application.OctetStream)
+        }
+
+        // What a song's file is (FLAC, 1,411 kbps, 44.1 kHz), for the player's chip.
+        get("/api/music/info/{id}") {
+            val info = call.parameters["id"]?.toLongOrNull()?.let { withContext(Dispatchers.IO) { music.info(it) } }
+            if (info == null) {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+            call.response.header(HttpHeaders.CacheControl, "private, max-age=86400")
+            call.respond(info)
+        }
+
+        // The songs with a heart: the same on the phone's player and every page's.
+        get("/api/music/favourites") {
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respondBytes(favourites.json().toByteArray(), ContentType.Application.Json)
+        }
+        post("/api/music/favourites/{id}") {
+            val id = call.parameters["id"]?.toLongOrNull()
+            val on = runCatching { call.receive<FavouriteDto>().on }.getOrNull()
+            if (id == null || on == null) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Which song, and heart or not"))
+                return@post
+            }
+            favourites.set(id, on)
+            call.respondBytes(favourites.json().toByteArray(), ContentType.Application.Json)
         }
 
         get("/api/music/art/{albumId}") {

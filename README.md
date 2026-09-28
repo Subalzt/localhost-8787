@@ -359,6 +359,12 @@ else starts at once, and skipping is instant. Media keys and the Windows media o
   (drag along it to choose a place, drag up off it to take the seek back), the colour is the
   cover's, and faint specks drift behind, quicker when the music is loud. `Esc` or Back steps
   back down.
+- **It looks like Namida's too**: fine broken-line icons, the artist large over the song with a
+  **heart** beside them (kept on the phone, so a song with a heart has it on the phone's player and
+  every page), a thin waveform, and a glowing play disc in the cover's colour, which tints the whole
+  player. Along the bottom, a chip with **what the file is** (FLAC, MP3, OPUS..., its bitrate and
+  its sample rate), **repeat**, and the **sound controls** (speed and volume). Shuffle, lyrics and
+  playing in step are on the bar.
 
 | Your albums | Playing, with what is next |
 | --- | --- |
@@ -366,22 +372,37 @@ else starts at once, and skipping is instant. Media keys and the Windows media o
 
 ### 6. Music on the phone itself
 
-The phone's own **Music** tab (between Devices and Control) plays the same library on the phone:
-its speaker, headphones or a car, with Localhost 8787 in the background, the controls in the
-notification and on the lock screen, and a headset's buttons working. *Albums* or *Songs* with a
-search, as on the page; tap an album for its songs, with **Play** and **Shuffle**.
+The phone's own **Music** tab opens the phone's music full screen, laid out as
+[Namida](https://github.com/namidaco/namida)'s library, in the colour of the song playing (Back
+returns to the app). It plays on the phone: its speaker, headphones or a car, with Localhost 8787
+in the background, the controls in the notification and on the lock screen, and a headset's
+buttons working.
 
-What is playing floats over the tabs as a mini player, the same player as the page's, after
+- **Tracks and Albums**, side by side under Namida's bottom bar: tap one or swipe between them.
+- **Tracks**: every song A to Z, each with its cover, who it is by, its album and year, how long
+  it is, a heart, and a menu (play next, play last, go to its album). Shuffle and play all at the
+  top. The song playing is lit.
+- **Albums**: three to a row, each cover with its year in a corner and a play button in the other,
+  and how many songs and how long under it.
+- **An album**: its cover in a frame with its name, who it is by and its year, **shuffle** and
+  **Play Last**; then its songs, each marked with its number, in the order you choose (disc
+  number, title, duration or artist, either way round).
+- **Search** at the top right filters the page you are on (or the album open) as you type.
+
+What is playing floats over the bar as a mini player, the same player as the page's, after
 Namida's:
 
 - **One continuous drag.** Up from the mini player to full screen, and on up to the queue; down
   again the same way. Everything follows the finger at once and settles where the drag says, the
-  mini player with a small bounce. The tabs sink away under it as it opens. Back steps down.
+  mini player with a small bounce. The bar sinks away under it as it opens. Back steps down.
 - **Swipe sideways** on the mini player or the cover for the song before or after, with a tick
   under the finger when it changes.
 - **The cover swells** with the song's loud moments and **the seek bar is its waveform**, worked
   out once on the phone and kept (the page gets the same, from the phone).
-- **Colours from the cover**, and specks drifting behind the full player.
+- **Namida's look**: the artist over the song with a heart, a thin waveform, the glowing play disc,
+  colours from the cover and specks drifting behind. Along the bottom, **what the file is** (FLAC,
+  MP3, OPUS..., its bitrate and sample rate), **repeat**, and the **sound controls**: speed, pitch
+  and volume, kept for next time.
 - **The queue**: tap a song to play it, drag it by its handle to move it, swipe it away to take it
   off. Pull the list down from its top and the player comes back down with it.
 - Pull the mini player down under itself to stop and put it away. The queue is kept for next time,
@@ -392,7 +413,7 @@ when it starts playing on its own, and a call or another app's sound pauses it.
 
 ### 7. Lyrics, found and saved by themselves
 
-Press the lyrics button in the player: the words scroll with the song, the line being sung in
+Press the lyrics button on the bar: the words scroll with the song, the line being sung in
 white, the rest waiting in grey. Click a line to jump there. With word timing, each word fills as
 it is sung; in a long instrumental gap, three dots swell until the singing starts again.
 
@@ -464,8 +485,8 @@ with a real transfer: close means the network is the limit, far below means stor
 
 ### 15. Back works as in an app
 
-- **On the phone**, Back closes whatever is open (the player a step at a time, an album, a
-  linked phone's files, the clipboard's history), then returns to Home; at Home it sends the app to the background, as Home does. It
+- **On the phone**, Back closes whatever is open (the player a step at a time, a search, an album,
+  Music, a linked phone's files, the clipboard's history), then returns to Home; at Home it sends the app to the background, as Home does. It
   never closes the app, and the server keeps running.
 - **On the laptop**, the browser's Back steps back through the page: it closes the player, the
   lyrics, a file being viewed or the monitor, then returns to the tab before. It leaves the page only from where
@@ -538,10 +559,13 @@ For hotspot mode, checked on 26 September 2026:
 - The phone's own player is Android's MediaPlayer, with the next song prepared and chained on for
   a gapless handover, in a media-playback service with a MediaSession. How loud each 50 ms of a
   song is gets decoded once, at low priority, and kept (a few kilobytes a song); the phone's player
-  and the page (`/api/music/loudness/{id}`) both draw from it.
+  and the page (`/api/music/loudness/{id}`) both draw from it. What a file is (its kind as the
+  decoder sees it, bitrate and sample rate) is read once a song (`/api/music/info/{id}`), and the
+  hearts are kept on the phone (`/api/music/favourites`, announced to the pages as they change).
 - The player's motion is after [Namida](https://github.com/namidaco/namida)'s: one number from 0
   (mini) through 1 (full) to 2 (queue) that every piece is placed from, and the same settling rules
-  and curves. It is written anew for Compose and for the page; none of Namida's code is used.
+  and curves, and its pages and player are drawn after Namida's. It is written anew for Compose and
+  for the page; none of Namida's code is used.
 - Only computers and phones you allow get in: each gets a signed session you can revoke on the
   phone. Everything stays on the local network: no cloud, no account. Traffic is plain HTTP, so
   treat it like a file share on your own Wi-Fi.

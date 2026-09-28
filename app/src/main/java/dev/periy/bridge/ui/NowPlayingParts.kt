@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
@@ -101,14 +104,17 @@ internal fun WaveSeek(
     val density = LocalDensity.current
     val appear = animateFloatAsState(if (env != null) 1f else 0f, tween(700, easing = FastOutSlowInEasing), label = "wave")
     var widthPx by remember { mutableIntStateOf(0) }
-    val barW = with(density) { 3.dp.toPx() }
-    val gap = with(density) { 2.4.dp.toPx() }
-    val count = if (widthPx > 0) ((widthPx + gap) / (barW + gap)).toInt().coerceAtLeast(8) else 0
+    // Namida's waveform: many fine bars close together, each a little over half its pitch wide.
+    val pitch = with(density) { 2.5.dp.toPx() }
+    val count = if (widthPx > 0) (widthPx / pitch).toInt().coerceAtLeast(8) else 0
+    val barW = pitch * 0.54f
     val bars = remember(env, count) { Loudness.bars(env, count) }
     val scrub = remember { mutableStateOf<Long?>(null) }
-    val track = Bridge.Text.copy(alpha = 0.17f)
-    val playedA = lerp(tint, Color.White, if (Bridge.Dark) 0.35f else 0f)
-    val playedB = if (Bridge.Dark) tint else lerp(tint, Color.Black, 0.2f)
+    // Every bar faint; those played in the cover's colour worked into the text's.
+    val ink = Bridge.Text
+    val track = ink.copy(alpha = 0.16f)
+    val playedA = lerp(ink, tint, 0.7f).copy(alpha = 0.62f)
+    val playedB = lerp(ink, tint, 0.55f).copy(alpha = 0.62f)
     val cancelAt = with(density) { 52.dp.toPx() }
 
     Box(
@@ -155,12 +161,12 @@ internal fun WaveSeek(
                 val pos = scrub.value ?: s.positionNow()
                 val f = if (s.durationMs > 0) (pos.toFloat() / s.durationMs).coerceIn(0f, 1f) else 0f
                 val step = if (n > 1) (size.width - barW) / (n - 1) else 0f
-                val minH = 3.dp.toPx()
+                val minH = 2.dp.toPx()
                 val cy = size.height / 2
                 val grow = appear.value
                 fun drawBars(color: Color? = null, brush: Brush? = null) {
                     for (i in 0 until n) {
-                        val h = minH + (size.height - minH) * bars[i].pow(1.25f) * grow
+                        val h = minH + (size.height - minH) * bars[i].pow(1.4f) * grow
                         val tl = Offset(i * step, cy - h / 2)
                         val sz = Size(barW, h)
                         if (brush != null) drawRoundRect(brush, tl, sz, CornerRadius(barW / 2))
@@ -267,7 +273,7 @@ internal fun QueuePanel(
         // How much is queued, shuffle, and back to the song playing: floating along the foot.
         Row(
             Modifier.align(Alignment.BottomCenter).padding(bottom = navBottom + 14.dp)
-                .floating(ButtonShape).padding(start = 18.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+                .floating(ButtonShape).background(Bridge.Surface).padding(start = 18.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val total = state.queue.sumOf { it.durationMs }
@@ -278,12 +284,12 @@ internal fun QueuePanel(
             )
             Spacer(Modifier.width(8.dp))
             Box(Modifier.size(40.dp).pressable(CircleShape, scaleTo = 0.88f) { player.setShuffle(!state.shuffle) }, contentAlignment = Alignment.Center) {
-                Icon(BlazeIcons.Shuffle, "Shuffle", tint = if (state.shuffle) Bridge.Lit else Bridge.Muted, modifier = Modifier.size(20.dp))
+                Icon(PlayerIcons.Shuffle, "Shuffle", tint = if (state.shuffle) Bridge.Lit else Bridge.Muted, modifier = Modifier.size(20.dp))
             }
             Box(Modifier.size(40.dp).pressable(CircleShape, scaleTo = 0.88f) {
                 scope.launch { list.animateScrollToItem((state.index - 2).coerceAtLeast(0)) }
             }, contentAlignment = Alignment.Center) {
-                Icon(BlazeIcons.Locate, "Go to the song playing", tint = Bridge.Muted, modifier = Modifier.size(20.dp))
+                Icon(PlayerIcons.Disc, "Go to the song playing", tint = Bridge.Muted, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -324,7 +330,7 @@ private fun QueueRow(
             val f = (abs(dx.value) / rowW).coerceIn(0f, 1f)
             if (f > 0f) drawRect(danger.copy(alpha = (f * 2.2f).coerceAtMost(0.9f)))
         }) {
-            Icon(BlazeIcons.Trash, null, tint = Color.White, modifier = Modifier.align(if (dx.value > 0) Alignment.CenterStart else Alignment.CenterEnd)
+            Icon(PlayerIcons.Trash, null, tint = Color.White, modifier = Modifier.align(if (dx.value > 0) Alignment.CenterStart else Alignment.CenterEnd)
                 .padding(horizontal = 24.dp).size(22.dp).graphicsLayer { alpha = (abs(dx.value) / rowW * 4f).coerceIn(0f, 1f) })
         }
         Row(
@@ -380,9 +386,112 @@ private fun QueueRow(
                     }
                 },
                 contentAlignment = Alignment.Center,
-            ) { Icon(BlazeIcons.Handle, "Move", tint = Bridge.Faint, modifier = Modifier.size(20.dp)) }
+            ) { Icon(PlayerIcons.Handle, "Move", tint = Bridge.Faint, modifier = Modifier.size(20.dp)) }
         }
     }
 }
 
 private val ROW_H = 64.dp
+
+// ---------------------------------------------------------------------------- the sound controls
+
+/**
+ * Namida's sound controls, from the player's bottom row: how fast it plays, how high, and how
+ * loud, each on a slider with its value, a mark where it was made, and Reset to put all three
+ * back. Rises over the player; Back, a tap outside or Done lets it down again.
+ */
+@Composable
+internal fun SoundSheet(state: PhonePlayer.State, tint: Color, onChange: (speed: Float, pitch: Float, volume: Float) -> Unit, onClose: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val shown = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { shown.animateTo(1f, tween(420, easing = androidx.compose.animation.core.CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f))) }
+    var closing by remember { mutableStateOf(false) }
+    val close: () -> Unit = {
+        if (!closing) { closing = true; scope.launch { shown.animateTo(0f, tween(220)); onClose() } }
+    }
+    androidx.activity.compose.BackHandler(onBack = close)
+    val live = rememberUpdatedState(state)
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier.fillMaxSize()
+                .graphicsLayer { alpha = shown.value }
+                .background(Color.Black.copy(alpha = 0.45f))
+                .pointerInput(Unit) { detectTapGestures { close() } },
+        )
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .graphicsLayer { translationY = (1f - shown.value) * size.height; alpha = (shown.value * 2f).coerceAtMost(1f) }
+                .padding(10.dp).navigationBarsPadding()
+                .clip(RoundedCornerShape(28.dp))
+                .background(Bridge.Surface)
+                .pointerInput(Unit) { detectTapGestures { } }
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(PlayerIcons.Sound, null, tint = Bridge.Text, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Sound", style = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.Bold), color = Bridge.Text, modifier = Modifier.weight(1f))
+                val changed = state.speed != 1f || state.pitch != 1f || state.volume != 1f
+                Text(
+                    "Reset", style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                    color = if (changed) Bridge.Accent else Bridge.Muted.copy(alpha = 0.6f),
+                    modifier = Modifier.clip(ButtonShape).clickable(enabled = changed) { onChange(1f, 1f, 1f) }.padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            SoundSlider("Speed", speedLabel(state.speed), state.speed, 0.5f, 2f, 0.05f, 1f, tint) { onChange(it, live.value.pitch, live.value.volume) }
+            SoundSlider("Pitch", speedLabel(state.pitch), state.pitch, 0.5f, 2f, 0.05f, 1f, tint) { onChange(live.value.speed, it, live.value.volume) }
+            SoundSlider("Volume", "${(state.volume * 100).roundToInt()}%", state.volume, 0f, 1f, 0.01f, 1f, tint) { onChange(live.value.speed, live.value.pitch, it) }
+            Spacer(Modifier.height(14.dp))
+            Box(
+                Modifier.fillMaxWidth().height(48.dp).pressable(ButtonShape, onClick = close).background(Bridge.Accent),
+                contentAlignment = Alignment.Center,
+            ) { Text("Done", style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = Bridge.OnAccent) }
+        }
+    }
+}
+
+/**
+ * One of the sound controls: its name and value over a thin track, lit from the left to the
+ * value, with a mark where the song was made ([mark]) and a round thumb; dragged or tapped,
+ * it moves in [step]s.
+ */
+@Composable
+private fun SoundSlider(label: String, value: String, v: Float, min: Float, max: Float, step: Float, mark: Float, tint: Color, onChange: (Float) -> Unit) {
+    val set = rememberUpdatedState(onChange)
+    val lit = lerp(tint, Bridge.Text, 0.25f)
+    val track = Bridge.Chip
+    val markColour = Bridge.Muted
+    fun at(x: Float, w: Float): Float {
+        val raw = min + (x / w).coerceIn(0f, 1f) * (max - min)
+        return ((raw / step).roundToInt() * step).coerceIn(min, max)
+    }
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Medium), color = Bridge.Text, modifier = Modifier.weight(1f))
+            Text(value, style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = Bridge.Muted)
+        }
+        Box(
+            Modifier.fillMaxWidth().height(36.dp)
+                .pointerInput(min, max, step) {
+                    detectTapGestures { set.value(at(it.x, size.width.toFloat())) }
+                }
+                .pointerInput(min, max, step) {
+                    detectHorizontalDragGestures { ch, _ -> ch.consume(); set.value(at(ch.position.x, size.width.toFloat())) }
+                }
+                .drawBehind {
+                    val r = 10.dp.toPx()
+                    val l = r; val w = size.width - r * 2
+                    val cy = size.height / 2
+                    val h = 4.dp.toPx()
+                    val f = ((v - min) / (max - min)).coerceIn(0f, 1f)
+                    drawRoundRect(track, Offset(l, cy - h / 2), Size(w, h), CornerRadius(h))
+                    drawRoundRect(lit, Offset(l, cy - h / 2), Size(w * f, h), CornerRadius(h))
+                    val mx = l + w * ((mark - min) / (max - min))
+                    drawCircle(markColour, 2.dp.toPx(), Offset(mx, cy + 9.dp.toPx()))
+                    drawCircle(lit, r, Offset(l + w * f, cy))
+                    drawCircle(Color.White.copy(alpha = 0.9f), r * 0.42f, Offset(l + w * f, cy))
+                },
+        )
+    }
+}

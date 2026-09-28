@@ -114,7 +114,7 @@ class MusicService : Service() {
                 )
                 .setState(
                     if (s.playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
-                    s.positionMs, if (s.playing) 1f else 0f, s.at,
+                    s.positionMs, if (s.playing) s.speed else 0f, s.at,
                 )
                 .build()
         )

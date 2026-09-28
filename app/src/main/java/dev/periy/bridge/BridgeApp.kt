@@ -38,6 +38,7 @@ class Container(ctx: Context) {
     /** The phone's own music player, and how loud each moment of a song is, for its seek bar and cover. */
     val player = dev.periy.bridge.music.PhonePlayer(app, music)
     val loudness = dev.periy.bridge.music.Loudness(app, music)
+    val favourites = dev.periy.bridge.music.Favourites(app)
     val direct = dev.periy.bridge.net.DirectLink(app)
     /** How two laptops' pages learn their addresses, to send to each other directly. */
     val stun = dev.periy.bridge.net.StunServer()
@@ -114,7 +115,7 @@ class Container(ctx: Context) {
             clipSync = { prefs.clipSync },
             deviceName = deviceName(),
         )
-        return BridgeServer(app, config, storage, tus, index, clipboard, devices, pairing, music, direct, peers, loudness)
+        return BridgeServer(app, config, storage, tus, index, clipboard, devices, pairing, music, direct, peers, loudness, favourites)
             .also { server = it }
     }
 

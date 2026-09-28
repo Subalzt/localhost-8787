@@ -44,13 +44,17 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         val positionMs: Long = 0,
         val at: Long = 0,
         val durationMs: Long = 0,
+        /** The sound controls: how fast, how high and how loud it plays (1 is as it was made). */
+        val speed: Float = 1f,
+        val pitch: Float = 1f,
+        val volume: Float = 1f,
         /** Bumped by every change, so a notification or a screen can tell a new state from an old one. */
         val seq: Long = 0,
     ) {
         val current: TrackDto? get() = queue.getOrNull(index)
         val hasNext: Boolean get() = index + 1 < queue.size || (repeat == Repeat.ALL && queue.isNotEmpty())
         fun positionNow(now: Long = SystemClock.elapsedRealtime()): Long {
-            val p = if (playing) positionMs + (now - at) else positionMs
+            val p = if (playing) positionMs + ((now - at) * speed).toLong() else positionMs
             return if (durationMs > 0) p.coerceIn(0, durationMs) else p.coerceAtLeast(0)
         }
     }
@@ -60,7 +64,11 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
     private val audio = app.getSystemService(AudioManager::class.java)
     private val prefs = app.getSharedPreferences("player", Context.MODE_PRIVATE)
 
-    private val _state = MutableStateFlow(State())
+    private val _state = MutableStateFlow(State(
+        speed = prefs.getFloat(K_SPEED, 1f),
+        pitch = prefs.getFloat(K_PITCH, 1f),
+        volume = prefs.getFloat(K_VOLUME, 1f),
+    ))
     val state: StateFlow<State> = _state
 
     /** The queue as it was before shuffle, to go back to. */
@@ -93,15 +101,16 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
             when (change) {
                 AudioManager.AUDIOFOCUS_LOSS -> { resumeOnGain = false; pause() }
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> { if (_state.value.playing) { resumeOnGain = true; pause(keepFocus = true) } }
-                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> mp?.setVolume(DUCK, DUCK)
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> { ducked = true; applyVolume() }
                 AudioManager.AUDIOFOCUS_GAIN -> {
-                    mp?.setVolume(1f, 1f)
+                    ducked = false; applyVolume()
                     if (resumeOnGain) { resumeOnGain = false; resume() }
                 }
             }
         }, main)
         .build()
     private var hasFocus = false
+    private var ducked = false
 
     /** Headphones pulled out: stop at once rather than play out loud. */
     private val noisy = object : BroadcastReceiver() {
@@ -167,6 +176,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         if (!prepared) return
         if (!gainFocus()) return
         runCatching { mp?.start() }
+        applyParams()
         set { it.copy(playing = true, positionMs = currentPos(), at = now()) }
     }
 
@@ -249,11 +259,21 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
 
     /** Plays these next, after the song playing. */
     fun playNext(tracks: List<TrackDto>) {
+        if (tracks.isEmpty()) return
         val s = _state.value
         if (s.current == null) { play(tracks, 0); return }
         val q = s.queue.toMutableList().apply { addAll(s.index + 1, tracks) }
         unshuffled = unshuffled + tracks
         set { it.copy(queue = q) }
+        chainNext()
+    }
+
+    /** Plays these after everything queued. */
+    fun playLast(tracks: List<TrackDto>) {
+        if (tracks.isEmpty()) return
+        if (_state.value.current == null) { play(tracks, 0); return }
+        unshuffled = unshuffled + tracks
+        set { it.copy(queue = it.queue + tracks) }
         chainNext()
     }
 
@@ -264,7 +284,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         dropFocus()
         unregisterNoisy()
         unshuffled = emptyList()
-        set { State(repeat = it.repeat, seq = it.seq) }
+        set { State(repeat = it.repeat, speed = it.speed, pitch = it.pitch, volume = it.volume, seq = it.seq) }
         prefs.edit().remove(K_IDS).remove(K_INDEX).remove(K_POS).apply()
     }
 
@@ -289,6 +309,42 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
                 positionMs = prefs.getLong(K_POS, 0).coerceIn(0, q[i].durationMs.coerceAtLeast(0)),
                 durationMs = q[i].durationMs,
             )
+        }
+    }
+
+    // ------------------------------------------------------------------ the sound controls
+
+    /**
+     * How fast, how high and how loud it plays, as Namida's sound controls set them. Kept for
+     * next time. Speed and pitch only reach a song that is playing (setting them on a paused
+     * MediaPlayer would start it); a paused one takes them as it starts.
+     */
+    fun setSound(speed: Float = _state.value.speed, pitch: Float = _state.value.pitch, volume: Float = _state.value.volume) {
+        val sp = speed.coerceIn(SPEED_MIN, SPEED_MAX)
+        val pi = pitch.coerceIn(PITCH_MIN, PITCH_MAX)
+        val vo = volume.coerceIn(0f, 1f)
+        // Where the song is, at the old speed, before the new one takes over the reckoning.
+        set { it.copy(positionMs = it.positionNow(), at = now(), speed = sp, pitch = pi, volume = vo) }
+        prefs.edit().putFloat(K_SPEED, sp).putFloat(K_PITCH, pi).putFloat(K_VOLUME, vo).apply()
+        applyVolume()
+        applyParams()
+    }
+
+    private fun outVolume() = _state.value.volume * (if (ducked) DUCK else 1f)
+
+    private fun applyVolume() {
+        val v = outVolume()
+        runCatching { mp?.setVolume(v, v) }
+        runCatching { nextMp?.setVolume(v, v) }
+    }
+
+    private fun applyParams() {
+        val p = mp ?: return
+        val s = _state.value
+        if (!prepared || !s.playing && !wantPlay) return
+        runCatching {
+            val now = p.playbackParams
+            if (now.speed != s.speed || now.pitch != s.pitch) p.playbackParams = android.media.PlaybackParams().setSpeed(s.speed).setPitch(s.pitch)
         }
     }
 
@@ -341,8 +397,10 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         val p = mp ?: return
         val dur = runCatching { p.duration.toLong() }.getOrDefault(0L).takeIf { it > 0 } ?: t.durationMs
         if (pendingSeek > 0) { runCatching { p.seekTo(pendingSeek, MediaPlayer.SEEK_CLOSEST) }; pendingSeek = -1 }
+        applyVolume()
         if (wantPlay && gainFocus()) {
             runCatching { p.start() }
+            applyParams()
             set { it.copy(playing = true, durationMs = dur, positionMs = currentPos(), at = now()) }
         } else {
             set { it.copy(playing = false, durationMs = dur, positionMs = currentPos(), at = now()) }
@@ -359,6 +417,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         val s = _state.value
         if (s.repeat == Repeat.ONE) {
             runCatching { mp?.seekTo(0); mp?.start() }
+            applyParams()
             set { it.copy(positionMs = 0, at = now(), playing = true) }
             return
         }
@@ -385,6 +444,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
             wire(chained, s.queue[n])
             prepared = true
             old?.let { o -> runCatching { o.setNextMediaPlayer(null) }; runCatching { o.release() } }
+            applyParams()
             val dur = runCatching { chained.duration.toLong() }.getOrDefault(s.queue[n].durationMs)
             set { it.copy(index = n, playing = true, positionMs = 0, at = now(), durationMs = dur) }
             chainNext()
@@ -421,6 +481,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         p.setOnPreparedListener {
             if (p !== nextMp) return@setOnPreparedListener
             nextReady = true
+            runCatching { p.setVolume(outVolume(), outVolume()) }
             if (mp === cur && prepared) runCatching { cur.setNextMediaPlayer(p) }
         }
         p.setOnErrorListener { _, _, _ -> if (p === nextMp) releaseNext(); true }
@@ -523,5 +584,12 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         const val K_POS = "pos"
         const val K_SHUFFLE = "shuffle"
         const val K_REPEAT = "repeat"
+        const val K_SPEED = "speed"
+        const val K_PITCH = "pitch"
+        const val K_VOLUME = "volume"
+        const val SPEED_MIN = 0.5f
+        const val SPEED_MAX = 2f
+        const val PITCH_MIN = 0.5f
+        const val PITCH_MAX = 2f
     }
 }

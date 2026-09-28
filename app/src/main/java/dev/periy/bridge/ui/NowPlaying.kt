@@ -14,6 +14,9 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.shadow
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -35,6 +38,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
@@ -355,10 +360,13 @@ private class Geo(
     val waveH = dp(58f)
     val waveBottom = ctrlY - playBig / 2 - dp(16f)
     val waveTop = waveBottom - waveH
-    val titleBig = with(d) { 23.sp.toPx() }
-    val titleMini = with(d) { 15.sp.toPx() }
+    // Namida's two lines: the artist first, large and bold, and the song under it.
+    val titleBig = with(d) { 21.sp.toPx() }
+    val titleMini = with(d) { 14.5.sp.toPx() }
     val artistBig = with(d) { 16.sp.toPx() }
-    val artistMini = with(d) { 13.sp.toPx() }
+    val artistMini = with(d) { 12.5.sp.toPx() }
+    /** The heart beside the two lines, in the full player. */
+    val heart = dp(44f)
     val textBigH = titleBig * 1.3f + artistBig * 1.35f + dp(2f)
     val textBigTop = waveTop - dp(18f) - textBigH
     private val artAreaTop = topRowTop + topRowH + dp(12f)
@@ -464,6 +472,11 @@ fun NowPlaying(
     val bigCover = rememberCover(cur.albumId, big = true)
     val tintTarget = (if (bigCover != null) Covers.tint(cur.albumId) else null) ?: Covers.madeUp(cur.album)
     val tint by animateColorAsState(tintTarget, tween(600), label = "tint")
+    // The whole player in the cover's colour, as Namida's is: everything in it reads this.
+    val basePalette = LocalPalette.current
+    val palette = remember(tint, basePalette) { playerPalette(basePalette, tint) }
+    val favourites = androidx.compose.ui.platform.LocalContext.current.container.favourites
+    val hearts by favourites.ids.collectAsState()
 
     // How loud each moment is: the waveform and the cover's swell.
     val env by produceState(loudness.cached(cur.id), cur.id) { value = loudness.of(cur.id) }
@@ -503,7 +516,14 @@ fun NowPlaying(
     // A seek being dragged on the waveform: where it would go. Read only by the label, so a
     // scrub redraws the label and nothing else.
     val seek = remember { mutableStateOf<Long?>(null) }
+    // The sound controls, opened from the bottom row.
+    var sound by remember { mutableStateOf(false) }
+    // What the file is, for the chip: FLAC, 1,411 kbps, 44.1 kHz.
+    val info by produceState<dev.periy.bridge.server.TrackInfoDto?>(null, cur.id) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { library.info(cur.id) }.getOrNull() }
+    }
 
+    CompositionLocalProvider(LocalPalette provides palette) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val g = remember(constraints.maxWidth, constraints.maxHeight, statusTop, navBottom, lift, density) {
             with(density) {
@@ -513,8 +533,9 @@ fun NowPlaying(
         motion.width = g.w
         motion.height = g.h
 
-        val floatBase = if (dark) Color(0xFF1E1E21) else Color.White
-        val bg = Bridge.Bg
+        val floatBase = palette.surface
+        val bg = palette.bg
+        val ink = palette.text
         val onDismiss = rememberUpdatedState { player.clear() }
         val around = rememberUpdatedState { i: Int -> aroundIndex(player.state.value, i) }
 
@@ -539,19 +560,15 @@ fun NowPlaying(
                     val r = panelRect(g, t)
                     val base = lerp(floatBase, bg, t.cp)
                     drawRect(base, Offset(r.left, r.top), Size(r.width, r.height))
-                    val a = if (dark) 1f else 0.72f
+                    // Namida's wash over it: the colour lifted a little at the top, deeper at the foot.
+                    val a = if (dark) 1f else 0.8f
                     drawRect(
                         Brush.verticalGradient(
-                            0f to tint.copy(alpha = lerp(0.30f, 0.46f, t.cp) * a),
-                            0.55f to tint.copy(alpha = lerp(0.16f, 0.20f, t.cp) * a),
-                            1f to tint.copy(alpha = lerp(0.10f, 0.07f, t.cp) * a),
+                            0f to lerp(tint, ink, 0.39f).copy(alpha = lerp(0.28f, 0.38f, t.cp) * a),
+                            1f to lerp(tint, ink, 0.16f).copy(alpha = lerp(0.22f, 0.10f, t.cp) * a),
                             startY = r.top, endY = r.bottom,
                         ),
                         Offset(r.left, r.top), Size(r.width, r.height),
-                    )
-                    if (dark && t.cp < 1f) drawRoundRect(
-                        Color.White.copy(alpha = 0.10f * (1f - t.cp)), Offset(r.left, r.top), Size(r.width, r.height),
-                        CornerRadius(lerp(g.miniRadius, 0f, t.cp)), style = androidx.compose.ui.graphics.drawscope.Stroke(g.dp(0.7f)),
                     )
                 }
                 .pointerInput(Unit) { playerGestures(g, motion, player, { around.value(it) }, { onDismiss.value() }) },
@@ -587,7 +604,7 @@ fun NowPlaying(
                         ArtFace(t, radiusOf = {
                             val tm = Terms(motion.p, motion.bounceUp)
                             val sz = artBox(g, tm)[2]
-                            lerp(g.dp(8f), g.dp(16f), tm.bcp) * g.artBig / sz.coerceAtLeast(1f)
+                            lerp(g.dp(6f), g.dp(14f), tm.bcp) * g.artBig / sz.coerceAtLeast(1f)
                         }, glow = tint, glowOf = { Terms(motion.p, motion.bounceUp).bcp })
                     }
                 }
@@ -596,15 +613,25 @@ fun NowPlaying(
             // ---- the titles, sliding a little faster than the covers
             listOf(-1 to prevT, 0 to curT, 1 to nextT).forEach { (slot, t) ->
                 if (t != null) key("t", slot, t.id) {
-                    TitleLine(t.title, g.titleBig, Modifier.placed({ textWidth(g, Terms(motion.p, motion.bounceUp), title = true) }, g.titleBig * 1.3f) {
+                    TitleLine(t.artist, g.titleBig, Modifier.placed({ textWidth(g, Terms(motion.p, motion.bounceUp), title = true) }, g.titleBig * 1.3f) {
                         textBox(g, Terms(motion.p, motion.bounceUp), motion.s, slot, title = true)
                     })
-                    TitleLine(t.artist, g.artistBig, Modifier.placed({ textWidth(g, Terms(motion.p, motion.bounceUp), title = false) }, g.artistBig * 1.35f) {
+                    TitleLine(t.title, g.artistBig, Modifier.placed({ textWidth(g, Terms(motion.p, motion.bounceUp), title = false) }, g.artistBig * 1.35f) {
                         textBox(g, Terms(motion.p, motion.bounceUp), motion.s, slot, title = false)
-                    }, muted = true)
+                    }, second = true)
                 }
             }
             }
+
+            // ---- the heart, beside the two lines: comes in from the left as the player opens
+            HeartButton(cur.id in hearts, Modifier.placed(g.heart, g.heart) {
+                val t = Terms(motion.p, motion.bounceUp)
+                floatArrayOf(
+                    g.w - g.dp(20f) - g.heart - (1f - t.bcp) * g.dp(100f),
+                    g.textBigTop + (g.textBigH - g.heart) / 2 - t.over * g.h * 0.35f,
+                    1f, t.fast,
+                )
+            }) { favourites.toggle(cur.id) }
 
             // ---- the waveform, with where a seek would land above it
             WaveSeek(
@@ -628,13 +655,13 @@ fun NowPlaying(
             })
 
             // ---- previous, play, next: from the mini player's right to the middle
-            TransportButton(BlazeIcons.Prev, "Previous", Modifier.placed(g.dp(56f), g.dp(56f)) {
+            TransportButton(PlayerIcons.Prev, "Previous", Modifier.placed(g.dp(56f), g.dp(56f)) {
                 ctrlBox(g, Terms(motion.p, motion.bounceUp), -1)
             }) { motion.toSong(-1, player) { around.value(it) } }
             PlayButton(state.playing, tint, Modifier.placed(g.playBig, g.playBig) {
                 ctrlBox(g, Terms(motion.p, motion.bounceUp), 0)
             }) { player.toggle() }
-            TransportButton(BlazeIcons.Next, "Next", Modifier.placed(g.dp(56f), g.dp(56f)) {
+            TransportButton(PlayerIcons.Next, "Next", Modifier.placed(g.dp(56f), g.dp(56f)) {
                 ctrlBox(g, Terms(motion.p, motion.bounceUp), 1)
             }) { motion.toSong(1, player) { around.value(it) } }
 
@@ -655,24 +682,22 @@ fun NowPlaying(
                 },
             )
 
-            // ---- the top row: close, where in the queue and which album, more
+            // ---- the top row: close, and where in the queue and which album
             TopRow(
                 index = state.index, count = state.queue.size, album = cur.album,
                 onClose = { motion.collapse() },
                 onAlbum = { onOpenAlbum(cur); motion.collapse() },
-                onClear = { motion.dismiss { player.clear() } },
                 modifier = Modifier.placed(g.w, g.topRowH) {
                     val t = Terms(motion.p, motion.bounceUp)
                     floatArrayOf(0f, g.topRowTop + (1f - t.bcp) * -g.dp(100f) - t.qp * g.dp(40f), 1f, t.bcp * (1f - t.qcp))
                 },
             )
 
-            // ---- the bottom row: what kind of file, shuffle, repeat, the queue
+            // ---- the bottom row: the sound, repeat, and the sound controls
             BottomRow(
-                cur, state.shuffle, state.repeat,
-                onShuffle = { player.setShuffle(!state.shuffle) },
+                state, info,
                 onRepeat = { player.cycleRepeat() },
-                onQueue = { motion.toQueue() },
+                onSound = { sound = true },
                 modifier = Modifier.placed(g.w, g.bottomRowH) {
                     val t = Terms(motion.p, motion.bounceUp)
                     floatArrayOf(0f, g.bottomRowTop + (1f - t.cp) * g.dp(100f) + slideDown(g, t), 1f, t.mid)
@@ -688,8 +713,38 @@ fun NowPlaying(
                 },
             )
         }
+        if (sound) SoundSheet(state, tint, onChange = { sp, pi, vo -> player.setSound(sp, pi, vo) }, onClose = { sound = false })
+    }
     }
 }
+
+/**
+ * The player's colours, from the cover's, as Namida builds its player's theme: the ground a
+ * deep (or, in light, a pale) shade of the colour, the text faintly tinted by it, and the
+ * colour itself for what is lit. Everything in the player reads these, the queue included.
+ */
+internal fun playerPalette(base: Palette, tint: Color): Palette =
+    if (base.dark) base.copy(
+        bg = lerp(Color(0xFF0F0F11), tint, 0.16f),
+        surface = lerp(Color(0xFF19191C), tint, 0.24f),
+        surface2 = lerp(Color(0xFF28282C), tint, 0.3f),
+        text = lerp(Color.White, tint, 0.06f),
+        muted = lerp(Color(0xFFB4B4B8), tint, 0.22f),
+        faint = lerp(Color(0xFF56565B), tint, 0.25f),
+        outline = tint.copy(alpha = 0.16f),
+        accent = lerp(tint, Color.White, 0.3f),
+        onAccent = Color.White,
+    ) else base.copy(
+        bg = lerp(Color(0xFFF8F8FA), tint, 0.12f),
+        surface = lerp(Color.White, tint, 0.14f),
+        surface2 = lerp(Color(0xFFEDEDF0), tint, 0.22f),
+        text = lerp(Color(0xFF141416), tint, 0.16f),
+        muted = lerp(Color(0xFF5E5E63), tint, 0.22f),
+        faint = lerp(Color(0xFFB8B8BD), tint, 0.25f),
+        outline = tint.copy(alpha = 0.18f),
+        accent = lerp(tint, Color.Black, 0.25f),
+        onAccent = Color.White,
+    )
 
 /** The songs either side of [i] in the queue, or -1 where there is none. */
 private fun aroundIndex(s: PhonePlayer.State, i: Int): Triple<Int, Int, Int> {
@@ -759,7 +814,7 @@ private fun slideSpacing(g: Geo, t: Terms, art: Float): Float {
 private fun textWidth(g: Geo, t: Terms, title: Boolean): Float {
     val row = rowOf(g, t)
     val scale = if (title) lerp(g.titleMini / g.titleBig, 1f, t.bcp) else lerp(g.artistMini / g.artistBig, 1f, t.bcp)
-    return lerp(row.textW, g.w - g.dp(48f), t.bcp) / scale
+    return lerp(row.textW, g.w - g.dp(44f) - g.heart, t.bcp) / scale
 }
 
 /** Previous (-1), play (0), next (1): along the mini row's right, or big in the middle. */
@@ -861,41 +916,50 @@ private fun ArtFace(t: TrackDto, radiusOf: () -> Float, glow: Color, glowOf: () 
     }
 }
 
-/** One line of the title or the artist, laid out at the full player's size; the motion scales it. */
+/** One of the two lines, laid out at the full player's size; the motion scales it. The second is the song's name. */
 @Composable
-private fun TitleLine(text: String, sizePx: Float, modifier: Modifier, muted: Boolean = false) {
+private fun TitleLine(text: String, sizePx: Float, modifier: Modifier, second: Boolean = false) {
     val d = LocalDensity.current
     val style = with(d) {
-        if (muted) TextStyle(fontSize = sizePx.toSp(), fontWeight = FontWeight.Medium, letterSpacing = (-0.1).sp)
-        else TextStyle(fontSize = sizePx.toSp(), fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
+        if (second) TextStyle(fontSize = sizePx.toSp(), fontWeight = FontWeight.SemiBold, letterSpacing = (-0.1).sp)
+        else TextStyle(fontSize = sizePx.toSp(), fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp)
     }
     Box(modifier) {
         Text(
-            text, style = style, color = if (muted) Bridge.Muted else Bridge.Text,
+            text, style = style, color = if (second) Bridge.Text.copy(alpha = 0.82f) else Bridge.Text,
             maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false,
             modifier = Modifier.fillMaxWidth(),
         )
     }
 }
 
-/** The play button: a disc in the cover's colour, lit from the top left, glowing onto what is under it. */
+/**
+ * The play button, as Namida's: a disc in the cover's colour going grey towards its lower
+ * right, glowing onto the player in the same colour, with the outline of play or pause on it.
+ * Pressed, it gives a little and glows a little more.
+ */
 @Composable
 private fun PlayButton(playing: Boolean, tint: Color, modifier: Modifier, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val s by animateFloatAsState(if (pressed) 0.97f else 1f, tween(400), label = "press")
     Box(modifier) {
         Box(
-            Modifier.fillMaxSize().padding(6.dp)
-                .depth(tint, CircleShape, 14.dp)
-                .pressable(CircleShape, scaleTo = 0.94f, onClick = onClick)
-                .background(Brush.linearGradient(listOf(lerp(tint, Color.White, 0.12f), tint, lerp(tint, Color(0xFF808080), 0.3f)))),
+            Modifier.fillMaxSize().padding(9.dp)
+                .graphicsLayer { scaleX = s; scaleY = s }
+                .shadow(if (pressed) 16.dp else 11.dp, CircleShape, ambientColor = tint, spotColor = tint)
+                .clip(CircleShape)
+                .clickable(interactionSource = source, indication = androidx.compose.material3.ripple(), onClick = onClick)
+                .background(Brush.linearGradient(0f to (if (pressed) lerp(tint, Color.White, 0.09f) else tint), 0.7f to lerp(tint, Color(0xFF9E9E9E), 0.22f))),
             contentAlignment = Alignment.Center,
         ) {
             AnimatedContent(
                 playing,
-                transitionSpec = { (scaleIn(tween(200), 0.6f) + fadeIn(tween(160))) togetherWith (scaleOut(tween(160), 0.6f) + fadeOut(tween(120))) },
+                transitionSpec = { (scaleIn(tween(200), 0.7f) + fadeIn(tween(200))) togetherWith (scaleOut(tween(200), 0.7f) + fadeOut(tween(160))) },
                 label = "playpause",
             ) { on ->
-                Icon(if (on) BlazeIcons.Pause else BlazeIcons.Play, if (on) "Pause" else "Play", tint = Color.White.copy(alpha = 0.94f),
-                    modifier = Modifier.size(30.dp))
+                Icon(if (on) PlayerIcons.Pause else PlayerIcons.Play, if (on) "Pause" else "Play", tint = Color.White.copy(alpha = 0.72f),
+                    modifier = Modifier.size(32.dp))
             }
         }
     }
@@ -905,22 +969,52 @@ private fun PlayButton(playing: Boolean, tint: Color, modifier: Modifier, onClic
 private fun TransportButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, modifier: Modifier, onClick: () -> Unit) {
     Box(modifier) {
         Box(Modifier.fillMaxSize().pressable(CircleShape, scaleTo = 0.86f, onClick = onClick), contentAlignment = Alignment.Center) {
-            Icon(icon, description, tint = Bridge.Text, modifier = Modifier.size(28.dp))
+            Icon(icon, description, tint = Bridge.Text, modifier = Modifier.size(30.dp))
         }
     }
 }
 
-/** Where the song is and how long it is, either side of the controls. */
+/**
+ * The heart beside the two lines: the outline in the player's quiet colour; tapped, it fills
+ * with the cover's colour and springs, as Namida's does. Kept on the phone, the same on the page.
+ */
+@Composable
+private fun HeartButton(on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val pop = remember { androidx.compose.animation.core.Animatable(1f) }
+    val first = remember { mutableStateOf(true) }
+    LaunchedEffect(on) {
+        if (first.value) { first.value = false; return@LaunchedEffect }
+        pop.snapTo(0.72f)
+        pop.animateTo(1f, spring(dampingRatio = 0.36f, stiffness = 520f))
+    }
+    val lit = Bridge.Accent
+    Box(modifier) {
+        Box(
+            Modifier.fillMaxSize().clip(CircleShape).clickable(onClick = onClick).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(if (on) PlayerIcons.HeartOn else PlayerIcons.Heart, if (on) "Take the heart off" else "Give it a heart",
+                tint = if (on) lit.copy(alpha = 0.9f) else Bridge.Muted.copy(alpha = 0.85f), modifier = Modifier.size(28.dp))
+        }
+    }
+}
+
+/** Where the song is and how long it is, either side of the controls, as a clock reads: 01:46. */
 @Composable
 private fun Times(state: PhonePlayer.State, tick: State<Long>, modifier: Modifier) {
     val live = rememberUpdatedState(state)
     val secs by remember { derivedStateOf { tick.value; live.value.positionNow() / 1000 } }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        val style = LabelStyle.copy(fontFeatureSettings = "tnum")
-        Text(fmtTime(secs * 1000), style = style, color = Bridge.Muted)
+        val style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
+        Text(clock(secs * 1000), style = style, color = Bridge.Text.copy(alpha = 0.78f))
         Spacer(Modifier.weight(1f))
-        Text(fmtTime(state.durationMs), style = style, color = Bridge.Muted)
+        Text(clock(state.durationMs), style = style, color = Bridge.Text.copy(alpha = 0.78f))
     }
+}
+
+private fun clock(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%02d:%02d".format(s / 60, s % 60)
 }
 
 /** Over the waveform while a seek is dragged: how far it goes from where the song is. */
@@ -930,88 +1024,85 @@ private fun SeekLabel(seek: State<Long?>, state: PhonePlayer.State, modifier: Mo
     Box(modifier, contentAlignment = Alignment.Center) {
         if (seekMs != null) {
             val diff = seekMs - state.positionNow()
-            Text((if (diff >= 0) "+" else "−") + fmtTime(abs(diff)), style = LabelStyle.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"),
+            Text((if (diff >= 0) "+" else "\u2212") + clock(abs(diff)), style = LabelStyle.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"),
                 color = Bridge.Text, textAlign = TextAlign.Center)
         }
     }
 }
 
+/** Namida's top row: close, and where in the queue (2/14) and what it is playing from (a tap shows the album). */
 @Composable
-private fun TopRow(index: Int, count: Int, album: String, onClose: () -> Unit, onAlbum: () -> Unit, onClear: () -> Unit, modifier: Modifier) {
-    var menu by remember { mutableStateOf(false) }
-    Row(modifier.padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconChip(BlazeIcons.ChevronDown, "Close the player", tint = Bridge.Text, bg = Color.Transparent, size = 42.dp, onClick = onClose)
+private fun TopRow(index: Int, count: Int, album: String, onClose: () -> Unit, onAlbum: () -> Unit, modifier: Modifier) {
+    Row(modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
+            Icon(PlayerIcons.Down, "Close the player", tint = Bridge.Text, modifier = Modifier.size(24.dp))
+        }
         Column(
             Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(onClick = onAlbum).padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("${index + 1} of $count", style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"), color = Bridge.Muted)
-            Text(album, style = TitleStyle.copy(fontSize = 15.5.sp), color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${index + 1}/$count", style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"), color = Bridge.Text.copy(alpha = 0.8f))
+            Text(album, style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text.copy(alpha = 0.9f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Box {
-            IconChip(BlazeIcons.More, "More", tint = Bridge.Text, bg = Bridge.Text.copy(alpha = 0.08f), size = 38.dp) { menu = true }
-            if (menu) androidx.compose.ui.window.Popup(
-                alignment = Alignment.TopEnd,
-                offset = androidx.compose.ui.unit.IntOffset(0, with(LocalDensity.current) { 44.dp.roundToPx() }),
-                onDismissRequest = { menu = false },
-            ) {
-                Column(Modifier.width(230.dp).floating(RoundedCornerShape(16.dp)).padding(vertical = 6.dp)) {
-                    MenuRow(BlazeIcons.Album, "Show the album") { menu = false; onAlbum() }
-                    MenuRow(BlazeIcons.Close, "Stop and clear the queue", Bridge.Danger) { menu = false; onClear() }
-                }
-            }
-        }
+        // As wide as the close button, so the middle stays in the middle.
+        Spacer(Modifier.size(44.dp))
     }
 }
 
-@Composable
-private fun MenuRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, color: Color = Bridge.Text, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(12.dp))
-        Text(label, style = TextStyle(fontSize = 15.sp), color = color)
-    }
-}
-
+/**
+ * Namida's bottom row: on the left, the headphones in a disc and what the file is (the kind of
+ * file, then its bitrate and sample rate; a tap opens the sound controls too); on the right,
+ * repeat and the sound controls. The queue is a drag up away; the other songs are the Tracks
+ * and Albums pages.
+ */
 @Composable
 private fun BottomRow(
-    t: TrackDto,
-    shuffle: Boolean,
-    repeat: PhonePlayer.Repeat,
-    onShuffle: () -> Unit,
+    state: PhonePlayer.State,
+    info: dev.periy.bridge.server.TrackInfoDto?,
     onRepeat: () -> Unit,
-    onQueue: () -> Unit,
+    onSound: () -> Unit,
     modifier: Modifier,
 ) {
-    Row(modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        // What is playing, as a chip: the kind of file and the year, where the tags say.
-        val chip = listOfNotNull(formatBadge(t.mime).ifEmpty { null }, t.year.takeIf { it > 0 }?.toString()).joinToString(" · ")
-        if (chip.isNotEmpty()) Row(
-            Modifier.clip(ButtonShape).background(Bridge.Text.copy(alpha = 0.08f)).padding(horizontal = 12.dp, vertical = 7.dp),
+    val repeat = state.repeat
+    val changed = state.speed != 1f || state.pitch != 1f || state.volume != 1f
+    Row(modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        val kind = info?.format?.takeIf { it.isNotEmpty() } ?: state.current?.mime?.let(::formatBadge)?.takeIf { it.isNotEmpty() } ?: "Audio"
+        val details = listOfNotNull(
+            info?.let(::fileDetails)?.takeIf { it.isNotEmpty() },
+            speedLabel(state.speed).takeIf { state.speed != 1f },
+        ).joinToString(" \u2022 ")
+        // The chip takes what room the buttons leave, and its details give way first.
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+        Row(
+            Modifier.clip(ButtonShape).clickable(onClick = onSound).padding(start = 2.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(BlazeIcons.Music, null, tint = Bridge.Muted, modifier = Modifier.size(15.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(chip, style = LabelStyle.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.3.sp), color = Bridge.Muted)
+            Box(Modifier.size(34.dp).clip(CircleShape).background(Bridge.Chip), contentAlignment = Alignment.Center) {
+                Icon(PlayerIcons.Headphones, null, tint = Bridge.Text, modifier = Modifier.size(19.dp))
+            }
+            Spacer(Modifier.width(9.dp))
+            Text(kind, style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold), color = Bridge.Text, maxLines = 1)
+            if (details.isNotEmpty()) {
+                Spacer(Modifier.width(7.dp))
+                Text(details, style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"),
+                    color = Bridge.Text.copy(alpha = 0.72f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
-        Spacer(Modifier.weight(1f))
-        Toggled(BlazeIcons.Shuffle, "Shuffle", shuffle, onClick = onShuffle)
-        Box {
-            Toggled(BlazeIcons.Repeat, when (repeat) { PhonePlayer.Repeat.OFF -> "Repeat"; PhonePlayer.Repeat.ALL -> "Repeat all"; else -> "Repeat this song" },
-                repeat != PhonePlayer.Repeat.OFF, onClick = onRepeat)
-            if (repeat == PhonePlayer.Repeat.ONE) Box(
-                Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(13.dp).clip(CircleShape).background(Bridge.Lit),
-                contentAlignment = Alignment.Center,
-            ) { Text("1", style = TextStyle(fontSize = 8.5.sp, fontWeight = FontWeight.ExtraBold), color = Color.White) }
         }
-        Toggled(BlazeIcons.Queue, "Queue", false, onClick = onQueue)
+        Toggled(if (repeat == PhonePlayer.Repeat.ONE) PlayerIcons.RepeatOne else PlayerIcons.Repeat,
+            when (repeat) { PhonePlayer.Repeat.OFF -> "Repeat"; PhonePlayer.Repeat.ALL -> "Repeat all"; else -> "Repeat this song" },
+            repeat != PhonePlayer.Repeat.OFF, onClick = onRepeat)
+        Toggled(PlayerIcons.Sound, "Sound: speed, pitch and volume", changed, onClick = onSound)
     }
 }
+
+/** A speed as the sound controls show it: 1.25×. */
+internal fun speedLabel(v: Float): String = "%.2f\u00D7".format(v).replace(".00\u00D7", "\u00D7")
 
 @Composable
 private fun Toggled(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, on: Boolean, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.88f, onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, description, tint = if (on) Bridge.Lit else Bridge.Text.copy(alpha = 0.78f), modifier = Modifier.size(22.dp))
+    Box(Modifier.size(42.dp).pressable(CircleShape, scaleTo = 0.88f, onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, description, tint = if (on) Bridge.Accent else Bridge.Text.copy(alpha = 0.85f), modifier = Modifier.size(21.dp))
     }
 }
 

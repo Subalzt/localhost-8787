@@ -55,6 +55,37 @@ data class TrackDto(
 data class MusicDto(val granted: Boolean, val tracks: List<TrackDto>)
 
 /**
+ * What a song's file is, as the player's chip shows it: the kind of file (FLAC, MP3, OPUS...),
+ * its bitrate in kbps and its sample rate in Hz; 0 where the file does not say.
+ */
+@Serializable
+data class TrackInfoDto(val format: String, val kbps: Int, val sampleRate: Int, val channels: Int = 0)
+
+/** The kind of file, from its type as Android reads it: FLAC, MP3, OPUS, OGG, AAC... */
+fun formatName(mime: String): String {
+    val m = mime.lowercase()
+    return when {
+        "flac" in m -> "FLAC"
+        "mpeg" in m || "mp3" in m -> "MP3"
+        "opus" in m -> "OPUS"
+        "vorbis" in m || "ogg" in m -> "OGG"
+        "alac" in m -> "ALAC"
+        "mp4a" in m || "aac" in m || "mp4" in m || "m4a" in m -> "AAC"
+        "wav" in m || "raw" in m -> "WAV"
+        "wma" in m -> "WMA"
+        "amr" in m -> "AMR"
+        "ac3" in m -> "AC3"
+        "dsd" in m || "dsf" in m || "dff" in m -> "DSD"
+        "ape" in m -> "APE"
+        else -> m.substringAfter('/').substringAfterLast('-').uppercase().take(5)
+    }
+}
+
+/** A heart set or taken off a song, from a page. */
+@Serializable
+data class FavouriteDto(val on: Boolean = false)
+
+/**
  * The phone's music, read from Android's own media index.
  *
  * Nothing is copied or converted. Tracks are served from where they already live, with
@@ -86,6 +117,51 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
      */
     private val art = object : LruCache<Long, ByteArray>(24 * 1024 * 1024) {
         override fun sizeOf(key: Long, value: ByteArray) = value.size.coerceAtLeast(1)
+    }
+
+    private val infos = LruCache<Long, TrackInfoDto>(512)
+
+    /**
+     * What the file is: its kind as the decoder sees it (an .ogg can be OPUS or Vorbis), its
+     * sample rate, and its bitrate (the file's own, else its size over its length). Read once
+     * a song, off the main thread.
+     */
+    fun info(id: Long): TrackInfoDto? {
+        infos.get(id)?.let { return it }
+        val t = find(id) ?: return null
+        val uri = uri(id)
+        var mime = t.mime
+        var rate = 0
+        var channels = 0
+        var kbps = 0
+        runCatching {
+            val ex = android.media.MediaExtractor()
+            try {
+                ex.setDataSource(app, uri, null)
+                for (i in 0 until ex.trackCount) {
+                    val f = ex.getTrackFormat(i)
+                    val m = f.getString(android.media.MediaFormat.KEY_MIME) ?: continue
+                    if (!m.startsWith("audio/")) continue
+                    mime = m
+                    if (f.containsKey(android.media.MediaFormat.KEY_SAMPLE_RATE)) rate = f.getInteger(android.media.MediaFormat.KEY_SAMPLE_RATE)
+                    if (f.containsKey(android.media.MediaFormat.KEY_CHANNEL_COUNT)) channels = f.getInteger(android.media.MediaFormat.KEY_CHANNEL_COUNT)
+                    if (f.containsKey(android.media.MediaFormat.KEY_BIT_RATE)) kbps = f.getInteger(android.media.MediaFormat.KEY_BIT_RATE) / 1000
+                    break
+                }
+            } finally { ex.release() }
+        }
+        if (kbps <= 0 || rate <= 0) runCatching {
+            val r = android.media.MediaMetadataRetriever()
+            try {
+                r.setDataSource(app, uri)
+                if (kbps <= 0) kbps = (r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toIntOrNull() ?: 0) / 1000
+                if (rate <= 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    rate = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_SAMPLERATE)?.toIntOrNull() ?: 0
+                }
+            } finally { r.release() }
+        }
+        if (kbps <= 0 && t.durationMs > 0 && t.size > 0) kbps = (t.size * 8 / t.durationMs).toInt()
+        return TrackInfoDto(formatName(mime), kbps, rate, channels).also { infos.put(id, it) }
     }
 
     fun granted(): Boolean {
