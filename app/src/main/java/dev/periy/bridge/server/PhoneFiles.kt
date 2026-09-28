@@ -259,9 +259,14 @@ class PhoneFiles {
 
 /**
  * A file on the phone as a range-capable response, so the page can fetch it over several
- * connections at once and resume where it stopped.
+ * connections at once and resume where it stopped. The body is produced in a writer
+ * launched in [scope], the call it answers, so it never outlives the request.
  */
-class FileRangeContent(private val file: File, private val type: ContentType) : OutgoingContent.ReadChannelContent() {
+class FileRangeContent(
+    private val scope: CoroutineScope,
+    private val file: File,
+    private val type: ContentType,
+) : OutgoingContent.ReadChannelContent() {
     private val length = file.length()
     override val contentType: ContentType get() = type
     override val contentLength: Long get() = length
@@ -271,7 +276,7 @@ class FileRangeContent(private val file: File, private val type: ContentType) : 
     override fun readFrom(range: LongRange): ByteReadChannel {
         val first = range.first.coerceAtLeast(0)
         val count = (range.last.coerceAtMost(length - 1) - first + 1).coerceAtLeast(0)
-        return CoroutineScope(Dispatchers.IO).writer(autoFlush = false) {
+        return scope.writer(Dispatchers.IO) {
             runCatching {
                 RandomAccessFile(file, "r").use { raf ->
                     raf.seek(first)
@@ -281,6 +286,7 @@ class FileRangeContent(private val file: File, private val type: ContentType) : 
                         val n = raf.read(buf, 0, minOf(buf.size.toLong(), count - sent).toInt())
                         if (n <= 0) break
                         channel.writeFully(buf, 0, n)
+                        channel.flush()
                         Monitor.addOut(n)
                         sent += n
                     }

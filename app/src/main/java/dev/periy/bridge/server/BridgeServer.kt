@@ -51,6 +51,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.sse.SSE
 import io.ktor.server.sse.sse
 import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
@@ -71,6 +72,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.FileInputStream
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "BridgeServer"
@@ -293,6 +295,7 @@ class BridgeServer(
             call.response.header(HttpHeaders.CacheControl, "private, max-age=86400")
             call.respond(
                 UriRangeContent(
+                    scope = call,
                     resolver = ctx.contentResolver,
                     uri = music.uri(track.id),
                     length = track.size,
@@ -447,7 +450,7 @@ class BridgeServer(
                 (if (inline) ContentDisposition.Inline else ContentDisposition.Attachment)
                     .withParameter(ContentDisposition.Parameters.FileName, f.name).toString(),
             )
-            call.respond(FileRangeContent(f, type))
+            call.respond(FileRangeContent(call, f, type))
         }
         // A photo the browser cannot decode itself (HEIC, DNG...), as a large JPEG to look at.
         get("/api/fs/view") {
@@ -1290,7 +1293,7 @@ class BridgeServer(
                 (if (inline) ContentDisposition.Inline else ContentDisposition.Attachment)
                     .withParameter(ContentDisposition.Parameters.FileName, m.name).toString(),
             )
-            call.respond(FileRangeContent(f, type))
+            call.respond(FileRangeContent(call, f, type))
         }
 
         // Clear, from anywhere: the shared clipboard and the phone's own. The history stays.
@@ -1321,7 +1324,7 @@ class BridgeServer(
                 (if (m.kind == "image" && m.mime != "image/svg+xml") ContentDisposition.Inline else ContentDisposition.Attachment)
                     .withParameter(ContentDisposition.Parameters.FileName, m.name).toString(),
             )
-            call.respond(FileRangeContent(f, runCatching { ContentType.parse(m.mime) }.getOrDefault(ContentType.Application.OctetStream)))
+            call.respond(FileRangeContent(call, f, runCatching { ContentType.parse(m.mime) }.getOrDefault(ContentType.Application.OctetStream)))
         }
         // Puts an item from the history back on the clipboard, everywhere.
         post("/api/clipboard/history/{v}/use") {
@@ -1362,6 +1365,7 @@ class BridgeServer(
             )
             call.respond(
                 DocumentContent(
+                    scope = call,
                     resolver = ctx.contentResolver,
                     entry = entry,
                     length = size,
@@ -1597,26 +1601,30 @@ class BridgeServer(
     /**
      * A response body of a given length that is generated, not read. One buffer is
      * reused for every write, so this measures the socket and nothing else.
+     *
+     * Written straight into the response from the call's own coroutine, so the loop ends
+     * at the first write after the client hangs up, and each chunk is counted only once
+     * the flush has handed it on to the connection.
      */
-    private class ZeroContent(private val length: Long) : OutgoingContent.ReadChannelContent() {
+    private class ZeroContent(private val length: Long) : OutgoingContent.WriteChannelContent() {
         override val contentType: ContentType get() = ContentType.Application.OctetStream
         override val contentLength: Long get() = length
 
-        override fun readFrom(): ByteReadChannel =
-            CoroutineScope(Dispatchers.IO).writer(autoFlush = false) {
-                val buf = ByteArray(DOWNLOAD_BUFFER)
-                var sent = 0L
-                try {
-                    while (sent < length) {
-                        val n = minOf(buf.size.toLong(), length - sent).toInt()
-                        channel.writeFully(buf, 0, n)
-                        Monitor.addOut(n, Lane.TEST)
-                        sent += n
-                    }
-                } catch (_: Throwable) {
-                    // Client hung up mid-probe; nothing to report.
+        override suspend fun writeTo(channel: ByteWriteChannel) {
+            val buf = ByteArray(DOWNLOAD_BUFFER)
+            var sent = 0L
+            try {
+                while (sent < length) {
+                    val n = minOf(buf.size.toLong(), length - sent).toInt()
+                    channel.writeFully(buf, 0, n)
+                    channel.flush()
+                    Monitor.addOut(n, Lane.TEST)
+                    sent += n
                 }
-            }.channel
+            } catch (_: IOException) {
+                // Client hung up mid-probe (the page's Measure always does); nothing to report.
+            }
+        }
     }
 
     private suspend fun io.ktor.server.application.ApplicationCall.respondTusOptions() {
@@ -1636,8 +1644,12 @@ class BridgeServer(
      * behind a content:// URI, so the seek is done with `lseek` on the descriptor the
      * provider hands back -- the same trick, and the same caveat, as the upload path in
      * [Storage].
+     *
+     * The body is produced in a writer launched in [scope], the call it answers, so it
+     * never outlives the request.
      */
     private inner class DocumentContent(
+        private val scope: CoroutineScope,
         private val resolver: ContentResolver,
         private val entry: FileEntry,
         private val length: Long,
@@ -1656,7 +1668,7 @@ class BridgeServer(
 
             outbound.begin(entry, length)
 
-            return CoroutineScope(Dispatchers.IO).writer(autoFlush = false) {
+            return scope.writer(Dispatchers.IO) {
                 val pfd = resolver.openFileDescriptor(entry.uri.let(Uri::parse), "r")
                 if (pfd == null) {
                     outbound.done(entry, first, 0, count)
@@ -1685,6 +1697,7 @@ class BridgeServer(
                         val n = input.read(buf, 0, want)
                         if (n <= 0) break
                         channel.writeFully(buf, 0, n)
+                        channel.flush()
                         Monitor.addOut(n)
                         sent += n
                         val now = System.currentTimeMillis()

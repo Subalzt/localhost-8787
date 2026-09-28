@@ -244,9 +244,11 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
  *
  * Music does not belong in the transfers list -- a playlist would fill it with rows that
  * are never "done" in any useful sense -- so this is the plain version of the file
- * download body: seek with lseek, stream exactly the requested range, stop.
+ * download body: seek with lseek, stream exactly the requested range, stop. The writer
+ * is launched in [scope], the call it answers, so it never outlives the request.
  */
 class UriRangeContent(
+    private val scope: CoroutineScope,
     private val resolver: ContentResolver,
     private val uri: Uri,
     private val length: Long,
@@ -261,7 +263,7 @@ class UriRangeContent(
     override fun readFrom(range: LongRange): ByteReadChannel {
         val first = range.first.coerceAtLeast(0)
         val count = (range.last.coerceAtMost(length - 1) - first + 1).coerceAtLeast(0)
-        return CoroutineScope(Dispatchers.IO).writer(autoFlush = false) {
+        return scope.writer(Dispatchers.IO) {
             val pfd = resolver.openFileDescriptor(uri, "r") ?: return@writer
             try {
                 val input = FileInputStream(pfd.fileDescriptor)
@@ -275,7 +277,8 @@ class UriRangeContent(
                         }
                     }
                 // Small first chunk so the browser can start decoding immediately; after
-                // that, full-size reads to keep the pipe full.
+                // that, full-size reads to keep the pipe full. Every chunk is flushed before
+                // it is counted, the first one included.
                 var chunk = 64 * 1024
                 val buf = ByteArray(DOWNLOAD_BUFFER)
                 var sent = 0L
@@ -284,8 +287,8 @@ class UriRangeContent(
                     val n = input.read(buf, 0, want)
                     if (n <= 0) break
                     channel.writeFully(buf, 0, n)
+                    channel.flush()
                     Monitor.addOut(n, Lane.MUSIC)
-                    if (sent == 0L) channel.flush()
                     sent += n
                     chunk = DOWNLOAD_BUFFER
                 }
