@@ -42,7 +42,8 @@ const val HELPER_PREFIX = "Laptop control on "
 /**
  * A device as a person knows it, by machine, never by browser: a phone or a laptop helper by its
  * own name; a page by its machine's name when that machine's helper is paired from the same
- * address and the page is on Windows too, as the helper is; else by its system alone ("Linux"
+ * address (or the page came through the helper's USB debugging) and the page is on Windows too,
+ * as the helper is; else by its system alone ("Linux"
  * for "Firefox on Linux"). A browser in WSL or a virtual machine reaches the phone from the same
  * address as Windows but is another system, so it is "Linux", not the Windows machine.
  */
@@ -51,7 +52,12 @@ fun shownName(d: PairedDevice, all: Collection<PairedDevice>): String {
     if (d.name.startsWith(HELPER_PREFIX)) return d.name.removePrefix(HELPER_PREFIX)
     val system = d.name.substringAfterLast(" on ", d.name)
     if (system != "Windows") return system
-    return all.firstOrNull { it.name.startsWith(HELPER_PREFIX) && it.lastIp == d.lastIp }?.name?.removePrefix(HELPER_PREFIX) ?: system
+    // A page that came in over the cable's USB debugging arrives from the phone's own loopback,
+    // through the helper's adb forward: it is on the helper's machine.
+    val helpers = all.filter { it.name.startsWith(HELPER_PREFIX) }
+    val machine = helpers.firstOrNull { it.lastIp == d.lastIp }
+        ?: helpers.takeIf { d.lastIp.startsWith("127.") }?.maxByOrNull { it.lastSeenAt }
+    return machine?.name?.removePrefix(HELPER_PREFIX) ?: system
 }
 
 /**
