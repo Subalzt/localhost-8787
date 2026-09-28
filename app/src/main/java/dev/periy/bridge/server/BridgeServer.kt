@@ -122,10 +122,12 @@ class BridgeServer(
     private val peers: PeerManager,
     private val loudness: dev.periy.bridge.music.Loudness,
     private val favourites: dev.periy.bridge.music.Favourites,
+    /** Lyrics, shared with the phone's own player, which looks them up itself too. */
+    private val lyricsFinder: LyricsFinder,
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val outbound = OutboundTracker()
-    private val lyrics = LyricsStore(ctx) { music.file(it.id) }
+    private val lyrics = lyricsFinder.store
     private val beacon = Control.Beacon(ctx, config.port, config.deviceName)
 
     /** The paired device behind this request, or null. Signature, expiry and revocation. */
@@ -304,7 +306,7 @@ class BridgeServer(
             )
         }
 
-        // A song's lyrics, as a page found them online and left here; see LyricsStore.
+        // A song's lyrics, as a page (or the phone itself) found them online and left here; see LyricsStore.
         get("/api/music/lyrics/{id}") {
             val track = call.parameters["id"]?.toLongOrNull()?.let { withContext(Dispatchers.IO) { music.find(it) } }
             call.response.header(HttpHeaders.CacheControl, "no-store")
@@ -324,6 +326,8 @@ class BridgeServer(
                 return@put
             }
             withContext(Dispatchers.IO) { lyrics.put(track, doc) }
+            // The phone's player shows them too, if it is on this song.
+            lyricsFinder.forget(track.id)
             call.respond(ApiResult(true))
         }
 

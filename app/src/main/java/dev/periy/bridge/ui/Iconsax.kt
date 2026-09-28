@@ -106,6 +106,10 @@ object Iconsax {
     val ArrowDown: ImageVector = icon("ArrowDown", S("M18.07 14.43L12 20.5l-6.07-6.07M12 12v8.33M12 3.5v4.53", true, true))
     /** The song playing is in view. */
     val Cd: ImageVector = icon("Cd", S("M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2", true, true), S("M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85", true, true))
+    /** Lyrics, shown over the cover. */
+    val Lyrics: ImageVector = icon("Lyrics", S("M2 9c0-5 2-7 7-7h5M22 10v5c0 5-2 7-7 7H9c-5 0-7-2-7-7v-2.02M18 10c-3 0-4-1-4-4V2l8 8", true, true))
+    /** Lyrics, switched off. */
+    val LyricsOff: ImageVector = icon("LyricsOff", S("M2 8.5h13.24M6 16.5h1.29M11 16.5h3.5", true, true), S("M7.98 20.5h9.58c3.56 0 4.44-.88 4.44-4.39V6.89M2 14.969v1.14c0 2.34.39 3.51 1.71 4.03M19.99 3.75c-.62-.18-1.42-.25-2.43-.25H6.44C2.89 3.5 2 4.38 2 7.89v3.05M22 2 2 22", true, true))
 
     private class Part(val d: String, val fill: Boolean, val round: Boolean = true, val roundJoin: Boolean = true)
 

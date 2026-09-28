@@ -551,6 +551,8 @@ private fun TrackTile(
             }
             Spacer(Modifier.width(6.dp))
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                val kind = remember(t.mime) { formatBadge(t.mime) }
+                if (kind.isNotEmpty()) TypeLabel(kind, ink(if (kind in LOSSLESS) nc.primary else nc.small, 170))
                 Text(fmtTime(t.durationMs), style = Nm.small.copy(fontWeight = FontWeight.Medium, color = ink(nc.small, 170)))
                 Box(Modifier.size(30.dp).clip(CircleShape).clickable { acts.heart(t) }, contentAlignment = Alignment.Center) {
                     Icon(if (hearted) Iconsax.HeartOn else Iconsax.Heart, if (hearted) "Take the heart off" else "Give it a heart",
@@ -563,6 +565,19 @@ private fun TrackTile(
         }
     }
 }
+
+/** What kind of file a song is (FLAC, MP3, OPUS...): a small outlined label, lossless ones in the lit colour. */
+@Composable
+private fun TypeLabel(kind: String, color: Color) {
+    Text(
+        kind, style = Nm.small.copy(fontSize = 9.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp, color = color, lineHeight = 11.sp),
+        modifier = Modifier.padding(bottom = 2.dp).clip(RoundedCornerShape(4.dp)).background(color.copy(alpha = color.alpha * 0.12f))
+            .border(0.5.dp, color.copy(alpha = color.alpha * 0.5f), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp),
+    )
+}
+
+/** The kinds of file that keep every bit of the recording. */
+private val LOSSLESS = setOf("FLAC", "ALAC", "WAV", "AIFF", "APE", "WV", "DSD")
 
 /** A song's menu, from Namida's "more" turned upright: play it next, play it last, or go to its album. */
 @Composable

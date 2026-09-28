@@ -70,6 +70,9 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
@@ -536,6 +539,19 @@ fun NowPlaying(
     val info by produceState<dev.periy.bridge.server.TrackInfoDto?>(null, cur.id) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { library.info(cur.id) }.getOrNull() }
     }
+    // The lyrics, over the cover while Namida's lyrics button is on: kept on the phone, else
+    // looked up (LyricsFinder), and read again when a page leaves new ones.
+    val container = androidx.compose.ui.platform.LocalContext.current.container
+    var lyricsOn by remember { mutableStateOf(container.prefs.lyricsShown) }
+    val lyricsVer by container.lyrics.changed.collectAsState()
+    val lyrics by produceState(container.lyrics.cached(cur), cur.id, lyricsVer, lyricsOn) {
+        value = container.lyrics.cached(cur)
+        if (lyricsOn) value = runCatching { container.lyrics.forTrack(cur) }.getOrNull()
+    }
+    val lyricsShowing = lyricsOn && lyrics?.let { it.timed || it.kind == dev.periy.bridge.server.ShownLyrics.Kind.PLAIN } == true
+    val lyricsVis by animateFloatAsState(if (lyricsShowing) 1f else 0f, tween(400), label = "lyrics")
+    // Only while the player is open on them do they take taps and scrolling.
+    val lyricsLive by remember { derivedStateOf { Terms(motion.p, motion.bounceUp).let { it.bcp > 0.95f && it.qcp < 0.05f } && abs(motion.s) < 0.05f } }
 
     CompositionLocalProvider(LocalPalette provides palette, LocalNamida provides nc) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -628,9 +644,25 @@ fun NowPlaying(
                             val tm = Terms(motion.p, motion.bounceUp)
                             val sz = artBox(g, tm)[2]
                             lerp(g.dp(6f), g.dp(14f), tm.bcp) * g.artBig / sz.coerceAtLeast(1f)
-                        }, glow = tint, glowOf = { Terms(motion.p, motion.bounceUp).bcp })
+                        }, glow = tint, glowOf = { Terms(motion.p, motion.bounceUp).bcp },
+                            veil = if (slot == 0) ({ lyricsVis * Terms(motion.p, motion.bounceUp).let { it.bcp * (1f - it.qcp) } }) else ({ 0f }),
+                            veilColor = tint.copy(alpha = 0.25f).compositeOver(nc.bg))
                     }
                 }
+            }
+            // ---- the lyrics, over this song's cover
+            val shownLyrics = lyrics
+            if (shownLyrics != null && (lyricsShowing || lyricsVis > 0f)) key("lyrics", curT.id) {
+                LyricsOverCover(
+                    shownLyrics, state, tick, tint, live = lyricsLive && lyricsShowing,
+                    onSeek = { ms -> player.seekTo(ms) },
+                    modifier = Modifier.placed(g.artBig, g.artBig) {
+                        val tm = Terms(motion.p, motion.bounceUp)
+                        val a = artBox(g, tm)
+                        val sv = motion.s
+                        floatArrayOf(a[0] - sv * slideSpacing(g, tm, a[2]), a[1], a[2] / g.artBig, lyricsVis * tm.bcp * (1f - tm.qcp) * (1f - abs(sv)).coerceIn(0f, 1f))
+                    },
+                )
             }
 
             }
@@ -710,6 +742,8 @@ fun NowPlaying(
                 state, info,
                 onRepeat = { player.cycleRepeat() },
                 onSound = { sound = true },
+                lyricsOn = lyricsOn, lyrics = lyrics,
+                onLyrics = { lyricsOn = !lyricsOn; container.prefs.lyricsShown = lyricsOn },
                 modifier = Modifier.placed(g.w, g.bottomRowH) {
                     val t = Terms(motion.p, motion.bounceUp)
                     floatArrayOf(0f, g.bottomRowTop + (1f - t.cp) * g.dp(100f) + slideDown(g, t), 1f, t.mid)
@@ -883,9 +917,12 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.playerGe
 
 // ---------------------------------------------------------------------------- pieces
 
-/** A cover, laid out at the full player's size and scaled by the motion; its corners and glow follow it. */
+/**
+ * A cover, laid out at the full player's size and scaled by the motion; its corners and glow
+ * follow it. [veil]: with the lyrics over it, as Namida's: blurred, under a faint veil of [veilColor].
+ */
 @Composable
-private fun ArtFace(t: TrackDto, radiusOf: () -> Float, glow: Color, glowOf: () -> Float) {
+private fun ArtFace(t: TrackDto, radiusOf: () -> Float, glow: Color, glowOf: () -> Float, veil: () -> Float = { 0f }, veilColor: Color = Color.Transparent) {
     val img = rememberCover(t.albumId, big = true)
     Box(
         Modifier.fillMaxSize()
@@ -896,12 +933,27 @@ private fun ArtFace(t: TrackDto, radiusOf: () -> Float, glow: Color, glowOf: () 
                 shadowElevation = 24.dp.toPx() * glowOf()
                 ambientShadowColor = glow.copy(alpha = 0.5f)
                 spotShadowColor = glow
+            }
+            .drawWithContent {
+                drawContent()
+                val v = veil()
+                if (v > 0f) drawRect(veilColor.copy(alpha = veilColor.alpha * LYRICS_VEIL * v))
             },
     ) {
-        if (img != null) androidx.compose.foundation.Image(img, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-        else MadeUpCover(t.album, Modifier.fillMaxSize())
+        // Blurred within the rounded corners, which stay sharp.
+        val inner = Modifier.fillMaxSize().graphicsLayer {
+            val v = veil()
+            val r = LYRICS_BLUR.toPx() * v
+            renderEffect = if (r > 0.5f) androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Clamp) else null
+        }
+        if (img != null) androidx.compose.foundation.Image(img, null, inner, contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+        else MadeUpCover(t.album, inner)
     }
 }
+
+/** Namida's blur on the cover under the lyrics (its 12, as a radius), and how much of its veil shows. */
+private val LYRICS_BLUR = 20.dp
+private const val LYRICS_VEIL = 0.25f
 
 /** One of the two lines, laid out at the full player's size; the motion scales it. Both are in Namida's medium style. */
 @Composable
@@ -1042,6 +1094,9 @@ private fun BottomRow(
     info: dev.periy.bridge.server.TrackInfoDto?,
     onRepeat: () -> Unit,
     onSound: () -> Unit,
+    lyricsOn: Boolean,
+    lyrics: dev.periy.bridge.server.ShownLyrics?,
+    onLyrics: () -> Unit,
     modifier: Modifier,
 ) {
     val nc = Nm.c
@@ -1097,6 +1152,12 @@ private fun BottomRow(
             onClick = onRepeat,
         )
         RowButton(Iconsax.Sound, "Sound: pitch, speed and volume", size = 21.dp, onClick = onSound)
+        // Namida's lyrics button, after the sound controls: the lyrics over the cover, on or off.
+        Box(
+            Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.88f, onClick = onLyrics)
+                .semantics { contentDescription = if (lyricsOn) "Hide the lyrics" else "Show the lyrics" },
+            contentAlignment = Alignment.Center,
+        ) { LyricsIcon(lyricsOn, lyrics, nc.onSecondaryContainer) }
         Spacer(Modifier.width(6.dp))
     }
 }

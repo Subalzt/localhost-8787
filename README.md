@@ -387,7 +387,8 @@ in the background, the controls in the notification and on the lock screen, and 
 buttons working.
 
 - **Tracks and Albums**, side by side under Namida's bottom bar: tap one or swipe between them.
-- **Tracks**: every song A to Z, each with its cover, who it is by, its album and year, how long
+- **Tracks**: every song A to Z, each with its cover, who it is by, its album and year, what kind
+  of file it is (a small FLAC, MP3, OPUS... label, lossless ones in the song's colour), how long
   it is, a heart, and a menu (play next, play last, go to its album). Shuffle and play all at the
   top. The song playing is lit.
 - **Albums**: three to a row, each cover with its year in a corner and a play button in the other,
@@ -417,6 +418,17 @@ Namida's:
   colours from the cover and specks drifting behind. Along the bottom, **what the file is** (FLAC,
   MP3, OPUS..., its bitrate and sample rate), **repeat**, and the **sound controls**: speed, pitch
   and volume, kept for next time.
+- **Lyrics over the cover**, from Namida's lyrics button beside the sound controls: the cover
+  blurs and the words scroll over it in time with the song, the line being sung in the middle on
+  a card of the song's colour, each word lighting as it is sung (for songs timed word by word),
+  and three dots filling across a long pause. Tap a line to go there; scroll to look around and
+  they come back to the song three seconds later. Untimed lyrics scroll as a page.
+- **Found by the phone itself.** A moment after each song starts (in the background too), when
+  the phone has no lyrics for it, it looks them up on [LRCLIB](https://lrclib.net) and keeps them
+  just as the page does: a `.lrc` beside the song and a copy in the app. Lyrics found by the phone
+  show on the page, and lyrics found by the page show on the phone. The button shows **?** when a
+  song has none and **x** when they could not be looked up (no internet); they are tried again
+  the next time it plays.
 - **The queue**: Namida's sheet, rising under the song as the cover shrinks to the top, opening at
   the song playing. Tap a song to play it, drag it by its handle to move it, swipe it away or use
   its menu to take it off. The broom removes the songs before or after (or all), **Shuffle**
@@ -436,7 +448,8 @@ it is sung; in a long instrumental gap, three dots swell until the singing start
 
 - **Looked up by themselves.** When a song starts and the phone has no lyrics for it, the browser
   looks them up on [LRCLIB](https://lrclib.net), a free, open lyrics library, provided the laptop
-  has internet. Nothing is typed and nothing is sent but the song's title, artist, album and length.
+  has internet (the phone does the same for songs it plays itself). Nothing is typed and nothing
+  is sent but the song's title, artist, album and length.
 - **Downloaded and kept.** What is found is saved on the phone twice: in the app, and as a
   standard `.lrc` file **beside the song** in its music folder (for example `Music/Song.lrc`), which
   other players read too. Next time the lyrics come from the phone, with or without internet.
@@ -571,8 +584,9 @@ For hotspot mode, checked on 26 September 2026:
 - A file sent to another computer or phone is a *pipe*: offered, accepted, then streamed through
   in one pass and never stored. A direct send uses WebRTC data channels; the phone passes the
   introductions along the pipe and answers STUN on UDP 3478.
-- Lyrics come from [LRCLIB](https://lrclib.net), fetched by the browser (the phone may have no
-  internet) and stored on the phone with a `.lrc` file beside the song.
+- Lyrics come from [LRCLIB](https://lrclib.net), fetched by the browser for the page and by the
+  phone for its own player (LyricsFinder, which reads them exactly as the page does), and stored
+  on the phone with a `.lrc` file beside the song.
 - The phone's own player is Android's MediaPlayer, with the next song prepared and chained on for
   a gapless handover, in a media-playback service with a MediaSession. How loud each 50 ms of a
   song is gets decoded once, at low priority, and kept (a few kilobytes a song); the phone's player
