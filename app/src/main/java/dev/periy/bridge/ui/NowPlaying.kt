@@ -472,8 +472,6 @@ fun NowPlaying(
     navBottom: Dp,
     lift: Dp,
     onOpenAlbum: (TrackDto) -> Unit,
-    /** The queue's add button: to the songs, to pick more. */
-    onAddSongs: () -> Unit = {},
 ) {
     val view = LocalView.current
     val density = LocalDensity.current
@@ -766,8 +764,6 @@ fun NowPlaying(
             // ---- the queue, rising under the mini row at the top
             QueuePanel(
                 player, state, motion, tint, navBottom,
-                onConfigure = { sound = true },
-                onAdd = onAddSongs,
                 modifier = Modifier.placed(g.w, g.h - g.listTop) {
                     val t = Terms(motion.p, motion.bounceUp)
                     floatArrayOf(0f, g.listTop + (1f - t.qp) * (g.h - g.listTop), 1f, if (t.qp > 0f) 1f else 0f)

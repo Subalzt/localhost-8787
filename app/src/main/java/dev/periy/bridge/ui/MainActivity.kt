@@ -592,7 +592,6 @@ private fun BlazeItUi(vm: MainViewModel) {
             player, now, motion, ctx.container.loudness,
             statusTop = statusTop, navBottom = bottomInset, lift = miniLift,
             onOpenAlbum = { t -> shelf.albumOf[t.id]?.let { shelf.openAlbum(it) }; shelf.showing = true },
-            onAddSongs = { motion.collapse(); shelf.open = null; shelf.page = 0; shelf.showing = true },
         )
 
         // A linked phone's files slide in over the app, as a folder does in Files.

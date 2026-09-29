@@ -217,8 +217,6 @@ internal fun QueuePanel(
     tint: Color,
     navBottom: Dp,
     modifier: Modifier,
-    onConfigure: () -> Unit = {},
-    onAdd: () -> Unit = {},
 ) {
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -264,24 +262,10 @@ internal fun QueuePanel(
     val lit = Color.White
     val favourites = androidx.compose.ui.platform.LocalContext.current.container.favourites
     val hearts by favourites.ids.collectAsState()
-    // Namida's jump button: a disc while the song playing is in view, else an arrow towards it.
-    val jump by remember {
-        derivedStateOf {
-            val info = list.layoutInfo.visibleItemsInfo
-            val i = live.value.index
-            when {
-                info.isEmpty() -> Iconsax.Cd
-                i < info.first().index -> Iconsax.ArrowUp
-                i > info.last().index -> Iconsax.ArrowDown
-                else -> Iconsax.Cd
-            }
-        }
-    }
-
     Box(modifier) {
         // Namida's queue: a sheet with corners of 32, its header washed in the song's colour.
         Column(Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).background(nc.bg)) {
-            QueueHeader(state, onConfigure = onConfigure, onClear = { player.clear() }, onClose = { motion.expand() })
+            QueueHeader(state, onClose = { motion.expand() })
             LazyColumn(
                 Modifier.weight(1f).nestedScroll(pull),
                 state = list,
@@ -304,11 +288,12 @@ internal fun QueuePanel(
             }
         }
 
-        // Namida's row along the foot: clear some of it, add songs, go to the song playing, shuffle.
+        // Namida's row along the foot: clear some of it, and shuffle what is left. In from the right
+        // edge, clear of a screen that curves away there.
         Row(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(nc.bg)
-                .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp + navBottom).height(48.dp - 8.dp),
+                .padding(start = 4.dp, end = 20.dp, top = 4.dp, bottom = 4.dp + navBottom).height(48.dp - 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -330,8 +315,6 @@ internal fun QueuePanel(
                     }
                 }
             }
-            NamidaButton(null, Iconsax.Add) { onAdd() }
-            NamidaButton(null, jump) { scope.launch { list.animateScrollToItem((state.index - 2).coerceAtLeast(0)) } }
             NamidaButton("Shuffle", Iconsax.Shuffle) { player.shuffleUpcoming() }
         }
     }
@@ -339,13 +322,12 @@ internal fun QueuePanel(
 
 /**
  * Namida's queue header: "Queue", where in it and the time left after the song playing, washed
- * in the song's colour; its round buttons (configure, more) and the arrow back down to the player.
+ * in the song's colour; and the arrow back down to the player.
  */
 @Composable
-private fun QueueHeader(state: PhonePlayer.State, onConfigure: () -> Unit, onClear: () -> Unit, onClose: () -> Unit) {
+private fun QueueHeader(state: PhonePlayer.State, onClose: () -> Unit) {
     val nc = Nm.c
     val left = state.queue.drop(state.index.coerceAtLeast(0)).sumOf { it.durationMs }
-    var more by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth()
             .background(Brush.linearGradient(listOf(
@@ -366,24 +348,6 @@ private fun QueueHeader(state: PhonePlayer.State, onConfigure: () -> Unit, onCle
                 Text(fmtMinutes(left), style = small)
             }
         }
-        QueueAction(Iconsax.Configure, "Configure") { onConfigure() }
-        Spacer(Modifier.width(6.dp))
-        Box {
-            QueueAction(Iconsax.More, "More") { more = true }
-            if (more) androidx.compose.ui.window.Popup(
-                alignment = Alignment.TopEnd,
-                offset = IntOffset(0, with(LocalDensity.current) { 44.dp.roundToPx() }),
-                onDismissRequest = { more = false },
-            ) {
-                androidx.compose.runtime.CompositionLocalProvider(LocalNamida provides nc) {
-                    Column(Modifier.width(220.dp).clip(RoundedCornerShape(16.dp))
-                        .background(nc.cardColor.copy(alpha = 180 / 255f).compositeOver(if (nc.dark) Color.Black else Color.White)).padding(vertical = 6.dp)) {
-                        QueueMenuRow("Stop and clear the queue") { more = false; onClear() }
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.width(6.dp))
         Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
             Icon(Iconsax.Down, "Back to the player", tint = nc.icon, modifier = Modifier.size(24.dp))
         }
@@ -391,16 +355,6 @@ private fun QueueHeader(state: PhonePlayer.State, onConfigure: () -> Unit, onCle
     }
 }
 
-/** One of the queue header's round buttons, as Namida's: a tonal disc with the icon. */
-@Composable
-private fun QueueAction(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
-    val nc = Nm.c
-    Box(
-        Modifier.size(40.dp).pressable(CircleShape, scaleTo = 0.9f, onClick = onClick)
-            .background(nc.secondaryContainer.copy(alpha = if (nc.dark) 0.55f else 0.7f)),
-        contentAlignment = Alignment.Center,
-    ) { Icon(icon, description, tint = nc.onSecondaryContainer, modifier = Modifier.size(20.dp)) }
-}
 
 @Composable
 private fun QueueMenuRow(label: String, onClick: () -> Unit) {

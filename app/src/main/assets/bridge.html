@@ -1658,7 +1658,7 @@
   .np-qx svg { width: 18px; height: 18px; transform: rotate(90deg); }
   .np-qlist.locked .np-qx, .np-qlist.locked .np-qh { display: none; }
   .np-qbar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: flex-end; align-items: center; gap: 8px; height: 48px;
-    padding: 4px 8px; border-radius: 12px 12px 0 0; background: var(--nm-bg, var(--surface)); }
+    padding: 4px 20px 4px 8px; border-radius: 12px 12px 0 0; background: var(--nm-bg, var(--surface)); }
   /* Namida's button: a faint wash of the lit colour with a hairline edge in it, the icon in its icon colour. */
   .np-pill { min-height: 36px; min-width: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; border-radius: 20px;
     border: .5px solid color-mix(in srgb, var(--nm-primary, var(--txt)) 18%, transparent); background: color-mix(in srgb, var(--nm-primary, var(--txt)) 6%, transparent);
@@ -2411,8 +2411,6 @@
     <!-- Namida's queue header: where in it and the time left, its round buttons, and back down to the player. -->
     <div class="np-qhead">
       <div class="np-qtitle"><b>Queue</b><span id="np-qinfo"></span></div>
-      <button class="np-qact" id="np-qconf" type="button" title="Sound: speed and volume" aria-label="Sound: speed and volume" data-nx="configure"></button>
-      <button class="np-qact" id="np-qmore" type="button" title="More" aria-label="More for the queue" data-nx="more"></button>
       <button class="np-btn np-qdown" id="np-qdown" type="button" title="Back to the player" aria-label="Back to the player" data-nx="down"></button>
     </div>
     <div class="np-qlist" id="np-qlist"></div>
@@ -2426,7 +2424,6 @@
           <button type="button" data-clear="others">Keep only the song playing</button>
         </div>
       </div>
-      <button class="np-pill" id="np-qjump" type="button" title="Go to the song playing" aria-label="Go to the song playing" data-nx="cd"></button>
       <button class="np-pill wide" id="np-qshuffle" type="button" title="Shuffle what is left" aria-label="Shuffle what is left"><span data-nx="shuffle"></span>Shuffle</button>
     </div>
   </div>
@@ -8006,7 +8003,6 @@ function npQueueRender() {
     });
     host.classList.toggle("paused", !isPlaying());
     npQueueInfo();
-    npJumpIcon();
     return;
   }
   host.dataset.key = key;
@@ -8060,7 +8056,6 @@ function npQueueRender() {
   host.appendChild(frag);
   host.classList.toggle("paused", !isPlaying());
   npQueueInfo();
-  npJumpIcon();
 }
 
 /** Namida's tile height: 82, and 4 under it. */
@@ -8070,17 +8065,6 @@ var NP_ROW_H = 86;
 function npQueueToCurrent(smooth) {
   var host = $("np-qlist"), y = Math.max(0, player.pos * NP_ROW_H);
   if (smooth && host.scrollTo) host.scrollTo({ top: y, behavior: "smooth" }); else host.scrollTop = y;
-  npJumpIcon();
-}
-
-/** The button to go back to the song playing: a disc while it is in view, else an arrow to where it is. */
-function npJumpIcon() {
-  var host = $("np-qlist"), b = $("np-qjump");
-  if (!host || !b) return;
-  var top = player.pos * NP_ROW_H, h = host.clientHeight || 1, name = "cd";
-  if (top + NP_ROW_H <= host.scrollTop) name = "arrowUp";
-  else if (top >= host.scrollTop + h - 70) name = "arrowDown";
-  if (b.dataset.nx !== name) { b.dataset.nx = name; b.innerHTML = nx(name); }
 }
 
 /** A song's "more": a small menu under its button, to take it off the queue. */
@@ -8327,33 +8311,9 @@ function setupFullPlayer() {
   $("np-next").onclick = function () { npToSong(1); };
   $("np-close").onclick = npCollapse;
   $("np-where").onclick = function () { npCollapse(); revealPlaying(); };
-  // The queue's header and foot, as Namida's: sound, more, back down; clear some, go to the song playing, shuffle what is left.
+  // The queue's header and foot, as the phone's: back down; clear some, shuffle what is left.
   $("np-qshuffle").onclick = npShuffleUpcoming;
-  $("np-qconf").onclick = npSoundOpen;
   $("np-qdown").onclick = function () { npMenusClose(); npGo(1); };
-  $("np-qmore").onclick = function (e) {
-    e.stopPropagation();
-    var had = !!document.querySelector(".np-rowmenu.head");
-    npMenusClose();
-    if (had) return;
-    var m = document.createElement("div");
-    m.className = "np-qmenu np-rowmenu head";
-    m.innerHTML = '<button type="button" data-a="album">Show the song in its album</button><button type="button" data-a="others">Keep only the song playing</button>';
-    m.onclick = function (ev) {
-      var b = ev.target.closest("button");
-      if (!b) return;
-      ev.stopPropagation();
-      npMenusClose();
-      if (b.dataset.a === "album") { npCollapse(); revealPlaying(); }
-      else { npClearSide("after"); npClearSide("before"); }
-    };
-    var q = $("np-queue"), r = this.getBoundingClientRect(), qr = q.getBoundingClientRect();
-    m.style.left = "auto"; m.style.bottom = "auto";
-    m.style.right = Math.max(8, qr.right - r.right) + "px";
-    m.style.top = (r.bottom - qr.top + 4) + "px";
-    q.appendChild(m);
-    requestAnimationFrame(function () { m.classList.add("in"); });
-  };
   $("np-qbroom").onclick = function (e) {
     e.stopPropagation();
     var m = $("np-qmenu"), open = m.hidden;
@@ -8370,8 +8330,7 @@ function setupFullPlayer() {
     if (b.dataset.clear === "others") { npClearSide("after"); npClearSide("before"); }
     else npClearSide(b.dataset.clear);
   };
-  $("np").addEventListener("pointerdown", function (e) { if (!e.target.closest(".np-qmenu, #np-qbroom, #np-qmore, .np-qx")) npMenusClose(); });
-  $("np-qlist").addEventListener("scroll", npJumpIcon, { passive: true });
+  $("np").addEventListener("pointerdown", function (e) { if (!e.target.closest(".np-qmenu, #np-qbroom, .np-qx")) npMenusClose(); });
   if (window.matchMedia) {
     var scheme = window.matchMedia("(prefers-color-scheme: dark)");
     var recolour = function () { npNamidaColours(); if (look.namida || look.style === "material") applyLook(look); if (np.shown) npRender(); };
@@ -8400,7 +8359,6 @@ function setupFullPlayer() {
   $("audio").addEventListener("loadedmetadata", npApplySpeed);
   $("audio").addEventListener("volumechange", function () { if (!$("np-sheet").hidden) npSoundPaint(); });
   npApplySpeed();
-  $("np-qjump").onclick = function () { npQueueToCurrent(true); };
   $("audio").addEventListener("play", npWake);
   window.addEventListener("resize", function () {
     if (!np.shown) return;
