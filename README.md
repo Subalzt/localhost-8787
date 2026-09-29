@@ -426,8 +426,12 @@ Namida's:
 - **Lyrics over the cover**, from Namida's lyrics button beside the sound controls: the cover
   blurs and the words scroll over it in time with the song, the line being sung in the middle on
   a card of the song's colour, each word lighting as it is sung (for songs timed word by word),
-  and three dots filling across a long pause. Tap a line to go there; scroll to look around and
-  they come back to the song three seconds later. Untimed lyrics scroll as a page.
+  and three dots filling across a long pause. Scroll to look around and they come back to the
+  song three seconds later. Untimed lyrics scroll as a page.
+- **Full-page lyrics**: tap the lyrics over the cover and they take the whole screen, as
+  Namida's: the cover blurred behind, who and what is playing along the top, the lines large from
+  the left with the one being sung on a soft card (tap a line to go there), and the waveform,
+  times and controls along the foot. Back, or the arrow at the top, returns to the player.
 - **Found by the phone itself.** A moment after each song starts (in the background too), when
   the phone has no lyrics for it, it looks them up on [LRCLIB](https://lrclib.net) and keeps them
   just as the page does: a `.lrc` beside the song and a copy in the app. Lyrics found by the phone

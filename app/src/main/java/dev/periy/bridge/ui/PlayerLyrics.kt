@@ -7,6 +7,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -103,8 +105,10 @@ private fun itemAt(items: List<LyricItem>, at: Long): Int {
 }
 
 /**
- * The lyrics, laid out at the full player's cover size (the motion scales them with it).
- * [live]: whether they take taps and scrolling (only while the player is open on them).
+ * The lyrics, laid out at the full player's cover size (the motion scales them with it), or
+ * with [full], as Namida's full-page lyrics: large, from the left, the line being sung on a soft
+ * card. [live]: whether they take taps and scrolling (only while the player is open on them).
+ * Over the cover a tap opens the full page ([onOpen]); on the full page a tap on a line goes to it.
  */
 @Composable
 internal fun LyricsOverCover(
@@ -115,6 +119,8 @@ internal fun LyricsOverCover(
     live: Boolean,
     onSeek: (Long) -> Unit,
     modifier: Modifier,
+    full: Boolean = false,
+    onOpen: (() -> Unit)? = null,
 ) {
     val nc = Nm.c
     // Namida fades the lyrics out at the top and bottom edges.
@@ -125,8 +131,13 @@ internal fun LyricsOverCover(
     BoxWithConstraints(modifier.then(fade)) {
         val half = maxHeight / 2
         if (lyrics.kind == ShownLyrics.Kind.PLAIN) {
-            Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState(), enabled = live).padding(horizontal = 16.dp, vertical = 40.dp)) {
-                Text(lyrics.plain, style = Nm.medium.copy(lineHeight = 15.nsp * 1.8f), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Box(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState(), enabled = live)
+                    .then(if (live && onOpen != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen) else Modifier)
+                    .padding(horizontal = if (full) 18.dp else 16.dp, vertical = 40.dp),
+            ) {
+                if (full) Text(lyrics.plain, style = FullLine.copy(color = nc.medium, lineHeight = 22.nsp * 1.6f), modifier = Modifier.fillMaxWidth())
+                else Text(lyrics.plain, style = Nm.medium.copy(lineHeight = 15.nsp * 1.8f), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
             return@BoxWithConstraints
         }
@@ -149,27 +160,36 @@ internal fun LyricsOverCover(
             if (list.layoutInfo.visibleItemsInfo.isEmpty()) androidx.compose.runtime.withFrameNanos { }
             list.centre(current.coerceAtLeast(0))
         }
-        val selectedBg = tint.copy(alpha = 140 / 255f).compositeOver(nc.bg).copy(alpha = 0.5f)
+        // Over the cover, the line on a wash of the song's colour; on the full page, a soft card of the text colour.
+        val selectedBg = if (full) nc.onSurface.copy(alpha = 0.09f) else tint.copy(alpha = 140 / 255f).compositeOver(nc.bg).copy(alpha = 0.5f)
         LazyColumn(
             state = list,
             userScrollEnabled = live,
             contentPadding = PaddingValues(vertical = (half - 24.dp).coerceAtLeast(0.dp)),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = if (full) Alignment.Start else Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxSize(),
         ) {
             itemsIndexed(items, key = { i, _ -> i }) { i, item ->
                 val d = if (current < 0) i + 1 else abs(i - current)
                 when (item) {
-                    is GapItem -> Dots(item, on = d == 0, state = live0, tick = tick)
+                    is GapItem -> Dots(item, on = d == 0, state = live0, tick = tick, full = full)
                     is LineItem -> Line(
                         item.line, lyrics.kind == ShownLyrics.Kind.WORD, distance = d, selectedBg = selectedBg, state = live0, tick = tick,
-                        onClick = if (live) ({ userAt = 0L; onSeek(item.line.t) }) else null,
+                        full = full,
+                        onClick = when {
+                            !live -> null
+                            onOpen != null -> onOpen
+                            else -> ({ userAt = 0L; onSeek(item.line.t) })
+                        },
                     )
                 }
             }
         }
     }
 }
+
+/** A line on Namida's full-page lyrics: large and bold, from the left. */
+private val FullLine = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.Bold, fontSize = 22.nsp, lineHeight = 28.nsp)
 
 /** Glides so item [index] sits in the middle (from further off, it goes there first). */
 private suspend fun LazyListState.centre(index: Int) {
@@ -192,19 +212,26 @@ private fun Line(
     selectedBg: Color,
     state: State<PhonePlayer.State>,
     tick: State<Long>,
+    full: Boolean,
     onClick: (() -> Unit)?,
 ) {
     val nc = Nm.c
     val on = distance == 0
-    val k by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.5f; 2 -> 0.4f; else -> 0.25f }, tween(300), label = "line")
+    val k by animateFloatAsState(
+        if (full) when (distance) { 0 -> 1f; 1 -> 0.72f; 2 -> 0.5f; else -> 0.3f } else when (distance) { 0 -> 1f; 1 -> 0.5f; 2 -> 0.4f; else -> 0.25f },
+        tween(300), label = "line",
+    )
     val bg by animateColorAsState(if (on) selectedBg else selectedBg.copy(alpha = 0f), tween(300), label = "card")
     val base = nc.medium
-    val style = Nm.medium.copy(color = base.copy(alpha = base.alpha * k), textAlign = TextAlign.Center)
+    val style = if (full) FullLine.copy(color = base.copy(alpha = base.alpha * k))
+    else Nm.medium.copy(color = base.copy(alpha = base.alpha * k), textAlign = TextAlign.Center)
     Box(
-        Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(8.dp)).background(bg)
+        (if (full) Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp).clip(RoundedCornerShape(12.dp))
+        else Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(8.dp)))
+            .background(bg)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(8.dp),
-        contentAlignment = Alignment.Center,
+            .padding(horizontal = 8.dp, vertical = if (full) 10.dp else 8.dp),
+        contentAlignment = if (full) Alignment.CenterStart else Alignment.Center,
     ) {
         if (on && words && line.words.isNotEmpty()) {
             // Sung words full, those to come dim; the one being sung brightens across its time.
@@ -223,12 +250,12 @@ private fun Line(
 
 /** A long pause in the singing: three dots, lit one by one across it while it lasts. */
 @Composable
-private fun Dots(gap: GapItem, on: Boolean, state: State<PhonePlayer.State>, tick: State<Long>) {
+private fun Dots(gap: GapItem, on: Boolean, state: State<PhonePlayer.State>, tick: State<Long>, full: Boolean = false) {
     val nc = Nm.c
     val shown by animateFloatAsState(if (on) 1f else 0f, tween(400), label = "gap")
     val f by remember(gap) { derivedStateOf { tick.value; ((state.value.positionNow() - gap.from).toFloat() / (gap.to - gap.from).coerceAtLeast(1)).coerceIn(0f, 1f) } }
     Row(
-        Modifier.height(28.dp * shown).graphicsLayer { alpha = shown },
+        Modifier.then(if (full) Modifier.padding(start = 18.dp) else Modifier).height(28.dp * shown).graphicsLayer { alpha = shown },
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

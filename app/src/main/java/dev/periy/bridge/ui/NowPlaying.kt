@@ -9,6 +9,9 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.layout.offset
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -552,6 +555,12 @@ fun NowPlaying(
     val lyricsVis by animateFloatAsState(if (lyricsShowing) 1f else 0f, tween(400), label = "lyrics")
     // Only while the player is open on them do they take taps and scrolling.
     val lyricsLive by remember { derivedStateOf { Terms(motion.p, motion.bounceUp).let { it.bcp > 0.95f && it.qcp < 0.05f } && abs(motion.s) < 0.05f } }
+    // Namida's full-page lyrics, opened by a tap on those over the cover. They go with the lyrics,
+    // and when the player folds away; Back closes them first.
+    var lyricsFull by remember { mutableStateOf(false) }
+    val playerOpen by remember { derivedStateOf { motion.p > 0.9f } }
+    if (lyricsFull && (!lyricsShowing || !playerOpen)) lyricsFull = false
+    androidx.activity.compose.BackHandler(enabled = lyricsFull) { lyricsFull = false }
 
     CompositionLocalProvider(LocalPalette provides palette, LocalNamida provides nc) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -656,6 +665,7 @@ fun NowPlaying(
                 LyricsOverCover(
                     shownLyrics, state, tick, tint, live = lyricsLive && lyricsShowing,
                     onSeek = { ms -> player.seekTo(ms) },
+                    onOpen = { lyricsFull = true },
                     modifier = Modifier.placed(g.artBig, g.artBig) {
                         val tm = Terms(motion.p, motion.bounceUp)
                         val a = artBox(g, tm)
@@ -764,8 +774,96 @@ fun NowPlaying(
                 },
             )
         }
+        // ---- Namida's full-page lyrics, over the whole player
+        val fullLyrics = lyrics
+        androidx.compose.animation.AnimatedVisibility(
+            lyricsFull && fullLyrics != null,
+            enter = fadeIn(tween(280)) + androidx.compose.animation.scaleIn(tween(360, easing = FastOutSlowInEasing), initialScale = 0.96f),
+            exit = fadeOut(tween(220)) + androidx.compose.animation.scaleOut(tween(220), targetScale = 0.97f),
+        ) {
+            val shownFull = remember { fullLyrics }
+            (fullLyrics ?: shownFull)?.let { fl ->
+                FullLyrics(
+                    cur, fl, state, tick, tint, env, lyricsOn, statusTop, navBottom,
+                    onClose = { lyricsFull = false },
+                    onLyricsOff = { lyricsFull = false; lyricsOn = false; container.prefs.lyricsShown = false },
+                    onSeek = { ms -> player.seekTo(ms) },
+                    onPrev = { motion.toSong(-1, player) { around.value(it) } },
+                    onToggle = { player.toggle() },
+                    onNext = { motion.toSong(1, player) { around.value(it) } },
+                )
+            }
+        }
         if (sound) SoundSheet(state, tint, onChange = { sp, pi, vo -> player.setSound(sp, pi, vo) }, onClose = { sound = false })
     }
+    }
+}
+
+/**
+ * Namida's full-page lyrics: the cover blurred far out behind a wash of the page colour; along
+ * the top, back, who and what is playing, and the lyrics button (which turns them off); the lines
+ * large from the left, the one being sung on a soft card (a tap on a line goes to it); along the
+ * foot, the waveform, then the times either side of previous, play and next.
+ */
+@Composable
+private fun FullLyrics(
+    cur: TrackDto,
+    lyrics: dev.periy.bridge.server.ShownLyrics,
+    state: PhonePlayer.State,
+    tick: State<Long>,
+    tint: Color,
+    env: ByteArray?,
+    lyricsOn: Boolean,
+    statusTop: Dp,
+    navBottom: Dp,
+    onClose: () -> Unit,
+    onLyricsOff: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onPrev: () -> Unit,
+    onToggle: () -> Unit,
+    onNext: () -> Unit,
+) {
+    val nc = Nm.c
+    val seek = remember { mutableStateOf<Long?>(null) }
+    // It takes every touch on it: none reaches the player under it.
+    Box(Modifier.fillMaxSize().pointerInput(Unit) {}.background(nc.bg)) {
+        Cover(cur.albumId, cur.album, Modifier.fillMaxSize().blur(90.dp), radius = 0.dp, big = true)
+        Box(Modifier.fillMaxSize().background(nc.bg.copy(alpha = if (nc.dark) 0.78f else 0.7f)))
+        Column(Modifier.fillMaxSize().padding(top = statusTop, bottom = navBottom)) {
+            Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
+                    Icon(Iconsax.Back, "Back to the player", tint = nc.icon, modifier = Modifier.size(22.dp))
+                }
+                Column(Modifier.weight(1f).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(cur.artist, style = Nm.large.copy(fontSize = 16.nsp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(cur.title, style = Nm.medium.copy(fontSize = 13.5.nsp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Box(
+                    Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onLyricsOff).semantics { contentDescription = "Hide the lyrics" },
+                    contentAlignment = Alignment.Center,
+                ) { LyricsIcon(lyricsOn, lyrics, nc.icon) }
+            }
+            LyricsOverCover(
+                lyrics, state, tick, tint, live = true, onSeek = onSeek, full = true,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            Box(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                WaveSeek(
+                    env = env, state = state, tint = tint, tick = tick, active = { true },
+                    onScrub = { seek.value = it }, onSeek = onSeek,
+                    modifier = Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(52.dp),
+                )
+                SeekLabel(seek, state, Modifier.fillMaxWidth().height(22.dp).offset(y = (-24).dp).graphicsLayer { alpha = if (seek.value != null) 1f else 0f })
+            }
+            Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
+                Times(state, tick, Modifier.fillMaxWidth().padding(horizontal = 20.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TransportButton(Iconsax.Prev, "Previous", Modifier.size(52.dp), onClick = onPrev)
+                    PlayButton(state.playing, nc.main, Modifier.size(58.dp), onClick = onToggle)
+                    TransportButton(Iconsax.Next, "Next", Modifier.size(52.dp), onClick = onNext)
+                }
+            }
+        }
     }
 }
 
