@@ -169,19 +169,10 @@ class MainActivity : ComponentActivity() {
      */
     private fun handleShare(intent: Intent?) {
         if (intent == null) return
+        // Tapping the music notification opens the player.
+        if (intent.action == dev.periy.bridge.music.MusicService.ACTION_OPEN_PLAYER) { openPlayer.value = true; intent.action = null; return }
         // Debug builds: `adb shell am start ... --ez serve true` starts the server for testing.
         if (dev.periy.bridge.BuildConfig.DEBUG && intent.getBooleanExtra("serve", false)) BridgeService.start(this)
-        // Debug builds: `--el synctest <trackId>` runs the phone's synced player silently from the
-        // start of that song (see SyncPlay's log), `--ez syncstop true` stops it.
-        if (dev.periy.bridge.BuildConfig.DEBUG) {
-            val id = intent.getLongExtra("synctest", -1)
-            if (id >= 0) dev.periy.bridge.server.SyncPlay.phone?.let {
-                it.silent = true
-                it.apply(dev.periy.bridge.server.SyncState(on = true, members = listOf("phone"), trackId = id, playing = true,
-                    anchorMs = System.currentTimeMillis() + 1500, anchorPos = 0.0))
-            }
-            if (intent.getBooleanExtra("syncstop", false)) dev.periy.bridge.server.SyncPlay.phone?.release()
-        }
         // Debug builds: `--es style theatre` and `--es accent blue` switch the look, for screenshots.
         if (dev.periy.bridge.BuildConfig.DEBUG) {
             intent.getStringExtra("accent")?.let { vm.setAccent(it) }
@@ -230,14 +221,27 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** The tabs along the bottom. Music is not a page beside the others: it opens full screen (MusicScreen.kt). */
 private val TABS = listOf(
     "Home" to BlazeIcons.Home,
     "Devices" to BlazeIcons.Phones,
+    "Music" to BlazeIcons.Music,
     "Control" to BlazeIcons.Trackpad,
     "Settings" to BlazeIcons.Sliders,
 )
+private const val PILL_MUSIC = 2
+
+/** The pages a swipe moves between: every tab but Music. */
+private val PAGES = TABS.filterIndexed { i, _ -> i != PILL_MUSIC }
+private fun pageOfPill(pill: Int) = if (pill > PILL_MUSIC) pill - 1 else pill
+
+/** Where the pill sits in the tabs for a place in the pages (2.5 is halfway from Control to Settings). */
+private fun pillOfPage(page: Float) = if (page <= PILL_MUSIC - 1) page else page + 1f
 private const val TAB_HOME = 0
 private val debugTab = kotlinx.coroutines.flow.MutableStateFlow(-1)
+
+/** The music notification was tapped: the player opens. */
+private val openPlayer = kotlinx.coroutines.flow.MutableStateFlow(false)
 
 /** Debug builds: a linked phone whose files to open (`--es peerbrowse <name>`). */
 private val debugBrowse = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
@@ -249,6 +253,9 @@ private val HeaderHeight = 60.dp
 
 /** The tabs along the bottom: the capsule, and the room around it. */
 private val TabsHeight = 74.dp
+
+/** The mini player (Namida's, 82 high), and the gap over it: what every page leaves free at its foot while music is queued. */
+private val MiniRoom = 82.dp + 12.dp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -274,19 +281,28 @@ private fun BlazeItUi(vm: MainViewModel) {
     val paired by peers.peers.collectAsStateWithLifecycle()
     val peerStatus by peers.status.collectAsStateWithLifecycle()
     val routes by peers.route.collectAsStateWithLifecycle()
+    // The phone's own music: the library as the Music tab shows it, and the player.
+    val player = ctx.container.player
+    val now by player.state.collectAsStateWithLifecycle()
+    val motion = rememberPlayerMotion()
+    val shelf = rememberMusicShelf()
+    val playerOpen by remember { derivedStateOf { motion.p > 0.5f } }
 
     var tab by remember { mutableIntStateOf(TAB_HOME) }
     // Swiping moves between the tabs. Each tab's list keeps its place while it is off screen.
-    val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = TAB_HOME) { TABS.size }
-    val lists = List(TABS.size) { androidx.compose.foundation.lazy.rememberLazyListState() }
+    val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = TAB_HOME) { PAGES.size }
+    val lists = List(PAGES.size) { androidx.compose.foundation.lazy.rememberLazyListState() }
     // A tap on a tab slides there, from wherever the pages are: it takes over a slide still
     // moving or a swipe still settling, so a tap is never lost and the pages never stop halfway.
     // (A slide waited on before would refuse a tap made during one, and cancel itself.)
     val navScope = rememberCoroutineScope()
     val goTo: (Int) -> Unit = { i ->
         tab = i
+        shelf.showing = false
         navScope.launch { pager.animateScrollToPage(i, animationSpec = spring(dampingRatio = 0.95f, stiffness = 650f)) }
     }
+    // A tap on a tab: Music opens full screen over the app; the rest slide there.
+    val onPill: (Int) -> Unit = { i -> if (i == PILL_MUSIC) shelf.showing = true else goTo(pageOfPill(i)) }
     // Where the pages are right now, in tabs, for the bars to follow a swipe.
     val pagePos by remember { derivedStateOf { pager.currentPage + pager.currentPageOffsetFraction } }
     LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect { tab = it } }
@@ -303,11 +319,49 @@ private fun BlazeItUi(vm: MainViewModel) {
     // Back: whatever is open closes first (a linked phone's files and the clipboard's history
     // take their own), then any tab goes back to Home. At Home the app goes to the background,
     // as Home does for any app; it is never closed, and the server keeps running either way.
-    androidx.activity.compose.BackHandler(enabled = showOem) { showOem = false }
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && tab != TAB_HOME) { goTo(TAB_HOME) }
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && tab == TAB_HOME) {
+    //
+    // Back follows the finger (Android 14 on): whatever it would close slides aside and fades as
+    // the swipe goes, what is under it coming back; let go and the rest plays out quickly; swipe
+    // back out before letting go and it all settles back. (Music's albums and the full-page
+    // lyrics do the same in their own screens.)
+    val oemSwipe = rememberBackSwipe(enabled = showOem) { showOem = false }
+    // A tab goes back to Home: the pages slide towards it with the swipe, a little under half way.
+    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && tab != TAB_HOME && !shelf.showing) { events ->
+        val from = pager.currentPage
+        val toward = if (from > TAB_HOME) -1 else 1
+        try {
+            events.collect { e -> pager.scrollToPage(from, toward * 0.45f * e.progress) }
+            goTo(TAB_HOME)
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            navScope.launch { pager.animateScrollToPage(from, animationSpec = spring(dampingRatio = 0.95f, stiffness = 650f)) }
+        }
+    }
+    // At Home, from Android 12 on the system takes back itself (and, from 14, shows it coming):
+    // the app goes to the background, as it does below 12 here.
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
         (ctx as? android.app.Activity)?.moveTaskToBack(true)
     }
+    // Music, open: a search closes, then an album (in Music's own screen), then Music itself, back
+    // to the app, following the finger. The player, open over it, goes back down a step first.
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && shelf.showing) { shelf.back() }
+    val musicSwipe = rememberBackSwipe(
+        enabled = !showOem && browsePeer == null && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
+    ) { shelf.showing = false }
+    // A linked phone's files, at their top folder (a folder inside goes up a folder first, in its screen).
+    val peerSwipe = rememberBackSwipe(enabled = browsePeer != null) { browsePeer = null }
+    // The player: down to the mini player (or from the queue back to the player) with the finger.
+    androidx.activity.compose.PredictiveBackHandler(enabled = now.current != null && playerOpen) { events ->
+        val from = motion.p
+        val to = if (from > 1.5f) 1f else 0f
+        try {
+            events.collect { e -> motion.backPreview(from, to, e.progress) }
+            if (to == 1f) motion.expand() else motion.collapse()
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            if (from > 1.5f) motion.toQueue() else motion.expand()
+        }
+    }
+    // Whether a back swipe is under way over the battery steps, for the pages to be there under them.
+    val oemPeek by remember { derivedStateOf { oemSwipe.progress.value > 0f } }
 
     // Who the clipboard reaches right now: every computer live here, once each (by its machine's
     // name where the laptop helper gives one), and the linked phones while copies go on to them.
@@ -330,7 +384,7 @@ private fun BlazeItUi(vm: MainViewModel) {
             first == null || (first.key == "hero" && first.offset + first.size > headerBottom)
         }
     }
-    val overHero = heroUnderBar && heroShowing
+    val overHero = heroUnderBar && heroShowing && !(now.current != null && playerOpen) && !shelf.showing
 
     // Status and navigation bar icons follow the palette, whichever way it was chosen.
     val dark = Bridge.Dark
@@ -345,9 +399,16 @@ private fun BlazeItUi(vm: MainViewModel) {
 
     // A computer asking to connect is waiting on you, so jump to where the answer is.
     LaunchedEffect(requests.size) { if (requests.isNotEmpty()) { goTo(TAB_HOME); showOem = false } }
-    // Debug builds: `--ei tab 0` opens that tab, for screenshots without touching the screen.
-    LaunchedEffect(Unit) { debugTab.collect { if (it >= 0) { goTo(it); debugTab.value = -1 } } }
+    // Debug builds: `--ei tab 0` opens that tab (2 is Music), for screenshots without touching the screen.
+    LaunchedEffect(Unit) { debugTab.collect { if (it >= 0) { onPill(it); debugTab.value = -1 } } }
     LaunchedEffect(Unit) { debugBrowse.collect { n -> if (n != null) { browsePeer = peers.find(n); debugBrowse.value = null } } }
+    LaunchedEffect(Unit) { openPlayer.collect { if (it) { showOem = false; browsePeer = null; motion.expand(); openPlayer.value = false } } }
+    // The library loads once it can be read (the queue from last time comes back with it), and
+    // covers the catalogue finds later are drawn when they arrive.
+    LoadMusicOnce(shelf, ctx.container.music, open = shelf.showing, granted = state.musicGranted) { player.restore(it) }
+    // Each time Music opens, songs added since are looked for (the library's own cache keeps this cheap).
+    LaunchedEffect(shelf.showing) { if (shelf.showing && shelf.loaded) shelf.load(ctx.container.music, refresh = false) }
+    LaunchedEffect(Unit) { dev.periy.bridge.server.EventBus.events.collect { if (it.name == "cover") Covers.forget(it.data) } }
 
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         vm.offerPickedFiles(uris)
@@ -404,27 +465,23 @@ private fun BlazeItUi(vm: MainViewModel) {
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val imeUp = WindowInsets.isImeVisible
-    // The tabs float along the bottom; every page leaves room under it for them.
-    val underBar = if (imeUp) 0.dp else TabsHeight + bottomInset
+    // The tabs float along the bottom; every page leaves room under it for them, and for the
+    // mini player over them while music is queued.
+    val hasPlayer = now.current != null && !showOem && !imeUp
+    val underBar = (if (imeUp) 0.dp else TabsHeight + bottomInset) + if (hasPlayer) MiniRoom else 0.dp
     // Room for the monitor pill, so by default it covers nothing.
     val monitorRoom = if (showMonitor) 48.dp else 0.dp
     val headerTop = statusTop + HeaderHeight + monitorRoom
     val contentTop = if (!heroUnderBar) headerTop else 0.dp
 
     Box(Modifier.fillMaxSize().background(Bridge.Bg)) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(if (shelf.showing) SharedAxisBack.under(musicSwipe) else Modifier).then(if (browsePeer != null) SharedAxisBack.under(peerSwipe) else Modifier)) {
             StyleBackground()
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).imePadding()) {
-                    if (showOem) OemScreen(oemSteps, Modifier.padding(top = contentTop), onOpen = { intent ->
-                            runCatching { openSettings.launch(intent) }.onFailure {
-                                Toast.makeText(ctx, "This phone would not open that screen", Toast.LENGTH_SHORT).show()
-                            }
-                        }, onDone = { showOem = false })
-
                     // The trackpad keeps its own touches; swipe on the keys under it instead.
-                    else androidx.compose.foundation.pager.HorizontalPager(
-                        pager, Modifier.fillMaxSize(), key = { it },
+                    if (!showOem || oemPeek) androidx.compose.foundation.pager.HorizontalPager(
+                        pager, Modifier.fillMaxSize().then(if (showOem) SharedAxisBack.under(oemSwipe) else Modifier), key = { it },
                         // Settles with a soft spring rather than a hard stop.
                         flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(
                             pager, snapPositionalThreshold = 0.18f,
@@ -486,29 +543,67 @@ private fun BlazeItUi(vm: MainViewModel) {
                         }
                     }
 
+                    if (showOem) OemScreen(oemSteps, Modifier.padding(top = contentTop).then(SharedAxisBack.over(oemSwipe)), onOpen = { intent ->
+                            runCatching { openSettings.launch(intent) }.onFailure {
+                                Toast.makeText(ctx, "This phone would not open that screen", Toast.LENGTH_SHORT).show()
+                            }
+                        }, onDone = { showOem = false })
+
                     // Over Home's hero the hero carries the title itself; the header comes in once it has gone.
                     androidx.compose.animation.AnimatedVisibility(
                         !overHero,
                         enter = androidx.compose.animation.fadeIn(tween(160)),
                         exit = androidx.compose.animation.fadeOut(tween(120)),
                     ) {
-                        AppHeader(if (shown == TAB_HOME) "Localhost 8787" else TABS[shown].first, false, showMonitor) { setMonitor(!showMonitor) }
+                        AppHeader(if (shown == TAB_HOME) "Localhost 8787" else PAGES[shown].first, false, showMonitor) { setMonitor(!showMonitor) }
                     }
 
                     // The tabs, floating along the bottom over a fade of the page, in reach of a thumb.
-                    if (!imeUp && !showOem) Box(
+                    // As the player opens they sink away under it, and come back as it closes.
+                    if (!imeUp && !showOem) androidx.compose.foundation.layout.BoxWithConstraints(
                         Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                            .graphicsLayer {
+                                if (now.current == null) return@graphicsLayer
+                                val cp = motion.p.coerceIn(0f, 1f)
+                                translationY = cp * size.height
+                                alpha = 1f - cp
+                            }
                             .background(Brush.verticalGradient(0f to Bridge.Bg.copy(alpha = 0f), 0.55f to Bridge.Bg.copy(alpha = 0.92f)))
                             .padding(top = 16.dp, bottom = bottomInset + 12.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        PillTabs(TABS, shown, position = pagePos) { goTo(it); showOem = false }
+                        // Five tabs fit a narrow phone with a little less room around each word.
+                        PillTabs(TABS, pillOfPage(shown.toFloat()).toInt(), position = pillOfPage(pagePos), itemPadding = if (maxWidth < 400.dp) 10.dp else 13.dp) { onPill(it); showOem = false }
                     }
                 }
 
                 if (showOem && !imeUp) Spacer(Modifier.height(bottomInset))
             }
         }
+
+        // Music, full screen over the app: Namida's Tracks and Albums pages.
+        androidx.compose.animation.AnimatedVisibility(
+            shelf.showing && !showOem,
+            enter = androidx.compose.animation.fadeIn(tween(240)) + androidx.compose.animation.scaleIn(tween(340, easing = androidx.compose.animation.core.CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)), initialScale = 0.94f),
+            exit = androidx.compose.animation.fadeOut(tween(200)) + androidx.compose.animation.scaleOut(tween(240), targetScale = 0.96f),
+        ) {
+            Box(SharedAxisBack.over(musicSwipe)) { MusicScreen(
+                shelf, now, player, motion,
+                statusTop = statusTop, bottomInset = bottomInset, miniRoom = MiniRoom,
+                requestMusic = { requestMusic.launch(musicPermission()) },
+            ) }
+        }
+
+        // What is playing: the mini player over the tabs, or 12 above Namida's bar in Music (it
+        // glides between the two), dragged up to full screen and on to the queue.
+        val miniLift by androidx.compose.animation.core.animateDpAsState(
+            if (shelf.showing) bottomInset + MusicBarHeight + 12.dp else bottomInset + 66.dp, tween(320), label = "lift",
+        )
+        if (hasPlayer) NowPlaying(
+            player, now, motion, ctx.container.loudness,
+            statusTop = statusTop, navBottom = bottomInset, lift = miniLift,
+            onOpenAlbum = { t -> shelf.albumOf[t.id]?.let { shelf.openAlbum(it) }; shelf.showing = true },
+        )
 
         // A linked phone's files slide in over the app, as a folder does in Files.
         androidx.compose.animation.AnimatedVisibility(
@@ -518,7 +613,7 @@ private fun BlazeItUi(vm: MainViewModel) {
         ) {
             // Kept while it slides out, after browsePeer has gone.
             val shownPeer = remember { browsePeer }
-            (browsePeer ?: shownPeer)?.let { PeerFilesScreen(it) { browsePeer = null } }
+            (browsePeer ?: shownPeer)?.let { Box(SharedAxisBack.over(peerSwipe)) { PeerFilesScreen(it) { browsePeer = null } } }
         }
 
         if (showMonitor) MonitorOverlay(monitor, running) { setMonitor(false) }
@@ -684,9 +779,9 @@ private class HeroText(state: UiState, running: Boolean, val url: String?) {
         else -> "Open on your computer"
     }
     val note: String? = when {
-        !running -> "Switch it on to reach this phone from a computer or another phone."
+        !running -> "Turn on to connect a computer or phone."
         state.storageMode == Storage.Mode.NO_DESTINATION -> "Set it in Settings, Receiving."
-        url == null -> "Plug in a USB cable, join Wi-Fi, or start the hotspot."
+        url == null -> "Connect USB, Wi-Fi or the hotspot."
         state.onlyCellular -> "Mobile data can't be reached. Use USB or the hotspot."
         else -> null
     }
@@ -1027,7 +1122,7 @@ private fun HeroExtras(state: UiState, running: Boolean, h: HeroText, showQr: Bo
         // The cable is in, but it carries nothing until USB tethering is on; Android lets only
         // the phone's own settings switch that.
         if (state.cableNoTether) {
-            RowNote("Cable connected. Turn on USB tethering for full speed.", Bridge.Text)
+            RowNote("Cable in. Turn on USB tethering for full speed.", Bridge.Text)
             Spacer(Modifier.height(8.dp))
             SoftButton("USB tethering", icon = BlazeIcons.Bolt, onClick = openTether)
         }
@@ -1540,7 +1635,7 @@ private fun LazyListScope.devicesTab(
     item { SectionBar("Pairing") }
     item {
         GroupCard {
-            SettingRow("Unpair everything", "Every computer and phone signs in again", first = true, titleColor = Bridge.Danger, onClick = { vm.unpairAll() })
+            SettingRow("Sign out all devices", first = true, titleColor = Bridge.Danger, onClick = { vm.unpairAll() })
         }
     }
 }
@@ -1667,10 +1762,10 @@ private fun DirectRow(direct: DirectLink.State, hotspotOn: Boolean, toggle: () -
             else -> "Direct link off"
         },
         when {
-            blocked -> "The phone's hotspot is on. Turn it off first: Android runs one at a time."
+            blocked -> "Turn the phone's hotspot off first"
             direct is DirectLink.State.Failed -> direct.reason
-            direct is DirectLink.State.On -> direct.info.ssid + " · the laptop helper joins by itself"
-            else -> "The laptop helper joins it by itself; the laptop is offline meanwhile"
+            direct is DirectLink.State.On -> direct.info.ssid + " · the laptop joins by itself"
+            else -> "The laptop joins by itself, offline meanwhile"
         },
         titleColor = if (direct is DirectLink.State.On) Bridge.Lit else Bridge.Text,
         onClick = if (blocked) openHotspot else toggle,
@@ -1724,7 +1819,7 @@ private fun LazyListScope.settingsTab(
                 first = true, icon = BlazeIcons.File, iconColor = Bridge.Orange,
                 onClick = pickFolder,
             ) { Action("Change") }
-            SettingRow("Always stage in app storage", "Slower; only if files arrive damaged") {
+            SettingRow("Stage in app storage", "Only if files arrive damaged") {
                 Toggle(state.forceStagedCopy) { vm.setForceStagedCopy(it) }
             }
         }
@@ -1824,7 +1919,7 @@ private fun LazyListScope.settingsTab(
             // album and artist names are sent.
             val prefs = LocalContext.current.container.prefs
             var lookup by remember { mutableStateOf(prefs.coverLookup) }
-            SettingRow("Find missing covers", "Looks up album and artist in Apple's catalogue", icon = BlazeIcons.Image, iconColor = Bridge.Purple) {
+            SettingRow("Find missing album art", "From Apple's catalogue", icon = BlazeIcons.Image, iconColor = Bridge.Purple) {
                 Toggle(lookup) { lookup = it; prefs.coverLookup = it }
             }
         }
@@ -1842,7 +1937,7 @@ private fun LazyListScope.settingsTab(
                 "Battery optimisation", if (state.batteryExempt) "Off" else "Tap to turn off",
                 onClick = if (!state.batteryExempt) ({ vm.batteryOptimizationIntent()?.let(openSettings) ?: showOem() }) else null,
             ) { Check(state.batteryExempt) }
-            SettingRow("Manufacturer settings", "If Localhost 8787 gets stopped", onClick = showOem) {
+            SettingRow("Manufacturer settings", "If the app gets stopped", onClick = showOem) {
                 Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp))
             }
         }

@@ -15,3 +15,5 @@ captures/
 # scrcpy, downloaded for phone mirroring (the helper also fetches it by itself)
 /tools/scrcpy/
 __pycache__/
+# The fixed key test builds are signed with (CI), so each installs over the last.
+!.github/test-signing.keystore
