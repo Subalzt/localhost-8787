@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.draw.shadow
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -95,6 +96,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -153,8 +155,11 @@ class PlayerMotion(private val scope: CoroutineScope) {
     /** Springing up from the mini player: things grow past full rather than head for the queue. */
     var bounceUp by mutableStateOf(false)
         private set
-    /** The songs shown while a swipe settles, before and after: frozen so nothing jumps under it. */
-    var frozen by mutableStateOf<Triple<Int, Int, Int>?>(null)
+    /**
+     * The songs shown while a swipe settles, before and after: frozen, as songs rather than places
+     * in the queue, so nothing jumps under it (not even when the queue is dealt again for a new round).
+     */
+    var frozen by mutableStateOf<Triple<TrackDto?, TrackDto?, TrackDto?>?>(null)
         private set
 
     internal var height = 1f
@@ -296,7 +301,7 @@ class PlayerMotion(private val scope: CoroutineScope) {
         if (dir < 0 && st.queue.size < 2) { settle(0f); return }
         sJob?.cancel()
         if (frozen != null) settleNow()
-        frozen = around(st.index)
+        frozen = around(st.index).let { (a, b, c) -> Triple(st.queue.getOrNull(a), st.queue.getOrNull(b), st.queue.getOrNull(c)) }
         if (dir > 0) player.next() else player.previous()
         haptic()
         val from = s
@@ -480,10 +485,10 @@ fun NowPlaying(
     motion.haptic = { view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
 
     val cur = state.current ?: return
-    val shown = motion.frozen ?: aroundIndex(state, state.index)
-    val prevT = state.queue.getOrNull(shown.first)
-    val curT = state.queue.getOrNull(shown.second) ?: cur
-    val nextT = state.queue.getOrNull(shown.third)
+    val shown = motion.frozen ?: aroundIndex(state, state.index).let { (a, b, c) -> Triple(state.queue.getOrNull(a), state.queue.getOrNull(b), state.queue.getOrNull(c)) }
+    val prevT = shown.first
+    val curT = shown.second ?: cur
+    val nextT = shown.third
 
     // The cover's colour, as the page takes it; the album's made-up colour until it loads.
     val bigCover = rememberCover(cur.albumId, big = true)
@@ -652,12 +657,13 @@ fun NowPlaying(
                             val sz = artBox(g, tm)[2]
                             lerp(g.dp(6f), g.dp(14f), tm.bcp) * g.artBig / sz.coerceAtLeast(1f)
                         }, glow = tint, glowOf = { Terms(motion.p, motion.bounceUp).bcp },
-                            veil = if (slot == 0) ({ lyricsVis * Terms(motion.p, motion.bounceUp).let { it.bcp * (1f - it.qcp) } }) else ({ 0f }),
+                            veil = if (slot == 0) ({ lyricsVis * Terms(motion.p, motion.bounceUp).bcp }) else ({ 0f }),
                             veilColor = tint.copy(alpha = 0.25f).compositeOver(nc.bg))
                     }
                 }
             }
-            // ---- the lyrics, over this song's cover
+            // ---- the lyrics, over this song's cover. As Namida's, they keep their size and ride on the
+            // cover's middle as it shrinks into the queue or the mini player, fading as they go.
             val shownLyrics = lyrics
             if (shownLyrics != null && (lyricsShowing || lyricsVis > 0f)) key("lyrics", curT.id) {
                 LyricsOverCover(
@@ -668,7 +674,8 @@ fun NowPlaying(
                         val tm = Terms(motion.p, motion.bounceUp)
                         val a = artBox(g, tm)
                         val sv = motion.s
-                        floatArrayOf(a[0] - sv * slideSpacing(g, tm, a[2]), a[1], a[2] / g.artBig, lyricsVis * tm.bcp * (1f - tm.qcp) * (1f - abs(sv)).coerceIn(0f, 1f))
+                        val inset = (a[2] - g.artBig) / 2
+                        floatArrayOf(a[0] + inset - sv * slideSpacing(g, tm, a[2]), a[1] + inset, 1f, lyricsVis * tm.bcp * (1f - abs(sv)).coerceIn(0f, 1f))
                     },
                 )
             }
@@ -751,7 +758,8 @@ fun NowPlaying(
             // ---- the bottom row: the sound, repeat, and the sound controls
             BottomRow(
                 state, info,
-                onRepeat = { player.cycleRepeat() },
+                onRepeat = { player.setRepeat(it) },
+                onRepeatTimes = { player.setRepeatTimes(it) },
                 onSound = { sound = true },
                 lyricsOn = lyricsOn, lyrics = lyrics,
                 onLyrics = { lyricsOn = !lyricsOn; container.prefs.lyricsShown = lyricsOn },
@@ -866,8 +874,8 @@ private fun FullLyrics(
 /** The songs either side of [i] in the queue, or -1 where there is none. */
 private fun aroundIndex(s: PhonePlayer.State, i: Int): Triple<Int, Int, Int> {
     val n = s.queue.size
-    val prev = if (i > 0) i - 1 else if (s.repeat == PhonePlayer.Repeat.ALL && n > 1) n - 1 else -1
-    val next = if (i + 1 < n) i + 1 else if (s.repeat == PhonePlayer.Repeat.ALL && n > 1) 0 else -1
+    val prev = if (i > 0) i - 1 else if (s.repeat.loops && n > 1) n - 1 else -1
+    val next = if (i + 1 < n) i + 1 else if (s.repeat.loops && n > 1) 0 else -1
     return Triple(prev, i, next)
 }
 
@@ -1188,7 +1196,8 @@ private fun TopRow(index: Int, count: Int, album: String, onClose: () -> Unit, o
 private fun BottomRow(
     state: PhonePlayer.State,
     info: dev.periy.bridge.server.TrackInfoDto?,
-    onRepeat: () -> Unit,
+    onRepeat: (PhonePlayer.Repeat) -> Unit,
+    onRepeatTimes: (Int) -> Unit,
     onSound: () -> Unit,
     lyricsOn: Boolean,
     lyrics: dev.periy.bridge.server.ShownLyrics?,
@@ -1196,7 +1205,6 @@ private fun BottomRow(
     modifier: Modifier,
 ) {
     val nc = Nm.c
-    val repeat = state.repeat
     Row(modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         // The chip takes what room the buttons leave, and its details give way first.
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
@@ -1237,11 +1245,7 @@ private fun BottomRow(
                 )
             }
         }
-        RowButton(
-            when (repeat) { PhonePlayer.Repeat.OFF -> Iconsax.RepeatOff; PhonePlayer.Repeat.ALL -> Iconsax.RepeatAll; else -> Iconsax.RepeatOne },
-            when (repeat) { PhonePlayer.Repeat.OFF -> "Repeat"; PhonePlayer.Repeat.ALL -> "Repeat all"; else -> "Repeat this song" },
-            onClick = onRepeat,
-        )
+        RepeatButton(state.repeat, state.repeatTimes, onRepeat, onRepeatTimes)
         RowButton(Iconsax.Sound, "Sound: pitch, speed and volume", size = 21.dp, onClick = onSound)
         // Namida's lyrics button, after the sound controls: the lyrics over the cover, on or off.
         Box(
@@ -1266,6 +1270,114 @@ internal fun bitsBadge(info: dev.periy.bridge.server.TrackInfoDto): String {
     if (info.bits <= 0) return ""
     val lossless = info.format.uppercase() in setOf("FLAC", "ALAC", "WAV", "APE", "DSD", "AIFF", "WV")
     return listOfNotNull("${info.bits}-bit", "Hi-Res".takeIf { info.bits >= 24 }, "Lossless".takeIf { lossless }).joinToString(" ")
+}
+
+/** What a repeat mode does, as its menu says it. */
+private fun repeatLabel(mode: PhonePlayer.Repeat, times: Int): String = when (mode) {
+    PhonePlayer.Repeat.OFF -> "Stop after the last song"
+    PhonePlayer.Repeat.ONE -> "Repeat this song"
+    PhonePlayer.Repeat.TIMES -> if (times == 1) "Repeat 1 more time" else "Repeat $times more times"
+    PhonePlayer.Repeat.ALL -> "Repeat the queue"
+    PhonePlayer.Repeat.ALL_SHUFFLE -> "Repeat the queue, shuffled"
+}
+
+/**
+ * A repeat mode's icon, as Namida draws it: the count inside a broken ring for a number of
+ * times, and a small shuffle at the corner of the queue's for shuffled rounds.
+ */
+@Composable
+private fun RepeatIcon(mode: PhonePlayer.Repeat, times: Int, tint: Color, size: Dp = 20.dp) {
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        val icon = when (mode) {
+            PhonePlayer.Repeat.OFF -> Iconsax.RepeatOff
+            PhonePlayer.Repeat.ONE -> Iconsax.RepeatOne
+            PhonePlayer.Repeat.TIMES -> Iconsax.Status
+            else -> Iconsax.RepeatAll
+        }
+        Icon(icon, null, tint = tint, modifier = Modifier.fillMaxSize())
+        if (mode == PhonePlayer.Repeat.TIMES) {
+            val fs = with(LocalDensity.current) { (size * 0.46f).toSp() }
+            Text("$times", style = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.SemiBold, fontSize = fs, lineHeight = fs, color = tint), maxLines = 1)
+        }
+        if (mode == PhonePlayer.Repeat.ALL_SHUFFLE) Icon(
+            Iconsax.Shuffle, null, tint = tint,
+            modifier = Modifier.size(size * 0.6f).align(Alignment.BottomEnd).offset(x = size * 0.22f, y = size * 0.22f),
+        )
+    }
+}
+
+/**
+ * Namida's repeat button: a tap opens its menu above the row, with the five ways to repeat, the
+ * one on lit in the song's colour, and the count for "more times" set with its − and +. The menu
+ * grows out of the button's corner and shrinks back into it.
+ */
+@Composable
+private fun RepeatButton(mode: PhonePlayer.Repeat, times: Int, onPick: (PhonePlayer.Repeat) -> Unit, onTimes: (Int) -> Unit) {
+    val nc = Nm.c
+    var open by remember { mutableStateOf(false) }
+    val shown = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    fun show() { open = true; scope.launch { shown.animateTo(1f, tween(260, easing = ToFull)) } }
+    fun hide() { scope.launch { shown.animateTo(0f, tween(160, easing = FastOutSlowInEasing)); open = false } }
+    Box {
+        Box(
+            Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.88f) { if (open) hide() else show() }
+                .semantics { contentDescription = "Repeat: " + repeatLabel(mode, times) },
+            contentAlignment = Alignment.Center,
+        ) { RepeatIcon(mode, times, nc.onSecondaryContainer) }
+        if (open) androidx.compose.ui.window.Popup(
+            alignment = Alignment.BottomEnd,
+            offset = with(LocalDensity.current) { IntOffset((44 + 44 + 6 - 12).dp.roundToPx(), -52.dp.roundToPx()) },
+            onDismissRequest = { hide() },
+            properties = androidx.compose.ui.window.PopupProperties(focusable = true),
+        ) {
+            CompositionLocalProvider(LocalNamida provides nc) {
+                Column(
+                    Modifier
+                        .graphicsLayer {
+                            val v = shown.value
+                            alpha = v.coerceIn(0f, 1f)
+                            val k = 0.9f + 0.1f * v
+                            scaleX = k; scaleY = k
+                            transformOrigin = TransformOrigin(0.8f, 1f)
+                        }
+                        .width(252.dp)
+                        .shadow(16.dp, RoundedCornerShape(20.dp), ambientColor = nc.shadow, spotColor = nc.shadow)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(nc.dialog)
+                        .border(1.dp, nc.onSurface.copy(alpha = 0.1f), RoundedCornerShape(20.dp))
+                        .padding(6.dp),
+                ) {
+                    PhonePlayer.Repeat.entries.forEach { m ->
+                        val on = m == mode
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(12.dp))
+                                .background(if (on) nc.tint.copy(alpha = 0.2f) else Color.Transparent)
+                                .clickable { onPick(m); hide() }
+                                .padding(horizontal = 8.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RepeatIcon(m, times, nc.icon, size = 22.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(repeatLabel(m, times), style = Nm.medium, modifier = Modifier.weight(1f))
+                            if (m == PhonePlayer.Repeat.TIMES) {
+                                CountButton(Iconsax.MinusCircle, "One fewer", enabled = times > 1) { onTimes(times - 1) }
+                                CountButton(Iconsax.Add, "One more", enabled = times < 99) { onTimes(times + 1) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CountButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(32.dp).clip(CircleShape).clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, description, tint = Nm.c.icon.copy(alpha = if (enabled) Nm.c.icon.alpha else 0.3f), modifier = Modifier.size(18.dp)) }
 }
 
 /** One of the bottom row's buttons: the icon alone, in the row's colour. */

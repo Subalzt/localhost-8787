@@ -81,11 +81,6 @@ class MusicShelf {
     val albumGrid = LazyGridState()
     val likedList = LazyListState()
 
-    /** Namida's count bar over each page: hidden while you scroll down, back as you scroll up. */
-    var trackBar by mutableStateOf(true)
-    var albumBar by mutableStateOf(true)
-    var likedBar by mutableStateOf(true)
-
     /** When each page's items came on screen, for Namida's staggered entrance. */
     val trackEntrance = Entrance()
     val albumEntrance = Entrance()

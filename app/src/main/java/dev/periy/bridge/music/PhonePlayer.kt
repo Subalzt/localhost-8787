@@ -31,7 +31,17 @@ import kotlinx.coroutines.flow.StateFlow
  */
 class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
 
-    enum class Repeat { OFF, ALL, ONE }
+    /**
+     * Namida's repeat modes, in its menu's order: stop after the last song; this song over and
+     * over; this song [State.repeatTimes] more times, then on; the whole queue; the whole queue,
+     * shuffled again each time round.
+     */
+    enum class Repeat { OFF, ONE, TIMES, ALL, ALL_SHUFFLE;
+        /** Round again after the last song. */
+        val loops: Boolean get() = this == ALL || this == ALL_SHUFFLE
+        /** This song again when it ends. */
+        val holds: Boolean get() = this == ONE || this == TIMES
+    }
 
     data class State(
         val queue: List<TrackDto> = emptyList(),
@@ -39,6 +49,8 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         val playing: Boolean = false,
         val shuffle: Boolean = false,
         val repeat: Repeat = Repeat.OFF,
+        /** How many more times [Repeat.TIMES] plays this song before it goes on. */
+        val repeatTimes: Int = 1,
         /** Where the song was at [at] (elapsedRealtime); while [playing] it has moved on since. */
         val positionMs: Long = 0,
         val at: Long = 0,
@@ -51,7 +63,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         val seq: Long = 0,
     ) {
         val current: TrackDto? get() = queue.getOrNull(index)
-        val hasNext: Boolean get() = index + 1 < queue.size || (repeat == Repeat.ALL && queue.isNotEmpty())
+        val hasNext: Boolean get() = index + 1 < queue.size || (repeat.loops && queue.isNotEmpty())
         fun positionNow(now: Long = SystemClock.elapsedRealtime()): Long {
             val p = if (playing) positionMs + ((now - at) * speed).toLong() else positionMs
             return if (durationMs > 0) p.coerceIn(0, durationMs) else p.coerceAtLeast(0)
@@ -145,7 +157,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         if (s.queue.isEmpty()) return
         val n = when {
             s.index + 1 < s.queue.size -> s.index + 1
-            s.repeat == Repeat.ALL -> 0
+            s.repeat.loops -> { roundAgain(); 0 }
             else -> return
         }
         skipTo(n)
@@ -155,14 +167,14 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
     fun previous() {
         val s = _state.value
         if (s.queue.isEmpty()) return
-        if (s.positionNow() > RESTART_AFTER_MS || (s.index == 0 && s.repeat != Repeat.ALL)) { seekTo(0); return }
+        if (s.positionNow() > RESTART_AFTER_MS || (s.index == 0 && !s.repeat.loops)) { seekTo(0); return }
         skipTo(if (s.index > 0) s.index - 1 else s.queue.lastIndex)
     }
 
     /** Whether previous goes to another song, rather than back to the start of this one. */
     fun previousChangesSong(): Boolean {
         val s = _state.value
-        return s.queue.size > 1 && s.positionNow() <= RESTART_AFTER_MS && (s.index > 0 || s.repeat == Repeat.ALL)
+        return s.queue.size > 1 && s.positionNow() <= RESTART_AFTER_MS && (s.index > 0 || s.repeat.loops)
     }
 
     fun toggle() { if (_state.value.playing) pause() else resume() }
@@ -196,12 +208,32 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         set { it.copy(positionMs = target, at = now()) }
     }
 
-    fun setRepeat(r: Repeat) {
-        set { it.copy(repeat = r) }
+    /** Picks a repeat mode; [times] sets how many more times [Repeat.TIMES] plays this song. */
+    fun setRepeat(r: Repeat, times: Int? = null) {
+        set { it.copy(repeat = r, repeatTimes = (times ?: it.repeatTimes).coerceIn(1, MAX_REPEATS)) }
         chainNext()
+        save()
     }
 
-    fun cycleRepeat() = setRepeat(when (_state.value.repeat) { Repeat.OFF -> Repeat.ALL; Repeat.ALL -> Repeat.ONE; Repeat.ONE -> Repeat.OFF })
+    /** The count for [Repeat.TIMES], changed from its menu without picking it. */
+    fun setRepeatTimes(times: Int) {
+        set { it.copy(repeatTimes = times.coerceIn(1, MAX_REPEATS)) }
+        save()
+    }
+
+    /** The next mode along, in Namida's order. */
+    fun cycleRepeat() = setRepeat(Repeat.entries[(_state.value.repeat.ordinal + 1) % Repeat.entries.size])
+
+    /**
+     * Round the queue again. Shuffling each round, the first song stays where it is (it is the
+     * one already shown next, and may already be sounding); the rest are dealt anew.
+     */
+    private fun roundAgain() {
+        val s = _state.value
+        if (s.repeat != Repeat.ALL_SHUFFLE || s.queue.size < 3) return
+        val q = listOf(s.queue[0]) + s.queue.drop(1).shuffled()
+        set { it.copy(queue = q) }
+    }
 
     /** Shuffles what comes after the song playing; off again, the queue goes back to its order, from this song. */
     fun setShuffle(on: Boolean) {
@@ -312,7 +344,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         dropFocus()
         unregisterNoisy()
         unshuffled = emptyList()
-        set { State(repeat = it.repeat, speed = it.speed, pitch = it.pitch, volume = it.volume, seq = it.seq) }
+        set { State(repeat = it.repeat, repeatTimes = it.repeatTimes, speed = it.speed, pitch = it.pitch, volume = it.volume, seq = it.seq) }
         prefs.edit().remove(K_IDS).remove(K_INDEX).remove(K_POS).apply()
     }
 
@@ -334,6 +366,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
                 queue = q, index = i, playing = false,
                 shuffle = prefs.getBoolean(K_SHUFFLE, false),
                 repeat = runCatching { Repeat.valueOf(prefs.getString(K_REPEAT, "OFF")!!) }.getOrDefault(Repeat.OFF),
+                repeatTimes = prefs.getInt(K_REPEAT_TIMES, 1).coerceIn(1, MAX_REPEATS),
                 positionMs = prefs.getLong(K_POS, 0).coerceIn(0, q[i].durationMs.coerceAtLeast(0)),
                 durationMs = q[i].durationMs,
             )
@@ -443,17 +476,25 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
      */
     private fun completed() {
         val s = _state.value
-        if (s.repeat == Repeat.ONE) {
+        if (s.repeat.holds) {
             runCatching { mp?.seekTo(0); mp?.start() }
             applyParams()
-            set { it.copy(positionMs = 0, at = now(), playing = true) }
+            // Counting down: the last of the times, it goes on as it would with repeat off.
+            set {
+                if (it.repeat != Repeat.TIMES) it.copy(positionMs = 0, at = now(), playing = true)
+                else if (it.repeatTimes > 1) it.copy(repeatTimes = it.repeatTimes - 1, positionMs = 0, at = now(), playing = true)
+                else it.copy(repeat = Repeat.OFF, repeatTimes = 1, positionMs = 0, at = now(), playing = true)
+            }
+            chainNext()
+            save()
             return
         }
         val n = when {
             s.index + 1 < s.queue.size -> s.index + 1
-            s.repeat == Repeat.ALL -> 0
+            s.repeat.loops -> 0
             else -> -1
         }
+        if (n == 0 && s.index == s.queue.lastIndex) roundAgain()
         if (n < 0) {
             wantPlay = false
             set { it.copy(playing = false, positionMs = 0, at = now()) }
@@ -489,9 +530,9 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         if (!prepared) return
         val s = _state.value
         val n = when {
-            s.repeat == Repeat.ONE -> -1
+            s.repeat.holds -> -1
             s.index + 1 < s.queue.size -> s.index + 1
-            s.repeat == Repeat.ALL && s.queue.size > 1 -> 0
+            s.repeat.loops && s.queue.size > 1 -> 0
             else -> -1
         }
         val want = s.queue.getOrNull(n)
@@ -589,6 +630,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
             .putLong(K_POS, s.positionNow())
             .putBoolean(K_SHUFFLE, s.shuffle)
             .putString(K_REPEAT, s.repeat.name)
+            .putInt(K_REPEAT_TIMES, s.repeatTimes)
             .apply()
     }
 
@@ -610,6 +652,8 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         const val K_POS = "pos"
         const val K_SHUFFLE = "shuffle"
         const val K_REPEAT = "repeat"
+        const val K_REPEAT_TIMES = "repeatTimes"
+        const val MAX_REPEATS = 99
         const val K_SPEED = "speed"
         const val K_PITCH = "pitch"
         const val K_VOLUME = "volume"

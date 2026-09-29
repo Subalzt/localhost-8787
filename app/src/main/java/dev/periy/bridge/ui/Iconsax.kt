@@ -110,6 +110,10 @@ object Iconsax {
     val Lyrics: ImageVector = icon("Lyrics", S("M2 9c0-5 2-7 7-7h5M22 10v5c0 5-2 7-7 7H9c-5 0-7-2-7-7v-2.02M18 10c-3 0-4-1-4-4V2l8 8", true, true))
     /** Lyrics, switched off. */
     val LyricsOff: ImageVector = icon("LyricsOff", S("M2 8.5h13.24M6 16.5h1.29M11 16.5h3.5", true, true), S("M7.98 20.5h9.58c3.56 0 4.44-.88 4.44-4.39V6.89M2 14.969v1.14c0 2.34.39 3.51 1.71 4.03M19.99 3.75c-.62-.18-1.42-.25-2.43-.25H6.44C2.89 3.5 2 4.38 2 7.89v3.05M22 2 2 22", true, true))
+    /** A ring broken in three: repeat a number of times, with the number inside it. */
+    val Status: ImageVector = icon("Status", S("M2.45 14.969c1.07 3.44 3.95 6.09 7.53 6.82M2.05 10.98A9.996 9.996 0 0 1 12 2c5.18 0 9.44 3.94 9.95 8.98M14.01 21.8c3.57-.73 6.44-3.35 7.53-6.78", true, true))
+    /** One fewer. */
+    val MinusCircle: ImageVector = icon("MinusCircle", S("M14.99 12H16M8 12h4M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85", true, true))
     /** Home. */
     val Home2: ImageVector = icon("Home2", S("M22 10.498c0-1.21-.81-2.76-1.8-3.45l-6.18-4.33c-1.4-.98-3.65-.93-5 .12l-5.39 4.2c-.9.7-1.63 2.19-1.63 3.32v7.41c0 2.32 1.89 4.22 4.21 4.22h11.58c2.32 0 4.21-1.9 4.21-4.21v-3.1M12 17.988v-3", true, true))
     /** Devices: a phone and a laptop. */

@@ -59,6 +59,8 @@ class NamidaColors(
     /** The song's colour as Namida lights things with it: its hue at 40% lightness, a little see-through. */
     val main: Color,
     val bg: Color,
+    /** The app bar, over the status bar too: lighter than the page, so a line runs along its foot. */
+    val appBar: Color,
     /** Tiles and cards (Namida's card theme), and its plainer card colour. */
     val card: Color,
     val cardColor: Color,
@@ -94,6 +96,7 @@ fun namidaColors(tint: Color, dark: Boolean): NamidaColors {
         tint = tint,
         main = main,
         bg = if (dark) tone(0.18f, 0.065f) else base.copy(alpha = 60 / 255f).compositeOver(Color.White),
+        appBar = if (dark) tone(0.18f, 0.1f) else base.copy(alpha = 25 / 255f).compositeOver(Color.White),
         card = base.copy(alpha = 36 / 255f).compositeOver(cardGround),
         cardColor = base.copy(alpha = 28 / 255f).compositeOver(cardGround),
         bar = if (dark) tone(0.18f, 0.115f) else tone(0.3f, 0.93f),

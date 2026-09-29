@@ -16,19 +16,13 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.runtime.key
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -283,7 +277,35 @@ fun MusicScreen(
                 ) { Cover(heroAlbum.coverId, heroAlbum.title, Modifier.fillMaxSize(), radius = 0.dp, big = true) }
             }
 
-            AppBar(shelf, statusTop)
+            // The app bar, with the page's count and what can be done to all of it on the left.
+            val barPage by remember { derivedStateOf { pagePos.roundToInt().coerceIn(0, 2) } }
+            AppBar(shelf, statusTop, barPage) { page ->
+                when (page) {
+                    0 -> {
+                        val songs = remember(shelf.tracks, shelf.query) { shelf.songs() }
+                        BarIcon(Iconsax.Shuffle, "Shuffle every song") { acts.shuffle(songs) }
+                        Spacer(Modifier.width(10.dp))
+                        BarIcon(Iconsax.Play, "Play every song") { acts.play(songs, 0) }
+                        Spacer(Modifier.width(10.dp))
+                        Text(count(songs.size, "Track"), style = Nm.medium, maxLines = 1)
+                    }
+                    1 -> {
+                        val albums = remember(shelf.albums, shelf.query) { shelf.albumMatches() }
+                        val quiet = Nm.c.onSecondaryContainer.copy(alpha = 0.8f)
+                        Icon(Iconsax.Arrange, null, tint = quiet, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(count(albums.size, "Album"), style = Nm.medium.copy(color = quiet), maxLines = 1)
+                    }
+                    else -> {
+                        val songs = remember(shelf.tracks, shelf.query, likedOrder) { shelf.liked(likedOrder) }
+                        BarIcon(Iconsax.Shuffle, "Shuffle the liked songs") { acts.shuffle(songs) }
+                        Spacer(Modifier.width(10.dp))
+                        BarIcon(Iconsax.Play, "Play the liked songs") { acts.play(songs, 0) }
+                        Spacer(Modifier.width(10.dp))
+                        Text(count(songs.size, "Liked song"), style = Nm.medium, maxLines = 1)
+                    }
+                }
+            }
 
             // ---- Namida's bottom bar: Tracks, Albums and Liked; it sinks away as the player opens
             NavBar(
@@ -334,17 +356,8 @@ private fun TracksPage(
     val songs = remember(shelf.tracks, shelf.query) { shelf.songs() }
     val playingId = now.current?.id
     val list = shelf.trackList
-    val nearTopPx = with(LocalDensity.current) { CountBarHeight.toPx() }
-    val hider = remember(list) { barHider({ list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset <= nearTopPx }) { shelf.trackBar = it } }
     Column(Modifier.fillMaxSize().padding(top = top)) {
-        HidingBar(shelf.trackBar) {
-            BarIcon(Iconsax.Shuffle, "Shuffle every song") { acts.shuffle(songs) }
-            Spacer(Modifier.width(10.dp))
-            BarIcon(Iconsax.Play, "Play every song") { acts.play(songs, 0) }
-            Spacer(Modifier.width(10.dp))
-            Text(count(songs.size, "Track"), style = Nm.medium, maxLines = 1)
-        }
-        LazyColumn(Modifier.weight(1f).nestedScroll(hider), state = list, contentPadding = PaddingValues(bottom = bottom)) {
+        LazyColumn(Modifier.weight(1f), state = list, contentPadding = PaddingValues(top = 6.dp, bottom = bottom)) {
             noteFor(shelf, songs.isEmpty())?.let { n -> item(key = "note") { LibraryNote(n, requestMusic) } }
             itemsIndexed(songs, key = { _, t -> t.id }) { i, t ->
                 TrackTile(
@@ -374,17 +387,8 @@ private fun LikedPage(
     val songs = remember(shelf.tracks, shelf.query, order) { shelf.liked(order) }
     val playingId = now.current?.id
     val list = shelf.likedList
-    val nearTopPx = with(LocalDensity.current) { CountBarHeight.toPx() }
-    val hider = remember(list) { barHider({ list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset <= nearTopPx }) { shelf.likedBar = it } }
     Column(Modifier.fillMaxSize().padding(top = top)) {
-        HidingBar(shelf.likedBar) {
-            BarIcon(Iconsax.Shuffle, "Shuffle the liked songs") { acts.shuffle(songs) }
-            Spacer(Modifier.width(10.dp))
-            BarIcon(Iconsax.Play, "Play the liked songs") { acts.play(songs, 0) }
-            Spacer(Modifier.width(10.dp))
-            Text(count(songs.size, "Liked song"), style = Nm.medium, maxLines = 1)
-        }
-        LazyColumn(Modifier.weight(1f).nestedScroll(hider), state = list, contentPadding = PaddingValues(bottom = bottom)) {
+        LazyColumn(Modifier.weight(1f), state = list, contentPadding = PaddingValues(top = 6.dp, bottom = bottom)) {
             val note = noteFor(shelf, songs.isEmpty() && shelf.query.isNotBlank())
                 ?: if (songs.isEmpty()) "No liked songs yet. Tap the heart on a song to keep it here." else null
             note?.let { n -> item(key = "note") { LibraryNote(n, requestMusic) } }
@@ -395,28 +399,6 @@ private fun LikedPage(
                 ) { acts.play(songs, i) }
             }
         }
-    }
-}
-
-/**
- * Namida's count bar over a page, which goes while you scroll down and comes back as you scroll
- * up (or reach the top), folding away over 400 ms.
- */
-@Composable
-private fun HidingBar(shown: Boolean, content: @Composable RowScope.() -> Unit) {
-    val h by animateDpAsState(if (shown) CountBarHeight else 0.dp, tween(400, easing = FastOutSlowInEasing), label = "bar")
-    val a by animateFloatAsState(if (shown) 1f else 0f, tween(400), label = "barAlpha")
-    Box(Modifier.fillMaxWidth().height(h).clipToBounds().graphicsLayer { alpha = a }, contentAlignment = Alignment.BottomStart) {
-        CountBar(Modifier.requiredHeight(CountBarHeight), content = content)
-    }
-}
-
-/** Shows the count bar on a scroll up and hides it on a scroll down, unless the list is at its top. */
-private fun barHider(nearTop: () -> Boolean, set: (Boolean) -> Unit) = object : NestedScrollConnection {
-    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-        if (consumed.y < -0.5f) set(nearTop())
-        else if (consumed.y > 0.5f || nearTop()) set(true)
-        return Offset.Zero
     }
 }
 
@@ -431,19 +413,11 @@ private fun AlbumsPage(
 ) {
     val albums = remember(shelf.albums, shelf.query) { shelf.albumMatches() }
     val playingKey = now.current?.let { shelf.albumOf[it.id]?.key }
-    val quiet = Nm.c.onSecondaryContainer.copy(alpha = 0.8f)
     val grid = shelf.albumGrid
-    val nearTopPx = with(LocalDensity.current) { CountBarHeight.toPx() }
-    val hider = remember(grid) { barHider({ grid.firstVisibleItemIndex == 0 && grid.firstVisibleItemScrollOffset <= nearTopPx }) { shelf.albumBar = it } }
     Column(Modifier.fillMaxSize().padding(top = top)) {
-        HidingBar(shelf.albumBar) {
-            Icon(Iconsax.Arrange, null, tint = quiet, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(count(albums.size, "Album"), style = Nm.medium.copy(color = quiet), maxLines = 1)
-        }
         LazyVerticalGrid(
-            GridCells.Fixed(3), Modifier.weight(1f).nestedScroll(hider), state = grid,
-            contentPadding = PaddingValues(start = 4.dp, end = 4.dp, bottom = bottom),
+            GridCells.Fixed(3), Modifier.weight(1f), state = grid,
+            contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 8.dp, bottom = bottom),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             noteFor(shelf, albums.isEmpty())?.let { n -> item(key = "note", span = { GridItemSpan(maxLineSpan) }) { LibraryNote(n, requestMusic) } }
@@ -888,11 +862,13 @@ private fun SortButton(sort: Int, onSort: (Int) -> Unit) {
 }
 
 /**
- * Namida's app bar: 56 high on the page colour; back on the left inside a page, the search on
- * the right. With the search open, Namida's search box across it, filtering as you type.
+ * Namida's app bar: 56 high, a shade lighter than the page, so a line of light to dark runs
+ * along its foot. On the left, the page's count and what can be done to all of it ([lead]);
+ * the search on the right. Opening the search (or an album) slides the count out to the left
+ * as the search box grows across, and back when it closes; inside an album, back on the left.
  */
 @Composable
-private fun AppBar(shelf: MusicShelf, statusTop: Dp) {
+private fun AppBar(shelf: MusicShelf, statusTop: Dp, page: Int, lead: @Composable RowScope.(Int) -> Unit) {
     val album = shelf.open
     val searching = if (album != null) shelf.albumSearching else shelf.searching
     val nc = Nm.c
@@ -902,7 +878,17 @@ private fun AppBar(shelf: MusicShelf, statusTop: Dp) {
     val back by animateFloatAsState(if (inAlbum || searching) 1f else 0f, tween(300), label = "back")
     val value = if (inAlbum) shelf.albumQuery else shelf.query
     val set: (String) -> Unit = { if (inAlbum) shelf.albumQuery = it else shelf.query = it }
-    Box(Modifier.fillMaxWidth().background(nc.bg).padding(top = statusTop).height(AppBarHeight)) {
+    val away by animateFloatAsState(if (inAlbum || searching) 1f else 0f, tween(400, easing = PageEase), label = "lead")
+    Box(Modifier.fillMaxWidth().background(nc.appBar).padding(top = statusTop).height(AppBarHeight)) {
+        if (away < 0.999f) androidx.compose.animation.Crossfade(
+            page, label = "count",
+            animationSpec = tween(220),
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = 18.dp, end = AppBarHeight + 8.dp)
+                .graphicsLayer {
+                    translationX = -away * (size.width * 0.6f + 18.dp.toPx())
+                    alpha = (1f - away * 1.4f).coerceIn(0f, 1f)
+                },
+        ) { pg -> Row(verticalAlignment = Alignment.CenterVertically) { lead(pg) } }
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(AppBarHeight).graphicsLayer { alpha = back }) {
                 if (back > 0f) AppBarIcon(Iconsax.Back, if (searching) "Close the search" else "Back") { shelf.back() }
