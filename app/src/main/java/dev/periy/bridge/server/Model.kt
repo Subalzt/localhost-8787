@@ -41,10 +41,6 @@ data class StateDto(
     /** The style (always "theatre" now) and the colour; shared like the theme. */
     val style: String = "theatre",
     val accent: String = "auto",
-    /** Namida's look over the whole page, not only its music. */
-    val namida: Boolean = false,
-    /** The colour the Material look is built from (the wallpaper's, for Automatic). */
-    val seed: String = "#6750A4",
     /** Clipboard follows between phone and laptop helper without pressing Send. */
     val clipSync: Boolean = true,
     /** What the shared clipboard holds: text, a picture, a file, or nothing. */
@@ -73,7 +69,7 @@ class ServerConfig(
     val setTheme: (String) -> Unit,
     /** The style and the colour, shared like the theme. */
     val look: () -> dev.periy.bridge.Look = { dev.periy.bridge.Look() },
-    val setLook: (String?, String?, Boolean?) -> Unit = { _, _, _ -> },
+    val setLook: (String?, String?) -> Unit = { _, _ -> },
     /** "direct" or "hotspot", and the hotspot's name and password; see Prefs.laptopLink. */
     val laptopLink: () -> String = { "direct" },
     val hotspot: () -> Pair<String, String> = { "" to "" },
@@ -132,7 +128,7 @@ data class PairStatusDto(val state: String)
 @Serializable data class ThemeRequest(val theme: String = "system")
 
 /** From a page's Settings: the style, the colour, or both, to use everywhere. */
-@Serializable data class LookRequest(val style: String? = null, val accent: String? = null, val namida: Boolean? = null)
+@Serializable data class LookRequest(val style: String? = null, val accent: String? = null)
 
 
 /** The phone's notifications, and whether Localhost 8787 may see them at all. */

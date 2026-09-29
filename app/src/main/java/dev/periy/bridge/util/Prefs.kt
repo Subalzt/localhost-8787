@@ -50,17 +50,12 @@ class Prefs(ctx: Context) {
         set(v) = sp.edit { putString(K_THEME, v) }
 
     /**
-     * The style, shared with every page: "material" or "theatre" (older names are mapped by
+     * The style, shared with every page: "theatre", the only one (older names are mapped by
      * styleName in BridgeApp).
      */
     var style: String
-        get() = sp.getString(K_STYLE, null) ?: "material"
+        get() = sp.getString(K_STYLE, null) ?: "theatre"
         set(v) = sp.edit { putString(K_STYLE, v) }
-
-    /** Whether this install has been moved to Material once, when it became the default. */
-    var materialDefaulted: Boolean
-        get() = sp.getBoolean(K_MATERIAL_DEFAULTED, false)
-        set(v) = sp.edit { putBoolean(K_MATERIAL_DEFAULTED, v) }
 
     /** The colour, shared with every page: "auto" (the style's own) or a system colour's name. */
     var accent: String
@@ -112,11 +107,6 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean(K_COVER_LOOKUP, true)
         set(v) = sp.edit { putBoolean(K_COVER_LOOKUP, v) }
 
-    /** Namida's look over the whole app and every page, not only Music (shared, like the colour). */
-    var namidaUi: Boolean
-        get() = sp.getBoolean(K_NAMIDA_UI, false)
-        set(v) = sp.edit { putBoolean(K_NAMIDA_UI, v) }
-
     /** The phone's player shows the song's lyrics over its cover (Namida's lyrics button). */
     var lyricsShown: Boolean
         get() = sp.getBoolean(K_LYRICS_SHOWN, true)
@@ -160,7 +150,5 @@ class Prefs(ctx: Context) {
         const val K_MONITOR = "show_monitor"
         const val K_COVER_LOOKUP = "cover_lookup"
         const val K_LYRICS_SHOWN = "lyrics_shown"
-        const val K_NAMIDA_UI = "namida_ui"
-        const val K_MATERIAL_DEFAULTED = "material_defaulted"
     }
 }

@@ -558,33 +558,12 @@ else needs just a browser.
 
 ### 16. The look
 
-Two styles, the same on the phone and the laptop, picked under *Settings → Appearance* and
-shared by the phone and every open page:
-
-- **Material** (the default) is Android's own design, with Material 3 Expressive's touches. Its
-  colours come from your wallpaper (Android 12 and later), or from the colour you pick, and every
-  open page gets the same colours from the phone.
-  - **On the phone:** a top bar and a docked navigation bar along the bottom.
-  - **On the laptop:** a navigation drawer down the side (a bar along the bottom in a narrow
-    window).
-  - **Home:** your status sits in a card of the main colour and sending in one of the second.
-  - **Settings:** rows are tiles with the page showing between them, and choices are joined
-    buttons where the picked one fills with colour and goes round.
-  - **Buttons:** their corners square off when pressed.
-  - **Icons:** they sit in scalloped cookie and four-leaf clover shapes.
-- **Theatre** is after the Apple TV app: a night-blue banner, large titles, capsule buttons, and on
-  the phone the tabs float along the bottom.
-
-**Swipe left or right** to move between tabs. **Colour**: Automatic (the wallpaper's in Material,
-black and white in Theatre) or red, orange, yellow, green, mint, blue or purple. **Light, dark or
-automatic** sits underneath. Music and its player keep their own look in either style.
-
-**Namida style** (the switch under them, shared the same way) gives everything outside Music a
-light touch of [Namida](https://github.com/namidaco/namida), in the colour you picked (Namida's
-own lilac for Automatic): its tinted grounds and cards, rounded 20 with a soft shadow; its faint
-washed buttons, small switch and pill indicators; row icons on round discs; its font, Lexend
-Deca; and its Iconsax icons. Layouts and text colours stay as they are, and Music, which is
-Namida's always, is untouched.
+After the Apple TV app, the same on the phone and the laptop: the app's own icon, a night-blue banner, large titles,
+capsule buttons, and on the phone the tabs float along the bottom within reach of a thumb. Music
+has Namida's look of its own, in the colours of the song playing.
+**Swipe left or right** to move between tabs. **Colour** (*Settings → Appearance*, shared by the
+phone and every open page): Automatic (black and white) or red, orange, yellow, green, mint, blue
+or purple. **Light, dark or automatic** sits underneath.
 
 ---
 

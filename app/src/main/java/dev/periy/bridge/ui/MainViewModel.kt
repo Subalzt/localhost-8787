@@ -229,10 +229,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setAccent(accent: String) = getApplication<Application>().container.setLook(accent = accent)
 
-    fun setNamida(on: Boolean) = getApplication<Application>().container.setLook(namida = on)
-
-    fun setStyle(style: String) = getApplication<Application>().container.setLook(style = style)
-
     // ------------------------------------------------------------------ direct link
 
     /** The phone's own offline network, for the laptop or another phone. */
