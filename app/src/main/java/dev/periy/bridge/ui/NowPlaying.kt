@@ -575,7 +575,9 @@ fun NowPlaying(
     // and when the player folds away; Back closes them first.
     var lyricsFull by remember { mutableStateOf(false) }
     val playerOpen by remember { derivedStateOf { motion.p > 0.9f } }
-    if (lyricsFull && (!lyricsShowing || !playerOpen)) lyricsFull = false
+    // Kept open from song to song (the next one's lyrics come in under it); only turning the
+    // lyrics off, or the player folding away, closes it.
+    if (lyricsFull && (!lyricsOn || !playerOpen)) lyricsFull = false
     androidx.activity.compose.BackHandler(enabled = lyricsFull) { lyricsFull = false }
 
     CompositionLocalProvider(LocalPalette provides palette, LocalNamida provides nc) {
@@ -792,16 +794,14 @@ fun NowPlaying(
             )
         }
         // ---- Namida's full-page lyrics, over the whole player
-        val fullLyrics = lyrics
         androidx.compose.animation.AnimatedVisibility(
-            lyricsFull && fullLyrics != null,
+            lyricsFull,
             enter = fadeIn(tween(280)) + androidx.compose.animation.scaleIn(tween(360, easing = FastOutSlowInEasing), initialScale = 0.96f),
             exit = fadeOut(tween(220)) + androidx.compose.animation.scaleOut(tween(220), targetScale = 0.97f),
         ) {
-            val shownFull = remember { fullLyrics }
-            (fullLyrics ?: shownFull)?.let { fl ->
+            run {
                 FullLyrics(
-                    cur, fl, state, tick, tint, env, lyricsOn, statusTop, navBottom,
+                    cur, lyrics, state, tick, tint, env, lyricsOn, statusTop, navBottom,
                     onClose = { lyricsFull = false },
                     onLyricsOff = { lyricsFull = false; lyricsOn = false; container.prefs.lyricsShown = false },
                     onSeek = { ms -> player.seekTo(ms) },
@@ -825,7 +825,7 @@ fun NowPlaying(
 @Composable
 private fun FullLyrics(
     cur: TrackDto,
-    lyrics: dev.periy.bridge.server.ShownLyrics,
+    lyrics: dev.periy.bridge.server.ShownLyrics?,
     state: PhonePlayer.State,
     tick: State<Long>,
     tint: Color,
@@ -860,10 +860,24 @@ private fun FullLyrics(
                     contentAlignment = Alignment.Center,
                 ) { LyricsIcon(lyricsOn, lyrics, nc.icon) }
             }
-            LyricsOverCover(
-                lyrics, state, tick, tint, live = true, onSeek = onSeek, full = true,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
+            val shown = lyrics?.takeIf { it.timed || it.kind == dev.periy.bridge.server.ShownLyrics.Kind.PLAIN }
+            if (shown != null) key(cur.id) {
+                LyricsOverCover(
+                    shown, state, tick, tint, live = true, onSeek = onSeek, full = true,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+            } else Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 28.dp), contentAlignment = Alignment.CenterStart) {
+                // The next song's lyrics on their way, or none to be had: said where the lines go.
+                Text(
+                    when {
+                        lyrics == null -> "Looking for the lyrics\u2026"
+                        lyrics.kind == dev.periy.bridge.server.ShownLyrics.Kind.INSTRUMENTAL -> "Instrumental"
+                        lyrics.offline -> "Lyrics come when the phone is online"
+                        else -> "No lyrics for this song"
+                    },
+                    style = Nm.large.copy(fontSize = 22.nsp, lineHeight = 28.nsp, color = nc.medium),
+                )
+            }
             Box(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 WaveSeek(
                     env = env, state = state, tint = tint, tick = tick, active = { true },
