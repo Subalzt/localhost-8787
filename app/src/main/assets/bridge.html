@@ -1396,16 +1396,17 @@
   .rep-ic i svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; }
   #np-repeat .rep-ic { width: 20px; height: 20px; color: inherit; }
   #np-repeat .rep-ic > svg, #np-repeat .rep-ic i svg { width: 100%; height: 100%; }
-  /* Its menu, over the bottom row: the five ways to repeat, the one on lit in the song's colour. */
-  .nm-rep { width: 252px; min-width: 0; padding: 6px; border-radius: 20px; background: var(--nm-dialog); transform-origin: 80% 100%;
-    border: 1px solid color-mix(in srgb, var(--nm-on-surface) 10%, transparent); }
-  .nm-rep .rr { display: flex; align-items: center; gap: 10px; margin: 2px 0; padding: 9px 8px; border-radius: 12px; cursor: pointer;
+  /* Its menu (Namida's popup, over the row): the five ways to repeat, the one on lit in the song's colour. */
+  .nml-pop.nm-rep { width: 264px; max-width: calc(100vw - 20px); }
+  .nm-rep .lb { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nm-rep .rr { display: flex; align-items: center; gap: 8px; margin: 2px 4px; padding: 8px; border-radius: 12px; cursor: pointer;
     font: 600 13.5px "Lexend Deca", system-ui, sans-serif; color: var(--nm-medium); }
   .nm-rep .rr:hover { background: color-mix(in srgb, var(--nm-on-surface) 6%, transparent); }
-  .nm-rep .rr.on { background: color-mix(in srgb, var(--nm-tint40) 50%, transparent); }
+  .nm-rep .rr.on { background: color-mix(in srgb, var(--nm-menu-edge) 25%, transparent); }
+  .nm-rep .rr .rep-ic { flex: 0 0 22px; width: 22px; height: 22px; color: var(--nm-menu-icon); }
   .nm-rep .lb { flex: 1 1 auto; min-width: 0; }
-  .nm-rep .cnt { width: 32px; height: 32px; flex: 0 0 auto; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; color: var(--nm-icon); }
-  .nm-rep .cnt:hover:not(:disabled) { background: color-mix(in srgb, var(--nm-on-surface) 8%, transparent); }
+  .nm-rep .cnt { flex: 0 0 auto; display: grid; place-items: center; padding: 0 4px; border: 0; background: none; cursor: pointer; color: var(--nm-menu-icon); transition: opacity .2s; }
+  .nm-rep .cnt:active:not(:disabled) { opacity: .5; }
   .nm-rep .cnt:disabled { opacity: .3; cursor: default; }
   .nm-rep .cnt svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; }
   .np-wave { pointer-events: auto; touch-action: none; cursor: pointer; }
@@ -1413,36 +1414,60 @@
   .np-seek { display: block; text-align: center; font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; pointer-events: none; }
   .np-times { display: flex; justify-content: space-between; font-size: 13px; font-weight: 550; color: var(--nm-small, color-mix(in srgb, var(--txt) 78%, transparent));
     font-variant-numeric: tabular-nums; pointer-events: none; }
-  /* Namida's sound controls: a dialog, Configure, rounded 24 on its dialog colour, each control an
-     icon, its name and its percentage over a Material slider (a thick track, a thin upright thumb). */
-  .np-sheet { position: absolute; inset: 0; pointer-events: auto; z-index: 3; }
-  .np-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .25s; }
-  .np-card { position: absolute; left: 50%; top: 50%; width: min(420px, calc(100% - 76px)); padding: 18px 20px 10px; border-radius: 24px;
-    background: var(--nm-dialog, var(--surface)); box-shadow: var(--float-shadow); transform: translate(-50%, -50%) scale(.92); opacity: 0;
-    transition: transform .32s cubic-bezier(.05,.7,.1,1), opacity .2s; }
-  .np-sheet.in .np-scrim { opacity: 1; } .np-sheet.in .np-card { transform: translate(-50%, -50%); opacity: 1; }
-  .np-card-title { display: block; margin-bottom: 10px; font-size: 20px; font-weight: 700; color: var(--nm-large, var(--txt)); }
-  .np-slider { display: block; padding: 6px 0; }
-  .np-sl-head { display: flex; align-items: center; gap: 12px; }
-  .np-sl-head i { display: grid; place-items: center; color: var(--nm-icon, var(--txt)); }
-  .np-sl-head svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-  .np-sl-head b { font-size: 17px; font-weight: 700; color: var(--nm-large, var(--txt)); }
-  .np-sl-head em { margin-left: -4px; font-style: normal; font-size: 15px; font-weight: 600; color: var(--nm-medium, var(--sub)); font-variant-numeric: tabular-nums; }
-  .np-slider input { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 40px; margin: 0; background: none; cursor: pointer; }
+  /* Namida's Configure dialog, presented as Namida presents dialogs: what is behind blurred 5 under
+     black at 45%, the dialog at 0.96 of its size on its dialog colour, rounded 24, fading over 300 ms.
+     Its title centred on a band of the card colour; each control a line (the icon in the secondary
+     colour, its name, its value, a restore) over Namida's Material slider (a track 6 thick lit up to
+     an upright thumb 5 by 24, a gap of 4 either side of it) with a step either side; reset all and
+     Done along the foot. */
+  .np-sheet { position: absolute; inset: 0; pointer-events: auto; z-index: 3; font-family: "Lexend Deca", system-ui, sans-serif; opacity: 0; transition: opacity .3s cubic-bezier(0,0,.2,1); }
+  .np-sheet.in { opacity: 1; }
+  .np-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.45); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+  .np-card { position: absolute; left: 50%; top: 50%; width: min(428px, calc(100% - 76px)); max-height: calc(100% - 64px); overflow: auto; border-radius: 24px;
+    background: var(--nm-dialog, var(--surface)); box-shadow: 0 6px 24px rgba(0,0,0,.18); transform: translate(-50%, -50%) scale(.96); scrollbar-width: none; }
+  .np-card-title { display: block; padding: 16px; text-align: center; font-size: 13.5px; font-weight: 600; color: var(--nm-medium, var(--txt));
+    background: color-mix(in srgb, var(--nm-primary) 2%, var(--nm-card)); }
+  .np-card-body { padding: 12px 0; }
+  .np-sl + .np-sl { margin-top: 6px; }
+  .np-sl:last-child { margin-bottom: 6px; }
+  .np-sl-head { display: flex; align-items: center; padding: 2px 12px; }
+  .np-sl-head i { display: grid; place-items: center; padding: 0 6px; margin-right: 6px; color: var(--nm-secondary, var(--txt)); }
+  .np-sl-head i svg { width: 24px; height: 24px; }
+  .np-sl-head b { font-size: 14.4px; font-weight: 700; color: var(--nm-large, var(--txt)); white-space: nowrap; }
+  .np-sl-head em { margin-left: 8px; font-style: normal; font-size: 12.15px; font-weight: 600; color: var(--nm-medium, var(--sub)); font-variant-numeric: tabular-nums; }
+  .np-restore { width: 40px; height: 40px; margin-left: 6px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; color: var(--nm-icon); }
+  .np-restore:hover { background: color-mix(in srgb, var(--nm-icon) 8%, transparent); }
+  .np-restore svg, .np-reset svg { width: 20px; height: 20px; }
+  .np-sheet svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .np-sl-row { display: flex; align-items: center; padding: 0 12px; }
+  /* Namida's icon button: the icon alone, dimmed to half while pressed. */
+  .np-step { display: grid; place-items: center; padding: 4px; border: 0; background: none; cursor: pointer; color: var(--nm-secondary, var(--txt)); transition: opacity .2s; -webkit-tap-highlight-color: transparent; }
+  .np-step:active { opacity: .5; }
+  .np-step svg { width: 20px; height: 20px; }
+  .np-slider { position: relative; flex: 1 1 auto; min-width: 0; }
+  .np-slider input { -webkit-appearance: none; appearance: none; display: block; width: calc(100% - 20px); height: 44px; margin: 0 10px; background: none; cursor: grab; touch-action: pan-y; }
+  .np-slider input:active { cursor: grabbing; }
+  .np-slider input:focus-visible { outline: 2px solid var(--nm-primary); outline-offset: 2px; border-radius: 8px; }
   .np-slider input::-webkit-slider-runnable-track { height: 6px; border-radius: 3px;
-    background: linear-gradient(to right, var(--nm-primary-85, var(--txt)) calc(var(--p, 50%) - 6px), transparent calc(var(--p, 50%) - 6px),
-      transparent calc(var(--p, 50%) + 6px), var(--nm-secondary-20, var(--surface-3)) calc(var(--p, 50%) + 6px)); }
+    background: linear-gradient(to right, var(--nm-primary-85, var(--txt)) calc(var(--p, 50%) - 6.5px), transparent calc(var(--p, 50%) - 6.5px),
+      transparent calc(var(--p, 50%) + 6.5px), var(--nm-secondary-20, var(--surface-3)) calc(var(--p, 50%) + 6.5px)); }
   .np-slider input::-moz-range-track { height: 6px; border-radius: 3px; background: var(--nm-secondary-20, var(--surface-3)); }
-  .np-slider input::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--nm-primary-85, var(--txt)); }
-  .np-slider input::-webkit-slider-thumb { -webkit-appearance: none; width: 5px; height: 24px; margin-top: -9px; border-radius: 3px; background: var(--nm-primary-85, var(--txt)); }
-  .np-slider input::-moz-range-thumb { width: 5px; height: 24px; border: 0; border-radius: 3px; background: var(--nm-primary-85, var(--txt)); }
-  .np-slider input:disabled { opacity: .45; cursor: default; }
-  .np-note { margin: -4px 0 4px; font-size: 12.5px; color: var(--nm-small, var(--sub)); }
-  .np-card-actions { display: flex; justify-content: flex-end; align-items: center; gap: 4px; padding-top: 6px; }
-  .np-card-actions .np-reset { width: 44px; height: 44px; flex: 0 0 44px; }
-  .np-card-actions .np-reset svg { width: 22px; height: 22px; }
-  .np-done { min-height: 36px; padding: 8px 24px; border: 0.5px solid color-mix(in srgb, var(--nm-primary, var(--txt)) 48%, transparent); border-radius: 20px;
-    font: inherit; font-size: 15.5px; font-weight: 600; cursor: pointer; background: color-mix(in srgb, var(--nm-primary, var(--txt)) 24%, transparent); color: var(--nm-icon, var(--txt)); }
+  .np-slider input::-moz-range-progress { height: 6px; border-radius: 3px 2px 2px 3px; background: var(--nm-primary-85, var(--txt)); }
+  .np-slider input::-webkit-slider-thumb { -webkit-appearance: none; width: 5px; height: 24px; margin-top: -9px; border-radius: 2.5px; background: var(--nm-primary-85, var(--txt)); }
+  .np-slider input::-moz-range-thumb { width: 5px; height: 24px; border: 0; border-radius: 2.5px; background: var(--nm-primary-85, var(--txt)); }
+  /* While sliding, the value on a pill over the thumb (Material's). */
+  .np-bubble { position: absolute; bottom: calc(50% + 16px); left: calc(10px + (100% - 20px) * var(--f, .5)); min-width: 32px; height: 32px; padding: 0 8px; box-sizing: border-box;
+    display: grid; place-items: center; border-radius: 16px; font-size: 12.6px; font-variant-numeric: tabular-nums; pointer-events: none;
+    background: #FFFFFF; color: rgba(0,0,0,.627); transform: translateX(-50%) scale(0); transform-origin: 50% 100%; transition: transform .14s cubic-bezier(.2,0,0,1); }
+  :root.nm-dark .np-bubble { background: #232323; color: rgba(255,255,255,.824); }
+  .np-slider.drag .np-bubble { transform: translateX(-50%) scale(1); }
+  .np-card-actions { display: flex; justify-content: flex-end; align-items: center; gap: 6px; padding: 12px 16px; }
+  .np-card-actions .np-reset { padding: 0 8px; }
+  .np-card-actions .np-reset svg { width: 24px; height: 24px; }
+  /* Namida's button: a faint wash of the colour with a hairline edge in it, capsule, words alone given room. */
+  .np-done { min-height: 36px; padding: 10px 30px; border: 0.5px solid color-mix(in srgb, var(--nm-primary) 18%, transparent); border-radius: 20px;
+    font: 600 13.95px "Lexend Deca", system-ui, sans-serif; cursor: pointer; background: color-mix(in srgb, var(--nm-primary) 6%, transparent); color: var(--nm-button-fg, var(--txt)); }
+  .np-done:hover { background: color-mix(in srgb, var(--nm-primary) 12%, transparent); }
   /* Namida's queue: a sheet with corners of 32; its header washed in the song's colour ("Queue", where
      in it and the time left, round buttons, and back down); its songs as Namida's tiles; and a row
      along its foot to clear some of it, go to the song playing, and shuffle what is left. */
@@ -1881,29 +1906,42 @@
   .nml-dnav button svg { width: 22px; height: 22px; flex: 0 0 auto; }
   .nml-dnav button .tab-pill, .nml-dnav button i { display: none; }
 
-  /* Namida's popup menu: its card colour over black (white, in light), rounded 16. */
-  .nml-pop { position: fixed; z-index: 80; min-width: 210px; padding: 6px 0; border-radius: 16px; font-family: "Lexend Deca", system-ui, sans-serif;
-    background: color-mix(in srgb, var(--nm-cardc) 70%, #000000); box-shadow: 0 8px 28px var(--nm-shadow); transform-origin: top right;
-    animation: nml-pop-in .26s var(--nml-ease); }
-  :root:not(.nm-dark) .nml-pop { background: color-mix(in srgb, var(--nm-cardc) 70%, #FFFFFF); }
-  .nml-pop.up { transform-origin: bottom right; }
-  .nml-pop.out { animation: nml-pop-out .16s ease forwards; }
-  @keyframes nml-pop-in { from { opacity: 0; transform: scale(.9); } }
-  @keyframes nml-pop-out { to { opacity: 0; transform: scale(.94); } }
-  .nml-pop button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: 0; background: none; cursor: pointer; text-align: left;
-    color: var(--nm-medium); font: 600 13.5px "Lexend Deca", system-ui, sans-serif; }
-  .nml-pop button:hover { background: color-mix(in srgb, var(--nm-on-surface) 7%, transparent); }
-  .nml-pop button.on { color: var(--nm-primary); }
-  .nml-pop button svg { width: 20px; height: 20px; color: var(--nm-icon); flex: 0 0 auto; }
+  /* Namida's popup menu: a card rounded 12 with a hairline of the song's colour, shaded corner to
+     corner from the page's colour over the song's to a little more of the song's; a small arrow in
+     the song's colour points at what opened it; it fades and grows out of the arrow over 100 ms. */
+  .nml-pop { position: fixed; z-index: 80; box-sizing: border-box; width: max-content; min-width: 140px; max-width: min(280px, 50vw); padding: 8px 2px; border-radius: 12px;
+    font-family: "Lexend Deca", system-ui, sans-serif; border: 1px solid var(--nm-menu-edge);
+    background: linear-gradient(to bottom right, var(--nm-menu-a), var(--nm-menu-b));
+    transform-origin: var(--ax, 50%) 0; animation: nml-pop-in .1s cubic-bezier(.77,0,.175,1); }
+  .nml-pop.up { transform-origin: var(--ax, 50%) 100%; }
+  .nml-pop.out { animation: nml-pop-out .1s cubic-bezier(.77,0,.175,1) forwards; }
+  @keyframes nml-pop-in { from { opacity: 0; transform: scale(0); } }
+  @keyframes nml-pop-out { to { opacity: 0; transform: scale(0); } }
+  .nml-arrow { position: absolute; left: calc(var(--ax, 50%) - 8px); bottom: calc(100% - 3px); width: 16px; height: 8px; color: var(--nm-main); pointer-events: none; }
+  .nml-pop.up .nml-arrow { bottom: auto; top: calc(100% - 3px); transform: rotate(180deg); }
+  .nml-pop.flat .nml-arrow { display: none; }
+  .nml-arrow svg { display: block; width: 16px; height: 8px; fill: currentColor; stroke: none; }
+  .nml-pop > button { display: flex; align-items: center; gap: 6px; box-sizing: border-box; width: calc(100% - 4px); min-height: 34px; margin: 2px; padding: 0 8px 0 6px;
+    border: 0; border-radius: 8px; background: none; cursor: pointer; text-align: left; color: var(--nm-medium); font: 600 13.5px "Lexend Deca", system-ui, sans-serif; }
+  .nml-pop > button:hover { background: color-mix(in srgb, var(--nm-on-surface) 6%, transparent); }
+  .nml-pop > button.on { background: color-mix(in srgb, var(--nm-secondary) 10%, transparent); }
+  .nml-pop > button svg { width: 20px; height: 20px; color: var(--nm-icon); opacity: .8; flex: 0 0 auto; }
   .nml-catch { position: fixed; inset: 0; z-index: 79; }
   .nml-tracks > .nml-disc { grid-column: 1 / -1; }
   .nml-hero { position: fixed; z-index: 29; object-fit: cover; transform-origin: 0 0; pointer-events: none; }
-  /* The phone's toast: a few words over the mini player for a moment. */
-  .nml-toast { position: fixed; z-index: 90; left: 50%; bottom: calc(var(--player-h, 0px) + 84px); max-width: min(420px, calc(100vw - 32px)); padding: 10px 18px;
-    border-radius: 20px; background: var(--nm-dialog); color: var(--nm-medium); box-shadow: 0 6px 20px var(--nm-shadow);
-    font: 600 13px "Lexend Deca", system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    opacity: 0; transform: translate(-50%, 12px); transition: opacity .25s, transform .35s var(--nml-ease, ease); pointer-events: none; }
-  .nml-toast.in { opacity: 1; transform: translate(-50%, 0); }
+  /* Namida's note: a card rounded 12 along the top, frosted, with a hairline grey edge; its words
+     semibold in the text colour at 70%; a line along its foot counting down the two seconds. It
+     drops in over 600 ms, quick then settling, and goes back up the same way. */
+  .nml-toast { position: fixed; z-index: 90; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 50%; box-sizing: border-box; width: min(420px, calc(100vw - 48px));
+    padding: 16px 12px; border-radius: 12px; overflow: hidden; border: 0.5px solid rgba(128,128,128,.5);
+    background: color-mix(in srgb, var(--nm-bg) 30%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    color: color-mix(in srgb, var(--nm-on-surface) 70%, transparent); font: 600 12.6px/1.25 "Lexend Deca", system-ui, sans-serif;
+    white-space: nowrap; text-overflow: ellipsis; pointer-events: none;
+    transform: translate(-50%, calc(-100% - 8px - env(safe-area-inset-top, 0px))); transition: transform .6s cubic-bezier(.77,0,.175,1); }
+  .nml-toast.in { transform: translate(-50%, 0); transition: transform .6s cubic-bezier(.18,1,.04,1); }
+  .nml-toast::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: color-mix(in srgb, var(--nm-primary) 35%, transparent);
+    transform-origin: 0 0; transform: scaleX(1); }
+  .nml-toast.in::after { transform: scaleX(0); transition: transform 2s linear .6s; }
   @media (prefers-reduced-motion: reduce) { .nml *, .nml-drawer *, .nml-pop { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -2257,14 +2295,23 @@
       <button class="np-pill wide" id="np-qshuffle" type="button" title="Shuffle what is left" aria-label="Shuffle what is left"><span data-nx="shuffle"></span>Shuffle</button>
     </div>
   </div>
-  <!-- Namida's sound controls: a dialog, Configure, with the speed and the volume. -->
+  <!-- Namida's Configure dialog: its title on a band, speed and volume each a line (icon, name,
+       value, restore) over a slider with a step either side; reset all and Done. -->
   <div class="np-sheet" id="np-sheet" hidden>
     <div class="np-scrim" id="np-scrim"></div>
     <div class="np-card" role="dialog" aria-label="Configure">
       <b class="np-card-title">Configure</b>
-      <label class="np-slider"><span class="np-sl-head"><i data-nx="speed"></i><b>Speed</b><em id="np-speed-v">100%</em></span><input id="np-speed" type="range" min="0.5" max="2" step="0.01" value="1"></label>
-      <label class="np-slider"><span class="np-sl-head"><i data-nx="volume" id="np-vol-i"></i><b>Volume</b><em id="np-vol-v">100%</em></span><input id="np-vol" type="range" min="0" max="100" step="1" value="100"></label>
-      <div class="np-card-actions"><button type="button" class="np-btn np-reset" id="np-reset" title="Put them back" aria-label="Put them back" data-nx="reset"></button><button type="button" class="np-done" id="np-done">Done</button></div>
+      <div class="np-card-body">
+        <div class="np-sl">
+          <div class="np-sl-head"><i data-nx="speed"></i><b>Speed</b><em id="np-speed-v">1.00x</em><button type="button" class="np-restore" id="np-speed-r" data-nx="reset" title="Speed back to normal" aria-label="Speed back to normal"></button></div>
+          <div class="np-sl-row"><button type="button" class="np-step" data-for="np-speed" data-by="-0.01" data-nx="back" title="Slower" aria-label="Slower"></button><span class="np-slider"><input id="np-speed" type="range" min="0" max="2" step="0.01" value="1" aria-label="Speed"><output class="np-bubble" aria-hidden="true"></output></span><button type="button" class="np-step" data-for="np-speed" data-by="0.01" data-nx="stepUp" title="Faster" aria-label="Faster"></button></div>
+        </div>
+        <div class="np-sl">
+          <div class="np-sl-head"><i data-nx="volume" id="np-vol-i"></i><b>Volume</b><em id="np-vol-v">100.0%</em><button type="button" class="np-restore" id="np-vol-r" data-nx="reset" title="Volume back to normal" aria-label="Volume back to normal"></button></div>
+          <div class="np-sl-row"><button type="button" class="np-step" data-for="np-vol" data-by="-1" data-nx="back" title="Quieter" aria-label="Quieter"></button><span class="np-slider"><input id="np-vol" type="range" min="0" max="100" step="1" value="100" aria-label="Volume"><output class="np-bubble" aria-hidden="true"></output></span><button type="button" class="np-step" data-for="np-vol" data-by="1" data-nx="stepUp" title="Louder" aria-label="Louder"></button></div>
+        </div>
+      </div>
+      <div class="np-card-actions"><button type="button" class="np-step np-reset" id="np-reset" title="Put them all back" aria-label="Put them all back" data-nx="reset"></button><button type="button" class="np-done" id="np-done">Done</button></div>
     </div>
   </div>
 </div>
@@ -5437,14 +5484,14 @@ function nmlPlayAll(list, shuffled) {
   startQueue(list, shuffled ? Math.floor(Math.random() * list.length) : 0, songsSource());
 }
 
-/** A few words at the foot for a moment, as the phone's toast. */
+/** Namida's note along the top, for a moment (as the phone's). */
 function nmlToast(text) {
   var t = $("nml-toast");
   if (!t) { t = document.createElement("div"); t.id = "nml-toast"; t.className = "nml-toast"; document.body.appendChild(t); }
   t.textContent = text;
   t.classList.remove("in"); void t.offsetWidth; t.classList.add("in");
   clearTimeout(nml.toastTimer);
-  nml.toastTimer = setTimeout(function () { t.classList.remove("in"); }, 2200);
+  nml.toastTimer = setTimeout(function () { t.classList.remove("in"); }, 2600);
 }
 
 // ---- the tiles
@@ -5602,14 +5649,33 @@ function nmlPop(anchor, items) {
   catcher.onpointerdown = function (e) { e.preventDefault(); nmlPopClose(); };
   document.body.appendChild(catcher);
   document.body.appendChild(m);
-  var r = anchor.getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
-  var top = r.bottom + 4;
-  if (top + mh > window.innerHeight - 8) { top = r.top - mh - 4; m.classList.add("up"); }
-  m.style.left = Math.min(window.innerWidth - mw - 8, Math.max(8, r.right - mw)) + "px";
-  m.style.top = Math.max(8, top) + "px";
+  nmlPlace(m, anchor);
   nml.pop = { menu: m, catcher: catcher };
   var first = m.querySelector("button");
   if (first) first.focus({ preventScroll: true });
+}
+
+/**
+ * Where a Namida menu goes: under [anchor] (over it, when there is no room under), its middle on
+ * it and 10 in from the window's edges, with the arrow pointing at it.
+ */
+function nmlPlace(m, anchor) {
+  var arrow = document.createElement("i");
+  arrow.className = "nml-arrow";
+  arrow.innerHTML = '<svg viewBox="0 0 16 8" aria-hidden="true"><path d="M0 8 L16 8 L10.56 1.12 C9.28 -0.4 6.72 -0.4 5.44 1.12 Z"/></svg>';
+  m.appendChild(arrow);
+  var r = anchor.getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight, W = window.innerWidth, H = window.innerHeight;
+  var left = Math.max(10, Math.min(W - 10 - mw, r.left + r.width / 2 - mw / 2));
+  var top = r.bottom + 6;
+  m.classList.remove("up", "flat");
+  if (top + mh > H - 10) {
+    if (r.top - 6 - mh >= 10) { top = r.top - 6 - mh; m.classList.add("up"); }
+    else { top = Math.max(10, H - 10 - mh); m.classList.add("flat"); }
+  }
+  var ax = Math.max(27 + 8, Math.min(mw - 27 - 8, r.left + r.width / 2 - left));
+  m.style.setProperty("--ax", ax.toFixed(1) + "px");
+  m.style.left = left + "px";
+  m.style.top = top + "px";
 }
 
 function nmlPopClose(now) {
@@ -5619,7 +5685,7 @@ function nmlPopClose(now) {
   p.catcher.remove();
   if (now) { p.menu.remove(); return; }
   p.menu.classList.add("out");
-  setTimeout(function () { p.menu.remove(); }, 170);
+  setTimeout(function () { p.menu.remove(); }, 110);
 }
 
 // ---- the albums
@@ -6913,7 +6979,7 @@ function setRepeat(m) {
 }
 
 /**
- * Namida's repeat menu, grown out of the button's corner above the bottom row: the five modes,
+ * Namida's repeat menu, Namida's popup by the button: the five modes,
  * the one on lit, and the count for "more times" set with its - and + without leaving it.
  */
 function npRepeatMenu(btn) {
@@ -6921,7 +6987,7 @@ function npRepeatMenu(btn) {
   var catcher = document.createElement("div");
   catcher.className = "nml-catch";
   var m = document.createElement("div");
-  m.className = "nml-pop nm-rep up";
+  m.className = "nml-pop nm-rep";
   m.setAttribute("role", "menu");
   function row(mode) {
     var r = document.createElement("div");
@@ -6960,10 +7026,7 @@ function npRepeatMenu(btn) {
   catcher.onpointerdown = function (e) { e.preventDefault(); nmlPopClose(); };
   document.body.appendChild(catcher);
   document.body.appendChild(m);
-  var r = btn.getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
-  var right = Math.min(window.innerWidth - 8, r.right + 64);
-  m.style.left = Math.max(8, right - mw) + "px";
-  m.style.top = Math.max(8, r.top - mh - 8) + "px";
+  nmlPlace(m, btn);
   nml.pop = { menu: m, catcher: catcher };
   var on = m.querySelector(".rr.on");
   if (on) on.focus({ preventScroll: true });
@@ -7851,7 +7914,8 @@ function npApplySpeed() {
 }
 
 function npSetSpeed(v) {
-  np.speed = Math.max(0.5, Math.min(2, Math.round(v * 100) / 100));
+  // The slider runs from 0 to 2, as Namida's; the sound stops short of 0.
+  np.speed = Math.max(0.25, Math.min(2, Math.round(v * 100) / 100));
   try { localStorage.setItem("blazeit.speed", String(np.speed)); } catch (e) {}
   npApplySpeed();
   npSoundPaint();
@@ -7862,13 +7926,19 @@ function npSoundPaint() {
   var sp = $("np-speed"), vo = $("np-vol"), a = $("audio");
   var v = a.muted ? 0 : Math.round(a.volume * 100);
   sp.value = np.speed; vo.value = v;
-  sp.style.setProperty("--p", ((np.speed - 0.5) / 1.5 * 100).toFixed(1) + "%");
-  vo.style.setProperty("--p", v + "%");
-  $("np-speed-v").textContent = Math.round(np.speed * 100) + "%";
-  $("np-vol-v").textContent = v + "%";
+  // Where each thumb sits: its track's lit part and the pill over it follow.
+  function at(input, f) {
+    input.style.setProperty("--p", "calc(2.5px + (100% - 5px) * " + f.toFixed(4) + ")");
+    input.parentNode.style.setProperty("--f", f.toFixed(4));
+  }
+  at(sp, np.speed / 2); at(vo, v / 100);
+  // Namida's figures: speed as 1.00x, volume as a percentage (100.0%); the pills as whole percentages.
+  $("np-speed-v").textContent = np.speed.toFixed(2) + "x";
+  $("np-vol-v").textContent = v.toFixed(1) + "%";
+  sp.parentNode.querySelector(".np-bubble").textContent = Math.round(np.speed * 100) + "%";
+  vo.parentNode.querySelector(".np-bubble").textContent = v + "%";
   var vi = $("np-vol-i"), vn = v === 0 ? "mute" : "volume";
   if (vi.dataset.nx !== vn) { vi.dataset.nx = vn; vi.innerHTML = nx(vn); }
-  $("np-reset").disabled = np.speed === 1 && v === 100;
 }
 
 function npSoundOpen() {
@@ -7885,7 +7955,7 @@ function npSoundClose() {
   if (sh.hidden) return;
   sh.classList.remove("in");
   clearTimeout(np.sheetTimer);
-  np.sheetTimer = setTimeout(function () { if (!sh.classList.contains("in")) sh.hidden = true; }, 320);
+  np.sheetTimer = setTimeout(function () { if (!sh.classList.contains("in")) sh.hidden = true; }, 300);
 }
 
 /** Called for every song the player shows (showPlayer). */
@@ -7922,6 +7992,8 @@ var NX = {
   sound: '<path d="M3 8.25v7.5M7.5 5.75v12.5M12 9.96v10.79M12 3.25v2.72M16.5 5.75v12.5M21 8.25v7.5" stroke-linecap="round" stroke-linejoin="round"/>',
   down: '<path d="M16.01 12.85l-2.62 2.62c-.77.77-2.03.77-2.8 0L4.08 8.95M19.92 8.95l-1.04 1.04" stroke-linecap="round" stroke-linejoin="round"/>',
   back: '<path d="M11.19 7.94l-2.62 2.62c-.77.77-.77 2.03 0 2.8l6.52 6.52M15.09 4.04l-1.04 1.04" stroke-linecap="round" stroke-linejoin="round"/>',
+  stepUp: '<path d="M15.85 8.99c2.87 1.66 2.87 4.37 0 6.03l-2.31 1.34-2.31 1.34C8.35 19.34 6 17.99 6 14.67V9.33c0-3.31 2.35-4.67 5.22-3.01" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>',
+  hashtag: '<path d="M10 3 8 21M16 3l-2 18M20.05 9h1.45M3.5 9h13.49M3.95 15H2.5M20.5 15H7.01" stroke-linecap="round" stroke-linejoin="round"/>',
   up: '<path d="M17.69 12.78c1.66 2.87.3 5.22-3.01 5.22H9.33c-3.31 0-4.67-2.35-3.01-5.22l1.34-2.31L9 8.16c1.66-2.87 4.37-2.87 6.03 0" stroke-linecap="round" stroke-linejoin="round"/>',
   search: '<path d="M11 2a9 9 0 1 1-4.07.97M19.071 20.97c.53 1.6 1.74 1.76 2.67.36.86-1.28.3-2.33-1.24-2.33-1.15 0-1.79.89-1.43 1.97Z" stroke-linecap="round" stroke-linejoin="round"/>',
   more: '<path d="M5 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2ZM19 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2Z" fill="currentColor" stroke="none"/><path d="M10 12c0 1.1.9 2 2 2s2-.9 2-2-.9-2-2-2" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -8009,6 +8081,16 @@ function npNamidaColours() {
   set("--nm-primary", css(primary));
   set("--nm-primary-85", css(primary, 0.85));
   set("--nm-secondary-20", css(secondary, 0.2));
+  set("--nm-secondary", css(secondary));
+  // Namida's popup menus: shaded corner to corner from the page's colour over the main colour,
+  // a hairline and an arrow in the main colour, their icons the main colour over the text colour.
+  var ground2 = npOver(bg, 0.5, dark ? [0, 0, 0] : white);
+  function overMain(a) { var al = a + mainA * (1 - a); return npOver(ground2, a / al, base); }
+  set("--nm-menu-a", css(overMain(0.9)));
+  set("--nm-menu-b", css(overMain(0.65)));
+  set("--nm-menu-edge", css(base, 0.8));
+  set("--nm-menu-icon", css(npOver(base, 120 / 255, onSurface)));
+  set("--nm-button-fg", css(npOver(base, 120 / 255, onSurface), 0.85));
   set("--nm-sec", css(dark ? tone(0.35, 0.26) : tone(0.45, 0.88)));
   set("--nm-on-sec", css(dark ? tone(0.4, 0.88) : tone(0.4, 0.12)));
   set("--nm-icon", dark ? "rgba(233,233,233,.784)" : "rgba(40,40,40,.784)");
@@ -8571,13 +8653,33 @@ function setupFullPlayer() {
     vol.dispatchEvent(new Event("input"));
     npSoundPaint();
   });
-  $("np-reset").onclick = function () {
-    npSetSpeed(1);
+  function npVolTo(v) {
     var vol = $("pl-vol");
-    vol.value = 100;
+    vol.value = Math.max(0, Math.min(100, v));
     vol.dispatchEvent(new Event("input"));
     npSoundPaint();
-  };
+  }
+  $("np-reset").onclick = function () { npSetSpeed(1); npVolTo(100); };
+  $("np-speed-r").onclick = function () { npSetSpeed(1); };
+  $("np-vol-r").onclick = function () { npVolTo(100); };
+  // The steps either side of a slider: a tap moves it one step; held down, ten steps a second.
+  Array.prototype.forEach.call(document.querySelectorAll("#np-sheet .np-step[data-for]"), function (b) {
+    var timer = 0, held = 0;
+    function step() {
+      var by = parseFloat(b.dataset.by);
+      if (b.dataset.for === "np-speed") npSetSpeed(np.speed + by); else npVolTo(parseInt($("np-vol").value, 10) + by);
+    }
+    function stop() { clearTimeout(held); clearInterval(timer); held = timer = 0; }
+    b.addEventListener("pointerdown", function () { stop(); held = setTimeout(function () { step(); timer = setInterval(step, 100); b.dataset.held = "1"; }, 500); });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (ev) { b.addEventListener(ev, stop); });
+    b.addEventListener("click", function () { if (b.dataset.held) { delete b.dataset.held; return; } step(); });
+  });
+  // While a slider is held, its value shows on the pill over the thumb.
+  Array.prototype.forEach.call(document.querySelectorAll("#np-sheet .np-slider"), function (w) {
+    var input = w.querySelector("input");
+    input.addEventListener("pointerdown", function () { w.classList.add("drag"); });
+    ["pointerup", "pointercancel", "blur"].forEach(function (ev) { input.addEventListener(ev, function () { w.classList.remove("drag"); }); });
+  });
   $("audio").addEventListener("loadedmetadata", npApplySpeed);
   $("audio").addEventListener("volumechange", function () { if (!$("np-sheet").hidden) npSoundPaint(); });
   npApplySpeed();
