@@ -1134,14 +1134,21 @@ class BridgeServer(
             call.respondBytes(html, ContentType.Text.Html.withCharset(Charsets.UTF_8))
         }
         get("/favicon.ico") { call.respond(HttpStatusCode.NoContent) }
-        // The laptop helper, offered from the page itself so any paired laptop can get it.
-        get("/blazeit-pc.bat") {
-            val bat = withContext(Dispatchers.IO) { ctx.assets.open("blazeit-pc.bat").use { it.readBytes() } }
-            call.response.header(
-                HttpHeaders.ContentDisposition,
-                ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, "blazeit-pc.bat").toString(),
-            )
-            call.respondBytes(bat, ContentType.Application.OctetStream)
+        // The laptop helpers, offered from the page itself so any paired laptop can get one:
+        // Windows's, and one Python file for Linux and the Mac, named for each.
+        for ((helper, asset) in listOf(
+            "blazeit-pc.bat" to "blazeit-pc.bat",
+            "blazeit-linux.py" to "blazeit-helper.py",
+            "blazeit-mac.py" to "blazeit-helper.py",
+        )) {
+            get("/$helper") {
+                val bytes = withContext(Dispatchers.IO) { ctx.assets.open(asset).use { it.readBytes() } }
+                call.response.header(
+                    HttpHeaders.ContentDisposition,
+                    ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, helper).toString(),
+                )
+                call.respondBytes(bytes, ContentType.Application.OctetStream)
+            }
         }
     }
 

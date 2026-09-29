@@ -138,11 +138,29 @@ the one that comes with scrcpy.
 
 **Path:** browser → the helper on the laptop → whichever way above is fastest → phone.
 
-Double-click **blazeit-pc.bat** (from the page's Settings; nothing is installed). It finds the
-phone by itself, over the cable, the hotspot, the direct link, Wi-Fi or USB debugging, and moves
-to a faster way the moment one appears and back when it goes. The page stays at
-`http://localhost:8787` whichever it is, so bookmarks and open tabs never change. Starting it
-again replaces the running copy. Windows only.
+On Windows, double-click **blazeit-pc.bat**; on Linux, run `python3 blazeit-linux.py` in a
+terminal; on a Mac, `python3 blazeit-mac.py` in Terminal. The page's Settings offers the one for
+the computer it is open on, and nothing is installed. The helper finds the phone by itself, over the cable, the hotspot, the direct link,
+Wi-Fi or USB debugging, and moves to a faster way the moment one appears and back when it goes.
+The page stays at `http://localhost:8787` whichever it is, so bookmarks and open tabs never
+change. Starting it again replaces the running copy.
+
+The Linux helper needs only Python 3 and uses what the system has: `wl-clipboard` (Wayland) or
+`xclip` (X11) for the clipboard; write access to `/dev/uinput`, or `xdotool` (X11), or `ydotool`,
+for the trackpad and keyboard; `pactl` or `wpctl` for the volume; `nmcli` to join the direct link;
+`scrcpy` for the phone's screen; `ffmpeg` (X11) or `wf-recorder` (sway, Hyprland) for the second
+screen. It says what is missing when something needs it. Under WSL it names itself *Linux* and
+leaves the trackpad and the second screen to the Windows helper.
+
+On a Mac the same file uses what macOS has: `pbcopy`, `pbpaste` and AppKit for the clipboard
+(text, pictures, a file), Quartz events for the trackpad and keyboard, AppleScript for the volume,
+and from [Homebrew](https://brew.sh) `ffmpeg` for the second screen and `scrcpy` for the phone's
+screen. macOS asks once for **Accessibility** (the trackpad) and **Screen Recording** (the second
+screen) for the app the helper runs in. The phone's Windows shortcuts come out as the Mac's: Ctrl+C
+is ⌘C, the app switcher is ⌘-Tab, three fingers up is Mission Control, four fingers change Space.
+To use the phone's hotspot or direct link, join it from the Wi-Fi menu; the helper follows the
+phone there. A USB cable works when the phone's USB tethering uses NCM, which macOS supports
+(it has no RNDIS).
 
 <img src="docs/images/web-settings.png" width="620" alt="The helper, running, in the page's Settings">
 
@@ -404,7 +422,8 @@ debugging on). It uses the cable when one is plugged in.
 ### 11. The phone as a second screen
 
 *Use as a second screen* on the Control tab shows the laptop's desktop on the phone; taps on it
-click there. With a virtual-display driver on the laptop it is a real extra monitor. Protected
+click there. With a virtual-display driver on the laptop (Windows) or an extra monitor set up with
+`xrandr` (Linux) it is a real extra monitor; otherwise it mirrors the laptop's screen. Protected
 video (Netflix, Prime Video) shows black, as it does for any screen capture.
 
 ### 12. A live monitor
@@ -440,8 +459,8 @@ The page is one file with no dependencies and works in Chrome, Edge, Brave, Oper
 Safari, on Windows, macOS, Linux, ChromeOS, Android and iPad. It is checked in Edge and Firefox,
 including over plain `http://` (a "not secure" address), where browsers switch off some features:
 there the page falls back by itself (copying still works, a direct laptop-to-laptop file is
-held in memory or goes through the phone). Only the laptop helper is Windows-only; everything
-else needs just a browser.
+held in memory or goes through the phone). The laptop helper runs on Windows, Linux and macOS;
+everything else needs just a browser.
 
 ### 16. The look
 
@@ -459,8 +478,10 @@ or purple. **Light, dark or automatic** sits underneath.
 2. Open **Localhost 8787**, go to **Settings**, choose where received files go, and allow
    notifications (and music, if you want the Music tab).
 3. Flip the switch on **Home** and open the address it shows on the laptop. Tap **Allow**.
-4. On Windows, for full speed and the extras, get **blazeit-pc.bat** from the page's **Settings**
-   and run it. Other computers need only the browser.
+4. For full speed and the extras, get the laptop helper from the page's **Settings** and run it:
+   **blazeit-pc.bat** on Windows, **blazeit-linux.py** on Linux (`python3 blazeit-linux.py`),
+   **blazeit-mac.py** on a Mac (`python3 blazeit-mac.py`).
+   Other computers need only the browser.
 5. For the most speed, plug in a USB-C cable and turn on USB tethering, or use the hotspot.
 
 Settings on the phone, top to bottom:
@@ -516,7 +537,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 Kotlin and Jetpack Compose on the phone (Android 10+), Ktor 3 for the server; the page has no
 build step and no dependencies. The code lives in `app/src/main/`: `assets/bridge.html` (the
-page), `assets/blazeit-pc.bat` (the helper), and `java/dev/periy/bridge/` (`server/` for the
+page), `assets/blazeit-pc.bat` and `assets/blazeit-helper.py` (the helpers: Windows's, and one for Linux and the Mac), and `java/dev/periy/bridge/` (`server/` for the
 routes, uploads, music, lyrics, linked phones, pipes and notifications, `ui/` for the app's
 screens, `net/` for addresses, the direct link and STUN).
 
@@ -524,7 +545,11 @@ screens, `net/` for addresses, the direct link and STUN).
 
 - Over the air, 80 MHz Wi-Fi 6 is the most this phone's hotspot offers; for more, use a cable.
 - On the direct link the laptop has no internet until the link stops.
-- The helper, laptop control and the second screen are Windows only.
+- On Linux the second screen works on X11 and on wlroots desktops (sway, Hyprland), not yet on
+  GNOME or KDE under Wayland; the trackpad needs `/dev/uinput`, `xdotool` (X11) or `ydotool`. Under
+  WSL the Windows helper runs both.
+- The Mac helper is written to Apple's documented tools and checked piece by piece, but has not
+  yet run on a real Mac. On a Mac the helper does not switch Wi-Fi itself.
 - Devices must share a local network (or a cable); nothing works across the internet.
 - Lyrics need internet on the laptop the first time a song is played; after that they are on
   the phone.

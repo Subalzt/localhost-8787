@@ -14,3 +14,4 @@ captures/
 /tools/blazeit-pc.bat
 # scrcpy, downloaded for phone mirroring (the helper also fetches it by itself)
 /tools/scrcpy/
+__pycache__/

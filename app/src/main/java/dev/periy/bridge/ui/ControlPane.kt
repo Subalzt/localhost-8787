@@ -146,7 +146,7 @@ fun ControlPane(running: Boolean, onStart: () -> Unit, modifier: Modifier = Modi
         val status = when {
             !running -> "Off"
             laptops.isEmpty() -> "No laptop"
-            else -> laptops.first().removePrefix("Laptop control on ")
+            else -> dev.periy.bridge.server.helperMachine(laptops.first())
         }
         // The laptop's screen here instead of a trackpad: this phone as its second monitor.
         if (running && laptops.isNotEmpty()) {

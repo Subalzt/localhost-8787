@@ -1781,10 +1781,10 @@
     <div class="set-group">
       <div class="set-row">
         <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V16h-15V6.5a1 1 0 0 1 1-1Z"/><path d="M2.5 18.5h19"/></svg></span>
-        <div class="sr-text"><b>blazeit-pc.bat</b><span id="helper-state"></span></div>
-        <a class="sr-action" href="/blazeit-pc.bat" download="blazeit-pc.bat">Download</a>
+        <div class="sr-text"><b id="helper-file">blazeit-pc.bat</b><span id="helper-state"></span></div>
+        <a class="sr-action" id="helper-dl" href="/blazeit-pc.bat" download="blazeit-pc.bat">Download</a>
       </div>
-      <div class="set-row sr-note">Full speed, the fastest link, and the phone as a trackpad. Nothing is installed; close its window to stop it.</div>
+      <div class="set-row sr-note" id="helper-note">Full speed, the fastest link, and the phone as a trackpad. Nothing is installed; close its window to stop it.</div>
     </div>
 
     <h2 class="set-title">Speed</h2>
@@ -4368,7 +4368,22 @@ function setupPhoneFiles() {
  */
 var MEASURE_MS = 5000;
 
+/** The laptop helper for this computer: Windows's .bat, or the Python file for Linux and the Mac. */
+// (An iPad asks for desktop pages as a Mac; it has a touch screen, which a Mac does not.)
+var HELPER_OS = /Android|iPhone|iPad/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1) ? "" :
+  /Macintosh|Mac OS X/.test(navigator.userAgent) ? "mac" : /Linux|X11|CrOS/.test(navigator.userAgent) ? "linux" : "";
+
 function renderHelperState() {
+  if (HELPER_OS) {
+    var file = "blazeit-" + HELPER_OS + ".py";
+    $("helper-file").textContent = file;
+    $("helper-dl").href = "/" + file;
+    $("helper-dl").setAttribute("download", file);
+    $("helper-note").textContent = "Full speed, the fastest link, the clipboard, and the phone as a trackpad. " +
+      "Run it with python3 " + file + " in " + (HELPER_OS === "mac" ? "Terminal" : "a terminal") +
+      "; nothing is installed, and Ctrl+C stops it." +
+      (HELPER_OS === "mac" ? " Allow Accessibility for Terminal when asked, for the trackpad." : "");
+  }
   var el = $("helper-state");
   var local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
   el.className = local ? "ok" : "warn";
