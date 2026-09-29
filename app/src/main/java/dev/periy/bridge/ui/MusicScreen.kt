@@ -131,9 +131,11 @@ private val CountBarHeight = 48.dp
 /** Namida's page change: quick to leave, slow to arrive. */
 private val PageEase = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
 
-/** The iOS push Namida uses for a page (Flutter's linearToEaseOut), and its pop (easeInToLinear). */
+/**
+ * The iOS push Namida uses for a page (Flutter's linearToEaseOut). Its pop, easeInToLinear, is the
+ * same curve played backwards, so going back is this one run from 1 to 0.
+ */
 private val LinearToEaseOut = CubicBezierEasing(0.35f, 0.91f, 0.33f, 0.97f)
-private val EaseInToLinear = CubicBezierEasing(0.67f, 0.03f, 0.65f, 0.09f)
 
 /** Where the flying cover is, [p] of the way from the grid to the album's page. */
 private fun heroRect(shelf: MusicShelf, p: Float): androidx.compose.ui.geometry.Rect {
@@ -196,7 +198,8 @@ fun MusicScreen(
             shelf.heroFlying = false
         } else if (shownAlbum != null) {
             shelf.heroFlying = shelf.heroKey == shownAlbum?.key && shelf.heroFrom != null && shelf.heroTo != null
-            push.animateTo(0f, tween(400, easing = EaseInToLinear))
+            // Back the same way round (Flutter plays the push backwards): quick to leave, slow to arrive.
+            push.animateTo(0f, tween(400, easing = LinearToEaseOut))
             shelf.heroFlying = false
             shownAlbum = null
             shelf.heroKey = null

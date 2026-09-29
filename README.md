@@ -339,39 +339,55 @@ Read-only, and off until you allow it on the phone.
 
 ### 5. Your music, from the phone
 
-The page's **Music** tab opens on your albums, each with its cover (albums without one get one
-found online or drawn for them). Songs stream straight from the phone, so FLAC and everything
-else starts at once, and skipping is instant. Media keys and the Windows media overlay work.
+The page's **Music** tab is the phone's Music (section 6), fitted to the window: on a laptop beside
+the page's own tabs, with more songs and albums to a row; in a phone's browser the whole screen,
+the other tabs a menu away at its top left. Songs stream straight from the phone, so FLAC and
+everything else starts at once, and skipping is instant. Media keys and the Windows media overlay
+work.
 
-- **Search and filter**: *Albums*, *Songs* or *Liked* (the songs with a heart, newest first) with
-  their counts, and a search box (`/` to jump to it, `Esc` to clear).
-- **The banner** shows what is playing: its album, and the next three songs with their covers and
-  file type, marked *Ready* once loaded. Click one to play it now. **Go to album** opens the album.
+- **Tracks, Albums and Liked**, as the app's: Namida's bar along the foot to go between them (the
+  page slides in from its side), each page's count and what can be done to all of it (shuffle,
+  play) on the app bar's line beside the search. The app bar is a shade lighter than the page, so
+  a line runs along its foot.
+- **Tracks and Liked** are Namida's tiles: the cover, title, who it is by, the album and year, what
+  kind of file it is, how long it is, a heart, and a menu (play next, play last, go to its album).
+  **Pull a song left** and *Play After* shows from under it. **Albums** are Namida's cards, the
+  year frosted into a corner and a play button in the other.
+- **An album** opens as a page pushed in from the right, its cover flying from its card into the
+  frame at the top, with shuffle, **Play Last**, its order (disc number, title, duration or
+  artist, either way round) and a header before each disc.
+- **Search** grows out of its button (or `/`), sliding the count away to the left; `Esc` clears it,
+  then closes it.
 - While a song plays, a small note sits beside *Music* in the tabs.
-- **The player, full screen**, moves as [Namida](https://github.com/namidaco/namida)'s does. Drag
-  the bar along the bottom up (or click its cover) and it grows into a player the size of the
-  window: the cover flies from the bar's corner to its place, the title and the play button follow,
+- **The player, full screen**, moves as [Namida](https://github.com/namidaco/namida)'s does, with
+  its times and curves: every move up or down settles over 300 ms, a song sideways over 600. Drag
+  the mini player up (or click its cover) and it grows into a player the size of the window: the
+  cover flies from the mini player's corner to its place, the title and the play button follow,
   and the waveform and the buttons come in last. Drag on up for the queue: every song in the order
   it will play, to play from, drag into a new order by its handle, or take off. Let go anywhere and
-  it settles by how far and how fast you dragged, back into the bar with a small bounce. Swipe the
-  cover or the bar sideways for the song before or after: the cover and title slide, the title a
-  little quicker. The cover swells with the loud moments, the seek bar is the song's own waveform
-  (drag along it to choose a place, drag up off it to take the seek back), the colour is the
-  cover's, and faint specks drift behind, quicker when the music is loud. `Esc` or Back steps
-  back down.
+  it settles by how far and how fast you dragged, back into the mini player with a small bounce.
+  Swipe the cover or the mini player sideways for the song before or after: the cover and title
+  slide, the title a little quicker. The cover swells with the loud moments, the seek bar is the
+  song's own waveform (drag along it to choose a place, drag up off it to take the seek back), the
+  colour is the cover's, and faint specks drift behind, quicker when the music is loud. `Esc` or
+  Back steps back down.
 - **The queue is Namida's**: a sheet with round corners rising under the song, which shrinks to
-  the top as it comes. Its header says where you are in it and the time left, with the sound
-  controls, a menu and a button back down; each song is Namida's tile (cover, title, artist, album
-  and year, its length, a heart, a handle and a menu to take it off). Along its foot, a broom to
-  remove the songs before or after, a button that goes to the song playing (an arrow pointing to
-  it once it is out of view), and **Shuffle**, which shuffles only what is left. When the song
-  changes, its colour passes from one tile to the next.
-- **It looks like Namida's too**: its font (Lexend Deca) and its icons (Iconsax), the artist large over the song with a
-  **heart** beside them (kept on the phone, so a song with a heart has it on the phone's player and
-  every page), a thin waveform, and a glowing play disc in the cover's colour, which tints the whole
-  player. Along the bottom, a chip with **what the file is** (FLAC, MP3, OPUS..., its bitrate, its
-  sample rate and, for a 24-bit file, a Hi-Res badge), **repeat**, and the **sound controls**
-  (Namida's Configure: speed and volume in percent). Shuffle and lyrics are on the bar.
+  the top as it comes. Its header says where you are in it and the time left, with a button back
+  down; each song is Namida's tile (cover, title, artist, album and year, its length, a heart, a
+  handle and a menu to take it off). Along its foot, a broom to remove the songs before or after,
+  and **Shuffle**, which shuffles only what is left. When the song changes, its colour passes from
+  one tile to the next.
+- **It looks like Namida's too**: its font (Lexend Deca) and its icons (Iconsax), the artist large
+  over the song with a **heart** beside them (kept on the phone, so a song with a heart has it on
+  the phone's player and every page), a thin waveform, and a glowing play disc in the cover's
+  colour, which tints the whole player. Along the bottom, **what the file is** (FLAC, MP3, OPUS...,
+  its bitrate, its sample rate and, for a 24-bit file, a Hi-Res badge), **repeat**, the **sound
+  controls** (Namida's Configure: speed and volume in percent) and **lyrics**.
+- **Repeat** opens Namida's menu: stop after the last song, repeat this song, repeat it a number of
+  more times (set with its − and +), repeat the queue, or repeat the queue shuffled anew each time
+  round.
+- **Lyrics over the cover**, as the phone's (below), riding on the cover into the queue, and
+  **full-page lyrics** on a tap.
 
 | Your albums | Playing, with what is next |
 | --- | --- |
@@ -386,11 +402,12 @@ in the background, the controls in the notification and on the lock screen, and 
 buttons working.
 
 - **Tracks, Albums and Liked**, side by side under Namida's bottom bar: tap one or swipe between
-  them. Sizes are Namida's own, text included (it draws its text at nine tenths).
+  them. Sizes are Namida's own, text included (it draws its text at nine tenths). Each page's
+  count, with shuffle and play all, sits on the app bar's line beside the search, and the app bar
+  is a shade lighter than the page, so a line runs along its foot.
 - **Tracks**: every song A to Z, each with its cover, who it is by, its album and year, what kind
   of file it is (a small FLAC, MP3, OPUS... label, lossless ones in the song's colour), how long
-  it is, a heart, and a menu (play next, play last, go to its album). Shuffle and play all at the
-  top. The song playing is lit. **Pull a song left** and *Play After* shows from under it, as in
+  it is, a heart, and a menu (play next, play last, go to its album). The song playing is lit. **Pull a song left** and *Play After* shows from under it, as in
   Namida: let go past it and the song plays after the one playing.
 - **Liked**: the songs with a heart, newest heart first, with shuffle and play all; the same list
   as the page's *Liked*.
@@ -402,19 +419,20 @@ buttons working.
   order you choose (disc number, title, duration or artist, either way round). An album on more
   than one disc has a header before each disc.
 - **Search** at the top right filters the page you are on (or the album open) as you type; the
-  box grows out of its icon.
+  box grows out of its icon as the count slides out to the left, and back when it closes.
 - **Namida's transitions**: an album opens as a page pushed in from the right (the one under it
   slides a third aside), its cover flying from the grid into the album's header; songs and albums
-  come in one after another, sliding up as they fade in; the count bar over a page slips away as
-  you scroll down and comes back as you scroll up; and the page sinks back a little as the player
-  opens over it. It is all in Namida's font, Lexend Deca, with Namida's icons.
+  come in one after another, sliding up as they fade in; and the page sinks back a little as the
+  player opens over it. Going back, the page leaves quickly and slows as it arrives, as Namida's
+  does. It is all in Namida's font, Lexend Deca, with Namida's icons.
 
 What is playing floats over the bar as a mini player, the same player as the page's, after
 Namida's:
 
 - **One continuous drag.** Up from the mini player to full screen, and on up to the queue; down
-  again the same way. Everything follows the finger at once and settles where the drag says, the
-  mini player with a small bounce. The bar sinks away under it as it opens. Back steps down.
+  again the same way. Everything follows the finger at once and settles where the drag says, with
+  Namida's times and curves: 300 ms up or down (the mini player with a small bounce), 600 ms for a
+  song sideways. The bar sinks away under it as it opens. Back steps down.
 - **Swipe sideways** on the mini player or the cover for the song before or after, with a tick
   under the finger when it changes.
 - **The cover swells** with the song's loud moments and **the seek bar is its waveform**, worked
@@ -423,11 +441,15 @@ Namida's:
   colours from the cover and specks drifting behind. Along the bottom, **what the file is** (FLAC,
   MP3, OPUS..., its bitrate and sample rate), **repeat**, and the **sound controls**: speed, pitch
   and volume, kept for next time.
+- **Repeat** opens Namida's menu: stop after the last song, repeat this song, repeat it a number of
+  more times (set with its − and +; it counts down, then carries on), repeat the queue, or repeat
+  the queue shuffled anew each time round.
 - **Lyrics over the cover**, from Namida's lyrics button beside the sound controls: the cover
   blurs and the words scroll over it in time with the song, the line being sung in the middle on
   a card of the song's colour, each word lighting as it is sung (for songs timed word by word),
   and three dots filling across a long pause. Scroll to look around and they come back to the
-  song three seconds later. Untimed lyrics scroll as a page.
+  song three seconds later. Untimed lyrics scroll as a page. Pull up to the queue (or down to the
+  mini player) and they ride on the cover's middle at their own size, fading as it shrinks.
 - **Full-page lyrics**: tap the lyrics over the cover and they take the whole screen, as
   Namida's: the cover blurred behind, who and what is playing along the top, the lines large from
   the left with the one being sung on a soft card (tap a line to go there), and the waveform,
@@ -451,9 +473,10 @@ it.
 
 ### 7. Lyrics, found and saved by themselves
 
-Press the lyrics button on the bar: the words scroll with the song, the line being sung in
-white, the rest waiting in grey. Click a line to jump there. With word timing, each word fills as
-it is sung; in a long instrumental gap, three dots swell until the singing starts again.
+Press the lyrics button in the full player's bottom row: the words scroll over the cover with the
+song, the line being sung on a card of the song's colour. Click them for the full page, where a
+click on a line jumps there. With word timing, each word fills as it is sung; in a long
+instrumental gap, three dots swell until the singing starts again.
 
 - **Looked up by themselves.** When a song starts and the phone has no lyrics for it, the browser
   looks them up on [LRCLIB](https://lrclib.net), a free, open lyrics library, provided the laptop

@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -137,11 +138,23 @@ import kotlin.math.roundToInt
 
 // ---------------------------------------------------------------------------- motion
 
-/** Namida's own curves, as it settles: quick to leave, slow to arrive; with a bounce into the mini player. */
-private val ToFull = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+/**
+ * Namida's own curves and times, as it settles: every move up or down over 300 ms, into full
+ * screen on Flutter's fastEaseInToSlowEaseOut (two cubics meeting at 0.198, 0.541: quick to leave,
+ * long and slow to arrive, never past), into the mini player with a small bounce, into the queue
+ * with a softer one; a song sideways over 600 ms, quick then gliding to a stop.
+ */
+private val ToFullIn = CubicBezierEasing(0.056f / 0.198f, 0.024f / 0.541f, 0.108f / 0.198f, 0.3085f / 0.541f)
+private val ToFullOut = CubicBezierEasing((0.3655f - 0.198f) / 0.802f, (1f - 0.541f) / 0.459f, (0.5465f - 0.198f) / 0.802f, (0.989f - 0.541f) / 0.459f)
+private val ToFull = Easing { t ->
+    if (t < 0.198f) ToFullIn.transform(t / 0.198f) * 0.541f
+    else 0.541f + ToFullOut.transform((t - 0.198f) / 0.802f) * 0.459f
+}
 private val ToMini = CubicBezierEasing(0.175f, 0.885f, 0.32f, 1.125f)
 private val ToQueue = CubicBezierEasing(0.15f, 0.96f, 0.28f, 1.04f)
 private val ToSong = CubicBezierEasing(0.18f, 1f, 0.04f, 1f)
+private const val SNAP_MS = 300
+private const val SONG_MS = 600
 
 /** Where the player is and how it moves: [p] up and down, [s] sideways. */
 @Stable
@@ -215,12 +228,12 @@ class PlayerMotion(private val scope: CoroutineScope) {
 
     fun expand() {
         bounceUp = p < 1f
-        go(1f, if (bounceUp) spring(dampingRatio = 0.74f, stiffness = 330f) else tween(340, easing = ToFull))
+        go(1f, tween(SNAP_MS, easing = ToFull))
     }
 
     fun collapse() {
         bounceUp = false
-        go(0f, tween(380, easing = ToMini))
+        go(0f, tween(SNAP_MS, easing = ToMini))
     }
 
     /** Slides the mini player up into place, as music starts. */
@@ -247,7 +260,7 @@ class PlayerMotion(private val scope: CoroutineScope) {
     fun toQueue() {
         bounceUp = false
         if (p < 1.6f) onQueueOpening()
-        go(2f, tween(380, easing = ToQueue))
+        go(2f, tween(SNAP_MS, easing = ToQueue))
     }
 
     private fun go(target: Float, spec: AnimationSpec<Float>) {
@@ -306,7 +319,7 @@ class PlayerMotion(private val scope: CoroutineScope) {
         haptic()
         val from = s
         sJob = scope.launch {
-            animate(from, dir.toFloat(), animationSpec = tween(560, easing = ToSong)) { v, _ -> s = v }
+            animate(from, dir.toFloat(), animationSpec = tween(SONG_MS, easing = ToSong)) { v, _ -> s = v }
             settleNow()
         }
     }
@@ -315,7 +328,7 @@ class PlayerMotion(private val scope: CoroutineScope) {
         val from = s
         sJob?.cancel()
         sJob = scope.launch {
-            animate(from, target, animationSpec = tween(520, easing = ToSong)) { v, _ -> s = v }
+            animate(from, target, animationSpec = tween(SONG_MS, easing = ToSong)) { v, _ -> s = v }
             sOffset = 0f
         }
     }
@@ -1322,7 +1335,7 @@ private fun RepeatButton(mode: PhonePlayer.Repeat, times: Int, onPick: (PhonePla
     Box {
         Box(
             Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.88f) { if (open) hide() else show() }
-                .semantics { contentDescription = "Repeat: " + repeatLabel(mode, times) },
+                .semantics { contentDescription = repeatLabel(mode, times).let { if (it.startsWith("Repeat")) it else "Repeat: " + it.replaceFirstChar(Char::lowercase) } },
             contentAlignment = Alignment.Center,
         ) { RepeatIcon(mode, times, nc.onSecondaryContainer) }
         if (open) androidx.compose.ui.window.Popup(
