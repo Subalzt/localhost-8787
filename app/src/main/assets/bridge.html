@@ -1191,7 +1191,7 @@
 
   /* ---------------------------------------------------------------- lyrics
      Namida's full-page lyrics, as the phone's (FullLyrics in NowPlaying.kt): the cover blurred far
-     out under a wash of the page colour; back, the artist over the song, and the lyrics button
+     out under a wash of the page colour; back, the song over its artist, and the lyrics button
      along the top; the lines large from the left, the one being sung on a soft card of the text
      colour, the rest dimmer the further off; the waveform, the times and the controls along the
      foot. In the song's colours (--nm-*). A tap on a line goes there. */
@@ -1209,8 +1209,8 @@
   .lyr-ib:hover { background: color-mix(in srgb, var(--nm-icon) 8%, transparent); }
   .lyr-ib svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.5; }
   .lyr-who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-  .lyr-artist { font-size: 14.4px; font-weight: 600; color: var(--nm-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .lyr-title { font-size: 12.15px; color: var(--nm-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lyr-title { font-size: 14.4px; font-weight: 600; color: var(--nm-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lyr-artist { font-size: 12.15px; color: var(--nm-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lyr-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 0 8px;
     -webkit-mask-image: linear-gradient(transparent, #000 10%, #000 88%, transparent); mask-image: linear-gradient(transparent, #000 10%, #000 88%, transparent); }
   .lyr-scroll::-webkit-scrollbar { display: none; }
@@ -1619,7 +1619,7 @@
      Deca at Namida's sizes (its text at nine tenths), its icons Iconsax. */
 
   /* ---- the mini player: Namida's card, floating over the page. 82 high, 6 in from the sides, the
-     cover 58 with 12 around it and corners of 6, corners of 20; the artist over the song; previous,
+     cover 58 with 12 around it and corners of 6, corners of 20; the song over its artist; previous,
      the play disc in the song's colour and next; the song's progress a hairline along its foot. It
      sits 12 over Music's own bar, and over the tabs along the bottom on a narrow screen. */
   #player { position: fixed; z-index: 40; top: auto; bottom: var(--mini-bottom, 12px);
@@ -2271,12 +2271,12 @@
 <!-- Lyrics, full screen over the page, in time with the song; the player stays along the bottom. -->
 <div class="lyr" id="lyr" hidden role="dialog" aria-label="Lyrics">
   <!-- Namida's full-page lyrics: the cover blurred far out under a wash of the page colour; along
-       the top, back, the artist and the song, and the lyrics button; the lines large from the left,
+       the top, back, the song and its artist, and the lyrics button; the lines large from the left,
        the one being sung on a soft card; the waveform, the times and the controls along the foot. -->
   <div class="lyr-bg" id="lyr-bg" aria-hidden="true"></div>
   <div class="lyr-top">
     <button class="lyr-ib" id="lyr-close" type="button" title="Back (Esc)" aria-label="Back" data-nx="back"></button>
-    <div class="lyr-who"><b class="lyr-artist" id="lyr-artist"></b><span class="lyr-title" id="lyr-title"></span></div>
+    <div class="lyr-who"><b class="lyr-title" id="lyr-title"></b><span class="lyr-artist" id="lyr-artist"></span></div>
     <button class="lyr-ib" id="lyr-off" type="button" title="Hide the lyrics" aria-label="Hide the lyrics" data-nx="lyrics"></button>
   </div>
   <div class="lyr-scroll" id="lyr-scroll">
@@ -6847,9 +6847,9 @@ function lyricsTick() {
 function showPlayer(t) {
   var pl = $("player");
   pl.hidden = false;
-  // As the app's mini player: the artist over the song.
-  $("pl-title").textContent = t.artist;
-  $("pl-sub").textContent = t.title;
+  // As the app's mini player: the song over its artist.
+  $("pl-title").textContent = t.title;
+  $("pl-sub").textContent = t.artist;
   showPlayerArt(t);
   markPlaying();
   setPlayerSpace();
@@ -7379,25 +7379,22 @@ function npRender() {
   ly.style.width = f.art + "px"; ly.style.height = f.art + "px";
   npPlace(ly, aX + (aS - f.art) / 2 - s * spacing, aY + (aS - f.art) / 2, 1, lv);
   ly.style.pointerEvents = lv > 0.5 && t.bcp > 0.95 && t.qp <= 0 ? "auto" : "none";
-  // In the bar the song is over the artist; open, as Namida has it, the artist is over the song,
-  // large. The two lines trade places on the way, crossing while they are faded out.
-  var tS = npLerp(row.artist / f.artist, 1, t.bcp), aSc = npLerp(row.title / f.title, 1, t.bcp);
+  // The song over its artist, in the bar and open alike: the song on the larger line.
+  var topS = npLerp(row.title / f.title, 1, t.bcp), subS = npLerp(row.artist / f.artist, 1, t.bcp);
   var tx = npLerp(row.textX, f.textX, t.bcp), tw = npLerp(row.textW, f.textW, t.bcp), tsp = spacing * 1.15;
-  // The two move as a pair; within it they swap over quickly in the middle of the way, dimmed as they pass.
+  // The two move as a pair.
   var pairTop = npLerp(row.titleTop + dip, f.titleTop - lift, t.bcp), gap = npLerp(row.artistTop - row.titleTop, f.artistTop - f.titleTop, t.bcp);
-  var flip = 1;
-  var ty = pairTop + gap * flip, ay = pairTop + gap * (1 - flip);
-  var cross = Math.pow(Math.abs(2 * flip - 1), 0.7);
+  var ty = pairTop, ay = pairTop + gap;
   $("np-slots").classList.toggle("full", t.bcp > 0.5);
   var moreA = t.qp > 0 ? 0 : npClamp(1 - t.bcp * 3, 0, 1);
   $("np-slots").style.setProperty("--more", moreA.toFixed(3));
   // Once faded, the album takes no room either, or it would leave an ellipsis after the artist.
   $("np-slots").classList.toggle("bare", moreA <= 0);
   Array.prototype.forEach.call(document.querySelectorAll("#np-slots .np-line"), function (el) {
-    var slot = +el.dataset.slot, title = el.classList.contains("t"), k = title ? tS : aSc;
-    el.style.fontSize = (title ? f.artist : f.title) + "px";
+    var slot = +el.dataset.slot, title = el.classList.contains("t"), k = title ? topS : subS;
+    el.style.fontSize = (title ? f.title : f.artist) + "px";
     el.style.width = (tw / k).toFixed(1) + "px";
-    npPlace(el, tx - s * tsp + slot * tsp, title ? ty : ay, k, el.dataset.has ? alphaOf(slot) * cross : 0);
+    npPlace(el, tx - s * tsp + slot * tsp, title ? ty : ay, k, el.dataset.has ? alphaOf(slot) : 0);
   });
 
   // The heart beside the two lines: in from the left as the player opens.

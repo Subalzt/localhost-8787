@@ -395,7 +395,7 @@ private class Geo(
     val waveH = dp(60f)
     val waveBottom = ctrlY - playBig / 2 - dp(18f)
     val waveTop = waveBottom - waveH
-    // Namida's two lines, both in its medium style: the artist at 20, the song at 15 (14.5 and 12.5 small).
+    // Namida's two lines, both in its medium style, the song over its artist: the song at 20, the artist at 15 (14.5 and 12.5 small).
     val titleBig = with(d) { 20.nsp.toPx() }
     val titleMini = with(d) { 14.5.nsp.toPx() }
     val artistBig = with(d) { 15.nsp.toPx() }
@@ -554,6 +554,8 @@ fun NowPlaying(
     val seek = remember { mutableStateOf<Long?>(null) }
     // The sound controls, opened from the bottom row.
     var sound by remember { mutableStateOf(false) }
+    // How far the sound dialog is in, for the player under it to blur by.
+    val soundFade = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     // What the file is, for the chip: FLAC, 1,411 kbps, 44.1 kHz.
     val info by produceState<dev.periy.bridge.server.TrackInfoDto?>(null, cur.id) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { library.info(cur.id) }.getOrNull() }
@@ -590,6 +592,11 @@ fun NowPlaying(
         motion.width = g.w
         motion.height = g.h
 
+        // Under Namida's dialogs, the player blurs (Android 12 on) as the dialog fades in.
+        val behindDialog = Modifier.graphicsLayer {
+            val f = soundFade.floatValue
+            renderEffect = if (f > 0.01f) androidx.compose.ui.graphics.BlurEffect(8.7.dp.toPx() * f, 8.7.dp.toPx() * f, androidx.compose.ui.graphics.TileMode.Clamp) else null
+        }
         val onDismiss = rememberUpdatedState { player.clear() }
         val around = rememberUpdatedState { i: Int -> aroundIndex(player.state.value, i) }
 
@@ -597,6 +604,7 @@ fun NowPlaying(
         Box(
             Modifier
                 .fillMaxSize()
+                .then(behindDialog)
                 .graphicsLayer {
                     val t = Terms(motion.p, motion.bounceUp)
                     val r = panelRect(g, t)
@@ -640,10 +648,10 @@ fun NowPlaying(
             // so on the way to the queue the title slides out from behind the cover
             listOf(-1 to prevT, 0 to curT, 1 to nextT).forEach { (slot, t) ->
                 if (t != null) key("t", slot, t.id) {
-                    TitleLine(t.artist, g.titleBig, Modifier.placed({ textWidth(g, Terms(motion.p, motion.bounceUp), title = true) }, g.titleBig * 1.3f) {
+                    TitleLine(t.title, g.titleBig, Modifier.placed({ textWidth(g, Terms(motion.p, motion.bounceUp), title = true) }, g.titleBig * 1.3f) {
                         textBox(g, Terms(motion.p, motion.bounceUp), motion.s, slot, title = true)
                     })
-                    TitleLine(t.title, g.artistBig, Modifier.placed({ textWidth(g, Terms(motion.p, motion.bounceUp), title = false) }, g.artistBig * 1.35f) {
+                    TitleLine(t.artist, g.artistBig, Modifier.placed({ textWidth(g, Terms(motion.p, motion.bounceUp), title = false) }, g.artistBig * 1.35f) {
                         textBox(g, Terms(motion.p, motion.bounceUp), motion.s, slot, title = false)
                     }, second = true)
                 }
@@ -811,7 +819,7 @@ fun NowPlaying(
                 )
             }
         }
-        if (sound) SoundSheet(state, tint, onChange = { sp, pi, vo -> player.setSound(sp, pi, vo) }, onClose = { sound = false })
+        if (sound) SoundSheet(player, state, soundFade, onClose = { sound = false })
     }
     }
 }
@@ -852,8 +860,8 @@ private fun FullLyrics(
                     Icon(Iconsax.Back, "Back to the player", tint = nc.icon, modifier = Modifier.size(22.dp))
                 }
                 Column(Modifier.weight(1f).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(cur.artist, style = Nm.large.copy(fontSize = 16.nsp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(cur.title, style = Nm.medium.copy(fontSize = 13.5.nsp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(cur.title, style = Nm.large.copy(fontSize = 16.nsp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(cur.artist, style = Nm.medium.copy(fontSize = 13.5.nsp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Box(
                     Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onLyricsOff).semantics { contentDescription = "Hide the lyrics" },
@@ -1334,77 +1342,43 @@ private fun RepeatIcon(mode: PhonePlayer.Repeat, times: Int, tint: Color, size: 
 }
 
 /**
- * Namida's repeat button: a tap opens its menu above the row, with the five ways to repeat, the
- * one on lit in the song's colour, and the count for "more times" set with its − and +. The menu
- * grows out of the button's corner and shrinks back into it.
+ * Namida's repeat button: a tap opens its menu (Namida's popup, over the row), with the five
+ * ways to repeat, the one on lit in the song's colour, and the count for "more times" set with
+ * its − and +.
  */
 @Composable
 private fun RepeatButton(mode: PhonePlayer.Repeat, times: Int, onPick: (PhonePlayer.Repeat) -> Unit, onTimes: (Int) -> Unit) {
     val nc = Nm.c
     var open by remember { mutableStateOf(false) }
-    val shown = remember { androidx.compose.animation.core.Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    fun show() { open = true; scope.launch { shown.animateTo(1f, tween(260, easing = ToFull)) } }
-    fun hide() { scope.launch { shown.animateTo(0f, tween(160, easing = FastOutSlowInEasing)); open = false } }
+    // Namida's icon colour in its menus: the song's colour, part see-through, over the text colour.
+    val iconColour = nc.main.copy(alpha = 120 / 255f).compositeOver(nc.onSurface)
     Box {
         Box(
-            Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.88f) { if (open) hide() else show() }
+            Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.88f) { open = !open }
                 .semantics { contentDescription = repeatLabel(mode, times).let { if (it.startsWith("Repeat")) it else "Repeat: " + it.replaceFirstChar(Char::lowercase) } },
             contentAlignment = Alignment.Center,
         ) { RepeatIcon(mode, times, nc.onSecondaryContainer) }
-        if (open) androidx.compose.ui.window.Popup(
-            alignment = Alignment.BottomEnd,
-            offset = with(LocalDensity.current) { IntOffset((44 + 44 + 6 - 12).dp.roundToPx(), -52.dp.roundToPx()) },
-            onDismissRequest = { hide() },
-            properties = androidx.compose.ui.window.PopupProperties(focusable = true),
-        ) {
-            CompositionLocalProvider(LocalNamida provides nc) {
-                Column(
-                    Modifier
-                        .graphicsLayer {
-                            val v = shown.value
-                            alpha = v.coerceIn(0f, 1f)
-                            val k = 0.9f + 0.1f * v
-                            scaleX = k; scaleY = k
-                            transformOrigin = TransformOrigin(0.8f, 1f)
-                        }
-                        .width(252.dp)
-                        .shadow(16.dp, RoundedCornerShape(20.dp), ambientColor = nc.shadow, spotColor = nc.shadow)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(nc.dialog)
-                        .border(1.dp, nc.onSurface.copy(alpha = 0.1f), RoundedCornerShape(20.dp))
-                        .padding(6.dp),
+        if (open) NamidaMenu(onDismiss = { open = false }) { close ->
+            PhonePlayer.Repeat.entries.forEach { m ->
+                val on = m == mode
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
+                        .background(if (on) nc.main.copy(alpha = 0.2f) else Color.Transparent)
+                        .clickable { onPick(m); close() }
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    PhonePlayer.Repeat.entries.forEach { m ->
-                        val on = m == mode
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(12.dp))
-                                .background(if (on) nc.tint.copy(alpha = 0.2f) else Color.Transparent)
-                                .clickable { onPick(m); hide() }
-                                .padding(horizontal = 8.dp, vertical = 9.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RepeatIcon(m, times, nc.icon, size = 22.dp)
-                            Spacer(Modifier.width(10.dp))
-                            Text(repeatLabel(m, times), style = Nm.medium, modifier = Modifier.weight(1f))
-                            if (m == PhonePlayer.Repeat.TIMES) {
-                                CountButton(Iconsax.MinusCircle, "One fewer", enabled = times > 1) { onTimes(times - 1) }
-                                CountButton(Iconsax.Add, "One more", enabled = times < 99) { onTimes(times + 1) }
-                            }
-                        }
+                    RepeatIcon(m, times, iconColour, size = 22.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(repeatLabel(m, times), style = Nm.medium, modifier = Modifier.weight(1f))
+                    if (m == PhonePlayer.Repeat.TIMES) {
+                        NmIconButton(Iconsax.MinusCircle, "One fewer", 18.dp, 4.dp, 0.dp, iconColour, repeat = true, enabled = times > 1) { onTimes(times - 1) }
+                        NmIconButton(Iconsax.Add, "One more", 18.dp, 4.dp, 0.dp, iconColour, repeat = true, enabled = times < 99) { onTimes(times + 1) }
                     }
                 }
             }
         }
     }
-}
-
-@Composable
-private fun CountButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier.size(32.dp).clip(CircleShape).clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { Icon(icon, description, tint = Nm.c.icon.copy(alpha = if (enabled) Nm.c.icon.alpha else 0.3f), modifier = Modifier.size(18.dp)) }
 }
 
 /** One of the bottom row's buttons: the icon alone, in the row's colour. */

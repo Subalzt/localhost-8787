@@ -391,6 +391,14 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         applyParams()
     }
 
+    /** Namida's two choices in the sound dialog: pitch counted in semitones, and speed carrying pitch with it. */
+    var pitchInSemitones: Boolean
+        get() = prefs.getBoolean(K_SEMITONES, false)
+        set(v) { prefs.edit().putBoolean(K_SEMITONES, v).apply() }
+    var speedCarriesPitch: Boolean
+        get() = prefs.getBoolean(K_LINK_PITCH, false)
+        set(v) { prefs.edit().putBoolean(K_LINK_PITCH, v).apply() }
+
     private fun outVolume() = _state.value.volume * (if (ducked) DUCK else 1f)
 
     private fun applyVolume() {
@@ -657,9 +665,12 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         const val K_SPEED = "speed"
         const val K_PITCH = "pitch"
         const val K_VOLUME = "volume"
-        const val SPEED_MIN = 0.5f
+        const val K_SEMITONES = "pitchInSemitones"
+        const val K_LINK_PITCH = "speedCarriesPitch"
+        // The dialog's sliders run from 0 to 2, as Namida's; the sound itself stops short of 0.
+        const val SPEED_MIN = 0.25f
         const val SPEED_MAX = 2f
-        const val PITCH_MIN = 0.5f
+        const val PITCH_MIN = 0.25f
         const val PITCH_MAX = 2f
     }
 }

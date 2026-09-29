@@ -163,18 +163,23 @@ private fun hsl(c: Color): Triple<Float, Float, Float> {
 
 /**
  * Namida's button: a faint wash of the colour with a hairline edge in it, the icon and the
- * words in the icon colour, a capsule at least 36 high.
+ * words in its icon colour (the colour, part see-through, over the text colour), a capsule at
+ * least 36 high; words alone get a quarter more room around them.
  */
 @Composable
 internal fun NamidaButton(text: String?, icon: ImageVector?, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val nc = Nm.c
     val wash = nc.primary.copy(alpha = 0.3f)
-    val fg = lerp(nc.icon, wash.copy(alpha = 1f), 0.15f).copy(alpha = 0.85f)
+    val fg = nc.primary.copy(alpha = 120 / 255f).compositeOver(nc.onSurface).copy(alpha = 0.85f)
     val shape = RoundedCornerShape(20.dp)
+    val wordsOnly = text != null && icon == null
     Row(
         modifier.heightIn(min = 36.dp).clip(shape).background(wash.copy(alpha = 0.3f * 0.2f)).border(0.5.dp, wash.copy(alpha = 0.3f * 0.6f), shape)
             .clickable(onClick = onClick)
-            .padding(horizontal = if (text != null) (if (icon != null) 18.dp else 24.dp) else 16.dp, vertical = 8.dp),
+            .padding(
+                horizontal = if (wordsOnly) 30.dp else if (text != null) 18.dp else 16.dp,
+                vertical = if (wordsOnly) 10.dp else 8.dp,
+            ),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {

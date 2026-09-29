@@ -323,6 +323,8 @@ fun MusicScreen(
                 shelf.open = null
                 scope.launch { pager.animateScrollToPage(i, animationSpec = tween(420, easing = PageEase)) }
             }
+
+            NamidaSnackHost(acts.snack, statusTop)
         }
     }
 }
@@ -342,6 +344,8 @@ private class TrackActions(val player: PhonePlayer, val shelf: MusicShelf, val f
     fun last(list: List<TrackDto>) = player.playLast(list)
     fun album(t: TrackDto) { shelf.albumOf[t.id]?.let { shelf.openAlbum(it) } }
     fun heart(t: TrackDto) = favourites.toggle(t.id)
+    /** Namida's note along the top, for what was done out of sight (a song swiped to play next). */
+    val snack = NamidaSnack()
 }
 
 // ---------------------------------------------------------------------------- the pages
@@ -596,7 +600,6 @@ private fun TrackTile(
     // the song plays after the one playing. A pull to the right is left for the pages' swipe.
     val scope = rememberCoroutineScope()
     val view = LocalView.current
-    val ctx = LocalContext.current
     val dx = remember { Animatable(0f) }
     var widthPx by remember { mutableIntStateOf(0) }
     val reach = with(LocalDensity.current) { 96.dp.toPx() }
@@ -643,7 +646,7 @@ private fun TrackTile(
                         }
                         if (armed) {
                             acts.next(t)
-                            android.widget.Toast.makeText(ctx, "Up next: ${t.title}", android.widget.Toast.LENGTH_SHORT).show()
+                            acts.snack.show("Up next: ${t.title}")
                         }
                         scope.launch { dx.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 420f)) }
                     }
@@ -707,42 +710,11 @@ private fun TrackMenu(t: TrackDto, acts: TrackActions, inAlbum: Boolean, tint: C
         Box(Modifier.clip(RoundedCornerShape(4.dp)).clickable { open = true }.padding(6.dp), contentAlignment = Alignment.Center) {
             Icon(Iconsax.More, "More for ${t.title}", tint = tint, modifier = Modifier.size(18.dp).rotate(90f))
         }
-        if (open) PopupMenu(onDismiss = { open = false }) {
-            MenuRow(Iconsax.Next, "Play next") { open = false; acts.next(t) }
-            MenuRow(Iconsax.PlayLast, "Play last") { open = false; acts.last(listOf(t)) }
-            if (!inAlbum) MenuRow(Iconsax.Albums, "Go to album") { open = false; acts.album(t) }
+        if (open) NamidaMenu(onDismiss = { open = false }) { close ->
+            NamidaMenuItem(Iconsax.Next, "Play next", onClick = { close(); acts.next(t) })
+            NamidaMenuItem(Iconsax.PlayLast, "Play last", onClick = { close(); acts.last(listOf(t)) })
+            if (!inAlbum) NamidaMenuItem(Iconsax.Albums, "Go to album", onClick = { close(); acts.album(t) })
         }
-    }
-}
-
-/** Namida's popup menu: its card colour laid over black (white, in light), rounded 16. */
-@Composable
-private fun PopupMenu(onDismiss: () -> Unit, content: @Composable () -> Unit) {
-    val nc = Nm.c
-    val colour = nc.cardColor.copy(alpha = 180 / 255f).compositeOver(if (nc.dark) Color.Black else Color.White)
-    androidx.compose.ui.window.Popup(
-        alignment = Alignment.TopEnd,
-        offset = IntOffset(0, with(LocalDensity.current) { 36.dp.roundToPx() }),
-        onDismissRequest = onDismiss,
-    ) {
-        CompositionLocalProvider(LocalNamida provides nc) {
-            Column(
-                Modifier.width(210.dp).shadow(12.dp, RoundedCornerShape(16.dp), ambientColor = nc.shadow, spotColor = nc.shadow)
-                    .clip(RoundedCornerShape(16.dp)).background(colour).padding(vertical = 6.dp),
-            ) { content() }
-        }
-    }
-}
-
-@Composable
-private fun MenuRow(icon: ImageVector?, label: String, on: Boolean = false, onClick: () -> Unit) {
-    val nc = Nm.c
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (icon != null) {
-            Icon(icon, null, tint = nc.icon, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(12.dp))
-        }
-        Text(label, style = Nm.medium.copy(color = if (on) nc.primary else nc.medium), modifier = Modifier.weight(1f))
     }
 }
 
@@ -848,6 +820,8 @@ private fun AlbumHead(a: Album, shelf: MusicShelf, pushOffset: () -> Float, onSh
 }
 
 private val SORTS = listOf("Disc Number", "Title", "Duration", "Artist")
+/** Namida's icons for the four. */
+private val SORT_ICONS = listOf(Iconsax.Hashtag, Iconsax.Music, Iconsax.Clock, Iconsax.Microphone)
 
 /** Namida's sort button: the order's name as a text button; a tap offers the others. */
 @Composable
@@ -858,8 +832,8 @@ private fun SortButton(sort: Int, onSort: (Int) -> Unit) {
             SORTS[sort], style = Nm.medium.copy(fontSize = (15f * 0.95f).nsp, color = Nm.c.primary), maxLines = 1,
             modifier = Modifier.padding(horizontal = 4.dp).clip(RoundedCornerShape(8.dp)).clickable { open = true }.padding(horizontal = 8.dp, vertical = 4.dp),
         )
-        if (open) PopupMenu(onDismiss = { open = false }) {
-            SORTS.forEachIndexed { i, s -> MenuRow(null, s, on = i == sort) { open = false; onSort(i) } }
+        if (open) NamidaMenu(onDismiss = { open = false }) { close ->
+            SORTS.forEachIndexed { i, s -> NamidaMenuItem(SORT_ICONS[i], s, selected = i == sort, onClick = { close(); onSort(i) }) }
         }
     }
 }

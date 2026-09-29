@@ -1,5 +1,37 @@
 package dev.periy.bridge.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.MutableFloatState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.delay
+import java.util.Locale
+import kotlin.math.ln
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -300,19 +332,10 @@ internal fun QueuePanel(
             var clearing by remember { mutableStateOf(false) }
             Box {
                 NamidaButton(null, Iconsax.Broom) { clearing = true }
-                if (clearing) androidx.compose.ui.window.Popup(
-                    alignment = Alignment.BottomStart,
-                    offset = IntOffset(0, with(LocalDensity.current) { -44.dp.roundToPx() }),
-                    onDismissRequest = { clearing = false },
-                ) {
-                    androidx.compose.runtime.CompositionLocalProvider(LocalNamida provides nc) {
-                        Column(Modifier.width(220.dp).clip(RoundedCornerShape(16.dp))
-                            .background(nc.cardColor.copy(alpha = 180 / 255f).compositeOver(if (nc.dark) Color.Black else Color.White)).padding(vertical = 6.dp)) {
-                            QueueMenuRow("Remove the songs before") { clearing = false; player.removeBefore() }
-                            QueueMenuRow("Remove the songs after") { clearing = false; player.removeAfter() }
-                            QueueMenuRow("Remove them all") { clearing = false; player.clear() }
-                        }
-                    }
+                if (clearing) NamidaMenu(onDismiss = { clearing = false }) { close ->
+                    NamidaMenuItem(Iconsax.Up, "Remove the songs before", onClick = { close(); player.removeBefore() })
+                    NamidaMenuItem(Iconsax.Down, "Remove the songs after", onClick = { close(); player.removeAfter() })
+                    NamidaMenuItem(Iconsax.Broom, "Remove them all", onClick = { close(); player.clear() })
                 }
             }
             NamidaButton("Shuffle", Iconsax.Shuffle) { player.shuffleUpcoming() }
@@ -356,10 +379,6 @@ private fun QueueHeader(state: PhonePlayer.State, onClose: () -> Unit) {
 }
 
 
-@Composable
-private fun QueueMenuRow(label: String, onClick: () -> Unit) {
-    Text(label, style = Nm.medium, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp))
-}
 
 @Composable
 private fun QueueRow(
@@ -476,17 +495,8 @@ private fun QueueRow(
                     Icon(Iconsax.More, "More for ${t.title}", tint = if (current) lit.copy(alpha = 160 / 255f) else nc.icon,
                         modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = 90f })
                 }
-                if (menu) androidx.compose.ui.window.Popup(
-                    alignment = Alignment.TopEnd,
-                    offset = IntOffset(0, with(LocalDensity.current) { 36.dp.roundToPx() }),
-                    onDismissRequest = { menu = false },
-                ) {
-                    androidx.compose.runtime.CompositionLocalProvider(LocalNamida provides nc) {
-                        Column(Modifier.width(210.dp).clip(RoundedCornerShape(16.dp))
-                            .background(nc.cardColor.copy(alpha = 180 / 255f).compositeOver(if (nc.dark) Color.Black else Color.White)).padding(vertical = 6.dp)) {
-                            QueueMenuRow("Take it off the queue") { menu = false; onRemove() }
-                        }
-                    }
+                if (menu) NamidaMenu(onDismiss = { menu = false }) { close ->
+                    NamidaMenuItem(Iconsax.MinusCircle, "Take it off the queue", onClick = { close(); onRemove() })
                 }
             }
             Spacer(Modifier.width(4.dp))
@@ -499,110 +509,325 @@ private val ROW_H = NamidaTileHeight + NamidaTileGap
 
 // ---------------------------------------------------------------------------- the sound controls
 
+/** Namida's dialogs come and go over 300 ms. */
+private const val DIALOG_MS = 300
+
+/** Tuned to 432 Hz, as a pitch: Namida's one-tap choice beside Pitch. */
+private const val HZ432 = 432f / 440f
+
+private fun toSemitones(ratio: Float): Float = if (ratio <= 0f) -12f else (12.0 * ln(ratio.toDouble()) / ln(2.0)).toFloat()
+private fun fromSemitones(st: Float): Float = 2.0.pow(st / 12.0).toFloat()
+
+/** Namida's figures: a percentage to two places at most (100.0%, 98.18%), speed as 1.00x, pitch as 0.0 st. */
+private fun percent(v: Float): String {
+    val p = (v * 10000f).roundToInt() / 100.0
+    return (if (p % 1.0 == 0.0) String.format(Locale.US, "%.1f", p) else p.toString()) + "%"
+}
+private fun times(v: Float) = String.format(Locale.US, "%.2fx", v)
+private fun stText(st: Float) = String.format(Locale.US, "%.1f st", st)
+private fun wholePercent(v: Float) = "${(v * 100).roundToInt()}%"
+
 /**
- * Namida's sound controls, from the player's chip or its sound button: a dialog titled
- * Configure, with pitch, speed and volume each as an icon, its name, its percentage and a
- * slider; reset in its corner and Done. Rises over the player; Back, a tap outside or Done
- * lets it go.
+ * Namida's Configure dialog, from the player's chip or its sound button, presented as Namida
+ * presents every dialog: the player behind blurred ([fade] is how far, for the player to read)
+ * under black at 45%, the dialog at 0.96 of its size, the whole fading in over 300 ms. Its title
+ * centred on a band across the top; pitch, speed and volume, each a line (its icon, its name,
+ * its value, a restore) over a slider with a step either side of it; reset all and Done along
+ * the foot. Back (which it follows as it is swiped), a tap outside or Done lets it go.
  */
 @Composable
-internal fun SoundSheet(state: PhonePlayer.State, tint: Color, onChange: (speed: Float, pitch: Float, volume: Float) -> Unit, onClose: () -> Unit) {
+internal fun SoundSheet(player: PhonePlayer, state: PhonePlayer.State, fade: MutableFloatState, onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
     val shown = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { shown.animateTo(1f, tween(320, easing = androidx.compose.animation.core.CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f))) }
     var closing by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown.animateTo(1f, tween(DIALOG_MS, easing = LinearOutSlowInEasing)) }
     val close: () -> Unit = {
-        if (!closing) { closing = true; scope.launch { shown.animateTo(0f, tween(180)); onClose() } }
+        if (!closing) { closing = true; scope.launch { shown.animateTo(0f, tween(DIALOG_MS, easing = FastOutLinearInEasing)); onClose() } }
     }
-    androidx.activity.compose.BackHandler(onBack = close)
+    val swipe = rememberBackSwipe(enabled = !closing) { swiped -> if (swiped) { closing = true; onClose() } else close() }
+    LaunchedEffect(Unit) { snapshotFlow { shown.value * (1f - swipe.progress.value) }.collect { fade.floatValue = it } }
+    DisposableEffect(Unit) { onDispose { fade.floatValue = 0f } }
+
     val live = rememberUpdatedState(state)
+    fun set(speed: Float = live.value.speed, pitch: Float = live.value.pitch, volume: Float = live.value.volume) = player.setSound(speed, pitch, volume)
+    var inSemitones by remember { mutableStateOf(player.pitchInSemitones) }
+    var linked by remember { mutableStateOf(player.speedCarriesPitch) }
+    val pitchAlpha by animateFloatAsState(if (linked) 0.6f else 1f, tween(300), label = "pitch")
     val nc = Nm.c
-    Box(Modifier.fillMaxSize()) {
-        Box(
-            Modifier.fillMaxSize()
-                .graphicsLayer { alpha = shown.value }
-                .background(Color.Black.copy(alpha = 0.45f))
-                .pointerInput(Unit) { detectTapGestures { close() } },
-        )
+
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = shown.value * (1f - swipe.progress.value) }) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).pointerInput(Unit) { detectTapGestures { close() } })
         Column(
-            Modifier.align(Alignment.Center).padding(horizontal = 38.dp).fillMaxWidth()
-                .graphicsLayer { val k = 0.92f + 0.08f * shown.value; scaleX = k; scaleY = k; alpha = shown.value }
+            Modifier.align(Alignment.Center)
+                .padding(horizontal = 38.dp, vertical = 32.dp)
+                .widthIn(max = 428.dp)
+                .fillMaxWidth()
+                .graphicsLayer { val k = 0.96f * (1f - 0.06f * swipe.progress.value); scaleX = k; scaleY = k }
                 .clip(RoundedCornerShape(24.dp))
                 .background(nc.dialog)
                 .pointerInput(Unit) { detectTapGestures { } }
-                .padding(top = 18.dp, bottom = 10.dp),
+                .verticalScroll(rememberScrollState()),
         ) {
-            Text("Configure", style = Nm.large.copy(fontSize = 20.nsp), modifier = Modifier.padding(horizontal = 20.dp))
-            Spacer(Modifier.height(12.dp))
-            SoundSlider(Iconsax.Pitch, "Pitch", state.pitch, 0.5f, 2f) { onChange(live.value.speed, it, live.value.volume) }
-            SoundSlider(Iconsax.Speed, "Speed", state.speed, 0.5f, 2f) { onChange(it, live.value.pitch, live.value.volume) }
-            SoundSlider(if (state.volume > 0f) Iconsax.Volume else Iconsax.Mute, "Volume", state.volume, 0f, 1f) {
-                onChange(live.value.speed, live.value.pitch, it)
-            }
-            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.weight(1f))
-                Box(Modifier.size(44.dp).clip(CircleShape).clickable { onChange(1f, 1f, 1f) }, contentAlignment = Alignment.Center) {
-                    Icon(Iconsax.Reset, "Put them back", tint = nc.icon, modifier = Modifier.size(22.dp))
+            // The title, on a band of the card colour across the top.
+            Box(
+                Modifier.fillMaxWidth().background(nc.primary.copy(alpha = 0.02f).compositeOver(nc.card)).padding(16.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text("Configure", style = Nm.medium, textAlign = TextAlign.Center) }
+
+            Column(Modifier.padding(vertical = 12.dp)) {
+                // Pitch: counted as a percentage or in semitones (a tap on its line switches), and
+                // held by speed while the two are linked.
+                val is432 = abs(state.pitch - HZ432) < 0.0005f
+                Column(Modifier.graphicsLayer { alpha = pitchAlpha }) {
+                    SoundLine(
+                        Iconsax.Pitch, "Pitch", if (inSemitones) "(Semitones)" else "(Percentage)",
+                        if (inSemitones) stText((toSemitones(state.pitch) * 10f).roundToInt() / 10f) else percent(state.pitch),
+                        onTap = { inSemitones = !inSemitones; player.pitchInSemitones = inSemitones },
+                        onRestore = { set(pitch = 1f) },
+                        enabled = !linked,
+                        featured = {
+                            SoundChip("432Hz", is432, enabled = !linked, onClick = { set(pitch = if (is432) 1f else HZ432) }) {
+                                Text("✓ ", style = Nm.small)
+                            }
+                        },
+                    )
+                    if (inSemitones) CuteSlider(toSemitones(state.pitch), -12f, 12f, 1f, 0.5f, ::stText, enabled = !linked) { set(pitch = fromSemitones(it)) }
+                    else CuteSlider(state.pitch, 0f, 2f, 0.01f, 0.01f, ::wholePercent, enabled = !linked) { set(pitch = it) }
                 }
-                Spacer(Modifier.width(4.dp))
-                Box(
-                    Modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(20.dp)).background(nc.primary.copy(alpha = 0.3f * 0.8f))
-                        .clickable(onClick = close).padding(horizontal = 24.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center,
-                ) { Text("Done", style = Nm.medium.copy(fontSize = 15.5.nsp, color = Color.White.copy(alpha = 0.85f))) }
+                Spacer(Modifier.height(6.dp))
+                SoundLine(
+                    Iconsax.Speed, "Speed", null, times(state.speed),
+                    onTap = null,
+                    onRestore = { set(speed = 1f, pitch = if (linked) 1f else live.value.pitch) },
+                    featured = {
+                        SoundChip("Pitch", linked, onClick = {
+                            linked = !linked
+                            player.speedCarriesPitch = linked
+                            if (linked) set(pitch = live.value.speed)
+                        }) {
+                            Icon(Iconsax.Link, null, tint = nc.icon, modifier = Modifier.padding(end = 4.dp).size(12.dp))
+                        }
+                    },
+                )
+                CuteSlider(state.speed, 0f, 2f, 0.01f, 0.01f, ::wholePercent) { set(speed = it, pitch = if (linked) it else live.value.pitch) }
+                Spacer(Modifier.height(6.dp))
+                SoundLine(
+                    if (state.volume > 0f) Iconsax.Volume else Iconsax.Mute, "Volume", null, percent(state.volume),
+                    onTap = null,
+                    onRestore = { set(volume = 1f) },
+                )
+                CuteSlider(state.volume, 0f, 1f, 0.01f, 0.01f, ::wholePercent) { set(volume = it) }
+                Spacer(Modifier.height(6.dp))
+            }
+            // Reset all, and Done.
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                NmIconButton(Iconsax.Reset, "Put them all back", 24.dp, 8.dp, 0.dp, nc.secondary) { set(1f, 1f, 1f) }
+                Spacer(Modifier.width(6.dp))
+                NamidaButton("Done", null, onClick = close)
             }
         }
     }
 }
 
 /**
- * One of the sound controls, as Namida's: its icon, its name in the large style and its
- * percentage beside it, over a slider of the Material kind Namida uses: a thick track, lit from
- * the left up to a thin upright thumb, with a gap either side of it. Dragged or tapped, it moves
- * in hundredths.
+ * Namida's icon button: the icon and nothing round it, dimmed to half while pressed. With
+ * [repeat], held down it goes on doing it, ten times a second.
  */
 @Composable
-private fun SoundSlider(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, v: Float, min: Float, max: Float, onChange: (Float) -> Unit) {
-    val set = rememberUpdatedState(onChange)
+internal fun NmIconButton(
+    icon: ImageVector, desc: String, size: Dp, padH: Dp, padV: Dp, tint: Color,
+    repeat: Boolean = false, enabled: Boolean = true, action: () -> Unit,
+) {
+    val act = rememberUpdatedState(action)
+    var pressed by remember { mutableStateOf(false) }
+    val a by animateFloatAsState(if (pressed) 0.5f else 1f, tween(200), label = "press")
+    val scope = rememberCoroutineScope()
+    Box(
+        Modifier
+            .semantics {
+                role = Role.Button
+                contentDescription = desc
+                if (enabled) onClick(label = null) { act.value(); true }
+            }
+            .pointerInput(repeat, enabled) {
+                if (!enabled) return@pointerInput
+                awaitEachGesture {
+                    awaitFirstDown()
+                    pressed = true
+                    var held = false
+                    val job = if (repeat) scope.launch {
+                        delay(viewConfiguration.longPressTimeoutMillis)
+                        held = true
+                        while (true) { act.value(); delay(100) }
+                    } else null
+                    val up = waitForUpOrCancellation()
+                    job?.cancel()
+                    pressed = false
+                    if (up != null) { up.consume(); if (!held) act.value() }
+                }
+            }
+            .graphicsLayer { alpha = a }
+            .padding(horizontal = padH, vertical = padV),
+    ) { Icon(icon, null, tint = tint, modifier = Modifier.size(size)) }
+}
+
+/**
+ * One of the sound controls' lines, as Namida's: its icon, its name (and under it how it is
+ * counted, where that can change), its value, then any quick choice and the restore.
+ */
+@Composable
+private fun SoundLine(
+    icon: ImageVector, title: String, subtitle: String?, value: String,
+    onTap: (() -> Unit)?, onRestore: () -> Unit,
+    enabled: Boolean = true,
+    featured: (@Composable () -> Unit)? = null,
+) {
     val nc = Nm.c
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 2.dp, horizontal = 8.dp)
+            .then(if (onTap != null) Modifier.clip(RoundedCornerShape(12.dp)).clickable(enabled = enabled, onClick = onTap).padding(vertical = 6.dp) else Modifier)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = nc.secondary, modifier = Modifier.padding(horizontal = 6.dp).size(24.dp))
+        Spacer(Modifier.width(6.dp))
+        Row(Modifier.weight(1f, fill = false), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f, fill = false)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, style = Nm.large.copy(fontSize = 16.nsp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (onTap != null) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(Iconsax.Swap, null, tint = nc.icon, modifier = Modifier.size(12.dp))
+                    }
+                }
+                if (subtitle != null) Text(subtitle, style = Nm.small.copy(fontSize = 10.nsp), maxLines = 1)
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(value, style = Nm.medium.copy(fontSize = 13.5.nsp, fontFeatureSettings = "tnum"), maxLines = 1)
+        }
+        if (featured != null) {
+            Spacer(Modifier.width(2.dp))
+            featured()
+        }
+        Spacer(Modifier.width(6.dp))
+        Box(
+            Modifier.size(40.dp).clip(CircleShape).clickable(enabled = enabled, onClick = onRestore).semantics { contentDescription = "$title back to normal" },
+            contentAlignment = Alignment.Center,
+        ) { Icon(Iconsax.Reset, null, tint = nc.icon, modifier = Modifier.size(20.dp)) }
+        Spacer(Modifier.width(10.dp))
+    }
+}
+
+/** Namida's small quick choice beside a line's value: lit more while it is on, a mark sliding in before its words. */
+@Composable
+private fun SoundChip(text: String, on: Boolean, enabled: Boolean = true, onClick: () -> Unit, mark: @Composable () -> Unit) {
+    val nc = Nm.c
+    Row(
+        Modifier.clip(RoundedCornerShape(7.2.dp)).background(nc.secondaryContainer.copy(alpha = if (on) 0.5f else 0.2f))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 7.56.dp, vertical = 3.78.dp)
+            .semantics { stateDescription = if (on) "On" else "Off" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AnimatedVisibility(
+            on,
+            enter = expandHorizontally(tween(300, easing = FastLinearToSlowEaseIn)) + fadeIn(tween(300, easing = FastLinearToSlowEaseIn)),
+            exit = shrinkHorizontally(tween(300, easing = FastLinearToSlowEaseIn)) + fadeOut(tween(300, easing = FastLinearToSlowEaseIn)),
+        ) { mark() }
+        Text(text, style = Nm.small, maxLines = 1)
+    }
+}
+
+/** Flutter's fastLinearToSlowEaseIn, which Namida's quick choices come in on. */
+private val FastLinearToSlowEaseIn = CubicBezierEasing(0.18f, 1f, 0.04f, 1f)
+
+/**
+ * Namida's slider with a step either side: the Material kind it uses (a track 6 thick, lit from
+ * the left up to an upright thumb 5 by 24, with a gap of 4 either side of it and small corners
+ * there), moved by sliding along it, a tap on it moving nothing; while sliding, the value shows
+ * on a label over the thumb. The steps go by [arrowStep], held down ten a second.
+ */
+@Composable
+private fun CuteSlider(
+    value: Float, min: Float, max: Float, step: Float, arrowStep: Float,
+    label: (Float) -> String, enabled: Boolean = true, onChange: (Float) -> Unit,
+) {
+    val nc = Nm.c
+    val set = rememberUpdatedState(onChange)
+    val now = rememberUpdatedState(value)
+    fun fine(v: Float) = (v * 10000f).roundToInt() / 10000f
+    fun snap(v: Float) = fine((v / step).roundToInt() * step).coerceIn(min, max)
     val active = nc.primary.copy(alpha = 0.85f)
     val inactive = nc.secondary.copy(alpha = 0.2f)
-    fun at(x: Float, w: Float, pad: Float): Float {
-        val raw = min + ((x - pad) / (w - pad * 2)).coerceIn(0f, 1f) * (max - min)
-        return ((raw * 100f).roundToInt() / 100f).coerceIn(min, max)
-    }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = nc.icon, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(12.dp))
-            Text(label, style = Nm.large)
-            Spacer(Modifier.width(8.dp))
-            Text("${(v * 100).roundToInt()}%", style = Nm.medium.copy(fontFeatureSettings = "tnum"))
+    val bubble = if (nc.dark) Color(0xFF232323) else Color.White
+    val labelStyle = TextStyle(
+        fontFamily = LexendDeca, fontSize = 14.nsp,
+        color = if (nc.dark) Color.White.copy(alpha = 210 / 255f) else Color.Black.copy(alpha = 160 / 255f),
+    )
+    val measurer = rememberTextMeasurer()
+    var dragging by remember { mutableStateOf(false) }
+    val lit by animateFloatAsState(if (dragging) 1f else 0f, tween(if (dragging) 160 else 120), label = "label")
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.width(12.dp))
+        NmIconButton(Iconsax.Back, "Less", 20.dp, 4.dp, 4.dp, nc.secondary, repeat = true, enabled = enabled) {
+            set.value(fine(now.value - arrowStep).coerceAtLeast(min))
         }
         Box(
-            Modifier.fillMaxWidth().height(40.dp)
-                .pointerInput(min, max) {
-                    val pad = 10.dp.toPx()
-                    detectTapGestures { set.value(at(it.x, size.width.toFloat(), pad)) }
-                }
-                .pointerInput(min, max) {
-                    val pad = 10.dp.toPx()
-                    detectHorizontalDragGestures { ch, _ -> ch.consume(); set.value(at(ch.position.x, size.width.toFloat(), pad)) }
+            Modifier.weight(1f).height(44.dp)
+                .pointerInput(min, max, step, enabled) {
+                    if (!enabled) return@pointerInput
+                    var v = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { v = now.value; dragging = true },
+                        onDragEnd = { dragging = false },
+                        onDragCancel = { dragging = false },
+                    ) { ch, dx ->
+                        ch.consume()
+                        v = (v + dx / (size.width - 20.dp.toPx()) * (max - min)).coerceIn(min, max)
+                        val s = snap(v)
+                        if (s != now.value) set.value(s)
+                    }
                 }
                 .drawBehind {
                     val pad = 10.dp.toPx()
-                    val l = pad; val w = size.width - pad * 2
+                    val l = pad
+                    val w = size.width - pad * 2
                     val cy = size.height / 2
                     val th = 6.dp.toPx()
                     val gap = 4.dp.toPx()
-                    val thumbW = 5.dp.toPx(); val thumbH = 24.dp.toPx()
-                    val f = ((v - min) / (max - min)).coerceIn(0f, 1f)
-                    val x = l + w * f
-                    val r = CornerRadius(th / 2)
-                    if (x - thumbW / 2 - gap > l) drawRoundRect(active, Offset(l, cy - th / 2), Size(x - thumbW / 2 - gap - l, th), r)
-                    if (l + w > x + thumbW / 2 + gap) drawRoundRect(inactive, Offset(x + thumbW / 2 + gap, cy - th / 2), Size(l + w - (x + thumbW / 2 + gap), th), r)
+                    val thumbW = 5.dp.toPx()
+                    val thumbH = 24.dp.toPx()
+                    val x = l + w * ((value.coerceIn(min, max) - min) / (max - min))
+                    val outer = CornerRadius(th / 2)
+                    val inner = CornerRadius(2.dp.toPx())
+                    fun bar(from: Float, to: Float, left: CornerRadius, right: CornerRadius, c: Color) {
+                        if (to - from <= 0.5f) return
+                        drawPath(Path().apply {
+                            addRoundRect(RoundRect(Rect(from, cy - th / 2, to, cy + th / 2), topLeft = left, topRight = right, bottomRight = right, bottomLeft = left))
+                        }, c)
+                    }
+                    bar(l, x - thumbW / 2 - gap, outer, inner, active)
+                    bar(x + thumbW / 2 + gap, l + w, inner, outer, inactive)
                     drawRoundRect(active, Offset(x - thumbW / 2, cy - thumbH / 2), Size(thumbW, thumbH), CornerRadius(thumbW / 2))
+                    if (lit > 0.01f) {
+                        val text = measurer.measure(label(value), labelStyle)
+                        val bw = maxOf(text.size.width + 16.dp.toPx(), 32.dp.toPx())
+                        val bh = 32.dp.toPx()
+                        val bottom = cy - thumbH / 2 - 4.dp.toPx()
+                        withTransform({ scale(lit, lit, pivot = Offset(x, bottom)) }) {
+                            drawRoundRect(bubble, Offset(x - bw / 2, bottom - bh), Size(bw, bh), CornerRadius(bh / 2))
+                            drawText(text, topLeft = Offset(x - text.size.width / 2f, bottom - bh / 2 - text.size.height / 2f))
+                        }
+                    }
                 },
         )
+        NmIconButton(Iconsax.StepUp, "More", 20.dp, 4.dp, 4.dp, nc.secondary, repeat = true, enabled = enabled) {
+            set.value(fine(now.value + arrowStep).coerceAtMost(max))
+        }
+        Spacer(Modifier.width(12.dp))
     }
 }

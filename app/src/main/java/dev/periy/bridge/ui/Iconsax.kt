@@ -82,6 +82,20 @@ object Iconsax {
     val Volume: ImageVector = icon("Volume", S("M15 7.412c0-2.98-2.07-4.12-4.59-2.54l-2.92 1.83c-.32.19-.69.3-1.06.3H5c-2 0-3 1-3 3v4c0 2 1 3 3 3h1.43c.37 0 .74.11 1.06.3l2.92 1.83c2.52 1.58 4.59.43 4.59-2.54v-5.12M18 8a6.66 6.66 0 0 1 0 8M19.828 18.5c1.45-1.93 2.17-4.21 2.17-6.5M19.828 5.5c.59.78 1.05 1.62 1.4 2.5", true, true))
     /** Volume, off. */
     val Mute: ImageVector = icon("Mute", S("M2 14c0 2 1 3 3 3h2M15 8.372v-.96c0-2.98-2.07-4.12-4.59-2.54l-2.92 1.83c-.32.19-.69.3-1.06.3H5c-2 0-3 1-3 3M10.41 19.13c2.52 1.58 4.59.43 4.59-2.54v-3.64M18.81 9.422c.9 2.15.63 4.66-.81 6.58M20.78 17c-.27.52-.58 1.02-.94 1.5M21.148 7.8c.83 1.97 1.05 4.13.66 6.2M22 2 2 22", true, true))
+    /** A step up, beside a slider (Namida's arrow_right_3). */
+    val StepUp: ImageVector = icon("StepUp", S("M15.85 8.99c2.87 1.66 2.87 4.37 0 6.03l-2.31 1.34-2.31 1.34C8.35 19.34 6 17.99 6 14.67V9.33c0-3.31 2.35-4.67 5.22-3.01", true, true))
+    /** Speed and pitch linked. */
+    val Link: ImageVector = icon("Link", S("M13.06 10.941a5.74 5.74 0 0 1 0 8.13c-2.25 2.24-5.89 2.25-8.13 0-2.24-2.25-2.25-5.89 0-8.13M14.969 3.172c1.49.03 2.97.62 4.1 1.76 2.34 2.34 2.34 6.14 0 8.49", true, true), S("M10.59 13.412c-2.34-2.34-2.34-6.14 0-8.49", true, true))
+    /** One way of counting or the other. */
+    val Swap: ImageVector = icon("Swap", S("M17.15 13.82l-3.04 3.04M6.85 13.82h10.3M6.85 10.18l3.04-3.04M14.11 10.18H6.85M17.149 10.18h-.52", true, true), S("M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85", true, true))
+    /** Sorted by disc and track number. */
+    val Hashtag: ImageVector = icon("Hashtag", S("M10 3 8 21M16 3l-2 18M20.05 9h1.45M3.5 9h13.49M3.95 15H2.5M20.5 15H7.01", true, true))
+    /** Sorted by title. */
+    val Music: ImageVector = icon("Music", S("M6.28 22.002a3.12 3.12 0 1 0 0-6.24 3.12 3.12 0 0 0 0 6.24Z", true, true), S("M20.838 7.96V4.6c0-2.6-1.63-2.96-3.28-2.51l-6.24 1.7c-1.14.31-1.92 1.21-1.92 2.51v12.57M20.84 16.8V12M17.722 19.92a3.12 3.12 0 1 0 0-6.24 3.12 3.12 0 0 0 0 6.24ZM9.398 9.518l11.44-3.12", true, true))
+    /** Sorted by length. */
+    val Clock: ImageVector = icon("Clock", S("M12 8v5", true, true), S("M9 2h6", true, true), S("M5 8a8.696 8.696 0 0 0-1.75 5.25C3.25 18.08 7.17 22 12 22s8.75-3.92 8.75-8.75S16.83 4.5 12 4.5c-1.26 0-2.45.26-3.53.74", true, true))
+    /** Sorted by artist. */
+    val Microphone: ImageVector = icon("Microphone", S("M6 12v1c0 3.31 2.69 6 6 6s6-2.69 6-6V8c0-3.31-2.69-6-6-6S6 4.69 6 8", true, true), S("M3 11v2a9 9 0 0 0 18 0v-2M9.11 7.48a8 8 0 0 1 5.5 0M10.031 10.482c1.2-.33 2.47-.33 3.67 0", true, true))
     /** Back as it was. */
     val Reset: ImageVector = icon("Reset", S("M18.01 19.99A9.964 9.964 0 0112 22c-5.52 0-8.89-5.56-8.89-5.56m0 0h4.52m-4.52 0v5M22 12c0 1.82-.49 3.53-1.34 5M6.03 3.97A9.921 9.921 0 0112 2c6.67 0 10 5.56 10 5.56m0 0v-5m0 5h-4.44M2 12c0-1.82.48-3.53 1.33-5", true, true))
     /** A handle to drag a song by: three lines. */
