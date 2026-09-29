@@ -377,12 +377,13 @@ work.
   handle and a menu to take it off). Along its foot, a broom to remove the songs before or after,
   and **Shuffle**, which shuffles only what is left. When the song changes, its colour passes from
   one tile to the next.
-- **It looks like Namida's too**: its font (Lexend Deca) and its icons (Iconsax), the artist large
-  over the song with a **heart** beside them (kept on the phone, so a song with a heart has it on
+- **It looks like Namida's too**: its font (Lexend Deca) and its icons (Iconsax), the song large
+  over its artist with a **heart** beside them (kept on the phone, so a song with a heart has it on
   the phone's player and every page), a thin waveform, and a glowing play disc in the cover's
   colour, which tints the whole player. Along the bottom, **what the file is** (FLAC, MP3, OPUS...,
   its bitrate, its sample rate and, for a 24-bit file, a Hi-Res badge), **repeat**, the **sound
-  controls** (Namida's Configure: speed and volume in percent) and **lyrics**.
+  controls** (Namida's Configure: speed and volume, each with a step either side of its slider) and
+  **lyrics**. Its menus, its notes and its dialog are Namida's too.
 - **Repeat** opens Namida's menu: stop after the last song, repeat this song, repeat it a number of
   more times (set with its − and +), repeat the queue, or repeat the queue shuffled anew each time
   round.
@@ -437,10 +438,11 @@ Namida's:
   under the finger when it changes.
 - **The cover swells** with the song's loud moments and **the seek bar is its waveform**, worked
   out once on the phone and kept (the page gets the same, from the phone).
-- **Namida's look**: the artist over the song with a heart, a thin waveform, the glowing play disc,
+- **Namida's look**: the song over its artist with a heart, a thin waveform, the glowing play disc,
   colours from the cover and specks drifting behind. Along the bottom, **what the file is** (FLAC,
   MP3, OPUS..., its bitrate and sample rate), **repeat**, and the **sound controls**: speed, pitch
-  and volume, kept for next time.
+  and volume in Namida's Configure dialog (pitch in percent or semitones, a one-tap 432 Hz, speed
+  carrying pitch if you like), kept for next time.
 - **Repeat** opens Namida's menu: stop after the last song, repeat this song, repeat it a number of
   more times (set with its − and +; it counts down, then carries on), repeat the queue, or repeat
   the queue shuffled anew each time round.
@@ -542,7 +544,10 @@ with a real transfer: close means the network is the limit, far below means stor
 
 - **On the phone**, Back closes whatever is open (the player a step at a time, a search, an album,
   Music, a linked phone's files, the clipboard's history), then returns to Home; at Home it sends the app to the background, as Home does. It
-  never closes the app, and the server keeps running.
+  never closes the app, and the server keeps running. From Android 14 the swipe shows it coming:
+  what it would close follows the finger (a page slides aside and fades, an album slides off the
+  way it came, the player lowers), finishes quickly when you let go, and settles back if you swipe
+  back out first.
 - **On the laptop**, the browser's Back steps back through the page: it closes the player, the
   lyrics, a file being viewed or the monitor, then returns to the tab before. It leaves the page only from where
   you opened it. Each tab has its own address (`#music`), so a reload or a bookmark opens it.

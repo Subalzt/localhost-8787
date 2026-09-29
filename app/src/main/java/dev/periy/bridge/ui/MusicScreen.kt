@@ -205,6 +205,20 @@ fun MusicScreen(
             shelf.heroKey = null
         }
     }
+    // Back from an album follows the finger (Android 14 on): the page slides off to the right as
+    // it is swiped, the pages under it coming back from a third aside; let go, and the rest of the
+    // way plays out as the push backwards; swiped back out, it slides home again. (The player,
+    // open over it, takes back first; so does a search on the album's page.)
+    androidx.activity.compose.PredictiveBackHandler(
+        enabled = shelf.showing && shelf.open != null && !shelf.albumSearching && motion.p < 0.5f,
+    ) { events ->
+        try {
+            events.collect { e -> push.snapTo(1f - e.progress) }
+            shelf.open = null
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            scope.launch { push.animateTo(1f, tween(300, easing = LinearToEaseOut)) }
+        }
+    }
     val widthPx = remember { floatArrayOf(0f) }
     val origin = remember { floatArrayOf(0f, 0f) }
     // The pages come in one after another the first time they show, as Namida's do.

@@ -319,17 +319,49 @@ private fun BlazeItUi(vm: MainViewModel) {
     // Back: whatever is open closes first (a linked phone's files and the clipboard's history
     // take their own), then any tab goes back to Home. At Home the app goes to the background,
     // as Home does for any app; it is never closed, and the server keeps running either way.
-    androidx.activity.compose.BackHandler(enabled = showOem) { showOem = false }
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && tab != TAB_HOME) { goTo(TAB_HOME) }
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && tab == TAB_HOME) {
+    //
+    // Back follows the finger (Android 14 on): whatever it would close slides aside and fades as
+    // the swipe goes, what is under it coming back; let go and the rest plays out quickly; swipe
+    // back out before letting go and it all settles back. (Music's albums and the full-page
+    // lyrics do the same in their own screens.)
+    val oemSwipe = rememberBackSwipe(enabled = showOem) { showOem = false }
+    // A tab goes back to Home: the pages slide towards it with the swipe, a little under half way.
+    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && tab != TAB_HOME && !shelf.showing) { events ->
+        val from = pager.currentPage
+        val toward = if (from > TAB_HOME) -1 else 1
+        try {
+            events.collect { e -> pager.scrollToPage(from, toward * 0.45f * e.progress) }
+            goTo(TAB_HOME)
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            navScope.launch { pager.animateScrollToPage(from, animationSpec = spring(dampingRatio = 0.95f, stiffness = 650f)) }
+        }
+    }
+    // At Home, from Android 12 on the system takes back itself (and, from 14, shows it coming):
+    // the app goes to the background, as it does below 12 here.
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
         (ctx as? android.app.Activity)?.moveTaskToBack(true)
     }
-    // Music, open: a search closes, then an album, then Music itself, back to the app. The
-    // player, open over it, goes back down a step first.
+    // Music, open: a search closes, then an album (in Music's own screen), then Music itself, back
+    // to the app, following the finger. The player, open over it, goes back down a step first.
     androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && shelf.showing) { shelf.back() }
-    androidx.activity.compose.BackHandler(enabled = now.current != null && playerOpen) {
-        if (motion.p > 1.5f) motion.expand() else motion.collapse()
+    val musicSwipe = rememberBackSwipe(
+        enabled = !showOem && browsePeer == null && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
+    ) { shelf.showing = false }
+    // A linked phone's files, at their top folder (a folder inside goes up a folder first, in its screen).
+    val peerSwipe = rememberBackSwipe(enabled = browsePeer != null) { browsePeer = null }
+    // The player: down to the mini player (or from the queue back to the player) with the finger.
+    androidx.activity.compose.PredictiveBackHandler(enabled = now.current != null && playerOpen) { events ->
+        val from = motion.p
+        val to = if (from > 1.5f) 1f else 0f
+        try {
+            events.collect { e -> motion.backPreview(from, to, e.progress) }
+            if (to == 1f) motion.expand() else motion.collapse()
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            if (from > 1.5f) motion.toQueue() else motion.expand()
+        }
     }
+    // Whether a back swipe is under way over the battery steps, for the pages to be there under them.
+    val oemPeek by remember { derivedStateOf { oemSwipe.progress.value > 0f } }
 
     // Who the clipboard reaches right now: every computer live here, once each (by its machine's
     // name where the laptop helper gives one), and the linked phones while copies go on to them.
@@ -443,19 +475,13 @@ private fun BlazeItUi(vm: MainViewModel) {
     val contentTop = if (!heroUnderBar) headerTop else 0.dp
 
     Box(Modifier.fillMaxSize().background(Bridge.Bg)) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(if (shelf.showing) SharedAxisBack.under(musicSwipe) else Modifier).then(if (browsePeer != null) SharedAxisBack.under(peerSwipe) else Modifier)) {
             StyleBackground()
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).imePadding()) {
-                    if (showOem) OemScreen(oemSteps, Modifier.padding(top = contentTop), onOpen = { intent ->
-                            runCatching { openSettings.launch(intent) }.onFailure {
-                                Toast.makeText(ctx, "This phone would not open that screen", Toast.LENGTH_SHORT).show()
-                            }
-                        }, onDone = { showOem = false })
-
                     // The trackpad keeps its own touches; swipe on the keys under it instead.
-                    else androidx.compose.foundation.pager.HorizontalPager(
-                        pager, Modifier.fillMaxSize(), key = { it },
+                    if (!showOem || oemPeek) androidx.compose.foundation.pager.HorizontalPager(
+                        pager, Modifier.fillMaxSize().then(if (showOem) SharedAxisBack.under(oemSwipe) else Modifier), key = { it },
                         // Settles with a soft spring rather than a hard stop.
                         flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(
                             pager, snapPositionalThreshold = 0.18f,
@@ -517,6 +543,12 @@ private fun BlazeItUi(vm: MainViewModel) {
                         }
                     }
 
+                    if (showOem) OemScreen(oemSteps, Modifier.padding(top = contentTop).then(SharedAxisBack.over(oemSwipe)), onOpen = { intent ->
+                            runCatching { openSettings.launch(intent) }.onFailure {
+                                Toast.makeText(ctx, "This phone would not open that screen", Toast.LENGTH_SHORT).show()
+                            }
+                        }, onDone = { showOem = false })
+
                     // Over Home's hero the hero carries the title itself; the header comes in once it has gone.
                     androidx.compose.animation.AnimatedVisibility(
                         !overHero,
@@ -555,11 +587,11 @@ private fun BlazeItUi(vm: MainViewModel) {
             enter = androidx.compose.animation.fadeIn(tween(240)) + androidx.compose.animation.scaleIn(tween(340, easing = androidx.compose.animation.core.CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)), initialScale = 0.94f),
             exit = androidx.compose.animation.fadeOut(tween(200)) + androidx.compose.animation.scaleOut(tween(240), targetScale = 0.96f),
         ) {
-            MusicScreen(
+            Box(SharedAxisBack.over(musicSwipe)) { MusicScreen(
                 shelf, now, player, motion,
                 statusTop = statusTop, bottomInset = bottomInset, miniRoom = MiniRoom,
                 requestMusic = { requestMusic.launch(musicPermission()) },
-            )
+            ) }
         }
 
         // What is playing: the mini player over the tabs, or 12 above Namida's bar in Music (it
@@ -581,7 +613,7 @@ private fun BlazeItUi(vm: MainViewModel) {
         ) {
             // Kept while it slides out, after browsePeer has gone.
             val shownPeer = remember { browsePeer }
-            (browsePeer ?: shownPeer)?.let { PeerFilesScreen(it) { browsePeer = null } }
+            (browsePeer ?: shownPeer)?.let { Box(SharedAxisBack.over(peerSwipe)) { PeerFilesScreen(it) { browsePeer = null } } }
         }
 
         if (showMonitor) MonitorOverlay(monitor, running) { setMonitor(false) }

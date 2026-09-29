@@ -158,6 +158,9 @@ private const val SONG_MS = 600
 
 /** Where the player is and how it moves: [p] up and down, [s] sideways. */
 @Stable
+/** How far a back swipe carries the player before it is let go. */
+private const val BACK_REACH = 0.3f
+
 class PlayerMotion(private val scope: CoroutineScope) {
     /** 0 mini, 1 full screen, 2 the queue; a little past either end while it bounces. */
     var p by mutableFloatStateOf(0f)
@@ -234,6 +237,16 @@ class PlayerMotion(private val scope: CoroutineScope) {
     fun collapse() {
         bounceUp = false
         go(0f, tween(SNAP_MS, easing = ToMini))
+    }
+
+    /**
+     * A back swipe [f] of the way (0 to 1), from [from] towards [to]: the player follows it down a
+     * third of the way there at most, the rest played out (collapse, expand) once it is let go.
+     */
+    fun backPreview(from: Float, to: Float, f: Float) {
+        vJob?.cancel()
+        bounceUp = false
+        p = from + (to - from) * BACK_REACH * f
     }
 
     /** Slides the mini player up into place, as music starts. */
@@ -580,7 +593,8 @@ fun NowPlaying(
     // Kept open from song to song (the next one's lyrics come in under it); only turning the
     // lyrics off, or the player folding away, closes it.
     if (lyricsFull && (!lyricsOn || !playerOpen)) lyricsFull = false
-    androidx.activity.compose.BackHandler(enabled = lyricsFull) { lyricsFull = false }
+    // Back follows the finger: the lyrics slide aside and fade, back to the player under them.
+    val lyricsSwipe = rememberBackSwipe(enabled = lyricsFull) { lyricsFull = false }
 
     CompositionLocalProvider(LocalPalette provides palette, LocalNamida provides nc) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -807,7 +821,7 @@ fun NowPlaying(
             enter = fadeIn(tween(280)) + androidx.compose.animation.scaleIn(tween(360, easing = FastOutSlowInEasing), initialScale = 0.96f),
             exit = fadeOut(tween(220)) + androidx.compose.animation.scaleOut(tween(220), targetScale = 0.97f),
         ) {
-            run {
+            Box(SharedAxisBack.over(lyricsSwipe)) {
                 FullLyrics(
                     cur, lyrics, state, tick, tint, env, lyricsOn, statusTop, navBottom,
                     onClose = { lyricsFull = false },

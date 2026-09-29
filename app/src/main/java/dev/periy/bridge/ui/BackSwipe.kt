@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,13 +44,15 @@ fun rememberBackSwipe(enabled: Boolean = true, onBack: (swiped: Boolean) -> Unit
     val swipe = remember { BackSwipe() }
     val scope = rememberCoroutineScope()
     val back = rememberUpdatedState(onBack)
+    // A surface swiped away stays drawn as gone (while any leaving animation of its own runs out),
+    // until it is back and can be swiped again.
+    LaunchedEffect(enabled) { if (enabled && swipe.progress.value != 0f) swipe.progress.snapTo(0f) }
     PredictiveBackHandler(enabled) { events ->
         try {
             events.collect { swipe.progress.snapTo(it.progress) }
             val swiped = swipe.progress.value > 0f
             if (swiped) swipe.progress.animateTo(1f, tween(FINISH_MS, easing = Finish))
             back.value(swiped)
-            swipe.progress.snapTo(0f)
         } catch (e: CancellationException) {
             scope.launch { swipe.progress.animateTo(0f, tween(SETTLE_MS, easing = Finish)) }
         }
