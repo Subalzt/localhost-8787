@@ -84,7 +84,8 @@ fun PeerFilesScreen(peer: Peer, onClose: () -> Unit) {
     }
     val listing = seen[path]
     val up = { path = path.substringBeforeLast('/', "") }
-    BackHandler { if (path.isEmpty()) onClose() else up() }
+    // Back goes up a folder; at the top, the app closes these (following the finger) itself.
+    BackHandler(enabled = path.isNotEmpty()) { up() }
 
     val save = { e: FsEntry ->
         val at = if (path.isEmpty()) e.name else "$path/${e.name}"

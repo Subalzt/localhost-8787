@@ -107,6 +107,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean(K_COVER_LOOKUP, true)
         set(v) = sp.edit { putBoolean(K_COVER_LOOKUP, v) }
 
+    /** The phone's player shows the song's lyrics over its cover (Namida's lyrics button). */
+    var lyricsShown: Boolean
+        get() = sp.getBoolean(K_LYRICS_SHOWN, true)
+        set(v) = sp.edit { putBoolean(K_LYRICS_SHOWN, v) }
+
     var uploadStreams: Int
         get() = sp.getInt(K_STREAMS, 4).coerceIn(1, 8)
         set(v) = sp.edit { putInt(K_STREAMS, v.coerceIn(1, 8)) }
@@ -144,5 +149,6 @@ class Prefs(ctx: Context) {
         const val K_HOTSPOT_PASS = "hotspot_pass"
         const val K_MONITOR = "show_monitor"
         const val K_COVER_LOOKUP = "cover_lookup"
+        const val K_LYRICS_SHOWN = "lyrics_shown"
     }
 }

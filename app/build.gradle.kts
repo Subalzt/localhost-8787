@@ -27,6 +27,17 @@ android {
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
         }
+        // The test build: smooth as a release, since the phone's runtime compiles an app that isn't
+        // debuggable properly and applies Compose's startup profiles (a debug build does neither,
+        // and drops frames in every animation). Signed with the debug key and installed as the
+        // debug app, so it goes over a debug build. Not shrunk, so nothing can go missing at runtime.
+        create("fast") {
+            initWith(getByName("debug"))
+            isDebuggable = false
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
         release {
             // Ktor + kotlinx.serialization both need keep rules; see proguard-rules.pro.
             isMinifyEnabled = true

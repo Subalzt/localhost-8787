@@ -236,7 +236,7 @@ private fun ChannelUse(m: MonitorSnapshot) {
         }
         Text(
             if (cap > 0) "Of what ${m.capacityLabel} can carry."
-            else "Waiting for the link; the laptop helper reports Wi-Fi rates.",
+            else "Waiting for the laptop helper's Wi-Fi rates.",
             style = BodyStyle.copy(fontSize = 12.sp), color = Bridge.Faint, modifier = Modifier.padding(top = 4.dp),
         )
     }
@@ -314,7 +314,7 @@ private fun Stat(title: String, value: String, color: Color = Bridge.Text, first
 @Composable
 private fun PhoneLinkRows(p: PhoneLink?) {
     if (p == null) {
-        SettingRow("This phone", "Hosting the hotspot, or not on Wi-Fi. The laptop's side below shows the link.")
+        SettingRow("This phone", "Not on Wi-Fi, or hosting the hotspot")
         return
     }
     val band = if (p.frequencyMhz >= 5925) "6 GHz" else if (p.frequencyMhz >= 4900) "5 GHz" else "2.4 GHz"
@@ -327,7 +327,7 @@ private fun PhoneLinkRows(p: PhoneLink?) {
 @Composable
 private fun LaptopLinkRows(l: LaptopLink?) {
     if (l == null) {
-        SettingRow("Laptop", "Run the laptop helper to see the laptop's side: signal, link rate and channel.")
+        SettingRow("Laptop", "Run the laptop helper to see its signal")
         return
     }
     SettingRow("Laptop", "${l.radio} · ${l.band} · channel ${l.channel} · ${l.signalPercent}% · ${quality(percentLevel(l.signalPercent))}") {

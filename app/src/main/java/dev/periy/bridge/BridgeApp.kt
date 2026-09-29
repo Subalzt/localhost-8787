@@ -19,6 +19,10 @@ import dev.periy.bridge.server.TusStore
 import dev.periy.bridge.util.Prefs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 /**
  * Hand-rolled singleton graph. A DI framework would earn its keep at ten times this size;
@@ -35,6 +39,28 @@ class Container(ctx: Context) {
     val devices = DeviceRegistry(app)
     val pairing = PairingManager(app, devices)
     val music = MusicLibrary(app) { prefs.coverLookup }
+    /** The phone's own music player, and how loud each moment of a song is, for its seek bar and cover. */
+    val player = dev.periy.bridge.music.PhonePlayer(app, music)
+    val loudness = dev.periy.bridge.music.Loudness(app, music)
+    val favourites = dev.periy.bridge.music.Favourites(app)
+    /**
+     * Lyrics: kept on the phone for the page and the phone's player alike, and looked up by the
+     * phone itself (LRCLIB) a moment after each song it plays starts, when it has none yet.
+     */
+    val lyrics = dev.periy.bridge.server.LyricsFinder(dev.periy.bridge.server.LyricsStore(app) { music.file(it.id) })
+    private val background = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
+    init {
+        background.launch {
+            player.state.map { it.current }.distinctUntilChangedBy { it?.id }.collectLatest { t ->
+                if (t == null) return@collectLatest
+                // Not for songs skipped straight past.
+                kotlinx.coroutines.delay(LYRICS_AFTER_MS)
+                runCatching { lyrics.forTrack(t) }
+            }
+        }
+    }
+
     val direct = dev.periy.bridge.net.DirectLink(app)
     /** How two laptops' pages learn their addresses, to send to each other directly. */
     val stun = dev.periy.bridge.net.StunServer()
@@ -111,7 +137,7 @@ class Container(ctx: Context) {
             clipSync = { prefs.clipSync },
             deviceName = deviceName(),
         )
-        return BridgeServer(app, config, storage, tus, index, clipboard, devices, pairing, music, direct, peers)
+        return BridgeServer(app, config, storage, tus, index, clipboard, devices, pairing, music, direct, peers, loudness, favourites, lyrics)
             .also { server = it }
     }
 
@@ -120,6 +146,9 @@ class Container(ctx: Context) {
         server = null
     }
 }
+
+/** How long a song plays on the phone before its lyrics are looked up. */
+private const val LYRICS_AFTER_MS = 1500L
 
 val THEMES = setOf("system", "light", "dark")
 

@@ -14,3 +14,5 @@ captures/
 /tools/blazeit-pc.bat
 # scrcpy, downloaded for phone mirroring (the helper also fetches it by itself)
 /tools/scrcpy/
+# The fixed key test builds are signed with (CI), so each installs over the last.
+!.github/test-signing.keystore
