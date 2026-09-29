@@ -114,15 +114,32 @@ fun namidaColors(tint: Color, dark: Boolean): NamidaColors {
 
 val LocalNamida = staticCompositionLocalOf { namidaColors(NamidaDefaultColour, dark = true) }
 
+/**
+ * Namida draws all its text at nine tenths of its styles' sizes (its font scale setting, 0.9 out
+ * of the box), so every size on the music screens goes through this.
+ */
+const val NamidaFontScale = 0.9f
+
+/** A text size on the music screens: Namida's own, at its font scale. */
+val Number.nsp: androidx.compose.ui.unit.TextUnit get() = (toFloat() * NamidaFontScale).sp
+
+/**
+ * A song's tile, as Namida lays one out on a phone (measured against it side by side): 75 high
+ * with 4 under it, its cover 63.
+ */
+val NamidaTileHeight = 75.dp
+val NamidaTileGap = 4.dp
+val NamidaThumb = 63.dp
+
 /** Shorthand for the music screens: Namida's colours and its three text styles. */
 object Nm {
     val c: NamidaColors @Composable @ReadOnlyComposable get() = LocalNamida.current
     /** Namida's displayLarge: 17, bold. */
-    val large: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = LocalNamida.current.large)
+    val large: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.Bold, fontSize = 17.nsp, color = LocalNamida.current.large)
     /** Namida's displayMedium: 15, semibold. */
-    val medium: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = LocalNamida.current.medium)
+    val medium: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.SemiBold, fontSize = 15.nsp, color = LocalNamida.current.medium)
     /** Namida's displaySmall: 13, regular. */
-    val small: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.Normal, fontSize = 13.sp, color = LocalNamida.current.small)
+    val small: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.Normal, fontSize = 13.nsp, color = LocalNamida.current.small)
 }
 
 /** Hue (0 to 360), saturation and lightness (0 to 1) of a colour. */
@@ -160,7 +177,7 @@ internal fun NamidaButton(text: String?, icon: ImageVector?, modifier: Modifier 
     ) {
         if (icon != null) Icon(icon, null, tint = fg, modifier = Modifier.size(20.dp))
         if (icon != null && text != null) Spacer(Modifier.width(8.dp))
-        if (text != null) Text(text, style = Nm.medium.copy(fontSize = 15.5.sp, color = fg), maxLines = 1, softWrap = false)
+        if (text != null) Text(text, style = Nm.medium.copy(fontSize = 15.5.nsp, color = fg), maxLines = 1, softWrap = false)
     }
 }
 

@@ -375,10 +375,10 @@ private class Geo(
     val waveBottom = ctrlY - playBig / 2 - dp(18f)
     val waveTop = waveBottom - waveH
     // Namida's two lines, both in its medium style: the artist at 20, the song at 15 (14.5 and 12.5 small).
-    val titleBig = with(d) { 20.sp.toPx() }
-    val titleMini = with(d) { 14.5.sp.toPx() }
-    val artistBig = with(d) { 15.sp.toPx() }
-    val artistMini = with(d) { 12.5.sp.toPx() }
+    val titleBig = with(d) { 20.nsp.toPx() }
+    val titleMini = with(d) { 14.5.nsp.toPx() }
+    val artistBig = with(d) { 15.nsp.toPx() }
+    val artistMini = with(d) { 12.5.nsp.toPx() }
     /** The heart beside the two lines, in the full player: 32 across. */
     val heart = dp(48f)
     val textBigH = titleBig * 1.3f + artistBig * 1.35f + dp(4f)
@@ -680,6 +680,9 @@ fun NowPlaying(
             // ---- the waveform, with where a seek would land above it
             WaveSeek(
                 env = env, state = state, tint = tint, tick = tick,
+                // Only while the full player shows: folded away it lies over the mini player, and a
+                // tap there (to open it) must not move the song.
+                active = { Terms(motion.p, motion.bounceUp).let { it.bcp > 0.9f && it.qcp < 0.1f } },
                 onScrub = { seek.value = it },
                 onSeek = { ms -> player.seekTo(ms) },
                 modifier = Modifier.placed(g.w - g.dp(40f), g.waveH) {
@@ -1116,22 +1119,22 @@ private fun BottomRow(
                 // bit depth in its little badge, all one text that may take two lines.
                 val details = info?.let { audioDetails(it, state.current?.mime.orEmpty()) }.orEmpty()
                 val badge = info?.let(::bitsBadge).orEmpty()
-                val small = SpanStyle(fontSize = 11.sp, color = nc.primary, fontFeatureSettings = "tnum")
+                val small = SpanStyle(fontSize = 11.nsp, color = nc.primary, fontFeatureSettings = "tnum")
                 val text = buildAnnotatedString {
                     append("Audio")
                     if (details.isNotEmpty()) withStyle(small) { append(" \u2022 $details") }
                     if (badge.isNotEmpty()) { append(" "); appendInlineContent("bits", badge) }
                 }
                 val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-                val badgeStyle = TextStyle(fontFamily = LexendDeca, fontSize = 11.sp, color = nc.primary)
+                val badgeStyle = TextStyle(fontFamily = LexendDeca, fontSize = 11.nsp, color = nc.primary)
                 val badgeW = with(LocalDensity.current) { (measurer.measure(badge, badgeStyle).size.width.toDp() + 4.dp + 12.dp + 2.dp + 4.dp).toSp() }
                 Text(
                     text,
-                    style = TextStyle(fontFamily = LexendDeca, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = nc.onSecondaryContainer, lineHeight = 17.sp),
+                    style = TextStyle(fontFamily = LexendDeca, fontSize = 15.nsp, fontWeight = FontWeight.Medium, color = nc.onSecondaryContainer, lineHeight = 17.nsp),
                     maxLines = 2, overflow = TextOverflow.Ellipsis,
                     inlineContent = if (badge.isEmpty()) emptyMap() else mapOf(
                         "bits" to androidx.compose.foundation.text.InlineTextContent(
-                            androidx.compose.ui.text.Placeholder(badgeW, 15.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter),
+                            androidx.compose.ui.text.Placeholder(badgeW, 15.nsp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter),
                         ) {
                             Row(
                                 Modifier.clip(RoundedCornerShape(4.dp)).background(nc.cardColor.copy(alpha = 60 / 255f)).padding(horizontal = 4.dp, vertical = 1.dp),

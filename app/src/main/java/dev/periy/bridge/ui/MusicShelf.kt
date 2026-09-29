@@ -63,9 +63,9 @@ class MusicShelf {
 
     /** The Music screen is open, over the app. */
     var showing by mutableStateOf(false)
-    /** 0: Tracks, 1: Albums. */
+    /** 0: Tracks, 1: Albums, 2: Liked. */
     var page by mutableIntStateOf(0)
-    /** The search over the Tracks or the Albums page, and what is typed in it. */
+    /** The search over the page showing, and what is typed in it. */
     var searching by mutableStateOf(false)
     var query by mutableStateOf("")
     /** The album open over the pages, and a search within it. */
@@ -79,14 +79,17 @@ class MusicShelf {
     /** Where each page is scrolled to, kept while the screen is closed. */
     val trackList = LazyListState()
     val albumGrid = LazyGridState()
+    val likedList = LazyListState()
 
     /** Namida's count bar over each page: hidden while you scroll down, back as you scroll up. */
     var trackBar by mutableStateOf(true)
     var albumBar by mutableStateOf(true)
+    var likedBar by mutableStateOf(true)
 
     /** When each page's items came on screen, for Namida's staggered entrance. */
     val trackEntrance = Entrance()
     val albumEntrance = Entrance()
+    val likedEntrance = Entrance()
     val pageEntrance = Entrance()
 
     /**
@@ -119,6 +122,13 @@ class MusicShelf {
     fun songs(): List<TrackDto> {
         val q = query.trim().lowercase()
         return if (q.isEmpty()) tracks else tracks.filter { matches(it, q) }
+    }
+
+    /** The liked songs on the phone, in the order given (newest heart first), through the search. */
+    fun liked(order: List<Long>): List<TrackDto> {
+        val byId = tracks.associateBy { it.id }
+        val q = query.trim().lowercase()
+        return order.mapNotNull { byId[it] }.filter { matches(it, q) }
     }
 
     fun albumMatches(): List<Album> {

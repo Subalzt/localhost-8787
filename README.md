@@ -343,8 +343,8 @@ The page's **Music** tab opens on your albums, each with its cover (albums witho
 found online or drawn for them). Songs stream straight from the phone, so FLAC and everything
 else starts at once, and skipping is instant. Media keys and the Windows media overlay work.
 
-- **Search and filter**: *Albums* or *Songs* with their counts, and a search box (`/` to jump to
-  it, `Esc` to clear).
+- **Search and filter**: *Albums*, *Songs* or *Liked* (the songs with a heart, newest first) with
+  their counts, and a search box (`/` to jump to it, `Esc` to clear).
 - **The banner** shows what is playing: its album, and the next three songs with their covers and
   file type, marked *Ready* once loaded. Click one to play it now. **Go to album** opens the album.
 - While a song plays, a small note sits beside *Music* in the tabs.
@@ -385,11 +385,15 @@ returns to the app). It plays on the phone: its speaker, headphones or a car, wi
 in the background, the controls in the notification and on the lock screen, and a headset's
 buttons working.
 
-- **Tracks and Albums**, side by side under Namida's bottom bar: tap one or swipe between them.
+- **Tracks, Albums and Liked**, side by side under Namida's bottom bar: tap one or swipe between
+  them. Sizes are Namida's own, text included (it draws its text at nine tenths).
 - **Tracks**: every song A to Z, each with its cover, who it is by, its album and year, what kind
   of file it is (a small FLAC, MP3, OPUS... label, lossless ones in the song's colour), how long
   it is, a heart, and a menu (play next, play last, go to its album). Shuffle and play all at the
-  top. The song playing is lit.
+  top. The song playing is lit. **Pull a song left** and *Play After* shows from under it, as in
+  Namida: let go past it and the song plays after the one playing.
+- **Liked**: the songs with a heart, newest heart first, with shuffle and play all; the same list
+  as the page's *Liked*.
 - **Albums**: three to a row, each cover with its year frosted into a corner (the cover seen
   blurred through it, as Namida's) and a play button in the other, and how many songs and how long
   under it.

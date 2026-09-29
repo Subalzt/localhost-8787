@@ -126,7 +126,7 @@ internal fun LyricsOverCover(
         val half = maxHeight / 2
         if (lyrics.kind == ShownLyrics.Kind.PLAIN) {
             Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState(), enabled = live).padding(horizontal = 16.dp, vertical = 40.dp)) {
-                Text(lyrics.plain, style = Nm.medium.copy(lineHeight = 15.sp * 1.8f), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text(lyrics.plain, style = Nm.medium.copy(lineHeight = 15.nsp * 1.8f), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
             return@BoxWithConstraints
         }
@@ -256,7 +256,7 @@ internal fun LyricsIcon(on: Boolean, lyrics: ShownLyrics?, tint: Color) {
     Box(contentAlignment = Alignment.Center) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
         if (mark.isNotEmpty()) Text(
-            mark, style = Nm.small.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, color = tint, lineHeight = 9.sp),
+            mark, style = Nm.small.copy(fontSize = 9.nsp, fontWeight = FontWeight.Bold, color = tint, lineHeight = 9.nsp),
             modifier = Modifier.padding(top = 3.dp, start = 1.dp),
         )
     }

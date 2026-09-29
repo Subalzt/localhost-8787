@@ -101,11 +101,14 @@ internal fun WaveSeek(
     state: PhonePlayer.State,
     tint: Color,
     tick: State<Long>,
+    /** Whether it takes touches now: a touch while it is not is left for the player to handle. */
+    active: () -> Boolean,
     onScrub: (Long?) -> Unit,
     onSeek: (Long) -> Unit,
     modifier: Modifier,
 ) {
     val live = rememberUpdatedState(state)
+    val activeNow = rememberUpdatedState(active)
     val view = LocalView.current
     val density = LocalDensity.current
     val appear = animateFloatAsState(if (env != null) 1f else 0f, tween(700, easing = FastOutSlowInEasing), label = "wave")
@@ -130,6 +133,7 @@ internal fun WaveSeek(
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
+                    if (!activeNow.value()) return@awaitEachGesture
                     // Taken here, so a drag on the waveform seeks rather than swiping songs.
                     down.consume()
                     val dur = live.value.durationMs
@@ -446,7 +450,7 @@ private fun QueueRow(
         val nc = Nm.c
         val shrink by animateFloatAsState(if (current) 0.96f else 1f, tween(400), label = "thumb")
         Row(
-            Modifier.fillMaxWidth().height(ROW_H - 4.dp)
+            Modifier.fillMaxWidth().height(NamidaTileHeight)
                 .offset { IntOffset(dx.value.roundToInt(), 0) }
                 .background(
                     // Held stronger in light mode, so the white type on it reads.
@@ -473,7 +477,7 @@ private fun QueueRow(
         ) {
             // As Namida's queue has it: its track tile, with a handle on the right.
             Spacer(Modifier.width(12.dp))
-            Box(Modifier.size(70.dp).graphicsLayer { scaleX = shrink; scaleY = shrink }) {
+            Box(Modifier.size(NamidaThumb).graphicsLayer { scaleX = shrink; scaleY = shrink }) {
                 Cover(t.albumId, t.album, Modifier.fillMaxSize(), radius = 8.dp)
             }
             Spacer(Modifier.width(12.dp))
@@ -487,9 +491,9 @@ private fun QueueRow(
             Spacer(Modifier.width(6.dp))
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(fmtTime(t.durationMs), style = Nm.small.copy(fontWeight = FontWeight.Medium, color = if (current) lit.copy(alpha = 170 / 255f) else nc.small))
-                Box(Modifier.size(30.dp).clip(CircleShape).clickable(onClick = onHeart), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(28.dp).clip(CircleShape).clickable(onClick = onHeart), contentAlignment = Alignment.Center) {
                     Icon(if (hearted) Iconsax.HeartOn else Iconsax.Heart, if (hearted) "Take the heart off" else "Give it a heart",
-                        tint = if (current) lit.copy(alpha = 140 / 255f) else nc.icon, modifier = Modifier.size(22.dp))
+                        tint = if (current) lit.copy(alpha = 140 / 255f) else nc.icon, modifier = Modifier.size(20.dp))
                 }
             }
             // The handle: drag it up or down and the song moves through the queue.
@@ -536,8 +540,8 @@ private fun QueueRow(
     }
 }
 
-/** Namida's track tile: 82 high with 4 under it. */
-private val ROW_H = 86.dp
+/** Namida's track tile, with the gap under it. */
+private val ROW_H = NamidaTileHeight + NamidaTileGap
 
 // ---------------------------------------------------------------------------- the sound controls
 
@@ -574,7 +578,7 @@ internal fun SoundSheet(state: PhonePlayer.State, tint: Color, onChange: (speed:
                 .pointerInput(Unit) { detectTapGestures { } }
                 .padding(top = 18.dp, bottom = 10.dp),
         ) {
-            Text("Configure", style = Nm.large.copy(fontSize = 20.sp), modifier = Modifier.padding(horizontal = 20.dp))
+            Text("Configure", style = Nm.large.copy(fontSize = 20.nsp), modifier = Modifier.padding(horizontal = 20.dp))
             Spacer(Modifier.height(12.dp))
             SoundSlider(Iconsax.Pitch, "Pitch", state.pitch, 0.5f, 2f) { onChange(live.value.speed, it, live.value.volume) }
             SoundSlider(Iconsax.Speed, "Speed", state.speed, 0.5f, 2f) { onChange(it, live.value.pitch, live.value.volume) }
@@ -591,7 +595,7 @@ internal fun SoundSheet(state: PhonePlayer.State, tint: Color, onChange: (speed:
                     Modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(20.dp)).background(nc.primary.copy(alpha = 0.3f * 0.8f))
                         .clickable(onClick = close).padding(horizontal = 24.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center,
-                ) { Text("Done", style = Nm.medium.copy(fontSize = 15.5.sp, color = Color.White.copy(alpha = 0.85f))) }
+                ) { Text("Done", style = Nm.medium.copy(fontSize = 15.5.nsp, color = Color.White.copy(alpha = 0.85f))) }
             }
         }
     }
