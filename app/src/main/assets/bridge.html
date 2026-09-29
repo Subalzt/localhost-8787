@@ -1553,16 +1553,14 @@
   .np-where:hover { background: color-mix(in srgb, var(--txt) 7%, transparent); }
   .np-where span { font-size: 12px; font-weight: 550; color: var(--sub); font-variant-numeric: tabular-nums; }
   .np-where b { max-width: 100%; font-size: 15.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* Namida's chip: the headphones in a disc of the secondary colour, "Audio" and after it what the
-     file is, small in the lit colour, with the bit depth in a badge; one text of up to two lines. */
-  .np-chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: calc(100% - 110px); margin-right: auto; padding: 4px 8px 4px 4px;
+  /* What the file is, in the lit colour, with the bit depth in a badge; one text of up to two lines
+     (Namida's headphones and "Audio" before it are left out). A click opens the sound controls. */
+  .np-chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: calc(100% - 110px); margin-right: auto; padding: 6px 8px;
     border: 0; border-radius: 12px; background: none; color: var(--nm-on-sec, var(--txt)); font: inherit; cursor: pointer; transition: background .15s; text-align: left; }
   .np-chip:hover { background: color-mix(in srgb, var(--txt) 7%, transparent); }
-  .np-chip .disc { flex: 0 0 30px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--nm-sec, var(--surface-2)); }
-  .np-chip .disc i { display: grid; place-items: center; }
   .np-chip svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
   #np-chip-t { min-width: 0; font-size: 15px; font-weight: 500; line-height: 17px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  #np-chip-t small { font-size: 11px; font-weight: 400; color: var(--nm-primary, var(--sub)); font-variant-numeric: tabular-nums; }
+  #np-chip-t small { font-size: 13px; font-weight: 500; color: var(--nm-primary, var(--sub)); font-variant-numeric: tabular-nums; }
   #np-chip-t .bits { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; padding: 1px 4px; border-radius: 4px; vertical-align: 1px;
     background: color-mix(in srgb, var(--nm-cardc, var(--surface)) 24%, transparent); font-size: 11px; font-weight: 400; color: var(--nm-primary, var(--sub)); }
   #np-chip-t .bits svg { width: 12px; height: 12px; }
@@ -2405,7 +2403,7 @@
     <div class="np-sq" aria-hidden="true"></div>
   </div>
   <div class="np-el np-row" id="np-bottom">
-    <button class="np-chip" id="np-chip" type="button" title="Sound: speed and volume"><span class="disc"><i data-nx="headphone"></i></span><span id="np-chip-t">Audio</span></button>
+    <button class="np-chip" id="np-chip" type="button" title="Sound: speed and volume"><span id="np-chip-t"></span></button>
     <div class="np-sq"><button class="np-btn" id="np-repeat" type="button" title="Repeat" aria-label="Repeat"><span class="r-off" data-nx="repeatOff"></span><span class="r-all" data-nx="repeatAll"></span><span class="r-one" data-nx="repeatOne"></span></button></div>
     <div class="np-sq"><button class="np-btn" data-nx="sound" id="np-sound" type="button" title="Sound: speed and volume" aria-label="Sound: speed and volume"></button></div>
   </div>
@@ -7533,9 +7531,9 @@ function npText() {
   // The chip: the kind of file, then its bitrate and sample rate (and the speed, when changed).
   var info = np.info[t.id], chip = $("np-chip-t");
   var details = [info ? npFileDetails(info) : "", np.speed !== 1 ? npSpeedText(np.speed) : ""].filter(Boolean).join(" \u2022 ");
-  // As Namida writes it: "Audio", then the details small in the lit colour, then the bit depth.
-  chip.textContent = "Audio";
-  if (details) { var more = document.createElement("small"); more.textContent = " \u2022 " + details; chip.appendChild(more); }
+  // The details in the lit colour, then the bit depth.
+  chip.textContent = "";
+  if (details) { var more = document.createElement("small"); more.textContent = details; chip.appendChild(more); }
   var bits = info ? npBitsBadge(info) : "";
   if (bits) { var badge = document.createElement("span"); badge.className = "bits"; badge.innerHTML = nx("wind"); badge.appendChild(document.createTextNode(bits)); chip.appendChild(badge); }
   $("np-repeat").classList.toggle("all", player.repeat === "all");

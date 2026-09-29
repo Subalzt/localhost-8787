@@ -1086,10 +1086,9 @@ private fun TopRow(index: Int, count: Int, album: String, onClose: () -> Unit, o
 }
 
 /**
- * Namida's bottom row. On the left, its chip: the headphones in a disc of the secondary
- * colour (a tap opens the sound controls), "Audio", and after it what the file is, small and
- * in the lit colour: FLAC • 1411 kb/s • 44.1 kHz, with the bit depth in a little badge when
- * the file says it. On the right, repeat and the sound controls.
+ * Namida's bottom row. On the left, what the file is, in the lit colour: FLAC • 1411 kb/s •
+ * 44.1 kHz, with the bit depth in a little badge when the file says it (a tap opens the sound
+ * controls). On the right, repeat and the sound controls.
  */
 @Composable
 private fun BottomRow(
@@ -1111,18 +1110,13 @@ private fun BottomRow(
                 Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onSound).padding(horizontal = 4.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.padding(vertical = 3.dp).clip(CircleShape).background(nc.secondaryContainer).padding(6.dp), contentAlignment = Alignment.Center) {
-                    Icon(Iconsax.Headphone, null, tint = nc.onSecondaryContainer, modifier = Modifier.size(18.dp))
-                }
-                Spacer(Modifier.width(8.dp))
-                // As Namida writes it: "Audio", then the details small in the lit colour, then the
-                // bit depth in its little badge, all one text that may take two lines.
+                // What the file is, in the lit colour, then the bit depth in its little badge, all
+                // one text that may take two lines (Namida's headphones and "Audio" before it left out).
                 val details = info?.let { audioDetails(it, state.current?.mime.orEmpty()) }.orEmpty()
                 val badge = info?.let(::bitsBadge).orEmpty()
-                val small = SpanStyle(fontSize = 11.nsp, color = nc.primary, fontFeatureSettings = "tnum")
+                val small = SpanStyle(fontSize = 13.nsp, color = nc.primary, fontFeatureSettings = "tnum")
                 val text = buildAnnotatedString {
-                    append("Audio")
-                    if (details.isNotEmpty()) withStyle(small) { append(" \u2022 $details") }
+                    if (details.isNotEmpty()) withStyle(small) { append(details) }
                     if (badge.isNotEmpty()) { append(" "); appendInlineContent("bits", badge) }
                 }
                 val measurer = androidx.compose.ui.text.rememberTextMeasurer()
