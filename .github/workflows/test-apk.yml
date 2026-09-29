@@ -1,4 +1,5 @@
-# A test build of the app on every push to the working branch: the debug APK, attached to the
+# A test build of the app on every push to the working branch: the "fast" APK (not debuggable, so
+# it animates as smoothly as a release; see app/build.gradle.kts), attached to the
 # "test-build" pre-release (replaced each time), so it can be downloaded straight onto a phone:
 # https://github.com/Subalzt/localhost-8787/releases/download/test-build/localhost-8787-test.apk
 #
@@ -38,12 +39,12 @@ jobs:
           mkdir -p ~/.android
           cp .github/test-signing.keystore ~/.android/debug.keystore
 
-      - name: Build the debug APK
+      - name: Build the test APK
         run: |
           chmod +x gradlew
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          ./gradlew :app:assembleDebug --stacktrace
-          cp app/build/outputs/apk/debug/*.apk localhost-8787-test.apk
+          ./gradlew :app:assembleFast --stacktrace
+          cp app/build/outputs/apk/fast/*.apk localhost-8787-test.apk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -58,4 +59,4 @@ jobs:
           gh release create test-build localhost-8787-test.apk \
             --prerelease --target "$GITHUB_SHA" \
             --title "Test build ($(git rev-parse --short HEAD))" \
-            --notes "Debug build of $(git rev-parse --short HEAD) on ${GITHUB_REF_NAME}. Installs as dev.periy.bridge.debug, over the last test build."
+            --notes "Test build of $(git rev-parse --short HEAD) on ${GITHUB_REF_NAME}. Installs as dev.periy.bridge.debug, over the last test build."

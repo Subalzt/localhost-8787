@@ -1445,6 +1445,8 @@
   .pl-btn.lyr-btn.none { opacity: .45; }
   #pl-lyrics-m { display: none; }
   body.lyr-open { overflow: hidden; }
+  /* Opened from the full player, over it. */
+  body.np-open #lyr { z-index: 45; }
   @media (max-width: 900px) {
     .lyr { grid-template-columns: 1fr; gap: 0; padding: 0 22px calc(var(--player-h, 80px) + 6px); }
     .lyr > .lyr-side { position: absolute; top: 16px; left: 22px; right: 76px; flex-direction: row; align-items: center; gap: 12px; }
@@ -1679,6 +1681,8 @@
   .player.np-hide #pl-art, .player.np-hide .pl-meta, .player.np-hide #pl-prev, .player.np-hide #pl-play, .player.np-hide #pl-next { visibility: hidden; }
   .player { touch-action: none; }
   body.np-open { overflow: hidden; }
+  /* Fully open, the player takes the scrollbar's strip as well, as the app takes the whole screen. */
+  html.np-full { scrollbar-gutter: auto; overflow: hidden; }
   .player .pl-left { cursor: pointer; }
   @media (prefers-reduced-motion: reduce) { .np-specks { display: none; } }
   @media (prefers-reduced-motion: reduce) { .lyr-bg img { animation: none; } .lyr, .lyr-line { transition: none; } }
@@ -2047,6 +2051,50 @@
   /* ---------------------------------------------------------------- floating: the monitor, the transfers */
   :root[data-style="material"] .mon-pill { border-radius: 28px; background: var(--m-c-high); box-shadow: 0 1px 3px rgba(0,0,0,.2), 0 4px 12px 2px rgba(0,0,0,.12); }
   :root[data-style="material"] .mon-sheet, :root[data-style="material"] .dock { border-radius: 28px; background: var(--m-c-high); }
+
+  /* ================================================================ Music, as the phone's
+     The same Music as the app (Namida's, as the phone draws it), fit to the window. Its colours are
+     the song playing's (--nm-*, worked out by npNamidaColours() for the whole page), its type Lexend
+     Deca at Namida's sizes (its text at nine tenths), its icons Iconsax. */
+
+  /* ---- the mini player: Namida's card, floating over the page. 82 high, 6 in from the sides, the
+     cover 58 with 12 around it and corners of 6, corners of 20; the artist over the song; previous,
+     the play disc in the song's colour and next; the song's progress a hairline along its foot. It
+     sits 12 over Music's own bar, and over the tabs along the bottom on a narrow screen. */
+  #player { position: fixed; z-index: 40; top: auto; bottom: var(--mini-bottom, 12px);
+    left: calc(var(--mini-left, 0px) + var(--mini-gap, 6px)); right: calc(var(--mini-right, 0px) + var(--mini-gap, 6px));
+    display: flex; align-items: center; gap: 0; height: 82px; padding: 0 6px 0 12px; border: 0; border-radius: 20px;
+    font-family: "Lexend Deca", system-ui, sans-serif; color: var(--nm-medium, var(--txt));
+    background: linear-gradient(var(--nm-mini-top, transparent), var(--nm-mini-bottom, transparent)), var(--nm-bg, var(--surface));
+    box-shadow: 0 6px 20px -4px var(--nm-shadow, rgba(0,0,0,.35)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  #player .pl-left { flex: 1 1 auto; min-width: 0; gap: 12px; cursor: pointer; }
+  #player .cover { width: 58px; height: 58px; flex: 0 0 58px; border-radius: 6px; box-shadow: none; }
+  #player .cover:hover { transform: none; }
+  #player .pl-title { font-size: 13.05px; font-weight: 600; letter-spacing: 0; line-height: 1.3; color: var(--nm-large, var(--txt)); }
+  #player .pl-sub { font-size: 11.25px; font-weight: 600; line-height: 1.3; color: var(--nm-medium, var(--sub)); }
+  #player .pl-viz, #player .pl-right, #player #pl-shuffle, #player #pl-repeat, #player .lyr-btn { display: none; }
+  #player .pl-center { flex: 0 0 auto; }
+  #player .pl-ctrls { gap: 0; }
+  #player .pl-btn { width: 40px; height: 40px; border-radius: 50%; color: var(--nm-icon, var(--txt)); background: none; }
+  #player .pl-btn:hover { background: color-mix(in srgb, var(--nm-icon, var(--txt)) 10%, transparent); }
+  #player .pl-btn svg { width: 22px; height: 22px; stroke-width: 1.5; }
+  #player .pl-btn.play { width: 44px; height: 44px; color: rgba(255,255,255,.706);
+    background: linear-gradient(135deg, var(--nm-main, var(--accent)), var(--nm-main-grey, var(--accent)) 70%);
+    box-shadow: 0 3px 9px -1px var(--nm-main, transparent); transition: transform .4s; }
+  #player .pl-btn.play:hover { transform: none; filter: brightness(1.05); }
+  #player .pl-btn.play:active { transform: scale(.97); }
+  #player .pl-btn.play svg { width: 22px; height: 22px; }
+  /* The progress: a hairline along the foot, from one round corner to the other; it only shows. */
+  #player #pl-seek { position: absolute; left: 20px; right: 20px; top: auto; bottom: 0; width: auto; height: 2.5px; margin: 0; padding: 0;
+    border-radius: 2px; pointer-events: none; transition: none;
+    background: linear-gradient(to right, var(--nm-mini-fill, var(--txt)) var(--p, 0%), var(--nm-mini-track, var(--surface-3)) var(--p, 0%)); }
+  #player #pl-seek::-webkit-slider-thumb { opacity: 0; width: 0; height: 0; box-shadow: none; }
+  #player #pl-seek::-moz-range-thumb { opacity: 0; width: 0; height: 0; border: 0; }
+  /* The card is inside the page's column, not under the drawer; the drawer and the docked monitor run to the foot. */
+  @media (min-width: 901px) { :root:not([data-style="theatre"]) { --mini-left: var(--side); } }
+  body.mon-dock { --mini-right: var(--panel); }
+  :root:not([data-style="theatre"]) .side { bottom: 0; }
+  body.mon-dock .mon-sheet { bottom: 0; }
 </style>
 </head>
 <body>
@@ -2362,9 +2410,9 @@
   <div class="pl-center">
     <div class="pl-ctrls">
       <button class="pl-btn" id="pl-shuffle" title="Shuffle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c2.5 0 3.8 1.3 5.3 4.2l.4.6c1.5 2.9 2.8 4.2 5.3 4.2H21"/><path d="M3 17h3.5c1.4 0 2.4-.4 3.3-1.2M14.2 8.2C15.1 7.4 16.1 7 17.5 7H21"/><path d="m18.5 4.5 2.5 2.5-2.5 2.5M18.5 13.5l2.5 2.5-2.5 2.5"/></svg></button>
-      <button class="pl-btn" id="pl-prev" title="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M18.5 6.2v11.6a.8.8 0 0 1-1.2.7L9 12.7a.8.8 0 0 1 0-1.4l8.3-5.8a.8.8 0 0 1 1.2.7Z"/><path d="M6 6v12"/></svg></button>
+      <button class="pl-btn" id="pl-prev" title="Previous" aria-label="Previous" data-nx="prev"></button>
       <button class="pl-btn play" id="pl-play" title="Play / pause (space)"></button>
-      <button class="pl-btn" id="pl-next" title="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M5.5 6.2v11.6a.8.8 0 0 0 1.2.7l8.3-5.8a.8.8 0 0 0 0-1.4L6.7 5.5a.8.8 0 0 0-1.2.7Z"/><path d="M18 6v12"/></svg></button>
+      <button class="pl-btn" id="pl-next" title="Next" aria-label="Next" data-nx="next"></button>
       <button class="pl-btn lyr-btn" id="pl-lyrics-m" type="button" title="Lyrics" aria-label="Lyrics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-7l-4.2 3.4v-3.4H5A1.5 1.5 0 0 1 3.5 15V6.5A1.5 1.5 0 0 1 5 5Z"/><path d="M8 9.5h8M8 12.5h5"/></svg></button>
       <button class="pl-btn" id="pl-repeat" title="Repeat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3l3 3-3 3"/><path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H20"/><path d="M7 21l-3-3 3-3"/><path d="M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H4"/></svg><i class="one">1</i></button>
     </div>
@@ -2406,6 +2454,7 @@
     <button class="np-chip" id="np-chip" type="button" title="Sound: speed and volume"><span id="np-chip-t"></span></button>
     <div class="np-sq"><button class="np-btn" id="np-repeat" type="button" title="Repeat" aria-label="Repeat"><span class="r-off" data-nx="repeatOff"></span><span class="r-all" data-nx="repeatAll"></span><span class="r-one" data-nx="repeatOne"></span></button></div>
     <div class="np-sq"><button class="np-btn" data-nx="sound" id="np-sound" type="button" title="Sound: speed and volume" aria-label="Sound: speed and volume"></button></div>
+    <div class="np-sq"><button class="np-btn" data-nx="lyrics" id="np-lyrics" type="button" title="Lyrics" aria-label="Lyrics"></button></div>
   </div>
   <div class="np-el np-queue" id="np-queue">
     <!-- Namida's queue header: where in it and the time left, its round buttons, and back down to the player. -->
@@ -2860,6 +2909,7 @@ function selectTab(id, fromHistory) {
     if (was && !p.hidden) { p.classList.remove("enter"); void p.offsetWidth; p.classList.add("enter"); }
   });
   moveTabPill();
+  setPlayerSpace();
   if (id === "music") musicOpen();
   if (id === "phone" && !fs.loaded) fsOpen("");
   if (id === "alerts") { alertsSeen = true; renderAlertCount(); }
@@ -5352,10 +5402,18 @@ async function setLook(change) {
 
 /** What the player takes from the bottom, for the sidebar, the dock and the page. */
 function setPlayerSpace() {
-  var pl = $("player");
-  var h = pl && !pl.hidden ? pl.offsetHeight : 0;
-  document.documentElement.style.setProperty("--player-h", h + "px");
+  var pl = $("player"), root = document.documentElement;
+  if (!pl || pl.hidden) { root.style.setProperty("--player-h", "0px"); return; }
+  // Over the tabs when they run along the foot (a narrow screen), and over Music's own bar in Music.
+  var H = window.innerHeight, bottom = 12;
+  var side = document.querySelector(".side"), sr = side && side.getBoundingClientRect();
+  if (sr && sr.height && sr.top > H / 2 && sr.width > window.innerWidth / 2) bottom = sr.height + 8;
+  var mb = $("music-view"), mr = mb && mb.offsetParent ? mb.getBoundingClientRect() : null;
+  if (mr && mr.height && mr.bottom > H - 2) bottom += mr.height;
+  root.style.setProperty("--mini-bottom", bottom + "px");
+  root.style.setProperty("--player-h", (bottom + pl.offsetHeight + 12) + "px");
 }
+window.addEventListener("resize", function () { setPlayerSpace(); });
 
 async function setTheme(theme) {
   applyTheme(theme);
@@ -6836,8 +6894,9 @@ function lyricsTick() {
 function showPlayer(t) {
   var pl = $("player");
   pl.hidden = false;
-  $("pl-title").textContent = t.title;
-  $("pl-sub").textContent = t.artist + " · " + t.album;
+  // As the app's mini player: the artist over the song.
+  $("pl-title").textContent = t.artist;
+  $("pl-sub").textContent = t.title;
   showPlayerArt(t);
   renderStage();
   setPlayerSpace();
@@ -6872,7 +6931,7 @@ function playPrev() {
 var PLAY_ICON = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path class=\"fill\" d=\"M8 5.6v12.8a.9.9 0 0 0 1.4.8l10-6.4a.9.9 0 0 0 0-1.6l-10-6.4A.9.9 0 0 0 8 5.6Z\"/></svg>";
 var PAUSE_ICON = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect class=\"fill\" x=\"6.5\" y=\"5\" width=\"4\" height=\"14\" rx=\"1.2\"/><rect class=\"fill\" x=\"13.5\" y=\"5\" width=\"4\" height=\"14\" rx=\"1.2\"/></svg>";
 function setPlayIcon(playing) {
-  $("pl-play").innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+  $("pl-play").innerHTML = playing ? NP_PAUSE_ICON : NP_PLAY_ICON;
   npPlayIcon(playing);
   var eq = $("tab-eq");
   if (eq && eq.hidden !== !playing) { eq.hidden = !playing; moveTabPill(); }
@@ -7087,7 +7146,7 @@ var np = {
   p: 0, s: 0, bounceUp: false, frozen: null, g: null, shown: false, layered: false, dragged: 0,
   vStop: null, sStop: null, startP: 0, sStart: 0, sOffset: 0, busy: 0,
   track: null, env: {}, envOrder: [], grow: 0, pulse: 0, loud: 0, raf: 0, last: 0,
-  seek: null, specks: [], slotIds: {}, tintRgb: [72, 72, 80], txtRgb: [255, 255, 255], qShownFor: "", info: {}, speed: 1,
+  seek: null, specks: [], slotIds: {}, tintRgb: [156, 153, 193], txtRgb: [255, 255, 255], qShownFor: "", info: {}, speed: 1,
   still: window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false,
 };
 
@@ -7241,37 +7300,24 @@ function npMeasure() {
     play: play, prev: c(r("pl-prev"), { cx: play.cx - 48, cy: play.cy, size: 36 }), next: c(r("pl-next"), { cx: play.cx + 48, cy: play.cy, size: 36 }),
     clip: { l: left.left, t: bar.top, r: left.right, b: bar.bottom }, spacing: Math.max(left.width, art.width + 16),
   };
-  var f, wide = W >= 900 && W / H > 1.2;
-  if (wide) {
-    // Side by side: the cover on the left; the title, the waveform and the controls beside it.
-    var sz = Math.max(160, Math.min(H - 190, W * 0.4, 640)), colW = Math.max(300, Math.min(540, W - sz - 64 - 96));
-    var x0 = (W - (sz + 64 + colW)) / 2, ay = (H - sz) / 2 + 14, cx0 = x0 + sz + 64;
-    var ft = 34, fa = 19, stack = ft * 1.28 + 4 + fa * 1.28 + 28 + 64 + 6 + 20 + 22 + 84 + 20 + 48;
-    var y = ay + (sz - stack) / 2;
-    f = { artX: x0, artY: ay, art: sz, textX: cx0, textW: colW - 52, title: ft, artist: fa, titleTop: y, artistTop: y + ft * 1.28 + 4 };
-    f.heart = { x: cx0 + colW - 44, y: y + (ft * 1.28 + 4 + fa * 1.28 - 44) / 2 };
-    y = f.artistTop + fa * 1.28 + 28;
-    f.waveX = cx0; f.waveW = colW; f.waveTop = y; f.waveH = 64; y += 64 + 6;
-    f.timesX = cx0; f.timesW = colW; f.timesY = y; y += 20 + 22;
-    var cy = y + 42;
-    f.play = { cx: cx0 + colW / 2, cy: cy, size: 80 };
-    f.prev = { cx: f.play.cx - 40 - 62, cy: cy, size: 60 }; f.next = { cx: f.play.cx + 40 + 62, cy: cy, size: 60 };
-    y += 84 + 20;
-    f.bottomX = cx0 - 12; f.bottomW = colW + 24; f.bottomTop = y; f.bottomH = 48;
-    f.topTop = 16; f.topH = 52;
-  } else {
-    var topT = 10, topH = 52, bottomH = 52, bottomTop = H - 14 - bottomH, big = 76;
-    var ctrlY = bottomTop - 22 - big / 2, waveH = 60, waveTop = ctrlY - big / 2 - 18 - waveH;
-    var tt = npClamp(W * 0.068, 20, 30), ta = tt * 0.66, textH = tt * 1.28 + ta * 1.28 + 2, textTop = waveTop - 20 - textH;
-    var areaTop = topT + topH + 12, areaBottom = textTop - 22;
-    var s2 = Math.max(120, Math.min(W - 56, areaBottom - areaTop, 620));
-    f = { artX: (W - s2) / 2, artY: areaTop + (areaBottom - areaTop - s2) / 2, art: s2, textX: 24, textW: W - 48 - 52, title: tt, artist: ta,
-      titleTop: textTop, artistTop: textTop + tt * 1.28 + 2, waveX: 20, waveW: W - 40, waveTop: waveTop, waveH: waveH,
-      timesX: 20, timesW: W - 40, timesY: ctrlY - 10,
-      play: { cx: W / 2, cy: ctrlY, size: big }, prev: { cx: W / 2 - big / 2 - 58, cy: ctrlY, size: 60 }, next: { cx: W / 2 + big / 2 + 58, cy: ctrlY, size: 60 },
-      bottomX: 0, bottomW: W, bottomTop: bottomTop, bottomH: bottomH, topTop: topT, topH: topH,
-      heart: { x: W - 20 - 44, y: textTop + (textH - 44) / 2 } };
-  }
+  // As the app's player, one column as on the phone: the phone's measures (its dp) scaled with the
+  // window's height, the column as wide as the cover and its margins allow (the window's width on
+  // a narrow screen), in the middle.
+  var k = W < 600 ? 1 : npClamp(H / 820, 1, 1.4);
+  var topT = 0, topH = 60 * k, bottomH = 60 * k, bottomTop = H - 8 * k - bottomH, big = 68 * k;
+  var ctrlY = bottomTop - 18 * k - big / 2, waveH = 60 * k, waveTop = ctrlY - big / 2 - 18 * k - waveH;
+  var tt = 18 * k, ta = 13.5 * k, textH = tt * 1.3 + ta * 1.35 + 4 * k, textTop = waveTop - 18 * k - textH;
+  var areaTop = topT + topH + 12 * k, areaBottom = textTop - 22 * k;
+  var cw = Math.min(W, Math.max(360, areaBottom - areaTop + 56 * k)), x0 = (W - cw) / 2;
+  var s2 = Math.max(120, Math.min(cw - 56 * k, areaBottom - areaTop));
+  var f = { artX: x0 + (cw - s2) / 2, artY: areaTop + (areaBottom - areaTop - s2) / 2, art: s2,
+    textX: x0 + 24 * k, textW: cw - 44 * k - 48, title: tt, artist: ta, titleTop: textTop, artistTop: textTop + tt * 1.3 + 4 * k,
+    waveX: x0 + 20 * k, waveW: cw - 40 * k, waveTop: waveTop, waveH: waveH,
+    timesX: x0 + 20 * k, timesW: cw - 40 * k, timesY: ctrlY - 10,
+    play: { cx: x0 + cw / 2, cy: ctrlY, size: big },
+    prev: { cx: x0 + cw / 2 - big, cy: ctrlY, size: 60 * k }, next: { cx: x0 + cw / 2 + big, cy: ctrlY, size: 60 * k },
+    bottomX: x0, bottomW: cw, bottomTop: bottomTop, bottomH: bottomH, topTop: topT, topH: topH,
+    heart: { x: x0 + cw - 16 * k - 44, y: textTop + (textH - 44) / 2 }, col: { x: x0, w: cw, k: k } };
   var qw = Math.min(W, 760), qx = (W - qw) / 2, qt = 14;
   var q = {
     artX: qx + 16, artY: qt, art: 54, textX: qx + 16 + 54 + 14, textW: Math.max(60, qw - (16 + 54 + 14) - 16 - 50 - 14),
@@ -7300,8 +7346,11 @@ function npPlace(el, x, y, scale, alpha) {
 
 /** Places every piece from np.p and np.s, and draws what moves. */
 function npRender() {
+  if (!np.g || !np.shown) return;
+  // Fully open, the scrollbar's strip is the player's too, and the sizes are taken again for the wider layer.
+  var full = np.p > 0.98;
+  if (full !== document.documentElement.classList.contains("np-full")) { document.documentElement.classList.toggle("np-full", full); np.g = npMeasure(); }
   var g = np.g;
-  if (!g || !np.shown) return;
   var t = npTerms(), f = g.f, row = t.qp > 0 ? g.q : g.mini, root = $("np");
   var dip = t.under * 240, lift = t.over * g.H * 0.35, slide = (1 - t.cp) * 60 - lift;
   root.style.opacity = t.under > 0.04 ? npClamp(1 - (t.under - 0.04) * 9, 0, 1).toFixed(3) : "";
@@ -7310,7 +7359,7 @@ function npRender() {
   var pl = $("np-panel");
   var L = npLerp(g.bar.left, 0, t.cp), T = npLerp(g.bar.top, 0, t.cp) + dip, R = npLerp(g.bar.right, g.W, t.cp), B = npLerp(g.bar.bottom, g.H, t.cp) + dip;
   pl.style.left = L + "px"; pl.style.top = T + "px"; pl.style.width = (R - L) + "px"; pl.style.height = Math.max(0, B - T) + "px";
-  pl.style.borderRadius = (20 * (1 - t.cp)).toFixed(1) + "px " + (20 * (1 - t.cp)).toFixed(1) + "px 0 0";
+  pl.style.borderRadius = (20 * (1 - t.cp)).toFixed(1) + "px";
   pl.style.opacity = Math.min(1, t.cp * 4).toFixed(3);
   $("np-specks").style.transform = "translate(" + (-L) + "px," + (-T) + "px)";
 
@@ -7330,12 +7379,11 @@ function npRender() {
   });
   // In the bar the song is over the artist; open, as Namida has it, the artist is over the song,
   // large. The two lines trade places on the way, crossing while they are faded out.
-  var tS = npLerp(row.title / f.artist, 1, t.bcp), aSc = npLerp(row.artist / f.title, 1, t.bcp);
+  var tS = npLerp(row.artist / f.artist, 1, t.bcp), aSc = npLerp(row.title / f.title, 1, t.bcp);
   var tx = npLerp(row.textX, f.textX, t.bcp), tw = npLerp(row.textW, f.textW, t.bcp), tsp = spacing * 1.15;
   // The two move as a pair; within it they swap over quickly in the middle of the way, dimmed as they pass.
   var pairTop = npLerp(row.titleTop + dip, f.titleTop - lift, t.bcp), gap = npLerp(row.artistTop - row.titleTop, f.artistTop - f.titleTop, t.bcp);
-  var flip = npClamp((t.bcp - 0.35) / 0.3, 0, 1);
-  flip = flip * flip * (3 - 2 * flip);
+  var flip = 1;
   var ty = pairTop + gap * flip, ay = pairTop + gap * (1 - flip);
   var cross = Math.pow(Math.abs(2 * flip - 1), 0.7);
   $("np-slots").classList.toggle("full", t.bcp > 0.5);
@@ -7523,7 +7571,7 @@ function npText() {
   var t = npTrack();
   if (!t) return;
   var n = player.order.length;
-  $("np-count").textContent = currentTrack() === t && n ? (player.pos + 1) + " of " + n : "Playing";
+  $("np-count").textContent = currentTrack() === t && n ? (player.pos + 1) + "/" + n : "Playing";
   $("np-album").textContent = t.album;
   // The chip: the kind of file, then its bitrate and sample rate (and the speed, when changed).
   var info = np.info[t.id], chip = $("np-chip-t");
@@ -7710,6 +7758,8 @@ var NX = {
   tracks: '<path d="M2.578 8.67a9.993 9.993 0 0 1 3.14-4.44M2 12c0 1.17.21 2.29.58 3.33M9.09 21.568c.92.28 1.9.43 2.91.43 5.52 0 10-4.48 10-10 0-.6-.06-1.19-.16-1.76M5.718 19.748c-.47-.38-.92-.8-1.32-1.26M20.24 6.34A9.982 9.982 0 0 0 12 2c-1.01 0-1.99.15-2.91.43M8.59 17.11a1.59 1.59 0 1 0 0-3.18 1.59 1.59 0 0 0 0 3.18Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.002 14.46V8.25c0-1.32-.83-1.51-1.67-1.28l-3.18.87c-.58.16-.98.61-.98 1.28v6.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.41 16.051a1.59 1.59 0 1 0 0-3.18 1.59 1.59 0 0 0 0 3.18ZM10.18 10.762 16 9.172" stroke-linecap="round" stroke-linejoin="round"/>',
   albums: '<path d="M2 9c0-5 2-7 7-7h6c5 0 7 2 7 7v6c0 5-2 7-7 7H9c-5 0-7-2-7-7v-1.41M7 2.5v19" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.47 16.8a1.49 1.49 0 1 0 0-2.98 1.49 1.49 0 0 0 0 2.98Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.43 14.31V8.48c0-1.24-.78-1.41-1.57-1.2l-2.98.81c-.54.15-.92.58-.92 1.2v6.01" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.931 15.8a1.49 1.49 0 1 0 0-2.98 1.49 1.49 0 0 0 0 2.98ZM12.96 11.04l5.47-1.49" stroke-linecap="round" stroke-linejoin="round"/>',
   playLast: '<path d="M19.07 19.07c3.91-3.91 3.91-10.24 0-14.14M4.929 4.93c-3.91 3.91-3.91 10.24 0 14.14M8.7 21.41c1.07.37 2.18.55 3.3.55 1.12-.01 2.23-.18 3.3-.55M8.7 2.59c1.07-.37 2.18-.55 3.3-.55 1.12 0 2.23.18 3.3.55" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.738 10.33c0-2.08 1.47-2.93 3.27-1.89l1.45.84 1.45.84c1.8 1.04 1.8 2.74 0 3.78l-1.45.84-1.45.84c-1.8 1.04-3.27.19-3.27-1.89" stroke-linecap="round" stroke-linejoin="round"/>',
+  lyrics: '<path d="M2 9c0-5 2-7 7-7h5M22 10v5c0 5-2 7-7 7H9c-5 0-7-2-7-7v-2.02M18 10c-3 0-4-1-4-4V2l8 8" stroke-linecap="round" stroke-linejoin="round"/>',
+  lyricsOff: '<path d="M2 8.5h13.24M6 16.5h1.29M11 16.5h3.5M7.98 20.5h9.58c3.56 0 4.44-.88 4.44-4.39V6.89M2 14.969v1.14c0 2.34.39 3.51 1.71 4.03M19.99 3.75c-.62-.18-1.42-.25-2.43-.25H6.44C2.89 3.5 2 4.38 2 7.89v3.05M22 2 2 22" stroke-linecap="round" stroke-linejoin="round"/>',
   arrange: '<path d="M10.18 17.15l-3.04-3.04M10.18 6.85v10.3M13.82 6.85l3.04 3.04M13.82 14.11V6.85M13.82 17.15v-.52" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85" stroke-linecap="round" stroke-linejoin="round"/>',
   note: '<path d="M4.109 16.98c-.09.32-.14.67-.14 1.02 0 2.21 1.79 4 4 4s4-1.79 4-4a3.999 3.999 0 0 0-5.02-3.87M11.969 18V4M14.61 2.11l4.42 1.47c1.07.36 1.95 1.57 1.95 2.7v1.17c0 1.53-1.18 2.38-2.63 1.9l-4.42-1.47c-1.07-.36-1.95-1.57-1.95-2.7V4c-.01-1.52 1.18-2.38 2.63-1.89Z" stroke-linecap="round" stroke-linejoin="round"/>',
   clear: '<path d="m13.99 10.012.84-.84M9.17 14.828l2.75-2.75M14.83 14.832l-5.66-5.66M4 6c-1.25 1.67-2 3.75-2 6 0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2c-1.43 0-2.8.3-4.03.85" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -7780,9 +7830,9 @@ function npIsDark() {
   return (bg[0] * 0.299 + bg[1] * 0.587 + bg[2] * 0.114) < 128;
 }
 function npNamidaColours() {
-  var el = $("np");
-  if (!el) return;
-  var dark = npIsDark(), hsl = npHsl(np.tintRgb || [72, 72, 80]), h = hsl[0], s = Math.min(1, hsl[1]);
+  // For the whole page: the full player, the mini player and Music all take them.
+  var el = document.documentElement;
+  var dark = npIsDark(), hsl = npHsl(np.tintRgb || NAMIDA_DEFAULT_RGB), h = hsl[0], s = Math.min(1, hsl[1]);
   function tone(k, l) { return npRgbOf(h, Math.min(1, s * k), l); }
   var base = npRgbOf(h, s, 0.4), mainA = dark ? 200 / 255 : 120 / 255, white = [255, 255, 255];
   var ground = dark ? [35, 35, 35] : white;
@@ -7812,6 +7862,12 @@ function npNamidaColours() {
   set("--nm-dialog", css(dark ? npOver(base, 16 / 255, [12, 12, 12]) : npOver(base, 48 / 255, white)));
   set("--nm-wash-top", css(washOf(100 / 255), 0.38));
   set("--nm-wash-bottom", css(washOf(40 / 255), 0.10));
+  // The mini player's own wash (stronger at its foot), its hairline, and the shadow under it.
+  set("--nm-mini-top", css(washOf(100 / 255), 0.28));
+  set("--nm-mini-bottom", css(washOf(40 / 255), 0.22));
+  set("--nm-mini-track", css(base, 0.3));
+  set("--nm-mini-fill", css(npOver(onSurface, 0.3, base)));
+  set("--nm-shadow", dark ? "rgba(10,10,10,.5)" : "rgba(100,100,100,.35)");
   set("--nm-qhead", "linear-gradient(135deg, " + css(npOver(bg, 0.9, np.tintRgb || base), 0.5) + ", " + css(npOver(bg, 0.65, np.tintRgb || base), 0.5) + ")");
   np.nm = { base: base, onSurface: onSurface, dark: dark };
 }
@@ -7860,6 +7916,7 @@ function npHide() {
   var el = $("np");
   $("player").classList.remove("np-hide");
   document.body.classList.remove("np-open");
+  document.documentElement.classList.remove("np-full");
   el.style.transition = "opacity .14s ease";
   el.style.opacity = "0";
   clearTimeout(np.hideTimer);
@@ -8341,6 +8398,7 @@ function setupFullPlayer() {
   $("np-heart").onclick = function () { var t = npTrack(); if (t) toggleFavourite(t.id); };
   // The sound controls: from the chip or the button beside repeat.
   $("np-chip").onclick = $("np-sound").onclick = npSoundOpen;
+  $("np-lyrics").onclick = function () { if (lyr.open) closeLyrics(); else openLyrics(); };
   $("np-scrim").onclick = $("np-done").onclick = npSoundClose;
   $("np-speed").addEventListener("input", function () { npSetSpeed(parseFloat(this.value)); });
   $("np-vol").addEventListener("input", function () {
