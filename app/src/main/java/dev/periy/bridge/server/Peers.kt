@@ -57,6 +57,8 @@ data class Peer(
     val mutual: Boolean = false,
     /** When the link was last confirmed both ways; it is renewed now and then. */
     val linkedAt: Long = 0,
+    /** The other phone's tunnel details for this one (its /api/tunnel), for reaching it from another network. */
+    val tunnel: String = "",
 )
 
 /** One phone's greeting to the other once they are linked: how to come back into it. */
@@ -187,6 +189,7 @@ class PeerManager(
         scope.launch {
             val now = System.currentTimeMillis()
             _peers.value.filter { !it.mutual || now - it.linkedAt > RENEW_MS }.forEach { runCatching { linkBack(it) } }
+            _peers.value.forEach { runCatching { fetchTunnel(it) } }
         }
         lookAround()
     }
@@ -354,6 +357,7 @@ class PeerManager(
             request("POST", peer.asTarget(), "/api/peers/hello", peer.cookie, body, "application/json").code in 200..299
         }.getOrDefault(false)
         update(peer.name) { it.copy(deviceId = id, mutual = ok || it.mutual, linkedAt = if (ok) System.currentTimeMillis() else it.linkedAt) }
+        if (ok) fetchTunnel(peer)
         return ok
     }
 
@@ -362,8 +366,13 @@ class PeerManager(
      * come into it. [from] is the entry that phone came in on here.
      */
     fun hello(h: PeerHello, ip: String, from: String) {
+        val old = _peers.value.firstOrNull { it.deviceId == from || it.name == h.name }
         val kept = _peers.value.filterNot { it.deviceId == from || it.name == h.name }
-        setPeers(kept + Peer(h.name, ip, h.port, h.cookie, from, mutual = true, linkedAt = System.currentTimeMillis()))
+        // Through a tunnel the greeting comes from loopback: the phone's local address stays as it was.
+        val host = if (ip.startsWith("127.") && old != null) old.host else ip
+        val peer = Peer(h.name, host, h.port, h.cookie, from, mutual = true, linkedAt = System.currentTimeMillis(), tunnel = old?.tunnel.orEmpty())
+        setPeers(kept + peer)
+        scope.launch { fetchTunnel(peer) }
     }
 
     /** Unlinks both ways: this phone forgets the other and shuts it out, and asks it to do the same. */
@@ -763,7 +772,71 @@ class PeerManager(
 
     private class Response(val code: Int, val body: String, val setCookie: String?, val location: String?)
 
-    private fun Peer.asTarget() = NearbyPhone(name, host, port)
+    // ------------------------------------------------------------------ from another network
+    //
+    // A linked phone that is not on this phone's networks is reached through its tunnel
+    // (docs/tunnel-protocol.md), served here on a loopback port: every request below then goes
+    // there unchanged. The moment the phone answers on its local address again, that is used.
+
+    private class Far(val conn: dev.periy.bridge.net.TunnelConnection, val port: Int)
+
+    private val far = ConcurrentHashMap<String, Far>()
+    private val localAt = ConcurrentHashMap<String, Long>()
+    private val tunnelAt = ConcurrentHashMap<String, Long>()
+
+    /** Keeps the other phone's tunnel details for this one, at most every ten minutes. */
+    private fun fetchTunnel(peer: Peer) {
+        val now = System.currentTimeMillis()
+        if (now - (tunnelAt[peer.name] ?: 0) < 600_000) return
+        tunnelAt[peer.name] = now
+        val r = runCatching { request("GET", peer.asTarget(), "/api/tunnel", peer.cookie, null) }.getOrNull() ?: return
+        if (r.code == 200 && r.body.contains("\"key\"")) update(peer.name) { it.copy(tunnel = r.body) }
+    }
+
+    private fun answersAt(host: String, port: Int): Boolean = runCatching {
+        java.net.Socket().use { it.connect(java.net.InetSocketAddress(host, port), 700); true }
+    }.getOrDefault(false)
+
+    private fun Peer.asTarget(): NearbyPhone {
+        val local = NearbyPhone(name, host, port)
+        if (tunnel.isEmpty()) return local
+        val now = System.currentTimeMillis()
+        if (now - (localAt[name] ?: 0) < 15_000) return local
+        if (answersAt(host, port)) {
+            localAt[name] = now
+            far.remove(name)?.conn?.bye("close again")
+            if (now - (tunnelAt[name] ?: 0) > 600_000) scope.launch { fetchTunnel(this@asTarget) }
+            return local
+        }
+        return viaTunnel(this)?.let { NearbyPhone(name, "127.0.0.1", it) } ?: local
+    }
+
+    /** The loopback port the other phone's tunnel is served on, dialling it first when needed. */
+    private fun viaTunnel(peer: Peer): Int? = synchronized(far) {
+        far[peer.name]?.takeIf { it.conn.alive }?.let { return it.port }
+        val t = runCatching { json.parseToJsonElement(peer.tunnel).jsonObject }.getOrNull() ?: return null
+        val tid = t["id"]?.jsonPrimitive?.content?.chunked(2)?.map { it.toInt(16).toByte() }?.toByteArray() ?: return null
+        val psk = t["key"]?.jsonPrimitive?.content?.let { Base64.getDecoder().decode(it) } ?: return null
+        val tport = t["port"]?.jsonPrimitive?.content?.toIntOrNull() ?: dev.periy.bridge.net.TunnelProto.PORT
+        val addrs = (t["addrs"] as? kotlinx.serialization.json.JsonArray)?.map { it.jsonPrimitive.content }.orEmpty()
+        for (a in addrs) {
+            val conn = runCatching {
+                dev.periy.bridge.net.TunnelClient.dial(
+                    a, tport, tid, psk, deviceName(),
+                    onInfo = { info -> info["addrs"]?.let { na -> update(peer.name) { p -> p.copy(tunnel = mergeAddrs(p.tunnel, na)) } } },
+                )
+            }.onFailure { Log.i(TAG, "Tunnel to ${peer.name} at $a: ${it.message}") }.getOrNull() ?: continue
+            val port = dev.periy.bridge.net.TunnelClient.serve(conn, peer.port)
+            far[peer.name] = Far(conn, port)
+            Log.i(TAG, "Reaching ${peer.name} through its tunnel at $a")
+            return port
+        }
+        null
+    }
+
+    private fun mergeAddrs(tunnel: String, addrs: kotlinx.serialization.json.JsonElement): String = runCatching {
+        JsonObject(json.parseToJsonElement(tunnel).jsonObject + ("addrs" to addrs)).toString()
+    }.getOrDefault(tunnel)
 
     private fun open(method: String, to: NearbyPhone, path: String, cookie: String?, network: android.net.Network? = null): HttpURLConnection {
         val url = URL("http://${to.host}:${to.port}$path")
