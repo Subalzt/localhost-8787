@@ -1,6 +1,6 @@
 # Plan: reaching the phone across different networks
 
-Status: planned, nothing built yet. Phase 0 decides whether the rest is possible.
+Status: Phase 0 in progress (see "Phase 0 results"). Phase 0 decides whether the rest is possible.
 
 ## Goal
 
@@ -133,7 +133,54 @@ feature works unchanged.
 4. Laptop ↔ laptop over IPv6, data counters, local-only features marked, README section 14
    ("What works across different networks") updated.
 
+## Phase 0 results
+
+2026-09-30, Xiaomi 15 (HyperOS, Android 16).
+
+**Built:** the server listens on `::` (one dual-stack socket). `/api/pair` answers 403 unless the
+caller is IPv4, link-local/ULA, or a global IPv6 inside the /64 of one of the phone's non-mobile
+links, so strangers on the internet cannot raise a pairing prompt. Home shows the internet
+IPv6 (a tap copies `http://[v6]:8787/`); logcat tag `NetInfo` prints it each time it changes.
+
+**The phone on mobile data** (`adb shell ip -6 addr`, `dumpsys connectivity`):
+
+- Carrier: **Jio True5G, India** (`jionet`, NR).
+- Global IPv6 on the internet network (`rmnet_data1`), for example
+  `2409:40e3:2087:2bf4:8002:f4ff:fee5:ea72/64`, SLAAC, stable interface id (no temporary
+  address). DNS `2405:200:800::11`.
+- IPv4 is only 464XLAT: `192.0.0.2/27`. No IPv4 address anything could connect to, as expected.
+- A second global IPv6 on `rmnet_data4` belongs to the IMS (VoLTE) network and is unreachable
+  from the internet; Home ignores it by reading the default network, not the interface list.
+- The hotspot (`wlan2`) shares the mobile /64: the phone is `2409:40e3:2087:2bf4::9d` there, so
+  laptops on the hotspot get global IPv6 too (a client there had two, SLAAC and privacy). Useful
+  for case 2 (laptop ↔ laptop over IPv6).
+
+**Listening on `::`:**
+
+| From | To | Result |
+| --- | --- | --- |
+| The phone itself | `127.0.0.1`, `::1`, its global IPv6 | answers |
+| Laptop, adb forward | `127.0.0.1` | answers |
+| Laptop on USB tethering | IPv4 `10.117.25.178` | answers; pairing and paired requests work, the phone records the laptop as plain `10.117.25.114`; 333 Mbps on one connection (cable at USB 2, the most it carries) |
+| Laptop on USB tethering | link-local IPv6 (`fe80::…%if`) | answers, pairing works |
+| Laptop on USB tethering | global IPv6 | none: the phone shares its /64 with the hotspot but not over USB |
+| Laptop on the hotspot | IPv4, and IPv6 | to test |
+| Laptop on the same Wi-Fi | IPv4 | to test |
+
+**Through the proxy and from another network:** to test (below).
+
+| Test | Result |
+| --- | --- |
+| Proxy CONNECT to 443 (baseline) | |
+| Proxy reaches an IPv6-only site | |
+| Proxy CONNECT to an IPv6 literal on 443 | |
+| Proxy CONNECT to a non-443 port (IPv4) | |
+| Proxy GET `http://[PHONE-V6]:8787/api/ping` | |
+| Proxy CONNECT `[PHONE-V6]:8787` | |
+| Another network's IPv6 → `[PHONE-V6]:8787` (Jio inbound firewall) | |
+
 ## Open questions
 
-- Which carrier and country the phones are on (decides whether inbound IPv6 is possible).
+- ~~Which carrier and country the phones are on.~~ Jio, India (the Xiaomi 15). The second
+  phone's carrier is still unknown.
 - SMS address exchange, or is typing / scanning a new address enough?
