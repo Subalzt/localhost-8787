@@ -427,12 +427,18 @@ class BridgeServer(
             val all = dev.periy.bridge.net.NetInfo.addresses()
             val (here, via) = call.arrivedOn(all)
             val usb = all.firstOrNull { it.kind == dev.periy.bridge.net.LinkKind.USB && !it.isIpv6 }
+            val tunnelled = here == dev.periy.bridge.net.TunnelProto.LOCAL_HOST
+            val stunPort = dev.periy.bridge.net.StunServer.PORT
+            val stun = (listOfNotNull(here.takeIf { !it.startsWith("127.") }) + dev.periy.bridge.net.NetInfo.publicAddresses(ctx))
+                .distinct().map { if (':' in it) "[$it]:$stunPort" else "$it:$stunPort" }
             call.respond(
                 RouteDto(
-                    via = via.name.lowercase(),
+                    via = if (tunnelled) "internet" else via.name.lowercase(),
                     host = here,
-                    usb = usb?.host?.takeIf { via != dev.periy.bridge.net.LinkKind.USB },
+                    // A cable on the phone is another laptop's business when this one is on another network.
+                    usb = usb?.host?.takeIf { via != dev.periy.bridge.net.LinkKind.USB && !tunnelled },
                     usbMbps = if (via == dev.periy.bridge.net.LinkKind.USB) Monitor.laptopUsbMbps() else 0,
+                    stun = stun,
                 )
             )
         }

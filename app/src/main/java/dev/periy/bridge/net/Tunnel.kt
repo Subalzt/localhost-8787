@@ -27,6 +27,11 @@ import java.util.concurrent.atomic.AtomicLong
  */
 object TunnelProto {
     const val PORT = 8789
+    /**
+     * Where the phone's end hands each stream to the page: a loopback address of its own, so the
+     * page can tell a request that came through the tunnel from one through adb's 127.0.0.1.
+     */
+    const val LOCAL_HOST = "127.0.0.87"
     const val HELLO = 1
     const val OPEN = 2
     const val DATA = 3
@@ -468,7 +473,7 @@ class TunnelServer(
             val conn = TunnelConnection(
                 s, tx = TunnelCipher(k[2], k[3]), rx = TunnelCipher(k[0], k[1]),
                 peer = id, remote = who, client = false,
-                connectLocal = { p -> if (p == pagePort()) Socket().apply { tcpNoDelay = true; connect(InetSocketAddress("127.0.0.1", p), 5_000) } else null },
+                connectLocal = { p -> if (p == pagePort()) Socket().apply { tcpNoDelay = true; connect(InetSocketAddress(TunnelProto.LOCAL_HOST, p), 5_000) } else null },
                 onClosed = { c -> conns.remove(c); totalBytes.addAndGet(c.bytesIn.get() + c.bytesOut.get()); publish() },
             )
             conns.add(conn)

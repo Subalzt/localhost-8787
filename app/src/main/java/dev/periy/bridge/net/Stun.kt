@@ -49,18 +49,22 @@ class StunServer(private val listenPort: Int = PORT) {
         val type = (b[0].toInt() and 0xFF shl 8) or (b[1].toInt() and 0xFF)
         if (type != BINDING_REQUEST) return
         for (i in 0 until 4) if (b[4 + i] != COOKIE[i]) return
-        val from = p.address as? Inet4Address ?: return
-        val ip = from.address
-        val out = ByteArray(20 + 12)
+        // The socket is dual-stack: an IPv4 asker arrives as ::ffff:a.b.c.d and Java hands it over
+        // as IPv4. An IPv6 one (a laptop on another network, over the phone's global address) is
+        // told its global IPv6, which is what lets two laptops far apart connect directly.
+        val ip = p.address.address
+        val v6 = ip.size == 16
+        val out = ByteArray(20 + if (v6) 24 else 12)
         out[0] = 0x01; out[1] = 0x01 // Binding success
-        out[2] = 0; out[3] = 12
+        out[2] = 0; out[3] = (if (v6) 24 else 12).toByte()
         System.arraycopy(b, 4, out, 4, 16) // the cookie and the transaction id, as asked
-        // XOR-MAPPED-ADDRESS: where the request came from, masked with the cookie.
-        out[20] = 0x00; out[21] = 0x20; out[22] = 0; out[23] = 8
-        out[24] = 0; out[25] = 0x01
+        // XOR-MAPPED-ADDRESS: where the request came from, masked with the cookie (and, for
+        // IPv6, the transaction id after it).
+        out[20] = 0x00; out[21] = 0x20; out[22] = 0; out[23] = (if (v6) 20 else 8).toByte()
+        out[24] = 0; out[25] = if (v6) 0x02 else 0x01
         val xport = p.port xor 0x2112
         out[26] = (xport shr 8).toByte(); out[27] = xport.toByte()
-        for (i in 0 until 4) out[28 + i] = (ip[i].toInt() xor COOKIE[i].toInt()).toByte()
+        for (i in ip.indices) out[28 + i] = (ip[i].toInt() xor b[4 + i].toInt()).toByte()
         s.send(DatagramPacket(out, out.size, p.address, p.port))
     }
 

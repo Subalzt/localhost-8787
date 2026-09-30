@@ -147,7 +147,7 @@ data class PairStatusDto(val state: String)
  */
 @Serializable
 data class RouteDto(
-    /** usb, direct, hotspot, wifi, cellular or other. */
+    /** usb, direct, hotspot, wifi, cellular, internet (the tunnel) or other. */
     val via: String,
     /** The phone's address that answered. */
     val host: String,
@@ -158,6 +158,12 @@ data class RouteDto(
      * cable came up at USB 2 (about 40 MB/s instead of 250). 0 when unknown.
      */
     val usbMbps: Int = 0,
+    /**
+     * The phone's STUN addresses (host:port), for a page's direct sends to another laptop: where it
+     * reached the phone, and the phone's public IPv6, which also tells a laptop on another network
+     * its own global address.
+     */
+    val stun: List<String> = emptyList(),
 )
 
 /** The phone's own offline network, for a laptop helper or another phone to join. */

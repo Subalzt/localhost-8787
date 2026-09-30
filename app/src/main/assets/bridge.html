@@ -3453,7 +3453,7 @@ async function pipePump(row) {
       renderTransfers();
       await sleep(1000);
     }
-    row.status = "straight to " + row.toName;
+    row.status = "to " + row.toName + " through the phone";
     renderTransfers();
     await new Promise(function (resolve, reject) {
       var x = new XMLHttpRequest();
@@ -3503,10 +3503,12 @@ function rtcSignal(id, msg) {
 }
 
 function newPeerConnection() {
-  // The phone's STUN answer tells each page its address as the phone sees it; on the same network,
-  // the laptop's real one, which the other laptop can reach.
-  var host = route && route.host ? route.host : "";
-  return new RTCPeerConnection({ iceServers: host ? [{ urls: "stun:" + host + ":3478" }] : [] });
+  // The phone's STUN answer tells each page its address as the phone sees it: on the same network
+  // the laptop's real one there, and over the phone's public IPv6 the laptop's own global IPv6, so
+  // two laptops on different networks can still reach each other. The phone is the only server.
+  var list = route && route.stun && route.stun.length ? route.stun
+    : route && route.host && route.host.indexOf("127.") !== 0 ? [route.host + ":3478"] : [];
+  return new RTCPeerConnection({ iceServers: list.length ? [{ urls: list.map(function (a) { return "stun:" + a; }) }] : [] });
 }
 
 /** Candidates that arrive before the other side's description are kept until it has come. */
@@ -5102,7 +5104,7 @@ var viaHelper = location.hostname === "localhost" || location.hostname === "127.
 // helper the page only sees localhost, so it asks the phone; that is also how it notices a
 // USB cable sitting unused (an old helper that never learned about cables, say).
 var route = null, usbMissed = 0;
-var ROUTE_NAMES = { usb: "Over the USB cable", direct: "On the direct link", hotspot: "On the phone's hotspot", wifi: "Over your Wi-Fi" };
+var ROUTE_NAMES = { usb: "Over the USB cable", direct: "On the direct link", hotspot: "On the phone's hotspot", wifi: "Over your Wi-Fi", internet: "Over the internet" };
 
 async function refreshRoute() {
   try {
@@ -5121,6 +5123,7 @@ var ROUTE_BADGES = {
   direct: { name: "Direct link", speed: "about 100 MB/s", icon: '<path d="M13.5 2.5 5 13.5h6.5l-1 8 8.5-11h-6.5l1-8Z"/>' },
   hotspot: { name: "Phone's hotspot", speed: "about 65 MB/s", icon: '<path d="M8.2 11.6a5.4 5.4 0 0 1 7.6 0"/><path d="M5.2 8.6a9.6 9.6 0 0 1 13.6 0"/><path d="M12 13.5v7"/>' },
   wifi: { name: "Wi-Fi", speed: "router speed", icon: '<path d="M8.3 14.6a5.2 5.2 0 0 1 7.4 0"/><path d="M5.2 11.5a9.6 9.6 0 0 1 13.6 0"/><path d="M2.3 8.4a13.8 13.8 0 0 1 19.4 0"/><path d="M12 18.5h.01"/>' },
+  internet: { name: "Internet", speed: "through the tunnel", icon: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18Z"/>' },
 };
 
 /** The link as a badge in the hero: the cable lit white; any other link says a cable is faster. */
@@ -5133,7 +5136,7 @@ function renderRouteBadge(r) {
   el.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + b.icon + "</svg><span></span>";
   el.lastChild.textContent = b.name + " · ";
   var em = document.createElement("em");
-  em.textContent = usb2 ? "USB 2, about 40 MB/s" : usb ? b.speed : b.speed + ", USB is faster";
+  em.textContent = usb2 ? "USB 2, about 40 MB/s" : usb || r.via === "internet" ? b.speed : b.speed + ", USB is faster";
   el.appendChild(em);
 }
 
