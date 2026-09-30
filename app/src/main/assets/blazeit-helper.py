@@ -35,8 +35,10 @@ Options: --phone ADDRESS (skip the search), --no-browser (do not open the page),
 """
 
 import argparse
+import base64
 import fcntl
 import hashlib
+import hmac
 import http.client
 import json
 import os
@@ -430,6 +432,8 @@ def candidates():
 def link_name(addr):
     if addr[0] == "127.0.0.1" and addr[1] == ADB_FORWARD_PORT:
         return "over the cable's USB debugging (turn on USB tethering on the phone for full speed)"
+    if on_tunnel(addr):
+        return "over the internet, through the tunnel"
     if addr[0] == usb_host:
         return "over the USB cable"
     if direct_ssid:
@@ -463,6 +467,15 @@ def move_to(addr):
 def find_phone(first_time, typed=None):
     told = False
     while True:
+        if typed and ":" in typed:
+            # An IPv6 address from the phone's Home: where to find it over the internet now.
+            typed = typed.strip("[]")
+            c = tunnel_conf()
+            if c:
+                tunnel_save_addrs([typed] + [a for a in c.get("addrs") or [] if a != typed])
+            else:
+                say("This computer has not been paired with the phone yet: pair once on the same network first.")
+            typed = None
         if typed:
             addr = (typed, PHONE_PORT)
             if ping(addr):
@@ -486,13 +499,20 @@ def find_phone(first_time, typed=None):
             move_to(addr)
             say("Found the phone %s." % link_name(addr))
             return
+        addr = tunnel_path()
+        if addr and ping(addr):
+            moved = phone != addr
+            move_to(addr)
+            if moved:
+                say("Found the phone %s." % link_name(addr))
+            return
         if first_time and sys.stdin.isatty():
             try:
                 t = input("Could not find the phone. Is Localhost 8787 switched on? Type the address it shows "
                           "(or press Enter to search again): ").strip()
             except EOFError:
                 t = ""
-            m = re.search(r"(\d{1,3}(?:\.\d{1,3}){3})", t)
+            m = re.search(r"(\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{0,4}){2,7})", t)
             if m:
                 typed = m.group(1)
                 continue
@@ -669,6 +689,458 @@ def relay_loop():
             c.close()
             continue
         threading.Thread(target=bridge, args=(c,), daemon=True).start()
+
+
+# ---------------------------------------------------------------------- the tunnel
+#
+# From another network: one TCP connection to the phone's global IPv6, our own encryption, every
+# connection a stream inside it (docs/tunnel-protocol.md). The helper serves it on 127.0.0.1:18789
+# the way it uses adb's port forward, so the relay, requests and event streams work unchanged.
+
+TUNNEL_PORT = 8789
+TUNNEL_LOCAL_PORT = 18789
+T_HELLO, T_OPEN, T_DATA, T_FIN, T_RST, T_CREDIT, T_PING, T_PONG, T_ADDR, T_BYE = range(1, 11)
+T_WINDOW = 512 * 1024      # unacknowledged bytes per stream, each way
+T_CHUNK = 16384            # DATA body
+T_CREDIT_STEP = 128 * 1024
+T_IDLE_PING = 20
+T_DEAD = 60
+P25519 = 2 ** 255 - 19
+
+
+def x25519(k, u):
+    """RFC 7748. Plain integers, not constant-time: every key here is used once (see the spec)."""
+    k = bytearray(k)
+    k[0] &= 248
+    k[31] &= 127
+    k[31] |= 64
+    k = int.from_bytes(bytes(k), "little")
+    x1 = int.from_bytes(u, "little") & ((1 << 255) - 1)
+    x2, z2, x3, z3, swap = 1, 0, x1, 1, 0
+    for t in range(254, -1, -1):
+        bit = (k >> t) & 1
+        if swap ^ bit:
+            x2, x3, z2, z3 = x3, x2, z3, z2
+        swap = bit
+        a, b, c, d = x2 + z2, x2 - z2, x3 + z3, x3 - z3
+        aa, bb = a * a % P25519, b * b % P25519
+        e = aa - bb
+        da, cb = d * a % P25519, c * b % P25519
+        x3, z3 = (da + cb) ** 2 % P25519, x1 * (da - cb) ** 2 % P25519
+        x2, z2 = aa * bb % P25519, e * (aa + 121665 * e) % P25519
+    if swap:
+        x2, z2 = x3, z3
+    return (x2 * pow(z2, P25519 - 2, P25519) % P25519).to_bytes(32, "little")
+
+
+def hmac16(key, msg):
+    return hmac.new(key, msg, hashlib.sha256).digest()[:16]
+
+
+def hkdf_expand(prk, info, n):
+    out, t, i = b"", b"", 1
+    while len(out) < n:
+        t = hmac.new(prk, t + info + bytes([i]), hashlib.sha256).digest()
+        out += t
+        i += 1
+    return out[:n]
+
+
+class TunnelCipher(object):
+    """One direction: SHAKE256 keystream by frame counter, HMAC-SHA256 tag (encrypt-then-MAC)."""
+
+    def __init__(self, enc, mac):
+        self.enc, self.mac, self.n = enc, mac, 0
+
+    def _stream(self, data):
+        c = struct.pack(">Q", self.n)
+        self.n += 1
+        ks = hashlib.shake_256(self.enc + c).digest(len(data))
+        return c, (int.from_bytes(data, "little") ^ int.from_bytes(ks, "little")).to_bytes(len(data), "little")
+
+    def seal(self, pt):
+        c, ct = self._stream(pt)
+        ln = struct.pack(">I", len(ct))
+        return ln + ct + hmac16(self.mac, c + ln + ct)
+
+    def open(self, ct, tag):
+        c = struct.pack(">Q", self.n)
+        if not hmac.compare_digest(tag, hmac16(self.mac, c + struct.pack(">I", len(ct)) + ct)):
+            raise OSError("a frame failed its check")
+        return self._stream(ct)[1]
+
+
+def recv_exact(s, n):
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = s.recv(n - len(buf))
+        if not chunk:
+            raise OSError("the connection closed")
+        buf += chunk
+    return bytes(buf)
+
+
+class TunnelStream(object):
+    """A local connection carried as one stream: up from the socket, down to it through a queue."""
+
+    def __init__(self, tunnel, sid, sock):
+        self.t, self.sid, self.sock = tunnel, sid, sock
+        self.window = T_WINDOW                  # what the phone will still take
+        self.queue, self.queued = [], 0         # DATA waiting for the socket, None for FIN
+        self.cv = threading.Condition()
+        self.closed = False
+        self.ends = 0                           # directions finished cleanly
+
+    def start(self):
+        threading.Thread(target=self.up, daemon=True).start()
+        threading.Thread(target=self.down, daemon=True).start()
+
+    def up(self):
+        try:
+            while True:
+                data = self.sock.recv(T_CHUNK)
+                if not data:
+                    self.t.send(T_FIN, self.sid)
+                    self.end()
+                    return
+                with self.cv:
+                    while self.window < len(data) and not self.closed:
+                        self.cv.wait(5)
+                    if self.closed:
+                        return
+                    self.window -= len(data)
+                self.t.send(T_DATA, self.sid, data)
+        except OSError:
+            self.reset("the local connection failed")
+
+    def down(self):
+        owed = 0
+        try:
+            while True:
+                with self.cv:
+                    while not self.queue and not self.closed:
+                        self.cv.wait()
+                    if not self.queue:
+                        return
+                    data = self.queue.pop(0)
+                    if data is not None:
+                        self.queued -= len(data)
+                    empty = not self.queue
+                if data is None:
+                    self.sock.shutdown(socket.SHUT_WR)
+                    self.end()
+                    return
+                self.sock.sendall(data)
+                owed += len(data)
+                if owed >= T_CREDIT_STEP or (empty and owed):
+                    self.t.send(T_CREDIT, self.sid, struct.pack(">I", owed))
+                    owed = 0
+        except OSError:
+            self.reset("the local connection failed")
+
+    def end(self):
+        """One direction is done; after both, the stream closes without a reset."""
+        with self.cv:
+            self.ends += 1
+            if self.ends < 2 or self.closed:
+                return
+            self.closed = True
+            self.cv.notify_all()
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+        self.t.forget(self.sid)
+
+    def deliver(self, data):
+        with self.cv:
+            if self.closed:
+                return
+            if data is not None and self.queued + len(data) > T_WINDOW:
+                raise OSError("the phone sent past the window")
+            self.queue.append(data)
+            if data is not None:
+                self.queued += len(data)
+            self.cv.notify_all()
+
+    def credit(self, n):
+        with self.cv:
+            self.window += n
+            self.cv.notify_all()
+
+    def reset(self, why=None, send=True):
+        with self.cv:
+            if self.closed:
+                return
+            self.closed = True
+            self.cv.notify_all()
+        if send:
+            try:
+                self.t.send(T_RST, self.sid, (why or "").encode())
+            except OSError:
+                pass
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+        self.t.forget(self.sid)
+
+
+class Tunnel(object):
+    """The client end of one connection to the phone."""
+
+    def __init__(self, sock, tx, rx, addr):
+        self.sock, self.tx, self.rx, self.addr = sock, tx, rx, addr
+        self.send_lock = threading.Lock()
+        self.streams, self.next_sid, self.lock = {}, 1, threading.Lock()
+        self.alive = True
+        self.last_rx = self.last_tx = time.time()
+        self.hello = threading.Event()
+        self.info = {}
+        self.sent = self.received = 0
+
+    def send(self, kind, sid=0, body=b""):
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+        with self.send_lock:
+            if not self.alive:
+                raise OSError("the tunnel is closed")
+            frame = self.tx.seal(struct.pack(">BI", kind, sid) + body)
+            try:
+                self.sock.sendall(frame)
+            except OSError:
+                self.close()
+                raise
+            self.sent += len(frame)
+            self.last_tx = time.time()
+
+    def open_stream(self, sock, port=PHONE_PORT):
+        with self.lock:
+            sid, self.next_sid = self.next_sid, self.next_sid + 2
+            st = TunnelStream(self, sid, sock)
+            self.streams[sid] = st
+        self.send(T_OPEN, sid, struct.pack(">H", port))
+        st.start()
+
+    def forget(self, sid):
+        with self.lock:
+            self.streams.pop(sid, None)
+
+    def run(self):
+        """Reads frames until the connection ends."""
+        try:
+            while self.alive:
+                ln = struct.unpack(">I", recv_exact(self.sock, 4))[0]
+                if ln < 5 or ln > 65536 + 5:
+                    raise OSError("a frame of %d bytes" % ln)
+                rest = recv_exact(self.sock, ln + 16)
+                pt = self.rx.open(rest[:ln], rest[ln:])
+                self.received += ln + 20
+                self.last_rx = time.time()
+                kind, sid = struct.unpack(">BI", pt[:5])
+                body = pt[5:]
+                with self.lock:
+                    st = self.streams.get(sid)
+                if kind == T_DATA and st:
+                    st.deliver(body)
+                elif kind == T_FIN and st:
+                    st.deliver(None)
+                elif kind == T_CREDIT and st:
+                    st.credit(struct.unpack(">I", body[:4])[0])
+                elif kind == T_RST and st:
+                    st.reset(send=False)
+                elif kind == T_PING:
+                    self.send(T_PONG, 0, body)
+                elif kind in (T_HELLO, T_ADDR):
+                    try:
+                        self.info.update(json.loads(body.decode("utf-8")))
+                    except ValueError:
+                        pass
+                    tunnel_save_addrs(self.info.get("addrs"))
+                    self.hello.set()
+                elif kind == T_BYE:
+                    raise OSError("the phone closed the tunnel" + (": " + body.decode("utf-8", "replace") if body else ""))
+        except OSError as e:
+            if self.alive:
+                log("Tunnel: %s" % e)
+        finally:
+            self.close()
+
+    def keepalive(self):
+        while self.alive:
+            time.sleep(5)
+            now = time.time()
+            if now - self.last_rx > T_DEAD:
+                log("Tunnel: nothing from the phone for %d s" % T_DEAD)
+                self.close()
+            elif now - self.last_tx > T_IDLE_PING:
+                try:
+                    self.send(T_PING, 0, os.urandom(8))
+                except OSError:
+                    pass
+
+    def close(self):
+        with self.lock:
+            if not self.alive:
+                return
+            self.alive = False
+            held = list(self.streams.values())
+        for st in held:
+            st.reset(send=False)
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+
+
+def tunnel_dial(host, port, tid, psk, timeout=8):
+    """Connects and runs the handshake; the Tunnel is running when this returns."""
+    s = socket.create_connection((host, port), timeout=timeout)
+    try:
+        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        priv = os.urandom(32)
+        hello = b"L87T\x01" + tid + x25519(priv, (9).to_bytes(32, "little"))
+        hello += hmac16(psk, b"L87T/1 hello" + hello)
+        s.sendall(hello)
+        resp = recv_exact(s, 48)
+        dh = x25519(priv, resp[:32])
+        if dh == bytes(32):
+            raise OSError("a bad key from the phone")
+        th = hashlib.sha256(hello + resp[:32]).digest()
+        okm = hkdf_expand(hmac.new(psk, dh, hashlib.sha256).digest(), b"L87T/1 keys" + th, 160)
+        k = [okm[i:i + 32] for i in range(0, 160, 32)]
+        if not hmac.compare_digest(resp[32:], hmac16(k[4], b"L87T/1 accept" + th)):
+            raise OSError("the phone did not prove it knows this computer")
+        s.settimeout(None)
+    except (OSError, ValueError):
+        s.close()
+        raise
+    t = Tunnel(s, TunnelCipher(k[0], k[1]), TunnelCipher(k[2], k[3]), (host, port))
+    threading.Thread(target=t.run, daemon=True).start()
+    threading.Thread(target=t.keepalive, daemon=True).start()
+    t.send(T_HELLO, 0, json.dumps({"name": NAME, "v": 1}))
+    if not t.hello.wait(timeout):
+        t.close()
+        raise OSError("the phone did not answer the hello")
+    return t
+
+
+tunnel = None               # the running Tunnel, while there is one
+tunnel_lock = threading.Lock()
+tunnel_local = None         # ("127.0.0.1", port) where it is served here
+
+
+def tunnel_conf():
+    try:
+        with open(os.path.join(CONF, "tunnel.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def tunnel_save_addrs(addrs):
+    c = tunnel_conf()
+    if c and addrs and addrs != c.get("addrs"):
+        c["addrs"] = addrs
+        write_file(os.path.join(CONF, "tunnel.json"), json.dumps(c), private=True)
+
+
+def tunnel_learn():
+    """While the phone is reachable, keeps what the tunnel needs: its addresses, port and this computer's keys."""
+    try:
+        status, _, body = request("GET", "/api/tunnel", timeout=5)
+        if status != 200:
+            return
+        d = json.loads(body.decode("utf-8"))
+        if d.get("key") and d.get("id"):
+            write_file(os.path.join(CONF, "tunnel.json"), json.dumps(d), private=True)
+    except (OSError, http.client.HTTPException, ValueError):
+        pass
+
+
+def tunnel_serve():
+    """127.0.0.1:18789 (or the next free port): each connection there is a stream to the phone."""
+    global tunnel_local
+    for port in (TUNNEL_LOCAL_PORT, TUNNEL_LOCAL_PORT + 10, TUNNEL_LOCAL_PORT + 20):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind(("127.0.0.1", port))
+            s.listen(64)
+        except OSError:
+            s.close()
+            continue
+        tunnel_local = ("127.0.0.1", port)
+
+        def accept():
+            while True:
+                try:
+                    c, _ = s.accept()
+                except OSError:
+                    time.sleep(0.2)
+                    continue
+                t = tunnel
+                if t is None or not t.alive:
+                    c.close()
+                    continue
+                c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                try:
+                    t.open_stream(c)
+                except OSError:
+                    c.close()
+
+        threading.Thread(target=accept, daemon=True).start()
+        return tunnel_local
+    return None
+
+
+def tunnel_path():
+    """The last way in, from another network: dials the phone's saved addresses. None when it cannot."""
+    global tunnel
+    c = tunnel_conf()
+    if not c:
+        return None
+    with tunnel_lock:
+        if tunnel and tunnel.alive:
+            return tunnel_local
+        if tunnel_local is None and tunnel_serve() is None:
+            return None
+        tid, psk = bytes.fromhex(c["id"]), base64.b64decode(c["key"])
+        for host in c.get("addrs") or []:
+            try:
+                tunnel = tunnel_dial(host, int(c.get("port", TUNNEL_PORT)), tid, psk)
+                log("Tunnel to [%s]:%s" % (host, c.get("port", TUNNEL_PORT)))
+                return tunnel_local
+            except OSError as e:
+                say_once("tunnel-" + host + str(e), "Could not reach the phone at %s over the internet (%s)." % (host, e))
+    return None
+
+
+def on_tunnel(addr=None):
+    return tunnel_local is not None and (addr or phone) == tunnel_local
+
+
+def tunnel_loop():
+    """Keeps the tunnel's details current, and leaves the tunnel as soon as a local path answers."""
+    last_learn = 0
+    while True:
+        time.sleep(5)
+        if phone is None or not session:
+            continue
+        if not on_tunnel():
+            if time.time() - last_learn > 600:
+                tunnel_learn()
+                last_learn = time.time()
+            t = tunnel
+            if t and t.alive and all(r.addr != tunnel_local for r in relayed):
+                t.close()   # nothing uses it any more
+            continue
+        for addr in candidates():
+            if ping(addr):
+                say("The phone is close again: %s, %s." % (addr[0], link_name(addr)))
+                move_to(addr)
+                last_learn = 0
+                break
 
 
 # ---------------------------------------------------------------------- link report
@@ -2533,7 +3005,7 @@ def main():
             "sudo setfacl -m u:$USER:rw /dev/uinput), xdotool on X11 (%s), or ydotool." % install_hint("xdotool"))
 
     find_phone(True, typed=args.phone)
-    for loop in (relay_loop, link_loop, direct_loop, events_loop, volume_loop) + ((clip_loop,) if clip else ()):
+    for loop in (relay_loop, link_loop, direct_loop, events_loop, volume_loop, tunnel_loop) + ((clip_loop,) if clip else ()):
         threading.Thread(target=loop, daemon=True).start()
     control_loop(args.no_browser)
 
