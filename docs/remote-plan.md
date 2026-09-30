@@ -1,8 +1,9 @@
 # Plan: reaching the phone across different networks
 
 Status: the tunnel is built ([tunnel-protocol.md](tunnel-protocol.md)): the phone's end, the
-Linux/Mac and Windows helpers, and phone to phone. Tested end to end over the local network;
-the test across the internet waits for a laptop with IPv6 (see "Phase 0 results"). The proxy
+Linux/Mac and Windows helpers, and phone to phone. Tested across the internet on 2026-10-01
+(Airtel Wi-Fi to Jio mobile data; see "Phase 0 results"). Still to watch: the real helper
+switching over by itself with the cable out, and phone to phone with a second phone. The proxy
 case is set aside: the campus proxy allows CONNECT to 443 only, and Android apps cannot listen
 below 1024.
 
@@ -176,7 +177,23 @@ IPv6 (a tap copies `http://[v6]:8787/`); logcat tag `NetInfo` prints it each tim
 | Laptop on the hotspot | IPv4, and IPv6 | to test |
 | Laptop on the same Wi-Fi | IPv4 | to test |
 
-**Through the proxy and from another network:** to test (below).
+**Across the internet** (2026-10-01, about midnight): the laptop on Airtel home Wi-Fi with IPv6
+(`2401:4900:…`, its only IPv6 route), the phone on Jio mobile data.
+
+- **Jio lets connections in to the phone's IPv6.** TCP to the tunnel port connected in 231 ms;
+  the tunnel handshake takes 160–310 ms.
+- Jio drops incoming ICMPv6 echo (ping), so ping cannot measure the path.
+- The page on 8787 answers a caller from the internet with 403 ("Only from the phone's own
+  networks"), as designed; only the tunnel port is open to paired devices.
+- Through the tunnel, from the Python and the Windows clients: ping, state, downloads, uploads,
+  four parallel streams (each moving evenly after the fair-lock fix).
+- Speed follows the path, which swung between 0.07 and 0.3 MB/s (0.6–2.4 Mbps) each way that
+  night, raw TCP included; the tunnel matched raw TCP back to back (download 0.21 vs 0.08–0.24,
+  upload 0.145 vs 0.074 MB/s). Over the USB link the same code does 35–39 MB/s, so the tunnel is
+  not the limit.
+- No MTU black hole: a raw 1 MB upload progressed steadily.
+
+**Through the proxy:** set aside (below).
 
 | Test | Result |
 | --- | --- |
@@ -186,7 +203,7 @@ IPv6 (a tap copies `http://[v6]:8787/`); logcat tag `NetInfo` prints it each tim
 | Proxy CONNECT to a non-443 port (IPv4) | |
 | Proxy GET `http://[PHONE-V6]:8787/api/ping` | |
 | Proxy CONNECT `[PHONE-V6]:8787` | |
-| Another network's IPv6 → `[PHONE-V6]:8787` (Jio inbound firewall) | |
+| Another network's IPv6 → the phone (Jio inbound firewall) | **open**: Airtel → Jio tunnel port connects |
 
 ## Open questions
 
