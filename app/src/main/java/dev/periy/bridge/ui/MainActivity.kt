@@ -1119,15 +1119,15 @@ private fun HeroExtras(state: UiState, running: Boolean, h: HeroText, showQr: Bo
     if (!running) return
     Column(modifier.fillMaxWidth()) {
         if (h.showAddress && state.onlyCellular) RowNote(h.note ?: "")
-        // The address a laptop on another network would try (docs/remote-plan.md); a tap copies it.
-        state.ipv6?.let { v6 ->
+        // Where paired devices find the phone from other networks (docs/tunnel-protocol.md). They
+        // learn it by themselves; a tap copies it for when it changed while they were away.
+        state.ipv6?.takeIf { state.remote }?.let { v6 ->
             val ctx = LocalContext.current
-            val addr = "[$v6]:${state.port}"
             Text(
                 "IPv6  $v6", style = MonoStyle.copy(fontSize = 12.sp), color = Bridge.Muted,
                 maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 10.dp).clickable(onClickLabel = "Copy the IPv6 address") {
-                    SystemClipboard.write(ctx, "http://$addr/")
+                    SystemClipboard.write(ctx, v6)
                     Toast.makeText(ctx, "IPv6 address copied", Toast.LENGTH_SHORT).show()
                 },
             )
@@ -1794,6 +1794,29 @@ private fun DirectRow(direct: DirectLink.State, hotspotOn: Boolean, toggle: () -
     }
 }
 
+/**
+ * From other networks, through the tunnel (docs/tunnel-protocol.md): who is connected that way
+ * now and how much it has carried, since on mobile data every byte counts.
+ */
+@Composable
+private fun RemoteRow(state: UiState, set: (Boolean) -> Unit) {
+    val c = (LocalContext.current.applicationContext as dev.periy.bridge.BridgeApp).container
+    val peers by c.tunnel.peers.collectAsStateWithLifecycle()
+    val devices by c.devices.devices.collectAsStateWithLifecycle()
+    val used = remember(peers) { c.tunnel.bytesSoFar() }
+    val note = when {
+        !state.remote -> null
+        peers.isNotEmpty() -> peers.map { p -> devices.firstOrNull { it.id == p.deviceId }?.let { dev.periy.bridge.server.shownName(it, devices) } ?: "A device" }
+            .distinct().joinToString(", ") + " connected · " + formatBytes(used)
+        state.ipv6 == null -> "No IPv6 address right now"
+        used > 0 -> formatBytes(used) + " so far"
+        else -> "Paired devices only"
+    }
+    SettingRow("From other networks", note, icon = BlazeIcons.Link, iconColor = Bridge.Blue) {
+        Toggle(state.remote) { set(it) }
+    }
+}
+
 private fun LazyListScope.settingsTab(
     state: UiState,
     vm: MainViewModel,
@@ -1880,6 +1903,7 @@ private fun LazyListScope.settingsTab(
             SettingRow("Sync clipboard", icon = BlazeIcons.Paste, iconColor = Bridge.Teal) {
                 Toggle(state.clipSync) { vm.setClipSync(it) }
             }
+            RemoteRow(state) { vm.setRemote(it) }
             SettingRow(
                 "Notifications on the laptop",
                 if (state.notifAccess) null else "Needs notification access",

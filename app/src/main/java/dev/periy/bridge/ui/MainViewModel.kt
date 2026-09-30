@@ -57,6 +57,8 @@ data class UiState(
     val browsable: Boolean = false,
     /** Clipboard follows between phone and laptop without pressing Send. */
     val clipSync: Boolean = true,
+    /** Paired devices may reach the phone from other networks (the tunnel). */
+    val remote: Boolean = true,
     /** New screenshots go on the shared clipboard; and whether Localhost 8787 may read the photos for it. */
     val screenshotClip: Boolean = true,
     val canReadPhotos: Boolean = false,
@@ -162,6 +164,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 musicGranted = app.container.music.granted(),
                 browsable = Build.VERSION.SDK_INT >= 30 && android.os.Environment.isExternalStorageManager(),
                 clipSync = prefs.clipSync,
+                remote = prefs.remote,
                 screenshotClip = prefs.screenshotClip,
                 canReadPhotos = dev.periy.bridge.server.canReadPhotos(app),
                 watchLogs = dev.periy.bridge.server.ClipWatch.canReadLogs(app),
@@ -309,6 +312,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setScreenshotClip(on: Boolean) {
         getApplication<Application>().container.prefs.screenshotClip = on
         if (on) getApplication<Application>().container.prefs.clipSync = true
+        refresh()
+    }
+
+    /** Paired devices on other networks reach the phone through its tunnel; the switch takes effect at once. */
+    fun setRemote(on: Boolean) {
+        val c = getApplication<Application>().container
+        c.prefs.remote = on
+        if (c.server?.isRunning == true) c.server?.remote?.set(on)
         refresh()
     }
 
