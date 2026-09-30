@@ -193,6 +193,18 @@ IPv6 (a tap copies `http://[v6]:8787/`); logcat tag `NetInfo` prints it each tim
   not the limit.
 - No MTU black hole: a raw 1 MB upload progressed steadily.
 
+**Laptop to laptop across networks** (2026-10-01):
+
+- Jio lets UDP in as well: the phone's STUN answered over IPv6 from the Airtel Wi-Fi in 91 ms and
+  gave the laptop its global IPv6 and port unchanged (no NAT on IPv6).
+- A page through the tunnel reports `via: "internet"` and gathers a server-reflexive candidate
+  with its global IPv6 (`2401:4900:…`) from the phone's STUN over the internet.
+- A file from a page through the tunnel to a page on the phone's USB address: offered through
+  the phone, connected browser to browser, 2 MB received whole. With the direct attempt made to
+  fail, the same went through the phone (1 MB in 9 s on that night's Jio link).
+- Both pages ran on one laptop, so the direct connection there is not yet proof of one between
+  two networks; that needs a second laptop.
+
 **Through the proxy:** set aside (below).
 
 | Test | Result |

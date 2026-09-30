@@ -300,6 +300,7 @@ switch to the tunnel by themselves when no local path answers, and back again wh
 | Laptop and phone on different networks, cable plugged in | Yes, through USB debugging (5) |
 | Laptop on another network with IPv6, phone on mobile data | Yes, through the tunnel |
 | Two phones far apart, on mobile data | Yes, through the tunnel, once linked |
+| Two laptops on different networks, one phone | Yes: straight between the laptops when both have IPv6, else through the phone |
 | Two laptops, each on its own phone's hotspot | Yes, through both phones (12); from far apart, over the tunnel between the phones |
 | Laptop on a network with IPv4 only, phone on mobile data | No: nothing reaches a phone behind carrier NAT without a server in the middle |
 | Guest or campus Wi-Fi that hides devices from each other | Through the tunnel if the network has IPv6; else use a hotspot or a cable |

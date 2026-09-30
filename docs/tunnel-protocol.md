@@ -138,6 +138,20 @@ type:u8  stream:u32be  body
   there is no server to ask: type the address shown on the phone's Home into the helper
   (`--phone`), or scan it.
 
+## Laptop to laptop
+
+Two laptops reaching the same phone, one through the tunnel and one on the phone's network (or
+both through tunnels), send files the way they do on one network: the phone introduces them and
+they try to connect browser to browser (WebRTC), else the file goes through the phone.
+
+- Streams enter the phone's page at `127.0.0.87`, so the page knows a request came through the
+  tunnel; `/api/route` then says `via: "internet"`.
+- `/api/route` lists the phone's STUN addresses: the one the page reached, and the phone's
+  public IPv6. Browsers hide their own addresses behind `.local` names; the phone's STUN answer
+  over IPv6 gives each its global IPv6 (a server-reflexive candidate), which the other laptop
+  can reach. There is no IPv4 equivalent across networks: carrier NAT.
+- The phone's STUN server (UDP 3478) answers IPv6 as well as IPv4.
+
 ## Limits
 
 - The laptop needs IPv6 of its own when the phone is on mobile data. From an IPv4-only network
