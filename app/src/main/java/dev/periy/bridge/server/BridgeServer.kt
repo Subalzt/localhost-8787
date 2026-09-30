@@ -153,8 +153,10 @@ class BridgeServer(
         val server = embeddedServer(
             CIO,
             configure = {
+                // "::" is dual-stack on Android: IPv4 clients arrive as ::ffff:a.b.c.d, and a
+                // global IPv6 on mobile data can be reached from outside (docs/remote-plan.md).
                 connector {
-                    host = "0.0.0.0"
+                    host = "::"
                     port = config.port
                 }
                 // The default (45s) closes SSE streams and would also drop a paused
@@ -209,7 +211,7 @@ class BridgeServer(
             if (path in PUBLIC_PATHS || path.startsWith("/api/pair")) return@intercept
             val device = call.device()
             if (device != null) {
-                devices.touch(device.id, call.request.origin.remoteAddress)
+                devices.touch(device.id, call.remoteIp())
                 return@intercept
             }
             call.response.header("Tus-Resumable", TUS_VERSION)
@@ -526,7 +528,7 @@ class BridgeServer(
                 call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad greeting"))
                 return@post
             }
-            peers.hello(h, call.request.origin.remoteAddress, me.id)
+            peers.hello(h, call.remoteIp(), me.id)
             call.respond(ApiResult(true, config.deviceName))
         }
         post("/api/peers/bye") {
@@ -976,6 +978,27 @@ class BridgeServer(
     }
 
     /** The phone's address a request came in on, and the kind of link that is: the socket's own end says. */
+    /** The caller's address, with an IPv4 client on the dual-stack socket shown as plain IPv4. */
+    private fun ApplicationCall.remoteIp(): String =
+        request.origin.remoteAddress.removePrefix("::ffff:").substringBefore('%')
+
+    /**
+     * True unless the caller came in over the internet. IPv4 cannot (carrier NAT); a global IPv6
+     * is local only inside the /64 of one of the phone's own local links: the hotspot or USB
+     * shares the mobile /64, but a laptop there has its address on that link.
+     */
+    private fun ApplicationCall.fromLocalNetwork(): Boolean {
+        val ip = remoteIp()
+        if (':' !in ip) return true
+        val addr = runCatching { java.net.InetAddress.getByName(ip) }.getOrNull() ?: return false
+        if (addr.isLoopbackAddress || addr.isLinkLocalAddress || (addr.address[0].toInt() and 0xfe) == 0xfc) return true
+        val prefix = addr.address.copyOf(8)
+        return dev.periy.bridge.net.NetInfo.addresses().any { a ->
+            a.isIpv6 && a.kind != dev.periy.bridge.net.LinkKind.CELLULAR &&
+                runCatching { java.net.InetAddress.getByName(a.host).address.copyOf(8).contentEquals(prefix) }.getOrDefault(false)
+        }
+    }
+
     private fun ApplicationCall.arrivedOn(
         all: List<dev.periy.bridge.net.Address> = dev.periy.bridge.net.NetInfo.addresses(),
     ): Pair<String, dev.periy.bridge.net.LinkKind> {
@@ -1187,7 +1210,13 @@ class BridgeServer(
 
         // A computer asks to be let in. The phone shows who is asking and a code.
         post("/api/pair") {
-            val ip = call.request.origin.remoteAddress
+            // Now that the server listens on IPv6, anyone on the internet can reach it over mobile
+            // data: pairing stays local, so they cannot even raise a prompt.
+            if (!call.fromLocalNetwork()) {
+                call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Pair on the same network first."))
+                return@post
+            }
+            val ip = call.remoteIp()
             val name = describeUserAgent(call.request.header(HttpHeaders.UserAgent))
             val req = pairing.request(name, ip)
             if (req == null) {
