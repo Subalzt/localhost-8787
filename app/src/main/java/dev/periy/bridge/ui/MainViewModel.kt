@@ -33,6 +33,8 @@ private const val USB_STATE = "android.hardware.usb.action.USB_STATE"
 
 data class UiState(
     val addresses: List<Address> = emptyList(),
+    /** The phone's global IPv6 on its internet link, what a laptop on another network would try. */
+    val ipv6: String? = null,
     val port: Int = 8787,
     val storageMode: Storage.Mode = Storage.Mode.NO_DESTINATION,
     val destination: String? = null,
@@ -80,6 +82,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = refreshAddresses()
         override fun onLost(network: Network) = refreshAddresses()
+        // Mobile IPv6 addresses change without the network changing.
+        override fun onLinkPropertiesChanged(network: Network, lp: android.net.LinkProperties) = refreshAddresses()
     }
 
     /** Whether a computer (not just a charger) is on the USB port, from the sticky USB_STATE broadcast. */
@@ -140,6 +144,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val addrs = withContext(Dispatchers.IO) { NetInfo.addresses() }
             _state.value = _state.value.copy(
                 addresses = addrs,
+                ipv6 = NetInfo.internetIpv6(app),
                 port = prefs.port,
                 storageMode = storageInfo.first,
                 destination = storageInfo.second,
@@ -173,6 +178,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val addrs = withContext(Dispatchers.IO) { NetInfo.addresses() }
             _state.value = _state.value.copy(
                 addresses = addrs,
+                ipv6 = NetInfo.internetIpv6(app),
                 estimate = withContext(Dispatchers.IO) { NetInfo.estimate(app) },
                 fasterLink = NetInfo.fasterLinkAvailable(addrs.firstOrNull()),
                 cableNoTether = cableNoTether(addrs),

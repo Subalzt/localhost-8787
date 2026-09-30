@@ -189,6 +189,31 @@ object NetInfo {
         )
     }
 
+    /**
+     * The global IPv6 of the network the phone reaches the internet on, the one a laptop on
+     * another network would have to connect to. Taken from the default network rather than the
+     * interface list: mobile data also brings up an IMS network with a global address of its
+     * own that nothing outside the carrier can reach. A stable address before a temporary one.
+     */
+    fun internetIpv6(ctx: Context): String? = runCatching {
+        val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return null
+        val lp = cm.getLinkProperties(cm.activeNetwork ?: return null) ?: return null
+        lp.linkAddresses
+            .filter { la ->
+                val a = la.address
+                a is Inet6Address && !a.isLinkLocalAddress && !a.isLoopbackAddress &&
+                    (a.address[0].toInt() and 0xe0) == 0x20
+            }
+            .sortedBy { it.flags and 0x01 } // IFA_F_TEMPORARY last
+            .firstOrNull()?.address?.hostAddress?.substringBefore('%')
+    }.getOrNull().also {
+        if (it != lastIpv6) android.util.Log.i("NetInfo", "Internet IPv6: ${it ?: "none"} (was ${lastIpv6 ?: "none"})")
+        lastIpv6 = it
+    }
+
+    @Volatile
+    private var lastIpv6: String? = null
+
     /** The address to put in the notification and the QR code. Null when offline. */
     fun preferred(): Address? = addresses().firstOrNull()
 

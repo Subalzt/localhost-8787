@@ -1119,6 +1119,19 @@ private fun HeroExtras(state: UiState, running: Boolean, h: HeroText, showQr: Bo
     if (!running) return
     Column(modifier.fillMaxWidth()) {
         if (h.showAddress && state.onlyCellular) RowNote(h.note ?: "")
+        // The address a laptop on another network would try (docs/remote-plan.md); a tap copies it.
+        state.ipv6?.let { v6 ->
+            val ctx = LocalContext.current
+            val addr = "[$v6]:${state.port}"
+            Text(
+                "IPv6  $v6", style = MonoStyle.copy(fontSize = 12.sp), color = Bridge.Muted,
+                maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 10.dp).clickable(onClickLabel = "Copy the IPv6 address") {
+                    SystemClipboard.write(ctx, "http://$addr/")
+                    Toast.makeText(ctx, "IPv6 address copied", Toast.LENGTH_SHORT).show()
+                },
+            )
+        }
         // The cable is in, but it carries nothing until USB tethering is on; Android lets only
         // the phone's own settings switch that.
         if (state.cableNoTether) {
