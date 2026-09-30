@@ -92,6 +92,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean(K_CLIP_SYNC, true)
         set(v) = sp.edit { putBoolean(K_CLIP_SYNC, v) }
 
+    /** Paired laptops and phones may reach this phone from other networks, through the tunnel. */
+    var remote: Boolean
+        get() = sp.getBoolean(K_REMOTE, true)
+        set(v) = sp.edit { putBoolean(K_REMOTE, v) }
+
     /** New screenshots go on the shared clipboard by themselves, Localhost 8787 open or not. */
     var screenshotClip: Boolean
         get() = sp.getBoolean(K_SHOT_CLIP, true)
@@ -144,6 +149,7 @@ class Prefs(ctx: Context) {
         const val K_THEME = "theme"
         const val K_LAPTOP_LINK = "laptop_link"
         const val K_CLIP_SYNC = "clip_sync"
+        const val K_REMOTE = "remote"
         const val K_SHOT_CLIP = "screenshot_clip"
         const val K_HOTSPOT_SSID = "hotspot_ssid"
         const val K_HOTSPOT_PASS = "hotspot_pass"

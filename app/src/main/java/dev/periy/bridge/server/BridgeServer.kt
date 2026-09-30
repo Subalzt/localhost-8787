@@ -40,6 +40,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondBytesWriter
 import io.ktor.server.response.respondOutputStream
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.head
@@ -108,6 +109,28 @@ private const val SIGNAL_MAX = 64 * 1024
  *    response without it, and omitting it on the error paths is the classic way to make
  *    a resumable upload silently non-resumable.
  */
+/** The tunnel as the server sees it: whether it is on, and each device's keys (docs/tunnel-protocol.md). */
+class RemoteDoor(
+    val tunnel: dev.periy.bridge.net.TunnelServer,
+    private val keys: dev.periy.bridge.net.TunnelKeys,
+    val enabled: () -> Boolean,
+    private val info: () -> String,
+) {
+    /** The phone's HELLO plus this device's id and key, as the helper keeps it. */
+    fun forDevice(deviceId: String): String {
+        val base = kotlinx.serialization.json.Json.parseToJsonElement(info()).jsonObject
+        return kotlinx.serialization.json.JsonObject(
+            base + mapOf(
+                "id" to kotlinx.serialization.json.JsonPrimitive(keys.tid(deviceId).joinToString("") { "%02x".format(it) }),
+                "key" to kotlinx.serialization.json.JsonPrimitive(android.util.Base64.encodeToString(keys.psk(deviceId), android.util.Base64.NO_WRAP)),
+                "on" to kotlinx.serialization.json.JsonPrimitive(enabled()),
+            )
+        ).toString()
+    }
+
+    fun set(on: Boolean) = if (on) tunnel.start() else tunnel.stop()
+}
+
 class BridgeServer(
     private val ctx: Context,
     private val config: ServerConfig,
@@ -141,6 +164,9 @@ class BridgeServer(
 
     val isRunning: Boolean get() = engine != null
 
+    /** The tunnel, for paired devices on other networks; set by the container before [start]. */
+    var remote: RemoteDoor? = null
+
     fun start() {
         if (engine != null) return
         storage.refresh()
@@ -167,12 +193,14 @@ class BridgeServer(
         )
         server.start(wait = false)
         engine = server
+        remote?.let { if (it.enabled()) it.tunnel.start() }
         beacon.start()
         Monitor.start(ctx)
         Log.i(TAG, "Listening on :${config.port}")
     }
 
     fun stop() {
+        remote?.tunnel?.stop()
         beacon.stop()
         Monitor.stop()
         engine?.stop(GRACE_MS, TIMEOUT_MS)
@@ -207,6 +235,14 @@ class BridgeServer(
         }
 
         intercept(ApplicationCallPipeline.Plugins) {
+            // The server listens on IPv6 too, so on mobile data the whole internet can reach it:
+            // from outside the phone's own networks the way in is the tunnel, where devices are
+            // known before a byte of HTTP. Here they get nothing, not even a pairing prompt.
+            if (!call.fromLocalNetwork()) {
+                call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Only from the phone's own networks."))
+                finish()
+                return@intercept
+            }
             val path = call.request.path()
             if (path in PUBLIC_PATHS || path.startsWith("/api/pair")) return@intercept
             val device = call.device()
@@ -1208,14 +1244,20 @@ class BridgeServer(
             call.respond(PingDto(ok = true, paired = call.device() != null, device = config.deviceName))
         }
 
+        // What a paired device needs to come back from another network: its keys for the tunnel,
+        // and where the phone is. Only here, on the phone's own networks (see the intercept).
+        get("/api/tunnel") {
+            val d = call.device()
+            val door = remote
+            if (d == null || door == null) {
+                call.respond(HttpStatusCode.NotFound, ApiResult(false, "No tunnel"))
+                return@get
+            }
+            call.respondText(door.forDevice(d.id), ContentType.Application.Json)
+        }
+
         // A computer asks to be let in. The phone shows who is asking and a code.
         post("/api/pair") {
-            // Now that the server listens on IPv6, anyone on the internet can reach it over mobile
-            // data: pairing stays local, so they cannot even raise a prompt.
-            if (!call.fromLocalNetwork()) {
-                call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Pair on the same network first."))
-                return@post
-            }
             val ip = call.remoteIp()
             val name = describeUserAgent(call.request.header(HttpHeaders.UserAgent))
             val req = pairing.request(name, ip)

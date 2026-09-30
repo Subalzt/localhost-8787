@@ -78,6 +78,23 @@ class Container(ctx: Context) {
         storage = storage, index = index, clipboard = clipboard, clipSync = { prefs.clipSync },
     )
 
+    /** From other networks: paired devices reach the phone through its tunnel (docs/tunnel-protocol.md). */
+    val tunnelKeys = dev.periy.bridge.net.TunnelKeys(app.filesDir)
+    val tunnel = dev.periy.bridge.net.TunnelServer(
+        tunnelKeys,
+        deviceIds = { devices.devices.value.map { it.id } },
+        pagePort = { prefs.port },
+        info = ::tunnelInfo,
+    )
+
+    /** What the tunnel tells a device about this phone: its name, and where to find it next time. */
+    fun tunnelInfo(): String = kotlinx.serialization.json.buildJsonObject {
+        put("name", kotlinx.serialization.json.JsonPrimitive(deviceName()))
+        put("v", kotlinx.serialization.json.JsonPrimitive(1))
+        put("port", kotlinx.serialization.json.JsonPrimitive(dev.periy.bridge.net.TunnelProto.PORT))
+        put("addrs", kotlinx.serialization.json.JsonArray(dev.periy.bridge.net.NetInfo.publicAddresses(app).map { kotlinx.serialization.json.JsonPrimitive(it) }))
+    }.toString()
+
     private val _theme = MutableStateFlow(prefs.theme)
 
     /** The shared appearance: "system", "light" or "dark". The app and every page follow it. */
@@ -138,6 +155,7 @@ class Container(ctx: Context) {
             deviceName = deviceName(),
         )
         return BridgeServer(app, config, storage, tus, index, clipboard, devices, pairing, music, direct, peers, loudness, favourites, lyrics)
+            .also { it.remote = dev.periy.bridge.server.RemoteDoor(tunnel, tunnelKeys, { prefs.remote }, ::tunnelInfo) }
             .also { server = it }
     }
 

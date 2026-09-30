@@ -214,6 +214,35 @@ object NetInfo {
     @Volatile
     private var lastIpv6: String? = null
 
+    /**
+     * Every address another network could reach this phone at, the default network's first:
+     * global IPv6 (2000::/3) and public IPv4 on each network that carries the internet. Not the
+     * IMS network's, which has no internet capability, and not 464XLAT's 192.0.0.x.
+     */
+    fun publicAddresses(ctx: Context): List<String> = runCatching {
+        val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return emptyList()
+        val active = cm.activeNetwork
+        @Suppress("DEPRECATION")
+        val nets = cm.allNetworks.sortedBy { if (it == active) 0 else 1 }
+        val out = LinkedHashSet<String>()
+        for (n in nets) {
+            val caps = cm.getNetworkCapabilities(n) ?: continue
+            if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
+            val lp = cm.getLinkProperties(n) ?: continue
+            for (la in lp.linkAddresses.sortedBy { it.flags and 0x01 }) {
+                val a = la.address
+                val ok = when (a) {
+                    is Inet6Address -> (a.address[0].toInt() and 0xe0) == 0x20
+                    is Inet4Address -> !a.isSiteLocalAddress && !a.isLinkLocalAddress && !a.isLoopbackAddress &&
+                        !isCarrierGrade(a.hostAddress ?: "") && !(a.hostAddress ?: "").startsWith("192.0.0.")
+                    else -> false
+                }
+                if (ok) a.hostAddress?.substringBefore('%')?.let(out::add)
+            }
+        }
+        out.toList()
+    }.getOrDefault(emptyList())
+
     /** The address to put in the notification and the QR code. Null when offline. */
     fun preferred(): Address? = addresses().firstOrNull()
 
