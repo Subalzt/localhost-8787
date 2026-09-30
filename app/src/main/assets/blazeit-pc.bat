@@ -2615,6 +2615,7 @@ public static class Tunnel87
         readonly Action<List<string>> onAddrs;
         readonly Action<string> log;
         readonly object sendLock = new object();
+        long nextTicket, serving;
         readonly Dictionary<int, Stream87> streams = new Dictionary<int, Stream87>();
         int nextSid = 1;
         volatile bool alive = true;
@@ -2646,13 +2647,25 @@ public static class Tunnel87
             plain[0] = (byte)type;
             plain[1] = (byte)(sid >> 24); plain[2] = (byte)(sid >> 16); plain[3] = (byte)(sid >> 8); plain[4] = (byte)sid;
             Array.Copy(body, off, plain, 5, len);
+            // Streams take turns in the order they asked: on a slow link the one that just wrote
+            // would otherwise take the connection straight back while the others wait.
+            long mine;
             lock (sendLock)
+            {
+                mine = nextTicket++;
+                while (serving != mine) Monitor.Wait(sendLock);
+            }
+            try
             {
                 if (!alive) throw new IOException("the tunnel is closed");
                 byte[] frame = tx.Seal(plain);
                 try { ns.Write(frame, 0, frame.Length); }
                 catch (Exception e) { Close("write failed"); throw new IOException(e.Message); }
                 lastTx = Environment.TickCount;
+            }
+            finally
+            {
+                lock (sendLock) { serving++; Monitor.PulseAll(sendLock); }
             }
         }
 

@@ -36,6 +36,7 @@ Options: --phone ADDRESS (skip the search), --no-browser (do not open the page),
 
 import argparse
 import base64
+import collections
 import fcntl
 import hashlib
 import hmac
@@ -770,6 +771,31 @@ class TunnelCipher(object):
         return self._stream(ct)[1]
 
 
+class FairLock(object):
+    """Taken in the order asked for: on a slow link, streams take turns writing to the tunnel rather
+    than the one that just wrote taking it straight back while the others wait."""
+
+    def __init__(self):
+        self._lock, self._waiting, self._held = threading.Lock(), collections.deque(), False
+
+    def __enter__(self):
+        with self._lock:
+            if not self._held and not self._waiting:
+                self._held = True
+                return self
+            turn = threading.Event()
+            self._waiting.append(turn)
+        turn.wait()   # handed over by the one before
+        return self
+
+    def __exit__(self, *_):
+        with self._lock:
+            if self._waiting:
+                self._waiting.popleft().set()
+            else:
+                self._held = False
+
+
 def recv_exact(s, n):
     buf = bytearray()
     while len(buf) < n:
@@ -891,7 +917,7 @@ class Tunnel(object):
 
     def __init__(self, sock, tx, rx, addr):
         self.sock, self.tx, self.rx, self.addr = sock, tx, rx, addr
-        self.send_lock = threading.Lock()
+        self.send_lock = FairLock()
         self.streams, self.next_sid, self.lock = {}, 1, threading.Lock()
         self.alive = True
         self.last_rx = self.last_tx = time.time()

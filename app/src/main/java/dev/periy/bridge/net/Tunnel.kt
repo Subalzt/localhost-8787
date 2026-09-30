@@ -92,7 +92,11 @@ class TunnelConnection(
     private val onClosed: (TunnelConnection) -> Unit = {},
 ) {
     private val out = sock.getOutputStream()
-    private val sendLock = Any()
+    /**
+     * Fair, so streams take turns: on a slow link the writer that just finished would otherwise take
+     * the lock straight back, and the other streams would wait for as long as it has data.
+     */
+    private val sendLock = java.util.concurrent.locks.ReentrantLock(true)
     private val streams = ConcurrentHashMap<Int, Stream>()
     private val nextSid = AtomicLong(if (client) 1 else 2)
     private val open = AtomicBoolean(true)
@@ -109,7 +113,8 @@ class TunnelConnection(
         plain[0] = type.toByte()
         ByteBuffer.wrap(plain, 1, 4).putInt(sid)
         System.arraycopy(body, off, plain, 5, len)
-        synchronized(sendLock) {
+        sendLock.lock()
+        try {
             if (!open.get()) throw IOException("the tunnel is closed")
             val frame = tx.seal(plain)
             try {
@@ -121,6 +126,8 @@ class TunnelConnection(
             }
             bytesOut.addAndGet(frame.size.toLong())
             lastTx = System.currentTimeMillis()
+        } finally {
+            sendLock.unlock()
         }
     }
 
