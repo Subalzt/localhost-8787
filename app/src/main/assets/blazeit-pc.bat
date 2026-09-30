@@ -144,6 +144,10 @@ public static class BlazeItPc
         volume.IsBackground = true;
         volume.Start();
 
+        Thread far = new Thread(TunnelLoop);
+        far.IsBackground = true;
+        far.Start();
+
         ControlLoop();
     }
 
@@ -235,6 +239,7 @@ public static class BlazeItPc
 
     static string LinkName(string host)
     {
+        if (host == TunnelHost) return "over the internet, through the tunnel";
         if (host == usbHost) return "over the USB cable";
         if (host == AdbHost) return "over the cable's USB debugging (turn on USB tethering on the phone for full speed)";
         if (directSsid != null) return "on the phone's " + (directSsid.StartsWith("AndroidShare") ? "direct link" : "hotspot");
@@ -452,6 +457,15 @@ public static class BlazeItPc
                     return;
                 }
             }
+            // From another network, through the tunnel to the phone's saved address.
+            string far = TunnelPath();
+            if (far != null && Ping(far))
+            {
+                bool moved = phone != far;
+                MoveTo(far);
+                if (moved) Say("Found the phone " + LinkName(far) + ".");
+                return;
+            }
             // Closed last time while on a direct link that has since ended: go home first.
             if (File.Exists(DirectFile))
             {
@@ -470,6 +484,17 @@ public static class BlazeItPc
             {
                 Console.Write("Could not find the phone. Is Localhost 8787 started? Type the address it shows (or press Enter to search again): ");
                 string typed = (Console.ReadLine() ?? "").Trim();
+                // The IPv6 address on the phone's Home: where the tunnel finds it now.
+                Match v6 = Regex.Match(typed, @"([0-9a-fA-F]{1,4}(:[0-9a-fA-F]{0,4}){2,7})");
+                if (v6.Success && typed.Contains(":"))
+                {
+                    List<string> addrs = TunnelAddrs(TunnelConf());
+                    addrs.Remove(v6.Groups[1].Value);
+                    addrs.Insert(0, v6.Groups[1].Value);
+                    if (TunnelConf() == null) Say("This laptop has not been paired with the phone yet: pair once on the same network first.");
+                    TunnelSaveAddrs(addrs);
+                    continue;
+                }
                 Match m = Regex.Match(typed, @"(\d{1,3}(\.\d{1,3}){3})");
                 if (m.Success && Ping(m.Groups[1].Value))
                 {
@@ -2159,6 +2184,681 @@ public static class BlazeItPc
         catch { }
         try { toSocket.Shutdown(SocketShutdown.Send); } catch { }
     }
+
+    // ------------------------------------------------------------------ the tunnel
+    //
+    // From another network: one TCP connection to the phone's global IPv6, our own encryption,
+    // every connection a stream inside it (docs/tunnel-protocol.md). Served here at 127.0.0.3:8787,
+    // the way USB debugging is at 127.0.0.2, so everything else works unchanged.
+
+    const string TunnelHost = "127.0.0.3";
+    static volatile Tunnel87.Conn tunnel;
+    static bool tunnelServing;
+    static readonly object tunnelLock = new object();
+    static readonly string TunnelFile = Path.Combine(Dir, "tunnel.json");
+    static readonly HashSet<string> tunnelSaid = new HashSet<string>();
+
+    /** While the phone is reachable: its tunnel keys and addresses, kept for when it is not. */
+    static void TunnelLearn()
+    {
+        try
+        {
+            using (HttpWebResponse r = Http("GET", "/api/tunnel", session, 5000))
+            {
+                string b = Body(r);
+                if ((int)r.StatusCode == 200 && b.Contains("\"key\"")) File.WriteAllText(TunnelFile, b);
+            }
+        }
+        catch { }
+    }
+
+    static string TunnelConf() { try { return File.Exists(TunnelFile) ? File.ReadAllText(TunnelFile) : null; } catch { return null; } }
+
+    static List<string> TunnelAddrs(string conf)
+    {
+        List<string> list = new List<string>();
+        Match m = Regex.Match(conf ?? "", "\"addrs\"\\s*:\\s*\\[([^\\]]*)\\]");
+        if (m.Success) foreach (Match a in Regex.Matches(m.Groups[1].Value, "\"([^\"]+)\"")) list.Add(a.Groups[1].Value);
+        return list;
+    }
+
+    /** New addresses from the phone (over the tunnel, or typed from its Home), first one first. */
+    static void TunnelSaveAddrs(List<string> addrs)
+    {
+        string conf = TunnelConf();
+        if (conf == null || addrs == null || addrs.Count == 0) return;
+        string arr = "[" + string.Join(",", addrs.ConvertAll<string>(delegate (string a) { return "\"" + a + "\""; }).ToArray()) + "]";
+        string now = Regex.Replace(conf, "\"addrs\"\\s*:\\s*\\[[^\\]]*\\]", "\"addrs\":" + arr);
+        if (now != conf) try { File.WriteAllText(TunnelFile, now); } catch { }
+    }
+
+    /** The last way in, from another network. The tunnel's address here, or null when it cannot. */
+    static string TunnelPath()
+    {
+        string conf = TunnelConf();
+        if (conf == null) return null;
+        lock (tunnelLock)
+        {
+            Tunnel87.Conn t = tunnel;
+            if (t != null && t.Alive) return TunnelHost;
+            if (!tunnelServing)
+            {
+                try
+                {
+                    TcpListener l = new TcpListener(IPAddress.Parse(TunnelHost), PhonePort);
+                    l.Start();
+                    KeepToSelf(l.Server);
+                    tunnelServing = true;
+                    Thread acc = new Thread(delegate ()
+                    {
+                        while (true)
+                        {
+                            TcpClient c;
+                            try { c = l.AcceptTcpClient(); }
+                            catch (Exception e) { Log("Taking a connection for the tunnel: " + e.Message); Thread.Sleep(200); continue; }
+                            KeepToSelf(c.Client);
+                            Tunnel87.Conn now = tunnel;
+                            if (now == null || !now.Alive) { c.Close(); continue; }
+                            try { now.OpenStream(c, PhonePort); } catch { c.Close(); }
+                        }
+                    });
+                    acc.IsBackground = true;
+                    acc.Start();
+                }
+                catch (Exception e) { Log("Serving the tunnel: " + e.Message); return null; }
+            }
+            string id = Regex.Match(conf, "\"id\"\\s*:\\s*\"([0-9a-f]+)\"").Groups[1].Value;
+            string key = Regex.Match(conf, "\"key\"\\s*:\\s*\"([^\"]+)\"").Groups[1].Value;
+            Match pm = Regex.Match(conf, "\"port\"\\s*:\\s*(\\d+)");
+            int port = pm.Success ? int.Parse(pm.Groups[1].Value) : 8789;
+            if (id.Length != 32 || key.Length == 0) return null;
+            byte[] tid = new byte[16];
+            for (int i = 0; i < 16; i++) tid[i] = Convert.ToByte(id.Substring(i * 2, 2), 16);
+            byte[] psk = Convert.FromBase64String(key);
+            foreach (string host in TunnelAddrs(conf))
+            {
+                try
+                {
+                    tunnel = Tunnel87.Dial(host, port, tid, psk, Environment.MachineName, TunnelSaveAddrs, Log);
+                    Log("Tunnel to [" + host + "]:" + port);
+                    return TunnelHost;
+                }
+                catch (Exception e)
+                {
+                    string why = "Could not reach the phone at " + host + " over the internet (" + e.Message + ").";
+                    lock (tunnelSaid) if (tunnelSaid.Add(why)) Say(why);
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Keeps the tunnel's details current, and leaves it the moment a local path answers. */
+    static void TunnelLoop()
+    {
+        int lastLearn = Environment.TickCount - 700000;
+        while (true)
+        {
+            Thread.Sleep(5000);
+            try
+            {
+                if (phone == null || session == null) continue;
+                if (phone != TunnelHost)
+                {
+                    if (unchecked(Environment.TickCount - lastLearn) > 600000) { TunnelLearn(); lastLearn = Environment.TickCount; }
+                    Tunnel87.Conn t = tunnel;
+                    bool used;
+                    lock (relayed) used = relayed.Exists(delegate (Relayed r) { return r.host == TunnelHost; });
+                    if (t != null && t.Alive && !used) t.Close("not needed any more");
+                    continue;
+                }
+                foreach (string c in Candidates())
+                {
+                    if (c != TunnelHost && Ping(c))
+                    {
+                        Say("The phone is close again: " + c + ", " + LinkName(c) + ".");
+                        MoveTo(c);
+                        lastLearn = Environment.TickCount - 700000;
+                        break;
+                    }
+                }
+            }
+            catch (Exception e) { Log("Tunnel loop: " + e.Message); }
+        }
+    }
+}
+
+/**
+ * The L87 tunnel's client end (docs/tunnel-protocol.md), the same as the Linux and Mac helper's:
+ * X25519, HKDF-SHA256, SHAKE256 keystream and HMAC-SHA256 tags; streams with flow control.
+ */
+public static class Tunnel87
+{
+    const int HELLO = 1, OPEN = 2, DATA = 3, FIN = 4, RST = 5, CREDIT = 6, PING = 7, PONG = 8, ADDR = 9, BYE = 10;
+    const int WINDOW = 512 * 1024, CHUNK = 16384, CREDIT_STEP = 128 * 1024;
+
+    // ---------------------------------------------------------------- X25519 (RFC 7748)
+
+    static readonly System.Numerics.BigInteger P = System.Numerics.BigInteger.Pow(2, 255) - 19;
+
+    static System.Numerics.BigInteger Mod(System.Numerics.BigInteger v)
+    {
+        v = System.Numerics.BigInteger.Remainder(v, P);
+        return v.Sign < 0 ? v + P : v;
+    }
+
+    static System.Numerics.BigInteger Le(byte[] b)
+    {
+        byte[] t = new byte[b.Length + 1];
+        Array.Copy(b, t, b.Length);
+        return new System.Numerics.BigInteger(t);
+    }
+
+    /** Plain big integers, not constant-time: every key here is used once. */
+    public static byte[] X25519(byte[] scalar, byte[] u)
+    {
+        byte[] k = (byte[])scalar.Clone();
+        k[0] &= 248; k[31] &= 127; k[31] |= 64;
+        System.Numerics.BigInteger kk = Le(k);
+        byte[] uu = (byte[])u.Clone();
+        uu[31] &= 127;
+        System.Numerics.BigInteger x1 = Mod(Le(uu)), x2 = 1, z2 = 0, x3 = x1, z3 = 1, tmp;
+        int swap = 0;
+        for (int t = 254; t >= 0; t--)
+        {
+            int bit = (int)((kk >> t) & 1);
+            if ((swap ^ bit) == 1) { tmp = x2; x2 = x3; x3 = tmp; tmp = z2; z2 = z3; z3 = tmp; }
+            swap = bit;
+            System.Numerics.BigInteger a = x2 + z2, b = x2 - z2, c = x3 + z3, d = x3 - z3;
+            System.Numerics.BigInteger aa = Mod(a * a), bb = Mod(b * b), e = aa - bb;
+            System.Numerics.BigInteger da = Mod(d * a), cb = Mod(c * b);
+            System.Numerics.BigInteger s = da + cb, m = da - cb;
+            x3 = Mod(s * s);
+            z3 = Mod(x1 * Mod(m * m));
+            x2 = Mod(aa * bb);
+            z2 = Mod(e * (aa + 121665 * e));
+        }
+        if (swap == 1) { x2 = x3; z2 = z3; }
+        byte[] outp = Mod(x2 * System.Numerics.BigInteger.ModPow(z2, P - 2, P)).ToByteArray();
+        byte[] r = new byte[32];
+        Array.Copy(outp, r, Math.Min(32, outp.Length));
+        return r;
+    }
+
+    // ---------------------------------------------------------------- HMAC, HKDF
+
+    public static byte[] Hmac(byte[] key, params byte[][] parts)
+    {
+        using (System.Security.Cryptography.HMACSHA256 h = new System.Security.Cryptography.HMACSHA256(key))
+        {
+            foreach (byte[] p in parts) h.TransformBlock(p, 0, p.Length, null, 0);
+            h.TransformFinalBlock(new byte[0], 0, 0);
+            return h.Hash;
+        }
+    }
+
+    public static byte[] Hmac16(byte[] key, params byte[][] parts)
+    {
+        byte[] full = Hmac(key, parts), r = new byte[16];
+        Array.Copy(full, r, 16);
+        return r;
+    }
+
+    static byte[] HkdfExpand(byte[] prk, byte[] info, int n)
+    {
+        MemoryStream o = new MemoryStream();
+        byte[] t = new byte[0];
+        for (int i = 1; o.Length < n; i++)
+        {
+            t = Hmac(prk, t, info, new byte[] { (byte)i });
+            o.Write(t, 0, t.Length);
+        }
+        byte[] r = new byte[n];
+        Array.Copy(o.ToArray(), r, n);
+        return r;
+    }
+
+    static byte[] Cat(params byte[][] parts)
+    {
+        MemoryStream o = new MemoryStream();
+        foreach (byte[] p in parts) o.Write(p, 0, p.Length);
+        return o.ToArray();
+    }
+
+    static bool Same(byte[] a, byte[] b)
+    {
+        if (a.Length != b.Length) return false;
+        int d = 0;
+        for (int i = 0; i < a.Length; i++) d |= a[i] ^ b[i];
+        return d == 0;
+    }
+
+    // ---------------------------------------------------------------- SHAKE256
+
+    static readonly ulong[] RC = {
+        0x0000000000000001UL, 0x0000000000008082UL, 0x800000000000808AUL, 0x8000000080008000UL,
+        0x000000000000808BUL, 0x0000000080000001UL, 0x8000000080008081UL, 0x8000000000008009UL,
+        0x000000000000008AUL, 0x0000000000000088UL, 0x0000000080008009UL, 0x000000008000000AUL,
+        0x000000008000808BUL, 0x800000000000008BUL, 0x8000000000008089UL, 0x8000000000008003UL,
+        0x8000000000008002UL, 0x8000000000000080UL, 0x000000000000800AUL, 0x800000008000000AUL,
+        0x8000000080008081UL, 0x8000000000008080UL, 0x0000000080000001UL, 0x8000000080008008UL };
+    static readonly int[] ROT = { 0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14 };
+
+    static ulong Rol(ulong v, int n) { return n == 0 ? v : (v << n) | (v >> (64 - n)); }
+
+    static void KeccakF(ulong[] a)
+    {
+        ulong[] c = new ulong[5], b = new ulong[25];
+        for (int round = 0; round < 24; round++)
+        {
+            for (int x = 0; x < 5; x++) c[x] = a[x] ^ a[x + 5] ^ a[x + 10] ^ a[x + 15] ^ a[x + 20];
+            for (int x = 0; x < 5; x++)
+            {
+                ulong d = c[(x + 4) % 5] ^ Rol(c[(x + 1) % 5], 1);
+                for (int y = 0; y < 25; y += 5) a[y + x] ^= d;
+            }
+            for (int x = 0; x < 5; x++)
+                for (int y = 0; y < 5; y++)
+                    b[y + 5 * ((2 * x + 3 * y) % 5)] = Rol(a[x + 5 * y], ROT[x + 5 * y]);
+            for (int y = 0; y < 25; y += 5)
+                for (int x = 0; x < 5; x++)
+                    a[y + x] = b[y + x] ^ (~b[y + (x + 1) % 5] & b[y + (x + 2) % 5]);
+            a[0] ^= RC[round];
+        }
+    }
+
+    /** XORs SHAKE256(input) into buf[off, off+len). The input is shorter than one block here. */
+    public static void Shake256Xor(byte[] input, byte[] buf, int off, int len)
+    {
+        const int RATE = 136;
+        ulong[] s = new ulong[25];
+        byte[] block = new byte[RATE];
+        Array.Copy(input, block, input.Length);
+        block[input.Length] ^= 0x1F;
+        block[RATE - 1] ^= 0x80;
+        for (int i = 0; i < RATE / 8; i++) s[i] ^= BitConverter.ToUInt64(block, i * 8);
+        KeccakF(s);
+        int done = 0;
+        while (true)
+        {
+            for (int i = 0; i < RATE && done < len; i++, done++)
+                buf[off + done] ^= (byte)(s[i >> 3] >> ((i & 7) * 8));
+            if (done >= len) return;
+            KeccakF(s);
+        }
+    }
+
+    // ---------------------------------------------------------------- frames
+
+    internal class Cipher
+    {
+        readonly byte[] seed;
+        readonly System.Security.Cryptography.HMACSHA256 mac;
+        long n;
+
+        public Cipher(byte[] enc, byte[] macKey)
+        {
+            seed = new byte[enc.Length + 8];
+            Array.Copy(enc, seed, enc.Length);
+            mac = new System.Security.Cryptography.HMACSHA256(macKey);
+        }
+
+        byte[] Counter() { byte[] c = BitConverter.GetBytes(n); Array.Reverse(c); return c; }
+
+        static byte[] Be32(int v) { byte[] b = BitConverter.GetBytes(v); Array.Reverse(b); return b; }
+
+        byte[] Tag(byte[] c, byte[] len, byte[] buf, int off, int count)
+        {
+            mac.Initialize();
+            mac.TransformBlock(c, 0, 8, null, 0);
+            mac.TransformBlock(len, 0, 4, null, 0);
+            mac.TransformFinalBlock(buf, off, count);
+            byte[] t = new byte[16];
+            Array.Copy(mac.Hash, t, 16);
+            return t;
+        }
+
+        void Keystream(byte[] buf, int off, int len)
+        {
+            Array.Copy(Counter(), 0, seed, seed.Length - 8, 8);
+            Shake256Xor(seed, buf, off, len);
+            n++;
+        }
+
+        public byte[] Seal(byte[] plain)
+        {
+            byte[] o = new byte[4 + plain.Length + 16];
+            byte[] len = Be32(plain.Length);
+            Array.Copy(len, o, 4);
+            Array.Copy(plain, 0, o, 4, plain.Length);
+            byte[] c = Counter();
+            Keystream(o, 4, plain.Length);
+            Array.Copy(Tag(c, len, o, 4, plain.Length), 0, o, 4 + plain.Length, 16);
+            return o;
+        }
+
+        public bool Open(byte[] ct, byte[] tag)
+        {
+            if (!Same(Tag(Counter(), Be32(ct.Length), ct, 0, ct.Length), tag)) return false;
+            Keystream(ct, 0, ct.Length);
+            return true;
+        }
+    }
+
+    static byte[] ReadExact(Stream s, int n)
+    {
+        byte[] b = new byte[n];
+        int got = 0;
+        while (got < n)
+        {
+            int r = s.Read(b, got, n - got);
+            if (r <= 0) throw new IOException("the connection closed");
+            got += r;
+        }
+        return b;
+    }
+
+    static int Be(byte[] b, int off) { return (b[off] << 24) | (b[off + 1] << 16) | (b[off + 2] << 8) | b[off + 3]; }
+
+    /** Connects to the phone and runs the handshake; the connection is running when this returns. */
+    public static Conn Dial(string host, int port, byte[] tid, byte[] psk, string name, Action<List<string>> onAddrs, Action<string> log)
+    {
+        TcpClient tcp = new TcpClient(AddressFamily.InterNetworkV6);
+        tcp.Client.DualMode = true;
+        try
+        {
+            IAsyncResult ar = tcp.BeginConnect(IPAddress.Parse(host), port, null, null);
+            if (!ar.AsyncWaitHandle.WaitOne(8000)) throw new IOException("no answer in 8 s");
+            tcp.EndConnect(ar);
+            tcp.NoDelay = true;
+            tcp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            NetworkStream ns = tcp.GetStream();
+            ns.ReadTimeout = 8000;
+            byte[] priv = new byte[32];
+            using (System.Security.Cryptography.RandomNumberGenerator rng = System.Security.Cryptography.RandomNumberGenerator.Create()) rng.GetBytes(priv);
+            byte[] nine = new byte[32]; nine[0] = 9;
+            byte[] hello = Cat(Encoding.ASCII.GetBytes("L87T"), new byte[] { 1 }, tid, X25519(priv, nine));
+            hello = Cat(hello, Hmac16(psk, Encoding.ASCII.GetBytes("L87T/1 hello"), hello));
+            ns.Write(hello, 0, hello.Length);
+            byte[] resp = ReadExact(ns, 48);
+            byte[] eS = new byte[32], mac2 = new byte[16];
+            Array.Copy(resp, eS, 32);
+            Array.Copy(resp, 32, mac2, 0, 16);
+            byte[] dh = X25519(priv, eS);
+            if (Same(dh, new byte[32])) throw new IOException("a bad key from the phone");
+            byte[] th;
+            using (System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create()) th = sha.ComputeHash(Cat(hello, eS));
+            byte[] okm = HkdfExpand(Hmac(psk, dh), Cat(Encoding.ASCII.GetBytes("L87T/1 keys"), th), 160);
+            byte[][] k = new byte[5][];
+            for (int i = 0; i < 5; i++) { k[i] = new byte[32]; Array.Copy(okm, i * 32, k[i], 0, 32); }
+            if (!Same(mac2, Hmac16(k[4], Encoding.ASCII.GetBytes("L87T/1 accept"), th)))
+                throw new IOException("the phone did not prove it knows this laptop");
+            ns.ReadTimeout = Timeout.Infinite;
+            Conn c = new Conn(tcp, ns, new Cipher(k[0], k[1]), new Cipher(k[2], k[3]), onAddrs, log);
+            c.Start();
+            c.Send(HELLO, 0, Encoding.UTF8.GetBytes("{\"name\":\"" + name.Replace("\\", "").Replace("\"", "") + "\",\"v\":1}"));
+            if (!c.hello.WaitOne(8000)) { c.Close("no hello"); throw new IOException("the phone did not answer the hello"); }
+            return c;
+        }
+        catch
+        {
+            try { tcp.Close(); } catch { }
+            throw;
+        }
+    }
+
+    public class Conn
+    {
+        readonly TcpClient tcp;
+        readonly NetworkStream ns;
+        readonly Cipher tx, rx;
+        readonly Action<List<string>> onAddrs;
+        readonly Action<string> log;
+        readonly object sendLock = new object();
+        readonly Dictionary<int, Stream87> streams = new Dictionary<int, Stream87>();
+        int nextSid = 1;
+        volatile bool alive = true;
+        int lastRx = Environment.TickCount, lastTx = Environment.TickCount;
+        internal readonly ManualResetEvent hello = new ManualResetEvent(false);
+
+        internal Conn(TcpClient tcp, NetworkStream ns, Cipher tx, Cipher rx, Action<List<string>> onAddrs, Action<string> log)
+        {
+            this.tcp = tcp; this.ns = ns; this.tx = tx; this.rx = rx; this.onAddrs = onAddrs; this.log = log;
+        }
+
+        public bool Alive { get { return alive; } }
+
+        internal void Start()
+        {
+            Thread r = new Thread(Run);
+            r.IsBackground = true;
+            r.Start();
+            Thread k = new Thread(Keepalive);
+            k.IsBackground = true;
+            k.Start();
+        }
+
+        public void Send(int type, int sid, byte[] body) { Send(type, sid, body, 0, body.Length); }
+
+        public void Send(int type, int sid, byte[] body, int off, int len)
+        {
+            byte[] plain = new byte[5 + len];
+            plain[0] = (byte)type;
+            plain[1] = (byte)(sid >> 24); plain[2] = (byte)(sid >> 16); plain[3] = (byte)(sid >> 8); plain[4] = (byte)sid;
+            Array.Copy(body, off, plain, 5, len);
+            lock (sendLock)
+            {
+                if (!alive) throw new IOException("the tunnel is closed");
+                byte[] frame = tx.Seal(plain);
+                try { ns.Write(frame, 0, frame.Length); }
+                catch (Exception e) { Close("write failed"); throw new IOException(e.Message); }
+                lastTx = Environment.TickCount;
+            }
+        }
+
+        public void OpenStream(TcpClient local, int port)
+        {
+            Stream87 st;
+            lock (streams)
+            {
+                st = new Stream87(this, nextSid, local);
+                streams[nextSid] = st;
+                nextSid += 2;
+            }
+            Send(OPEN, st.sid, new byte[] { (byte)(port >> 8), (byte)port });
+            st.Start();
+        }
+
+        internal void Forget(int sid) { lock (streams) streams.Remove(sid); }
+
+        void Run()
+        {
+            string why = "closed";
+            try
+            {
+                while (alive)
+                {
+                    int len = Be(ReadExact(ns, 4), 0);
+                    if (len < 5 || len > 65536 + 5) { why = "a frame of " + len + " bytes"; break; }
+                    byte[] ct = ReadExact(ns, len), tag = ReadExact(ns, 16);
+                    if (!rx.Open(ct, tag)) { why = "a frame failed its check"; break; }
+                    lastRx = Environment.TickCount;
+                    int type = ct[0], sid = Be(ct, 1);
+                    byte[] body = new byte[len - 5];
+                    Array.Copy(ct, 5, body, 0, body.Length);
+                    Stream87 st;
+                    lock (streams) streams.TryGetValue(sid, out st);
+                    if (type == DATA && st != null) st.Deliver(body);
+                    else if (type == FIN && st != null) st.Deliver(null);
+                    else if (type == CREDIT && st != null && body.Length >= 4) st.Credit(Be(body, 0));
+                    else if (type == RST && st != null) st.Reset(null, false);
+                    else if (type == PING) Send(PONG, 0, body);
+                    else if (type == HELLO || type == ADDR)
+                    {
+                        string j = Encoding.UTF8.GetString(body);
+                        Match m = Regex.Match(j, "\"addrs\"\\s*:\\s*\\[([^\\]]*)\\]");
+                        if (m.Success && onAddrs != null)
+                        {
+                            List<string> list = new List<string>();
+                            foreach (Match a in Regex.Matches(m.Groups[1].Value, "\"([^\"]+)\"")) list.Add(a.Groups[1].Value);
+                            try { onAddrs(list); } catch { }
+                        }
+                        hello.Set();
+                    }
+                    else if (type == BYE) { why = "the phone closed the tunnel: " + Encoding.UTF8.GetString(body); break; }
+                }
+            }
+            catch (Exception e) { why = e.Message; }
+            Close(why);
+        }
+
+        void Keepalive()
+        {
+            Random rnd = new Random();
+            while (alive)
+            {
+                Thread.Sleep(5000);
+                if (unchecked(Environment.TickCount - lastRx) > 60000) Close("nothing from the phone for 60 s");
+                else if (unchecked(Environment.TickCount - lastTx) > 20000)
+                {
+                    byte[] b = new byte[8];
+                    rnd.NextBytes(b);
+                    try { Send(PING, 0, b); } catch { }
+                }
+            }
+        }
+
+        public void Close(string why)
+        {
+            Stream87[] held;
+            lock (streams)
+            {
+                if (!alive) return;
+                alive = false;
+                held = new Stream87[streams.Count];
+                streams.Values.CopyTo(held, 0);
+            }
+            if (log != null) log("Tunnel closed: " + why);
+            foreach (Stream87 s in held) s.Reset(null, false);
+            try { tcp.Close(); } catch { }
+        }
+    }
+
+    /** A local connection carried as one stream: up from the socket, down to it through a queue. */
+    internal class Stream87
+    {
+        readonly Conn c;
+        internal readonly int sid;
+        readonly TcpClient local;
+        readonly object gate = new object();
+        readonly Queue<byte[]> queue = new Queue<byte[]>();
+        static readonly byte[] FinMark = new byte[0];
+        long window = WINDOW;
+        int queued, ends;
+        bool closed;
+
+        public Stream87(Conn c, int sid, TcpClient local) { this.c = c; this.sid = sid; this.local = local; }
+
+        public void Start()
+        {
+            local.NoDelay = true;
+            Thread u = new Thread(Up); u.IsBackground = true; u.Start();
+            Thread d = new Thread(Down); d.IsBackground = true; d.Start();
+        }
+
+        void Up()
+        {
+            byte[] buf = new byte[CHUNK];
+            try
+            {
+                NetworkStream s = local.GetStream();
+                while (true)
+                {
+                    int n = s.Read(buf, 0, buf.Length);
+                    if (n <= 0) { c.Send(FIN, sid, new byte[0]); End(); return; }
+                    lock (gate)
+                    {
+                        while (window < n && !closed) Monitor.Wait(gate, 5000);
+                        if (closed) return;
+                        window -= n;
+                    }
+                    c.Send(DATA, sid, buf, 0, n);
+                }
+            }
+            catch { Reset("the local connection failed", true); }
+        }
+
+        void Down()
+        {
+            int owed = 0;
+            try
+            {
+                NetworkStream s = local.GetStream();
+                while (true)
+                {
+                    byte[] data;
+                    bool empty;
+                    lock (gate)
+                    {
+                        while (queue.Count == 0 && !closed) Monitor.Wait(gate);
+                        if (queue.Count == 0) return;
+                        data = queue.Dequeue();
+                        queued -= data.Length;
+                        empty = queue.Count == 0;
+                    }
+                    if (object.ReferenceEquals(data, FinMark)) { try { local.Client.Shutdown(SocketShutdown.Send); } catch { } End(); return; }
+                    s.Write(data, 0, data.Length);
+                    owed += data.Length;
+                    if (owed >= CREDIT_STEP || (empty && owed > 0))
+                    {
+                        c.Send(CREDIT, sid, new byte[] { (byte)(owed >> 24), (byte)(owed >> 16), (byte)(owed >> 8), (byte)owed });
+                        owed = 0;
+                    }
+                }
+            }
+            catch { Reset("the local connection failed", true); }
+        }
+
+        public void Deliver(byte[] data)
+        {
+            lock (gate)
+            {
+                if (closed) return;
+                if (data != null && queued + data.Length > WINDOW) throw new IOException("the phone sent past the window");
+                queue.Enqueue(data ?? FinMark);
+                if (data != null) queued += data.Length;
+                Monitor.PulseAll(gate);
+            }
+        }
+
+        public void Credit(int n) { lock (gate) { window += n; Monitor.PulseAll(gate); } }
+
+        void End()
+        {
+            lock (gate)
+            {
+                ends++;
+                if (ends < 2 || closed) return;
+                closed = true;
+                Monitor.PulseAll(gate);
+            }
+            try { local.Close(); } catch { }
+            c.Forget(sid);
+        }
+
+        public void Reset(string why, bool send)
+        {
+            lock (gate)
+            {
+                if (closed) return;
+                closed = true;
+                Monitor.PulseAll(gate);
+            }
+            if (send) try { c.Send(RST, sid, Encoding.UTF8.GetBytes(why ?? "")); } catch { }
+            try { local.Close(); } catch { }
+            c.Forget(sid);
+        }
+    }
 }
 
 /**
@@ -2706,5 +3406,5 @@ public static class MasterVolume
 
 '@
 
-Add-Type -TypeDefinition $source -Language CSharp -ReferencedAssemblies System.Windows.Forms, System.Drawing, System.IO.Compression, System.IO.Compression.FileSystem
+Add-Type -TypeDefinition $source -Language CSharp -ReferencedAssemblies System.Windows.Forms, System.Drawing, System.IO.Compression, System.IO.Compression.FileSystem, System.Numerics
 [BlazeItPc]::Run($f)
