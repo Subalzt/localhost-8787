@@ -1,6 +1,15 @@
 # Plan: reaching the phone across different networks
 
-Status: Phase 0 in progress (see "Phase 0 results"). Phase 0 decides whether the rest is possible.
+Status: the tunnel is built ([tunnel-protocol.md](tunnel-protocol.md)): the phone's end, the
+Linux/Mac and Windows helpers, and phone to phone. Tested end to end over the local network;
+the test across the internet waits for a laptop with IPv6 (see "Phase 0 results"). The proxy
+case is set aside: the campus proxy allows CONNECT to 443 only, and Android apps cannot listen
+below 1024.
+
+What changed from the design below: instead of a TLS listener, the tunnel uses its own
+encryption keyed at pairing (a TLS-inspecting proxy breaks pinned TLS; see
+[Bypass-PROXY-with-WireGuard-over-HTTP-CONNECT](https://github.com/Subalzt/Bypass-PROXY-with-WireGuard-over-HTTP-CONNECT)),
+and one connection carries every stream, so the helper serves it like adb's port forward.
 
 ## Goal
 

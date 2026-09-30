@@ -287,21 +287,28 @@ larger ones go through the phone as a normal download.
 
 <br>
 
-Everything above needs a path between the devices on a local network. In short:
+Pair once on the same network. After that, a laptop or phone on another network reaches the
+phone through its **tunnel**: one connection to the phone's IPv6 address, with its own
+encryption and every request carried inside it
+([how it works](docs/tunnel-protocol.md)). The phone is the only server; there is none on the
+internet. The helper and linked phones learn the phone's address while they are together and
+switch to the tunnel by themselves when no local path answers, and back again when one does.
 
 | Situation | Works? |
 | :--- | :--- |
 | Laptop and phone on the same Wi-Fi, hotspot or cable | Yes |
 | Laptop and phone on different networks, cable plugged in | Yes, through USB debugging (5) |
-| Two phones on different Wi-Fi networks | Only if one can reach the other's address; else put one phone on the other's hotspot |
-| Two laptops, each on its own phone's hotspot | Yes, through both phones (12), once the phones are linked |
-| Phones on mobile data only | No: carriers block incoming connections |
-| Devices in different places, across the internet | No |
-| Guest or campus Wi-Fi that hides devices from each other | No; use a hotspot or a cable |
+| Laptop on another network with IPv6, phone on mobile data | Yes, through the tunnel |
+| Two phones far apart, on mobile data | Yes, through the tunnel, once linked |
+| Two laptops, each on its own phone's hotspot | Yes, through both phones (12); from far apart, over the tunnel between the phones |
+| Laptop on a network with IPv4 only, phone on mobile data | No: nothing reaches a phone behind carrier NAT without a server in the middle |
+| Guest or campus Wi-Fi that hides devices from each other | Through the tunnel if the network has IPv6; else use a hotspot or a cable |
 
-There is no server in the middle, on purpose. A small introduction server on the internet could
-let devices in different places find each other while the data still went directly between them,
-but it is not built.
+Through the tunnel: the clipboard, files, browsing the phone, music, notifications, the
+trackpad. The second screen and the phone's screen stay local. On mobile data every byte counts;
+Settings → Laptop access → From other networks shows who is connected that way and how much it
+has carried, and turns it off. If the phone's address changes while the two are apart, type
+the address its Home shows into the helper.
 
 </details>
 
@@ -684,7 +691,9 @@ screens, `music/` for the phone's own player, `net/` for addresses, the direct l
   WSL the Windows helper runs both.
 - The Mac helper is written to Apple's documented tools and checked piece by piece, but has not
   yet run on a real Mac. On a Mac the helper does not switch Wi-Fi itself.
-- Devices must share a local network (or a cable); nothing works across the internet.
+- Across the internet the laptop needs IPv6 of its own, and the phone's carrier has to let
+  connections in to it; a proxy that allows only port 443 cannot reach the phone (Android apps
+  cannot listen below 1024).
 - Lyrics need internet on the laptop the first time a song is played; after that they are on
   the phone.
 - Protected video cannot be shown on the second screen.
