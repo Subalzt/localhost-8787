@@ -153,16 +153,20 @@ class Loudness(ctx: Context, private val music: MusicLibrary) {
             return ((env[i].toInt() and 0xFF) * (1 - t) + (env[j].toInt() and 0xFF) * t) / 255f
         }
 
-        /** [count] bars for a seek bar: each the loudest moment in its stretch of the song. */
-        fun bars(env: ByteArray?, count: Int): FloatArray {
+        /**
+         * [count] bars for a seek bar: each the loudest moment in its stretch of the song, or with
+         * [average] how loud the stretch is on the whole (which keeps the shape of a loud song).
+         */
+        fun bars(env: ByteArray?, count: Int, average: Boolean = false): FloatArray {
             val out = FloatArray(count)
             if (env == null || env.isEmpty() || count <= 0) return out
             for (b in 0 until count) {
                 val from = (b.toLong() * env.size / count).toInt()
                 val to = ((b + 1L) * env.size / count).toInt().coerceAtLeast(from + 1).coerceAtMost(env.size)
                 var m = 0
-                for (k in from until to) m = maxOf(m, env[k].toInt() and 0xFF)
-                out[b] = m / 255f
+                var sum = 0
+                for (k in from until to) { val v = env[k].toInt() and 0xFF; m = maxOf(m, v); sum += v }
+                out[b] = (if (average) sum.toFloat() / (to - from) else m.toFloat()) / 255f
             }
             return out
         }

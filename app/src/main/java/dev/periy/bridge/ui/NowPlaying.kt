@@ -130,8 +130,8 @@ import kotlin.math.roundToInt
  *
  * Sideways, the cover and the title slide to the song before or after, the title a little
  * faster than the cover, and the next one slides in behind them. The cover swells with the
- * loud moments of the song, the seek bar is the song's own waveform, the whole player takes
- * its colour from the cover, and specks drift behind it, quicker when the music is loud.
+ * loud moments of the song, the seek bar is the song's own waveform, and the cover's colour
+ * glows behind it on the black.
  *
  * Written anew for Compose from how Namida's player moves; none of its code is used.
  */
@@ -520,9 +520,10 @@ fun NowPlaying(
     val bigCover = rememberCover(cur.albumId, big = true)
     val tintTarget = (if (bigCover != null) Covers.tint(cur.albumId) else null) ?: Covers.madeUp(cur.album)
     val tint by animateColorAsState(tintTarget, tween(600), label = "tint")
-    // The whole player in the cover's colour, worked out as Namida works out its theme (NamidaStyle.kt).
+    // The player black (white in the light theme) as the library is; the cover's colour only
+    // glows behind the cover.
     val basePalette = LocalPalette.current
-    val nc = remember(tint, basePalette.dark) { namidaColors(tint, basePalette.dark) }
+    val nc = rememberCleanColors()
     val palette = remember(nc, basePalette) { nc.asPalette(basePalette) }
     val favourites = androidx.compose.ui.platform.LocalContext.current.container.favourites
     val hearts by favourites.ids.collectAsState()
@@ -539,10 +540,9 @@ fun NowPlaying(
         }
     }
 
-    // Every frame while playing: the swell, the waveform's progress and the drifting specks.
+    // Every frame while playing: the swell and the waveform's progress.
     val live = rememberUpdatedState(state)
     val pulse = remember { mutableFloatStateOf(0f) }
-    val loud = remember { mutableFloatStateOf(0f) }
     val tick = remember { mutableLongStateOf(0L) }
     LaunchedEffect(state.playing, env) {
         var last = 0L
@@ -553,10 +553,9 @@ fun NowPlaying(
             val s = live.value
             val v = if (s.playing) Loudness.at(env, s.positionNow()) else 0f
             val k = 1f - exp(-dt / 70f)
-            loud.floatValue += (v - loud.floatValue) * k
             pulse.floatValue += (v.pow(2.4f) - pulse.floatValue) * k
             tick.longValue = now
-            if (!s.playing && pulse.floatValue < 0.002f) { pulse.floatValue = 0f; loud.floatValue = 0f; break }
+            if (!s.playing && pulse.floatValue < 0.002f) { pulse.floatValue = 0f; break }
         }
     }
 
@@ -634,24 +633,30 @@ fun NowPlaying(
                 .drawBehind {
                     val t = Terms(motion.p, motion.bounceUp)
                     val r = panelRect(g, t)
-                    drawRect(nc.bg, Offset(r.left, r.top), Size(r.width, r.height))
-                    // Namida's wash of the song's colour: lifted towards the text colour at the top,
-                    // less so at the foot; stronger at the top once open, at the foot in the mini player.
-                    val icp = 1f - t.cp
-                    drawRect(
-                        Brush.verticalGradient(
-                            0f to nc.onSurface.copy(alpha = 100 / 255f).compositeOver(nc.main).copy(alpha = lerp(0.38f, 0.28f, icp)),
-                            1f to nc.onSurface.copy(alpha = 40 / 255f).compositeOver(nc.main).copy(alpha = lerp(0.10f, 0.22f, icp)),
-                            startY = r.top, endY = r.bottom,
-                        ),
-                        Offset(r.left, r.top), Size(r.width, r.height),
+                    // The mini player on the raised surface, the player itself on black (or white).
+                    drawRect(lerp(nc.cardColor, nc.bg, t.cp.coerceIn(0f, 1f)), Offset(r.left, r.top), Size(r.width, r.height))
+                    // The cover's colour, as a glow spreading from behind the cover as it opens; it
+                    // dims as the queue rises over it.
+                    val glowA = (if (nc.dark) 0.42f else 0.22f) * t.bcp.coerceIn(0f, 1f) * (1f - t.qcp.coerceIn(0f, 1f))
+                    if (glowA > 0.005f) {
+                        val a = artBox(g, t)
+                        val c = Offset(a[0] + a[2] / 2, a[1] + a[2] * 0.45f)
+                        drawRect(
+                            Brush.radialGradient(listOf(tint.copy(alpha = glowA), tint.copy(alpha = glowA * 0.35f), Color.Transparent), c, a[2] * 1.15f),
+                            Offset(r.left, r.top), Size(r.width, r.height),
+                        )
+                    }
+                    // A hairline round the mini player, gone as it opens.
+                    val edge = (1f - t.cp * 4f).coerceIn(0f, 1f)
+                    if (edge > 0f) drawRoundRect(
+                        nc.onSurface.copy(alpha = 0.12f * edge), Offset(r.left + 0.5f, r.top + 0.5f), Size(r.width - 1f, r.height - 1f),
+                        CornerRadius(g.miniRadius), style = androidx.compose.ui.graphics.drawscope.Stroke(1f),
                     )
                 }
-                .pointerInput(Unit) { playerGestures(g, motion, player, { around.value(it) }, { onDismiss.value() }) },
+                // Keyed on the layout, so touches are judged where the mini player is now (it
+                // moves down in Music), not where it was when the player first showed.
+                .pointerInput(g) { playerGestures(g, motion, player, { around.value(it) }, { onDismiss.value() }) },
         ) {
-            // Specks drifting behind the full player, quicker when the music is loud.
-            Particles(motion, tint, loud, tick, state.playing)
-
             // The covers and titles slide within the mini row's own corner at first (short of
             // its buttons), and across the whole screen once the player is open.
             Box(Modifier.fillMaxSize().graphicsLayer {
@@ -754,13 +759,13 @@ fun NowPlaying(
             })
 
             // ---- previous, play, next: from the mini player's right to the middle
-            TransportButton(Iconsax.Prev, "Previous", Modifier.placed(g.playBig, g.playBig) {
+            TransportButton(BlazeIcons.PreviousSolid, "Previous", Modifier.placed(g.playBig, g.playBig) {
                 ctrlBox(g, Terms(motion.p, motion.bounceUp), -1)
             }) { motion.toSong(-1, player) { around.value(it) } }
-            PlayButton(state.playing, nc.main, Modifier.placed(g.playBig, g.playBig) {
+            PlayButton(state.playing, Modifier.placed(g.playBig, g.playBig) {
                 ctrlBox(g, Terms(motion.p, motion.bounceUp), 0)
             }) { player.toggle() }
-            TransportButton(Iconsax.Next, "Next", Modifier.placed(g.playBig, g.playBig) {
+            TransportButton(BlazeIcons.NextSolid, "Next", Modifier.placed(g.playBig, g.playBig) {
                 ctrlBox(g, Terms(motion.p, motion.bounceUp), 1)
             }) { motion.toSong(1, player) { around.value(it) } }
 
@@ -776,8 +781,8 @@ fun NowPlaying(
                     val r = panelRect(g, t)
                     val l = r.left + g.miniRadius; val w = r.width - g.miniRadius * 2
                     val y = r.bottom - g.dp(2.5f)
-                    drawRoundRect(nc.main.copy(alpha = 0.3f * a), Offset(l, y), Size(w, g.dp(2.5f)), CornerRadius(g.dp(2f)))
-                    drawRoundRect(nc.onSurface.copy(alpha = 0.3f).compositeOver(nc.main).copy(alpha = a), Offset(l, y), Size(w * f.coerceIn(0f, 1f), g.dp(2.5f)), CornerRadius(g.dp(2f)))
+                    drawRoundRect(nc.onSurface.copy(alpha = 0.14f * a), Offset(l, y), Size(w, g.dp(2.5f)), CornerRadius(g.dp(2f)))
+                    drawRoundRect(nc.onSurface.copy(alpha = 0.85f * a), Offset(l, y), Size(w * f.coerceIn(0f, 1f), g.dp(2.5f)), CornerRadius(g.dp(2f)))
                 },
             )
 
@@ -911,9 +916,9 @@ private fun FullLyrics(
             Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
                 Times(state, tick, Modifier.fillMaxWidth().padding(horizontal = 20.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TransportButton(Iconsax.Prev, "Previous", Modifier.size(52.dp), onClick = onPrev)
-                    PlayButton(state.playing, nc.main, Modifier.size(58.dp), onClick = onToggle)
-                    TransportButton(Iconsax.Next, "Next", Modifier.size(52.dp), onClick = onNext)
+                    TransportButton(BlazeIcons.PreviousSolid, "Previous", Modifier.size(52.dp), onClick = onPrev)
+                    PlayButton(state.playing, Modifier.size(58.dp), onClick = onToggle)
+                    TransportButton(BlazeIcons.NextSolid, "Next", Modifier.size(52.dp), onClick = onNext)
                 }
             }
         }
@@ -1120,44 +1125,34 @@ private fun TitleLine(text: String, sizePx: Float, modifier: Modifier, second: B
 }
 
 /**
- * The play button, as Namida's: a disc of the song's colour going grey towards its lower right,
- * glowing onto the player in the same colour, with Iconsax's play or pause on it in white.
- * Pressed, it gives a little, lightens and glows a little more.
+ * Play and pause: the solid shape alone, large, in the type colour; pressed, it gives a little.
+ * The two cross-fade into each other.
  */
 @Composable
-private fun PlayButton(playing: Boolean, main: Color, modifier: Modifier, onClick: () -> Unit) {
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val s by animateFloatAsState(if (pressed) 0.97f else 1f, tween(400), label = "press")
-    val base = if (pressed) main.copy(alpha = 233 / 255f).compositeOver(Color.White) else main
+private fun PlayButton(playing: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Box(modifier) {
-        Box(
-            Modifier.fillMaxSize()
-                .graphicsLayer { scaleX = s; scaleY = s }
-                .shadow(if (pressed) 14.dp else 9.dp, CircleShape, ambientColor = main.copy(alpha = 160 / 255f), spotColor = main.copy(alpha = 160 / 255f))
-                .clip(CircleShape)
-                .clickable(interactionSource = source, indication = androidx.compose.material3.ripple(), onClick = onClick)
-                .background(Brush.linearGradient(0f to base, 0.7f to main.copy(alpha = 200 / 255f).compositeOver(Color(0xFF9E9E9E)))),
-            contentAlignment = Alignment.Center,
-        ) {
+        Box(Modifier.fillMaxSize().pressable(CircleShape, scaleTo = 0.88f, onClick = onClick), contentAlignment = Alignment.Center) {
             AnimatedContent(
                 playing,
-                transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+                transitionSpec = {
+                    (fadeIn(tween(180)) + androidx.compose.animation.scaleIn(tween(220), initialScale = 0.7f)) togetherWith
+                        (fadeOut(tween(140)) + androidx.compose.animation.scaleOut(tween(180), targetScale = 0.7f))
+                },
                 label = "playpause",
             ) { on ->
-                Icon(if (on) Iconsax.Pause else Iconsax.Play, if (on) "Pause" else "Play", tint = Color.White.copy(alpha = 180 / 255f),
-                    modifier = Modifier.size(40.dp))
+                Icon(if (on) BlazeIcons.Pause else BlazeIcons.Play, if (on) "Pause" else "Play", tint = Nm.c.onSurface,
+                    modifier = Modifier.size(46.dp))
             }
         }
     }
 }
 
-/** Namida's previous and next: the icon alone, 32 across, in its icon colour. */
+/** Previous and next: the solid shapes alone, in the type colour. */
 @Composable
 private fun TransportButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, modifier: Modifier, onClick: () -> Unit) {
     Box(modifier) {
         Box(Modifier.fillMaxSize().pressable(CircleShape, scaleTo = 0.86f, onClick = onClick), contentAlignment = Alignment.Center) {
-            Icon(icon, description, tint = Nm.c.icon, modifier = Modifier.size(32.dp))
+            Icon(icon, description, tint = Nm.c.onSurface, modifier = Modifier.size(34.dp))
         }
     }
 }
@@ -1261,36 +1256,18 @@ private fun BottomRow(
                 Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onSound).padding(horizontal = 4.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // What the file is, in the lit colour, then the bit depth in its little badge, all
-                // one text that may take two lines (Namida's headphones and "Audio" before it left out).
-                val details = info?.let { audioDetails(it, state.current?.mime.orEmpty()) }.orEmpty()
-                val badge = info?.let(::bitsBadge).orEmpty()
-                val small = SpanStyle(fontSize = 13.nsp, color = nc.primary, fontFeatureSettings = "tnum")
-                val text = buildAnnotatedString {
-                    if (details.isNotEmpty()) withStyle(small) { append(details) }
-                    if (badge.isNotEmpty()) { append(" "); appendInlineContent("bits", badge) }
-                }
-                val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-                val badgeStyle = TextStyle(fontFamily = MusicType, fontSize = 11.nsp, color = nc.primary)
-                val badgeW = with(LocalDensity.current) { (measurer.measure(badge, badgeStyle).size.width.toDp() + 4.dp + 12.dp + 2.dp + 4.dp).toSp() }
-                Text(
-                    text,
-                    style = TextStyle(fontFamily = MusicType, fontSize = 15.nsp, fontWeight = FontWeight.Medium, color = nc.onSecondaryContainer, lineHeight = 17.nsp),
-                    maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    inlineContent = if (badge.isEmpty()) emptyMap() else mapOf(
-                        "bits" to androidx.compose.foundation.text.InlineTextContent(
-                            androidx.compose.ui.text.Placeholder(badgeW, 15.nsp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter),
-                        ) {
-                            Row(
-                                Modifier.clip(RoundedCornerShape(4.dp)).background(nc.cardColor.copy(alpha = 60 / 255f)).padding(horizontal = 4.dp, vertical = 1.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(Iconsax.Wind, null, tint = nc.primary, modifier = Modifier.size(12.dp))
-                                Spacer(Modifier.width(2.dp))
-                                Text(badge, style = badgeStyle, maxLines = 1)
-                            }
-                        },
-                    ),
+                // What the file is, as it is: FLAC · 16-bit · 44.1 kHz · 968 kbps, on a faint pill;
+                // the bitrate gives way first where the row is short of room.
+                var roomy by remember(info) { mutableStateOf(true) }
+                val line = info?.let { formatLine(it, state.current?.mime.orEmpty(), kbps = roomy) }
+                    ?: state.current?.mime?.let(::formatBadge).orEmpty()
+                if (line.isNotEmpty()) Text(
+                    line,
+                    onTextLayout = { if (it.hasVisualOverflow && roomy) roomy = false },
+                    style = TextStyle(fontFamily = MusicType, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.2.sp,
+                        color = nc.onSurface.copy(alpha = 0.8f), fontFeatureSettings = "tnum"),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(nc.onSurface.copy(alpha = 0.1f)).padding(horizontal = 8.dp, vertical = 3.dp),
                 )
             }
         }
@@ -1409,44 +1386,4 @@ private fun RowButton(icon: androidx.compose.ui.graphics.vector.ImageVector, des
     Box(Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.88f, onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, description, tint = Nm.c.onSecondaryContainer, modifier = Modifier.size(size))
     }
-}
-
-/**
- * Specks drifting behind the full player, as Namida's: faint, in the cover's colour, quicker
- * with the loud moments; they fade in as the player opens and drift to a stop when it pauses.
- */
-@Composable
-private fun Particles(motion: PlayerMotion, tint: Color, loud: State<Float>, tick: State<Long>, playing: Boolean) {
-    val specks = remember { List(46) { Speck() } }
-    val clock = remember { LongArray(1) }
-    val fade = androidx.compose.animation.core.animateFloatAsState(if (playing) 1f else 0f, tween(1000), label = "specks")
-    Box(
-        Modifier.fillMaxSize().drawBehind {
-            val t = Terms(motion.p, motion.bounceUp)
-            tick.value
-            val now = System.nanoTime()
-            val dt = if (clock[0] == 0L) 0f else ((now - clock[0]) / 1e9f).coerceIn(0f, 0.064f)
-            clock[0] = now
-            val a = t.cp * (1f - t.qcp * 0.6f) * fade.value
-            if (a <= 0.005f) return@drawBehind
-            val speed = 1f + loud.value * 5f
-            val color = lerp(tint, Color.White, 0.45f)
-            specks.forEach { sp ->
-                sp.x = (sp.x + sp.vx * dt * speed + 1f) % 1f
-                sp.y = (sp.y + sp.vy * dt * speed + 1f) % 1f
-                drawCircle(color.copy(alpha = sp.alpha * a * 0.5f), sp.r * density, Offset(sp.x * size.width, sp.y * size.height))
-            }
-        },
-    )
-}
-
-private class Speck {
-    var x = Math.random().toFloat()
-    var y = Math.random().toFloat()
-    private val angle = Math.random() * Math.PI * 2
-    private val v = 0.006f + Math.random().toFloat() * 0.02f
-    val vx = (kotlin.math.cos(angle) * v).toFloat()
-    val vy = (kotlin.math.sin(angle) * v).toFloat() - 0.004f
-    val r = 1.2f + Math.random().toFloat() * 2.2f
-    val alpha = 0.3f + Math.random().toFloat() * 0.7f
 }

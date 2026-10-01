@@ -134,6 +134,15 @@ fun cleanColors(dark: Boolean, accent: Color): NamidaColors {
     )
 }
 
+/** The clean colours for the app's theme and colour as they are now (Automatic lights in the type colour). */
+@Composable
+fun rememberCleanColors(): NamidaColors {
+    val base = LocalPalette.current
+    val chosen = base.accent != TheatreDark.accent && base.accent != TheatreLight.accent
+    val accent = if (chosen) base.accent else if (base.dark) Color.White else Color.Black
+    return androidx.compose.runtime.remember(accent, base.dark) { cleanColors(base.dark, accent) }
+}
+
 /** The music screens' type: the phone's own (Roboto, or the maker's), as the page uses the computer's. */
 val MusicType: androidx.compose.ui.text.font.FontFamily = androidx.compose.ui.text.font.FontFamily.Default
 

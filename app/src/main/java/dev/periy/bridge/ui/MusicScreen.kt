@@ -164,9 +164,7 @@ fun MusicScreen(
     // colour, or in the type colour while that is Automatic.
     val cur = now.current
     val base = LocalPalette.current
-    val chosen = base.accent != TheatreDark.accent && base.accent != TheatreLight.accent
-    val accent = if (chosen) base.accent else if (base.dark) Color.White else Color.Black
-    val nc = remember(accent, base.dark) { cleanColors(base.dark, accent) }
+    val nc = rememberCleanColors()
 
     val favourites = LocalContext.current.container.favourites
     val hearts by favourites.ids.collectAsState()

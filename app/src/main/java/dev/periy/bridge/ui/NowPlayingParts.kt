@@ -149,14 +149,15 @@ internal fun WaveSeek(
     val pitch = with(density) { 2.5.dp.toPx() }
     val count = if (widthPx > 0) (widthPx / pitch).toInt().coerceAtLeast(8) else 0
     val barW = pitch * 0.54f
-    val bars = remember(env, count) { Loudness.bars(env, count) }
+    // Spread over the whole height, as the page draws it: the quietest bar low, the loudest near
+    // full, eased so the loud parts stand up out of the rest.
+    val bars = remember(env, count) { spreadBars(Loudness.bars(env, count, average = true)) }
     val scrub = remember { mutableStateOf<Long?>(null) }
-    // Namida's colours: every bar in the text colour at 40/255; those played in the song's colour
-    // laid over it (180, then 140), at 110/255.
+    // In the type colour: faint still to come, nearly solid where it has played.
     val nc = Nm.c
-    val track = nc.onSurface.copy(alpha = 40 / 255f)
-    val playedA = nc.main.copy(alpha = 180 / 255f).compositeOver(nc.onSurface).copy(alpha = 110 / 255f)
-    val playedB = nc.main.copy(alpha = 140 / 255f).compositeOver(nc.onSurface).copy(alpha = 110 / 255f)
+    val track = nc.onSurface.copy(alpha = 0.22f)
+    val playedA = nc.onSurface.copy(alpha = 0.9f)
+    val playedB = playedA
     val cancelAt = with(density) { 52.dp.toPx() }
 
     Box(
@@ -211,7 +212,7 @@ internal fun WaveSeek(
                 val grow = appear.value
                 fun drawBars(color: Color? = null, brush: Brush? = null) {
                     for (i in 0 until n) {
-                        val h = minH + (size.height - minH) * bars[i].pow(1.4f) * grow
+                        val h = minH + (size.height - minH) * bars[i] * grow
                         val tl = Offset(gap + i * step, cy - h / 2)
                         val sz = Size(barW, h)
                         if (brush != null) drawRoundRect(brush, tl, sz, CornerRadius(barW / 2))
@@ -225,6 +226,15 @@ internal fun WaveSeek(
                 }
             },
     )
+}
+
+/** Bars from 4% to 98% of the height, from the quietest to the loudest, eased up by 1.6 (as the page's npBarsSpread). */
+internal fun spreadBars(raw: FloatArray): FloatArray {
+    if (raw.isEmpty()) return raw
+    val lo = raw.min()
+    val hi = raw.max()
+    if (hi - lo < 1e-4f) return FloatArray(raw.size) { 0.04f + 0.94f * raw[it].coerceIn(0f, 1f) }
+    return FloatArray(raw.size) { 0.04f + 0.94f * ((raw[it] - lo) / (hi - lo)).pow(1.6f) }
 }
 
 // ---------------------------------------------------------------------------- the queue
