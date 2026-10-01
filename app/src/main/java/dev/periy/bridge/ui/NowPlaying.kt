@@ -1416,7 +1416,8 @@ private fun RepeatButton(mode: PhonePlayer.Repeat, times: Int, onPick: (PhonePla
             contentAlignment = Alignment.Center,
         ) { RepeatIcon(mode, times, nc.onSecondaryContainer) }
         if (open) NamidaMenu(onDismiss = { open = false }) { close ->
-            PhonePlayer.Repeat.entries.forEach { m ->
+            // The four ways, as the page offers them ("a number more times" is not offered).
+            PhonePlayer.Repeat.entries.filter { it != PhonePlayer.Repeat.TIMES }.forEach { m ->
                 val on = m == mode
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
