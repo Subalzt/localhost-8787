@@ -2289,6 +2289,18 @@ public static class BlazeItPc
                     lock (tunnelSaid) if (tunnelSaid.Add(why)) Say(why);
                 }
             }
+            // No IPv6 way to it: across IPv4, punched through both NATs.
+            try
+            {
+                tunnel = Tunnel87.DialPunched(tid, psk, Environment.MachineName, TunnelSaveAddrs, Log);
+                Log("Tunnel to the phone over UDP, punched through");
+                return TunnelHost;
+            }
+            catch (Exception e)
+            {
+                string why = "Could not reach the phone across IPv4 (" + e.Message + ").";
+                lock (tunnelSaid) if (tunnelSaid.Add(why)) Say(why);
+            }
         }
         return null;
     }
@@ -2560,7 +2572,7 @@ public static class Tunnel87
 
     static int Be(byte[] b, int off) { return (b[off] << 24) | (b[off + 1] << 16) | (b[off + 2] << 8) | b[off + 3]; }
 
-    /** Connects to the phone and runs the handshake; the connection is running when this returns. */
+    /** Connects to the phone over TCP and runs the handshake; the connection is running when this returns. */
     public static Conn Dial(string host, int port, byte[] tid, byte[] psk, string name, Action<List<string>> onAddrs, Action<string> log)
     {
         TcpClient tcp = new TcpClient(AddressFamily.InterNetworkV6);
@@ -2572,7 +2584,20 @@ public static class Tunnel87
             tcp.EndConnect(ar);
             tcp.NoDelay = true;
             tcp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-            NetworkStream ns = tcp.GetStream();
+            return Handshake(tcp.GetStream(), tcp.Close, tid, psk, name, onAddrs, log);
+        }
+        catch
+        {
+            try { tcp.Close(); } catch { }
+            throw;
+        }
+    }
+
+    /** The handshake over ns (TCP, or a path punched over UDP), then the connection, running. */
+    static Conn Handshake(Stream ns, Action close, byte[] tid, byte[] psk, string name, Action<List<string>> onAddrs, Action<string> log)
+    {
+        try
+        {
             ns.ReadTimeout = 8000;
             byte[] priv = new byte[32];
             using (System.Security.Cryptography.RandomNumberGenerator rng = System.Security.Cryptography.RandomNumberGenerator.Create()) rng.GetBytes(priv);
@@ -2594,7 +2619,7 @@ public static class Tunnel87
             if (!Same(mac2, Hmac16(k[4], Encoding.ASCII.GetBytes("L87T/1 accept"), th)))
                 throw new IOException("the phone did not prove it knows this laptop");
             ns.ReadTimeout = Timeout.Infinite;
-            Conn c = new Conn(tcp, ns, new Cipher(k[0], k[1]), new Cipher(k[2], k[3]), onAddrs, log);
+            Conn c = new Conn(close, ns, new Cipher(k[0], k[1]), new Cipher(k[2], k[3]), onAddrs, log);
             c.Start();
             c.Send(HELLO, 0, Encoding.UTF8.GetBytes("{\"name\":\"" + name.Replace("\\", "").Replace("\"", "") + "\",\"v\":1}"));
             if (!c.hello.WaitOne(8000)) { c.Close("no hello"); throw new IOException("the phone did not answer the hello"); }
@@ -2602,15 +2627,647 @@ public static class Tunnel87
         }
         catch
         {
-            try { tcp.Close(); } catch { }
+            try { close(); } catch { }
             throw;
+        }
+    }
+
+    // ---------------------------------------------------------------- across IPv4
+    //
+    // When the phone's IPv6 cannot be reached (this network has none): both ends swap their public
+    // IPv4 addresses as two sealed notes on a public message board, punch through their NATs over
+    // UDP, and run the tunnel over a reliable stream on that path (docs/tunnel-protocol.md, "Across
+    // IPv4"). The same as the phone's Punch.kt and the Linux and Mac helper's.
+
+    public const string Board = "https://ntfy.sh";
+    const int PROBE = 1, PROBE_ACK = 2, PDATA = 3, PACK = 4, PKEEP = 5, PCLOSE = 6;
+    const int PHEADER = 20, PTAG = 8, MSS = 1200, PQUEUE = 4096, PWINDOW = 4096;
+
+    static byte[] Ascii(string s) { return Encoding.ASCII.GetBytes(s); }
+
+    static byte[] Sub(byte[] b, int off, int n) { byte[] r = new byte[n]; Array.Copy(b, off, r, 0, n); return r; }
+
+    static void PutBe(byte[] b, int off, int v) { b[off] = (byte)(v >> 24); b[off + 1] = (byte)(v >> 16); b[off + 2] = (byte)(v >> 8); b[off + 3] = (byte)v; }
+
+    static void Rand(byte[] b) { using (System.Security.Cryptography.RandomNumberGenerator r = System.Security.Cryptography.RandomNumberGenerator.Create()) r.GetBytes(b); }
+
+    static string Topic(byte[] psk, string label)
+    {
+        byte[] h = Hmac(psk, Ascii(label));
+        StringBuilder sb = new StringBuilder("l87-");
+        for (int i = 0; i < 10; i++) sb.Append(h[i].ToString("x2"));
+        return sb.ToString();
+    }
+
+    static string Seal(byte[] psk, string json)
+    {
+        byte[] nonce = new byte[16];
+        Rand(nonce);
+        byte[] ct = Encoding.UTF8.GetBytes(json);
+        Shake256Xor(Cat(Hmac(psk, Ascii("L87P/1 seal")), nonce), ct, 0, ct.Length);
+        byte[] tag = Hmac16(Hmac(psk, Ascii("L87P/1 seal mac")), nonce, ct);
+        return Convert.ToBase64String(Cat(nonce, ct, tag)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    static string Unseal(byte[] psk, string text)
+    {
+        try
+        {
+            string t = text.Trim().Replace('-', '+').Replace('_', '/');
+            t += new string('=', (4 - t.Length % 4) % 4);
+            byte[] all = Convert.FromBase64String(t);
+            if (all.Length < 33) return null;
+            byte[] nonce = Sub(all, 0, 16), ct = Sub(all, 16, all.Length - 32), tag = Sub(all, all.Length - 16, 16);
+            if (!Same(tag, Hmac16(Hmac(psk, Ascii("L87P/1 seal mac")), nonce, ct))) return null;
+            Shake256Xor(Cat(Hmac(psk, Ascii("L87P/1 seal")), nonce), ct, 0, ct.Length);
+            return Encoding.UTF8.GetString(ct);
+        }
+        catch { return null; }
+    }
+
+    /** A UDP socket on any port, which does not fail its next receive when a knock is refused (ICMP). */
+    static Socket NewUdp()
+    {
+        Socket s = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        s.Bind(new IPEndPoint(IPAddress.Any, 0));
+        try { s.IOControl(-1744830452, new byte[] { 0, 0, 0, 0 }, null); } catch { }   // SIO_UDP_CONNRESET off
+        return s;
+    }
+
+    /** One STUN Binding request (RFC 5389) from s: the address the server saw it come from, or null. */
+    static IPEndPoint Stun(Socket s, string host, int port)
+    {
+        IPAddress server = null;
+        try { foreach (IPAddress a in Dns.GetHostAddresses(host)) if (a.AddressFamily == AddressFamily.InterNetwork) { server = a; break; } }
+        catch { }
+        if (server == null) return null;
+        byte[] tid = new byte[12];
+        Rand(tid);
+        byte[] req = Cat(new byte[] { 0, 1, 0, 0, 0x21, 0x12, 0xA4, 0x42 }, tid);
+        byte[] buf = new byte[2048];
+        int end = Environment.TickCount + 1500, sent = Environment.TickCount - 1000;
+        s.ReceiveTimeout = 400;
+        try
+        {
+            while (unchecked(Environment.TickCount - end) < 0)
+            {
+                if (unchecked(Environment.TickCount - sent) > 400) { s.SendTo(req, new IPEndPoint(server, port)); sent = Environment.TickCount; }
+                EndPoint from = new IPEndPoint(IPAddress.Any, 0);
+                int n;
+                try { n = s.ReceiveFrom(buf, ref from); } catch (SocketException) { continue; }
+                if (n < 20) continue;
+                bool mine = true;
+                for (int i = 0; i < 12; i++) if (buf[8 + i] != tid[i]) mine = false;
+                if (!mine) continue;
+                int p = 20;
+                while (p + 4 <= n)
+                {
+                    int type = (buf[p] << 8) | buf[p + 1], len = (buf[p + 2] << 8) | buf[p + 3], v = p + 4;
+                    if ((type == 0x20 || type == 1) && len >= 8 && buf[v + 1] == 1)
+                    {
+                        int mp = (buf[v + 2] << 8) | buf[v + 3];
+                        byte[] ip = Sub(buf, v + 4, 4);
+                        if (type == 0x20) { mp ^= 0x2112; ip[0] ^= 0x21; ip[1] ^= 0x12; ip[2] ^= 0xA4; ip[3] ^= 0x42; }
+                        return new IPEndPoint(new IPAddress(ip), mp);
+                    }
+                    p = v + len + ((4 - len % 4) % 4);
+                }
+            }
+        }
+        finally { s.ReceiveTimeout = 0; }
+        return null;
+    }
+
+    /** Packet tags: HMAC-SHA256 over the packet, the first 8 bytes. One key per direction. */
+    internal class Tagger
+    {
+        readonly System.Security.Cryptography.HMACSHA256 h;
+        public Tagger(byte[] key) { h = new System.Security.Cryptography.HMACSHA256(key); }
+
+        public byte[] Packet(int kind, int role, int seq, int ack, long sack, int wnd, byte[] payload, int off, int len)
+        {
+            byte[] b = new byte[PHEADER + len + PTAG];
+            b[0] = (byte)kind; b[1] = (byte)role;
+            PutBe(b, 2, seq); PutBe(b, 6, ack); PutBe(b, 10, (int)(sack >> 32)); PutBe(b, 14, (int)sack);
+            b[18] = (byte)(wnd >> 8); b[19] = (byte)wnd;
+            Array.Copy(payload, off, b, PHEADER, len);
+            byte[] t;
+            lock (h) t = h.ComputeHash(b, 0, PHEADER + len);
+            Array.Copy(t, 0, b, PHEADER + len, PTAG);
+            return b;
+        }
+
+        public bool Valid(byte[] b, int n)
+        {
+            if (n < PHEADER + PTAG) return false;
+            byte[] t;
+            lock (h) t = h.ComputeHash(b, 0, n - PTAG);
+            int d = 0;
+            for (int i = 0; i < PTAG; i++) d |= t[i] ^ b[n - PTAG + i];
+            return d == 0;
+        }
+    }
+
+    internal class PathFound { public Socket s; public IPEndPoint to; }
+
+    /**
+     * Knocks from main (and 255 more sockets when this side's NAT is hard) at the other side's
+     * addresses, spraying random ports on its address when its NAT is hard and this one's is not,
+     * until a packet from it arrives: that socket and that address are the path. Null after 15 s.
+     */
+    static PathFound Knock(Socket main, bool hardHere, List<IPEndPoint> theirs, bool hardThere, byte[] tx, byte[] rx, int role)
+    {
+        List<Socket> socks = new List<Socket>();
+        socks.Add(main);
+        if (hardHere && !hardThere) for (int i = 1; i < 256; i++) { try { socks.Add(NewUdp()); } catch { break; } }
+        Tagger seal = new Tagger(tx), check = new Tagger(rx);
+        byte[] none = new byte[0];
+        byte[] probe = seal.Packet(PROBE, role, 0, 0, 0, 0, none, 0, 0), ack = seal.Packet(PROBE_ACK, role, 0, 0, 0, 0, none, 0, 0);
+        int[] ports = null;
+        if (hardThere && !hardHere && theirs.Count > 0)
+        {
+            // The ports near the one STUN saw first (NATs that count up), then the rest at random.
+            int seen = theirs[0].Port;
+            List<int> order = new List<int>();
+            HashSet<int> near = new HashSet<int>();
+            for (int d = 1; d <= 256; d++) foreach (int p in new int[] { seen + d, seen - d }) if (p >= 1024 && p <= 65535 && near.Add(p)) order.Add(p);
+            List<int> rest = new List<int>();
+            for (int p = 1024; p <= 65535; p++) if (p != seen && !near.Contains(p)) rest.Add(p);
+            Random rnd = new Random();
+            for (int i = rest.Count - 1; i > 0; i--) { int j = rnd.Next(i + 1); int t = rest[i]; rest[i] = rest[j]; rest[j] = t; }
+            order.AddRange(rest);
+            ports = order.ToArray();
+        }
+        int start = Environment.TickCount, last = start - 1000, next = 0;
+        byte[] buf = new byte[2048];
+        PathFound got = null;
+        while (got == null && unchecked(Environment.TickCount - start) < 15000)
+        {
+            if (unchecked(Environment.TickCount - last) >= 200)
+            {
+                last = Environment.TickCount;
+                foreach (Socket s in socks) foreach (IPEndPoint t in theirs) { try { s.SendTo(probe, t); } catch { } }
+            }
+            if (ports != null)
+                for (int i = 0; i < 30; i++, next++) { try { main.SendTo(probe, new IPEndPoint(theirs[0].Address, ports[next % ports.Length])); } catch { } }
+            List<Socket> ready = new List<Socket>(socks);
+            try { Socket.Select(ready, null, null, ports != null ? 100000 : 50000); } catch { Thread.Sleep(50); continue; }
+            foreach (Socket s in ready)
+            {
+                EndPoint from = new IPEndPoint(IPAddress.Any, 0);
+                int n;
+                try { n = s.ReceiveFrom(buf, ref from); } catch { continue; }
+                if (!check.Valid(buf, n)) continue;
+                if (buf[0] == PROBE) for (int k = 0; k < 3; k++) { try { s.SendTo(ack, from); } catch { } }
+                if (buf[0] == PROBE || buf[0] == PROBE_ACK) { got = new PathFound(); got.s = s; got.to = (IPEndPoint)from; break; }
+            }
+        }
+        foreach (Socket s in socks) if (got == null || s != got.s) { try { s.Close(); } catch { } }
+        return got;
+    }
+
+    static IPEndPoint ParseAddr(string a)
+    {
+        int i = a == null ? -1 : a.LastIndexOf(':');
+        IPAddress ip;
+        int port;
+        if (i < 0 || !IPAddress.TryParse(a.Substring(0, i), out ip) || !int.TryParse(a.Substring(i + 1), out port)) return null;
+        return new IPEndPoint(ip, port);
+    }
+
+    static string LanIp()
+    {
+        try
+        {
+            using (Socket s = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
+            {
+                s.Connect("192.0.2.1", 9);   // nothing is sent; this only picks the outgoing address
+                return ((IPEndPoint)s.LocalEndPoint).Address.ToString();
+            }
+        }
+        catch { return null; }
+    }
+
+    /**
+     * Across IPv4: a note to the phone through the board, its answer, then the punch, then the same
+     * handshake as Dial over the punched path. Throws IOException with the reason when it cannot.
+     */
+    public static Conn DialPunched(byte[] tid, byte[] psk, string name, Action<List<string>> onAddrs, Action<string> log)
+    {
+        ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+        Socket sock = NewUdp();
+        try
+        {
+            IPEndPoint a1 = Stun(sock, "stun.l.google.com", 19302), a2 = Stun(sock, "stun.cloudflare.com", 3478);
+            IPEndPoint me = a1 != null ? a1 : a2;
+            if (me == null) throw new IOException("this network gives no public IPv4 address to punch from (STUN did not answer)");
+            bool hard = a1 != null && a2 != null && a1.Port != a2.Port;
+            byte[] session = new byte[8];
+            Rand(session);
+            StringBuilder sh = new StringBuilder();
+            foreach (byte b in session) sh.Append(b.ToString("x2"));
+            string sHex = sh.ToString();
+            string lan = LanIp();
+            int at = (int)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;
+            string note = "{\"t\":\"punch\",\"s\":\"" + sHex + "\",\"at\":" + at + ",\"addr\":\"" + me + "\",\"hard\":" + (hard ? "true" : "false") +
+                ",\"lan\":[" + (lan != null ? "\"" + lan + ":" + ((IPEndPoint)sock.LocalEndPoint).Port + "\"" : "") + "]}";
+            string answer = null;
+            HttpWebRequest sub = (HttpWebRequest)WebRequest.Create(Board + "/" + Topic(psk, "L87P/1 down") + "/json");
+            sub.Timeout = 13000;
+            sub.ReadWriteTimeout = 13000;
+            try
+            {
+                using (WebResponse r = sub.GetResponse())
+                using (StreamReader rd = new StreamReader(r.GetResponseStream(), Encoding.UTF8))
+                {
+                    rd.ReadLine();   // the board's "open"
+                    HttpWebRequest post = (HttpWebRequest)WebRequest.Create(Board + "/" + Topic(psk, "L87P/1 up"));
+                    post.Method = "POST";
+                    post.Timeout = 10000;
+                    post.Headers["Cache"] = "no";
+                    post.Headers["Firebase"] = "no";
+                    byte[] body = Encoding.ASCII.GetBytes(Seal(psk, note));
+                    using (Stream w = post.GetRequestStream()) w.Write(body, 0, body.Length);
+                    post.GetResponse().Close();
+                    int end = Environment.TickCount + 12000;
+                    while (answer == null && unchecked(Environment.TickCount - end) < 0)
+                    {
+                        string line = rd.ReadLine();
+                        if (line == null) break;
+                        if (!line.Contains("\"event\":\"message\"")) continue;
+                        Match m = Regex.Match(line, "\"message\"\\s*:\\s*\"([A-Za-z0-9_-]+)\"");
+                        string a = m.Success ? Unseal(psk, m.Groups[1].Value) : null;
+                        if (a != null && a.Contains("\"t\":\"punch\"") && a.Contains("\"s\":\"" + sHex + "\"")) answer = a;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                if (answer == null) throw new IOException("could not reach the board at " + Board + " (" + e.Message + ")");
+            }
+            if (answer == null) throw new IOException("the phone did not answer through the board (is it on, with From other networks on?)");
+            List<IPEndPoint> theirs = new List<IPEndPoint>();
+            IPEndPoint pub = ParseAddr(Regex.Match(answer, "\"addr\"\\s*:\\s*\"([^\"]+)\"").Groups[1].Value);
+            if (pub != null) theirs.Add(pub);
+            Match lm = Regex.Match(answer, "\"lan\"\\s*:\\s*\\[([^\\]]*)\\]");
+            if (lm.Success) foreach (Match x in Regex.Matches(lm.Groups[1].Value, "\"([^\"]+)\"")) { IPEndPoint e = ParseAddr(x.Groups[1].Value); if (e != null) theirs.Add(e); }
+            if (theirs.Count == 0) throw new IOException("the phone could not see its own public address");
+            bool hardThere = Regex.IsMatch(answer, "\"hard\"\\s*:\\s*true");
+            byte[] k = Hmac(psk, Ascii("L87P/1 udp"), session);
+            byte[] toPhone = Hmac(k, Ascii("dev")), toDev = Hmac(k, Ascii("phone"));
+            List<string> shown = new List<string>();
+            foreach (IPEndPoint t in theirs) shown.Add(t.ToString());
+            if (log != null) log("Punching to " + string.Join(", ", shown.ToArray()) + " (here " + me + ", hard here " + hard + ", there " + hardThere + ")");
+            PathFound path = Knock(sock, hard, theirs, hardThere, toPhone, toDev, 0);
+            if (path == null)
+                throw new IOException("no way through the two networks' NATs (" + (hard ? "hard" : "easy") + " here, " + (hardThere ? "hard" : "easy") + " there)");
+            if (log != null) log("Punched through to " + path.to);
+            Udp87 u = new Udp87(path.s, path.to, toPhone, toDev, 0);
+            return Handshake(u, u.Close, tid, psk, name, onAddrs, log);
+        }
+        catch
+        {
+            try { sock.Close(); } catch { }
+            throw;
+        }
+    }
+
+    /**
+     * A reliable, ordered stream of bytes over one UDP path, for the tunnel to run on: numbered
+     * packets, cumulative and selective acks, loss found by time (a later packet came, this one did
+     * not), resending, and CUBIC's window. The same as the phone's UdpCarrier.
+     */
+    public class Udp87 : Stream
+    {
+        class Sent { public int seq; public byte[] data; public int at; public int tries; }
+
+        readonly Socket sock;
+        volatile IPEndPoint peer;
+        readonly Tagger seal, check;
+        readonly int role;
+        readonly object gate = new object();
+        readonly object order = new object();
+        int again;
+        volatile bool open = true;
+
+        readonly Queue<byte[]> pending = new Queue<byte[]>();
+        readonly SortedDictionary<int, Sent> inflight = new SortedDictionary<int, Sent>();
+        int nextSeq, recover, peerWnd = PWINDOW;
+        double cwnd = 16, ssthresh = 1e9, srtt, rttvar, minRtt, wmax, cubicK, origin;
+        int rto = 1000, epoch = -1;
+        bool epochSet;
+        volatile int lastSent = Environment.TickCount, lastHeard = Environment.TickCount;
+
+        int expected, unacked;
+        readonly Dictionary<int, byte[]> early = new Dictionary<int, byte[]>();
+        readonly Queue<byte[]> chunks = new Queue<byte[]>();
+        byte[] cur;
+        int pos;
+        int readTimeout = Timeout.Infinite;
+
+        public Udp87(Socket sock, IPEndPoint peer, byte[] tx, byte[] rx, int role)
+        {
+            this.sock = sock; this.peer = peer; this.role = role;
+            seal = new Tagger(tx); check = new Tagger(rx);
+            sock.ReceiveTimeout = 200;
+            Thread r = new Thread(RecvLoop); r.IsBackground = true; r.Start();
+            Thread t = new Thread(TickLoop); t.IsBackground = true; t.Start();
+        }
+
+        public override bool CanRead { get { return true; } }
+        public override bool CanWrite { get { return true; } }
+        public override bool CanSeek { get { return false; } }
+        public override bool CanTimeout { get { return true; } }
+        public override int ReadTimeout { get { return readTimeout; } set { readTimeout = value; } }
+        public override long Length { get { throw new NotSupportedException(); } }
+        public override long Position { get { throw new NotSupportedException(); } set { throw new NotSupportedException(); } }
+        public override long Seek(long o, SeekOrigin s) { throw new NotSupportedException(); }
+        public override void SetLength(long v) { throw new NotSupportedException(); }
+        public override void Flush() { }
+
+        public override int Read(byte[] b, int off, int count)
+        {
+            if (count == 0) return 0;
+            lock (gate)
+            {
+                if (cur == null || pos >= cur.Length)
+                {
+                    int end = Environment.TickCount + readTimeout;
+                    while (chunks.Count == 0 && open)
+                    {
+                        if (readTimeout == Timeout.Infinite) Monitor.Wait(gate, 1000);
+                        else
+                        {
+                            int left = end - Environment.TickCount;
+                            if (left <= 0) throw new IOException("nothing in " + readTimeout + " ms");
+                            Monitor.Wait(gate, left);
+                        }
+                    }
+                    if (chunks.Count == 0) return 0;
+                    cur = chunks.Dequeue();
+                    pos = 0;
+                }
+                int n = Math.Min(count, cur.Length - pos);
+                Array.Copy(cur, pos, b, off, n);
+                pos += n;
+                return n;
+            }
+        }
+
+        public override void Write(byte[] b, int off, int count)
+        {
+            for (int p = off; p < off + count; p += MSS)
+            {
+                int n = Math.Min(MSS, off + count - p);
+                byte[] chunk = new byte[n];
+                Array.Copy(b, p, chunk, 0, n);
+                lock (gate)
+                {
+                    while (open && pending.Count + inflight.Count >= PQUEUE) Monitor.Wait(gate, 1000);
+                    if (!open) throw new IOException("the path is closed");
+                    pending.Enqueue(chunk);
+                }
+            }
+            Pump();
+        }
+
+        long SackBits()
+        {
+            long bits = 0;
+            for (int i = 0; i < 64; i++) if (early.ContainsKey(expected + 1 + i)) bits |= 1L << i;
+            return bits;
+        }
+
+        void Send(int kind, int seq, byte[] payload)
+        {
+            int ack, wnd;
+            long sack;
+            lock (gate)
+            {
+                ack = expected; sack = SackBits(); wnd = Math.Max(0, PWINDOW - early.Count);
+                if (kind == PDATA || kind == PACK || kind == PKEEP) unacked = 0;
+            }
+            byte[] pk = seal.Packet(kind, role, seq, ack, sack, wnd, payload, 0, payload.Length);
+            try { sock.SendTo(pk, peer); } catch { }
+            lastSent = Environment.TickCount;
+        }
+
+        /** Sends what the window allows: one thread at a time, so packets leave in order. */
+        void Pump()
+        {
+            Interlocked.Exchange(ref again, 1);
+            while (Interlocked.CompareExchange(ref again, 0, 0) == 1)
+            {
+                if (!Monitor.TryEnter(order)) return;
+                try
+                {
+                    Interlocked.Exchange(ref again, 0);
+                    List<Sent> outq = new List<Sent>();
+                    lock (gate)
+                    {
+                        int room = Math.Min((int)cwnd, peerWnd) - inflight.Count;
+                        while (outq.Count < room && outq.Count < 256 && pending.Count > 0)
+                        {
+                            Sent s = new Sent();
+                            s.seq = nextSeq++; s.data = pending.Dequeue(); s.at = Environment.TickCount;
+                            inflight[s.seq] = s;
+                            outq.Add(s);
+                        }
+                    }
+                    foreach (Sent s in outq) Send(PDATA, s.seq, s.data);
+                }
+                finally { Monitor.Exit(order); }
+            }
+        }
+
+        void RecvLoop()
+        {
+            byte[] buf = new byte[2048];
+            while (open)
+            {
+                EndPoint from = new IPEndPoint(IPAddress.Any, 0);
+                int n;
+                try { n = sock.ReceiveFrom(buf, ref from); }
+                catch (SocketException e) { if (e.SocketErrorCode == SocketError.TimedOut || e.SocketErrorCode == SocketError.ConnectionReset) continue; break; }
+                catch { break; }
+                if (!check.Valid(buf, n) || buf[1] == role) continue;
+                lastHeard = Environment.TickCount;
+                IPEndPoint f = (IPEndPoint)from;
+                if (!f.Equals(peer)) peer = f;   // the other end's NAT moved it
+                int kind = buf[0], seq = Be(buf, 2), ack = Be(buf, 6), wnd = (buf[18] << 8) | buf[19];
+                long sack = ((long)Be(buf, 10) << 32) | (uint)Be(buf, 14);
+                if (kind == PROBE) { try { sock.SendTo(seal.Packet(PROBE_ACK, role, 0, 0, 0, 0, new byte[0], 0, 0), f); } catch { } }
+                else if (kind == PCLOSE) { Finish("the other end closed the path"); return; }
+                else if (kind == PDATA || kind == PACK || kind == PKEEP)
+                {
+                    Acked(ack, sack, wnd);
+                    if (kind == PDATA) Data(seq, Sub(buf, PHEADER, n - PHEADER - PTAG));
+                }
+            }
+        }
+
+        void Data(int seq, byte[] payload)
+        {
+            bool now;
+            lock (gate)
+            {
+                if (seq - expected < 0) now = true;   // a copy of one already had
+                else if (seq == expected)
+                {
+                    chunks.Enqueue(payload);
+                    expected++;
+                    bool filled = early.Count > 0;
+                    byte[] e;
+                    while (early.TryGetValue(expected, out e)) { early.Remove(expected); chunks.Enqueue(e); expected++; }
+                    unacked++;
+                    now = filled || unacked >= 2;
+                    Monitor.PulseAll(gate);
+                }
+                else if (seq - expected < PWINDOW) { early[seq] = payload; now = true; }
+                else now = false;
+            }
+            if (now) Send(PACK, 0, new byte[0]);
+        }
+
+        void Acked(int ack, long sack, int wnd)
+        {
+            List<Sent> resend = new List<Sent>();
+            lock (gate)
+            {
+                peerWnd = Math.Max(wnd, 4);
+                int now = Environment.TickCount, newly = 0, sample = -1, latest = 0;
+                bool cumulative = false, any = false;
+                List<int> done = new List<int>();
+                foreach (KeyValuePair<int, Sent> kv in inflight) { if (kv.Key - ack >= 0) break; done.Add(kv.Key); }
+                foreach (int s in done)
+                {
+                    Sent x = inflight[s];
+                    inflight.Remove(s);
+                    if (x.tries == 0) sample = now - x.at;
+                    if (!any || x.at - latest > 0) latest = x.at;
+                    any = true; newly++; cumulative = true;
+                }
+                for (int i = 0; i < 64; i++)
+                {
+                    if ((sack & (1L << i)) == 0) continue;
+                    Sent x;
+                    if (inflight.TryGetValue(ack + 1 + i, out x))
+                    {
+                        inflight.Remove(ack + 1 + i);
+                        if (x.tries == 0) sample = now - x.at;
+                        if (!any || x.at - latest > 0) latest = x.at;
+                        any = true; newly++;
+                    }
+                }
+                if (sample >= 0)
+                {
+                    if (srtt == 0) { srtt = sample; rttvar = sample / 2.0; }
+                    else { rttvar = 0.75 * rttvar + 0.25 * Math.Abs(srtt - sample); srtt = 0.875 * srtt + 0.125 * sample; }
+                    minRtt = minRtt == 0 ? sample : Math.Min(minRtt, sample);
+                }
+                if (cumulative) rto = (int)Math.Min(3000, srtt + Math.Max(4 * rttvar, 200));   // Linux: at least 200 ms over the round trip
+                Grow(newly, now);
+                // A packet sent after this one has come and this one has not (allowing a little
+                // reordering): lost, send it again. Originals leave in order, so the first one never
+                // resent and sent too late to count ends the search.
+                if (any)
+                {
+                    int reo = (int)Math.Max(srtt / 4, 5);
+                    foreach (Sent x in inflight.Values)
+                    {
+                        if (resend.Count >= 64) break;
+                        if (latest - reo - x.at > 0) resend.Add(x);
+                        else if (x.tries == 0) break;
+                    }
+                }
+                if (resend.Count > 0)
+                {
+                    if (resend[0].seq - recover >= 0)
+                    {
+                        wmax = cwnd; epochSet = false;
+                        ssthresh = Math.Max(cwnd * 0.7, 8); cwnd = ssthresh; recover = nextSeq;
+                    }
+                    foreach (Sent x in resend) { x.at = now; x.tries++; }
+                }
+                Monitor.PulseAll(gate);
+            }
+            foreach (Sent x in resend) Send(PDATA, x.seq, x.data);
+            Pump();
+        }
+
+        /** As Linux: doubling until the first loss, then CUBIC; never slower than Reno. Under gate. */
+        void Grow(int n, int now)
+        {
+            if (n == 0) return;
+            if (cwnd < ssthresh) cwnd += n;
+            else
+            {
+                if (!epochSet)
+                {
+                    epochSet = true; epoch = now;
+                    cubicK = Math.Pow(Math.Max(0, wmax - cwnd) / 0.4, 1 / 3.0);
+                    origin = Math.Max(wmax, cwnd);
+                }
+                double t = (now - epoch + minRtt) / 1000.0;
+                double target = origin + 0.4 * Math.Pow(t - cubicK, 3);
+                cwnd += n * Math.Max(target - cwnd, 1.0) / cwnd;
+            }
+            cwnd = Math.Min(cwnd, 2048);
+        }
+
+        void TickLoop()
+        {
+            while (open)
+            {
+                Thread.Sleep(10);
+                int now = Environment.TickCount;
+                Sent first = null;
+                bool ackDue;
+                lock (gate)
+                {
+                    // Nothing back for the oldest packet in a whole timeout: send it again, and
+                    // start slow (once per loss; the acks for it then show what else is missing).
+                    foreach (Sent x in inflight.Values) { first = x; break; }
+                    if (first != null && now - first.at > rto)
+                    {
+                        if (first.seq - recover >= 0) { wmax = cwnd; epochSet = false; ssthresh = Math.Max(cwnd * 0.7, 8); cwnd = 8; recover = nextSeq; }
+                        rto = Math.Min(rto * 2, 5000);
+                        first.at = now; first.tries++;
+                    }
+                    else first = null;
+                    ackDue = unacked > 0;
+                }
+                if (first != null) Send(PDATA, first.seq, first.data);
+                if (ackDue) Send(PACK, 0, new byte[0]);
+                Pump();
+                if (now - lastSent > 5000) Send(PKEEP, 0, new byte[0]);
+                if (now - lastHeard > 60000) Finish("nothing from the other end for 60 s");
+            }
+        }
+
+        void Finish(string why)
+        {
+            lock (gate)
+            {
+                if (!open) return;
+                open = false;
+                Monitor.PulseAll(gate);
+            }
+            try { sock.Close(); } catch { }
+        }
+
+        public override void Close()
+        {
+            if (open) for (int i = 0; i < 3; i++) Send(PCLOSE, 0, new byte[0]);
+            Finish("closed here");
+            base.Close();
         }
     }
 
     public class Conn
     {
-        readonly TcpClient tcp;
-        readonly NetworkStream ns;
+        readonly Action closer;
+        readonly Stream ns;
         readonly Cipher tx, rx;
         readonly Action<List<string>> onAddrs;
         readonly Action<string> log;
@@ -2622,9 +3279,9 @@ public static class Tunnel87
         int lastRx = Environment.TickCount, lastTx = Environment.TickCount;
         internal readonly ManualResetEvent hello = new ManualResetEvent(false);
 
-        internal Conn(TcpClient tcp, NetworkStream ns, Cipher tx, Cipher rx, Action<List<string>> onAddrs, Action<string> log)
+        internal Conn(Action closer, Stream ns, Cipher tx, Cipher rx, Action<List<string>> onAddrs, Action<string> log)
         {
-            this.tcp = tcp; this.ns = ns; this.tx = tx; this.rx = rx; this.onAddrs = onAddrs; this.log = log;
+            this.closer = closer; this.ns = ns; this.tx = tx; this.rx = rx; this.onAddrs = onAddrs; this.log = log;
         }
 
         public bool Alive { get { return alive; } }
@@ -2753,7 +3410,7 @@ public static class Tunnel87
             }
             if (log != null) log("Tunnel closed: " + why);
             foreach (Stream87 s in held) s.Reset(null, false);
-            try { tcp.Close(); } catch { }
+            try { closer(); } catch { }
         }
     }
 

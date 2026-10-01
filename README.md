@@ -294,6 +294,13 @@ encryption and every request carried inside it
 internet. The helper and linked phones learn the phone's address while they are together and
 switch to the tunnel by themselves when no local path answers, and back again when one does.
 
+From a network with no IPv6, the laptop and the phone swap their public IPv4 addresses as two
+small sealed notes on a public message board ([ntfy.sh](https://ntfy.sh), which keeps nothing),
+then **punch through both NATs** over UDP and run the same tunnel on that path. Nothing but those
+two notes goes through anyone else. It works unless both networks have the hard kind of NAT (a new
+port for every destination); from Airtel home broadband to a phone on Jio data it takes 5 to 9 s.
+Between two phones the tunnel is still IPv6 only.
+
 | Situation | Works? |
 | :--- | :--- |
 | Laptop and phone on the same Wi-Fi, hotspot or cable | Yes |
@@ -302,7 +309,7 @@ switch to the tunnel by themselves when no local path answers, and back again wh
 | Two phones far apart, on mobile data | Yes, through the tunnel, once linked |
 | Two laptops on different networks, one phone | Yes: straight between the laptops when both have IPv6, else through the phone |
 | Two laptops, each on its own phone's hotspot | Yes, through both phones (12); from far apart, over the tunnel between the phones |
-| Laptop on a network with IPv4 only, phone on mobile data | No: nothing reaches a phone behind carrier NAT without a server in the middle |
+| Laptop on a network with IPv4 only, phone on mobile data | Yes, punched through both NATs over UDP, unless both are the hard kind (then no) |
 | Guest or campus Wi-Fi that hides devices from each other | Through the tunnel if the network has IPv6; else use a hotspot or a cable |
 
 Through the tunnel: the clipboard, files, browsing the phone, music, notifications, the

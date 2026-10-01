@@ -66,6 +66,25 @@ object TunnelProto {
     }
 }
 
+/**
+ * What a tunnel connection runs over: a TCP socket, or a path punched through two NATs over UDP
+ * (UdpCarrier, for IPv4; see Punch.kt). Either way an ordered, reliable stream of bytes.
+ */
+interface TunnelLink {
+    val input: java.io.InputStream
+    val output: java.io.OutputStream
+    /** How long a read may wait before failing; 0 for ever. */
+    fun setReadTimeout(ms: Int)
+    fun close()
+}
+
+class SocketLink(val socket: Socket) : TunnelLink {
+    override val input: java.io.InputStream = socket.getInputStream()
+    override val output: java.io.OutputStream = socket.getOutputStream()
+    override fun setReadTimeout(ms: Int) { socket.soTimeout = ms }
+    override fun close() = socket.close()
+}
+
 /** The phone's tunnel secret, and each paired device's keys derived from it. */
 class TunnelKeys(filesDir: File) {
     private val file = File(filesDir, "tunnel.key")
@@ -84,7 +103,7 @@ class TunnelKeys(filesDir: File) {
  * reads its local socket and one that writes to it, so a slow reader only holds up its stream.
  */
 class TunnelConnection(
-    private val sock: Socket,
+    private val link: TunnelLink,
     private val tx: TunnelCipher,
     private val rx: TunnelCipher,
     /** Who is at the other end: the device's id on the phone, the phone's name on a client. */
@@ -96,7 +115,7 @@ class TunnelConnection(
     private val onInfo: (JsonObject) -> Unit = {},
     private val onClosed: (TunnelConnection) -> Unit = {},
 ) {
-    private val out = sock.getOutputStream()
+    private val out = link.output
     /**
      * Fair, so streams take turns: on a slow link the writer that just finished would otherwise take
      * the lock straight back, and the other streams would wait for as long as it has data.
@@ -148,7 +167,7 @@ class TunnelConnection(
     /** Reads frames until the connection ends. */
     fun run() {
         TunnelConnection.thread("tunnel-keepalive") { keepalive() }
-        val input = DataInputStream(sock.getInputStream().buffered(1 shl 16))
+        val input = DataInputStream(link.input.buffered(1 shl 16))
         var why = "closed"
         try {
             val tag = ByteArray(16)
@@ -219,7 +238,7 @@ class TunnelConnection(
         if (!open.compareAndSet(true, false)) return
         Log.i(TAG, "Tunnel with $peer ($remote) closed: $why")
         streams.values.toList().forEach { it.reset(send = false) }
-        runCatching { sock.close() }
+        runCatching { link.close() }
         onClosed(this)
     }
 
@@ -374,6 +393,8 @@ class TunnelServer(
     private val conns = CopyOnWriteArrayList<TunnelConnection>()
     private var server: ServerSocket? = null
     private val attempts = ConcurrentHashMap<String, ArrayDeque<Long>>()
+    /** Across IPv4: devices that cannot reach the phone's IPv6 ask through the board (Punch.kt). */
+    private val punch = Punch.Listener(keys, deviceIds) { link, who -> serve(link, who) }
 
     private val _peers = MutableStateFlow<List<TunnelPeer>>(emptyList())
     val peers: StateFlow<List<TunnelPeer>> = _peers
@@ -393,6 +414,7 @@ class TunnelServer(
             }
         }.onFailure { Log.w(TAG, "Could not listen on $port: ${it.message}") }.getOrNull() ?: return
         server = ss
+        punch.start()
         TunnelConnection.thread("tunnel-accept") { acceptLoop(ss) }
         TunnelConnection.thread("tunnel-stats") { statsLoop(ss) }
         Log.i(TAG, "Tunnel listening on :$port")
@@ -402,6 +424,7 @@ class TunnelServer(
     fun stop() {
         runCatching { server?.close() }
         server = null
+        punch.stop()
         conns.forEach { it.bye("the phone stopped") }
         conns.clear()
         publish()
@@ -411,6 +434,7 @@ class TunnelServer(
     fun prune() {
         val ids = deviceIds().toSet()
         conns.filter { it.peer !in ids }.forEach { it.bye("this computer was removed") }
+        punch.refresh()
     }
 
     /** Tells every connected device the phone's addresses changed. */
@@ -443,35 +467,42 @@ class TunnelServer(
     private fun handshake(s: Socket) {
         val remote = s.inetAddress
         val who = (remote.hostAddress ?: "?").substringBefore('%').removePrefix("::ffff:")
+        if (!allowed(remote)) { runCatching { s.close() }; return }
+        runCatching { s.tcpNoDelay = true; s.keepAlive = true }
+        serve(SocketLink(s), who)
+    }
+
+    /**
+     * A connection that has reached the phone some way (TCP, or a path punched over UDP): the
+     * hello, the reply, then frames until it ends. Blocks for the connection's life.
+     */
+    fun serve(link: TunnelLink, who: String) {
         try {
-            if (!allowed(remote)) { s.close(); return }
-            s.soTimeout = 10_000
-            s.tcpNoDelay = true
-            val input = DataInputStream(s.getInputStream())
+            link.setReadTimeout(10_000)
+            val input = DataInputStream(link.input)
             val hello = ByteArray(TunnelProto.HELLO_LEN)
             input.readFully(hello)
-            if (!hello.copyOf(5).contentEquals(TunnelProto.MAGIC)) { s.close(); return }
+            if (!hello.copyOf(5).contentEquals(TunnelProto.MAGIC)) { link.close(); return }
             val tid = hello.copyOfRange(5, 21)
             val eC = hello.copyOfRange(21, 53)
             val mac1 = hello.copyOfRange(53, 69)
             val id = deviceIds().firstOrNull { TunnelCrypto.equal(keys.tid(it), tid) }
             val psk = id?.let(keys::psk)
             if (psk == null || !TunnelCrypto.equal(TunnelCrypto.hmac16(psk, TunnelProto.L_HELLO, hello.copyOf(53)), mac1)) {
-                s.close()   // silence: a stranger learns nothing
+                link.close()   // silence: a stranger learns nothing
                 return
             }
             val priv = ByteArray(32).also(rng::nextBytes)
             val eS = TunnelCrypto.x25519(priv, TunnelCrypto.BASE)
             val dh = TunnelCrypto.x25519(priv, eC)
-            if (dh.all { it.toInt() == 0 }) { s.close(); return }
+            if (dh.all { it.toInt() == 0 }) { link.close(); return }
             val (k, th) = TunnelProto.keys(psk, dh, hello, eS)
-            val out = s.getOutputStream()
+            val out = link.output
             out.write(eS + TunnelCrypto.hmac16(k[4], TunnelProto.L_ACCEPT, th))
             out.flush()
-            s.soTimeout = 0
-            s.keepAlive = true
+            link.setReadTimeout(0)
             val conn = TunnelConnection(
-                s, tx = TunnelCipher(k[2], k[3]), rx = TunnelCipher(k[0], k[1]),
+                link, tx = TunnelCipher(k[2], k[3]), rx = TunnelCipher(k[0], k[1]),
                 peer = id, remote = who, client = false,
                 connectLocal = { p -> if (p == pagePort()) Socket().apply { tcpNoDelay = true; connect(InetSocketAddress(TunnelProto.LOCAL_HOST, p), 5_000) } else null },
                 onClosed = { c -> conns.remove(c); totalBytes.addAndGet(c.bytesIn.get() + c.bytesOut.get()); publish() },
@@ -482,7 +513,7 @@ class TunnelServer(
             conn.send(TunnelProto.HELLO, 0, info().toByteArray())
             conn.run()
         } catch (e: Exception) {
-            runCatching { s.close() }
+            runCatching { link.close() }
         }
     }
 
@@ -536,7 +567,7 @@ object TunnelClient {
             s.soTimeout = 0
             s.keepAlive = true
             val conn = TunnelConnection(
-                s, tx = TunnelCipher(k[0], k[1]), rx = TunnelCipher(k[2], k[3]),
+                SocketLink(s), tx = TunnelCipher(k[0], k[1]), rx = TunnelCipher(k[2], k[3]),
                 peer = host, remote = host, client = true, onInfo = onInfo, onClosed = onClosed,
             )
             TunnelConnection.thread("tunnel-read") { conn.run() }

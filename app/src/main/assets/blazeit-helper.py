@@ -43,6 +43,7 @@ import hmac
 import http.client
 import json
 import os
+import random
 import re
 import shutil
 import signal
@@ -52,7 +53,9 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 
 PHONE_PORT = 8787
 DISCOVERY_PORT = 8788
@@ -1020,11 +1023,21 @@ class Tunnel(object):
 
 
 def tunnel_dial(host, port, tid, psk, timeout=8):
-    """Connects and runs the handshake; the Tunnel is running when this returns."""
+    """Connects over TCP and runs the handshake; the Tunnel is running when this returns."""
     s = socket.create_connection((host, port), timeout=timeout)
     try:
         s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    except OSError:
+        s.close()
+        raise
+    return tunnel_start(s, tid, psk, (host, port), timeout)
+
+
+def tunnel_start(s, tid, psk, addr, timeout=8):
+    """The handshake over s (a TCP socket, or a UdpCarrier punched through), then the Tunnel."""
+    try:
+        s.settimeout(timeout)
         priv = os.urandom(32)
         hello = b"L87T\x01" + tid + x25519(priv, (9).to_bytes(32, "little"))
         hello += hmac16(psk, b"L87T/1 hello" + hello)
@@ -1042,7 +1055,7 @@ def tunnel_dial(host, port, tid, psk, timeout=8):
     except (OSError, ValueError):
         s.close()
         raise
-    t = Tunnel(s, TunnelCipher(k[0], k[1]), TunnelCipher(k[2], k[3]), (host, port))
+    t = Tunnel(s, TunnelCipher(k[0], k[1]), TunnelCipher(k[2], k[3]), addr)
     threading.Thread(target=t.run, daemon=True).start()
     threading.Thread(target=t.keepalive, daemon=True).start()
     t.send(T_HELLO, 0, json.dumps({"name": NAME, "v": 1}))
@@ -1050,6 +1063,549 @@ def tunnel_dial(host, port, tid, psk, timeout=8):
         t.close()
         raise OSError("the phone did not answer the hello")
     return t
+
+
+# ---------------------------------------------------------------------- across IPv4
+#
+# When the phone's IPv6 cannot be reached (this network has none): both ends swap their public
+# IPv4 addresses as two sealed notes on a public message board, punch through their NATs over UDP,
+# and run the tunnel over a reliable stream on that path (docs/tunnel-protocol.md, "Across IPv4").
+
+P_BOARD = "https://ntfy.sh"
+P_STUN = (("stun.l.google.com", 19302), ("stun.cloudflare.com", 3478))
+P_SOCKETS = 256             # a hard NAT's side opens this many, each its own mapping
+P_PUNCH = 15                # seconds both ends knock
+P_PROBE, P_PROBE_ACK, P_DATA, P_ACK, P_KEEP, P_CLOSE = range(1, 7)
+P_HEADER, P_TAG = 20, 8
+P_MSS = 1200                # payload per packet: under IPv6's minimum MTU even after NAT64
+P_QUEUE = 4096
+P_WINDOW = 4096
+
+
+def punch_topic(psk, label):
+    return "l87-" + hmac.new(psk, label, hashlib.sha256).digest()[:10].hex()
+
+
+def punch_keystream(psk, nonce, n):
+    return hashlib.shake_256(hmac.new(psk, b"L87P/1 seal", hashlib.sha256).digest() + nonce).digest(n)
+
+
+def punch_seal(psk, text):
+    nonce = os.urandom(16)
+    pt = text.encode("utf-8")
+    ct = bytes(a ^ b for a, b in zip(pt, punch_keystream(psk, nonce, len(pt))))
+    tag = hmac16(hmac.new(psk, b"L87P/1 seal mac", hashlib.sha256).digest(), nonce + ct)
+    return base64.urlsafe_b64encode(nonce + ct + tag).decode().rstrip("=")
+
+
+def punch_open(psk, text):
+    text = (text or "").strip()
+    try:
+        raw = base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+    except ValueError:
+        return None
+    if len(raw) < 33:
+        return None
+    nonce, ct, tag = raw[:16], raw[16:-16], raw[-16:]
+    if not hmac.compare_digest(tag, hmac16(hmac.new(psk, b"L87P/1 seal mac", hashlib.sha256).digest(), nonce + ct)):
+        return None
+    return bytes(a ^ b for a, b in zip(ct, punch_keystream(psk, nonce, len(ct)))).decode("utf-8", "replace")
+
+
+def punch_stun(sock, host, port, wait=1.5):
+    """One STUN Binding request from sock: (ip, port) as the server saw it, or None."""
+    try:
+        server = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_DGRAM)[0][4]
+    except OSError:
+        return None
+    tid = os.urandom(12)
+    req = struct.pack(">HHI", 1, 0, 0x2112A442) + tid
+    end, sent = time.time() + wait, 0
+    old = sock.gettimeout()
+    sock.settimeout(0.4)
+    try:
+        while time.time() < end:
+            if time.time() - sent > 0.4:
+                sock.sendto(req, server)
+                sent = time.time()
+            try:
+                data, _ = sock.recvfrom(2048)
+            except socket.timeout:
+                continue
+            except OSError:
+                return None
+            if len(data) < 20 or data[8:20] != tid:
+                continue
+            i = 20
+            while i + 4 <= len(data):
+                kind, ln = struct.unpack(">HH", data[i:i + 4])
+                v = data[i + 4:i + 4 + ln]
+                if kind in (0x20, 0x01) and ln >= 8 and v[1] == 1:
+                    p, ip = struct.unpack(">H", v[2:4])[0], v[4:8]
+                    if kind == 0x20:
+                        p ^= 0x2112
+                        ip = bytes(a ^ b for a, b in zip(ip, b"\x21\x12\xa4\x42"))
+                    return socket.inet_ntoa(ip), p
+                i += 4 + ln + (-ln % 4)
+    finally:
+        sock.settimeout(old)
+    return None
+
+
+def punch_mapped(sock):
+    """(public (ip, port), hard): hard when the NAT gives each destination its own port."""
+    seen = [a for a in (punch_stun(sock, h, p) for h, p in P_STUN) if a]
+    if not seen:
+        return None
+    return seen[0], any(a[1] != seen[0][1] for a in seen)
+
+
+def punch_lan_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("192.0.2.1", 9))   # nothing is sent; this only picks the outgoing address
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
+def punch_addr(s):
+    try:
+        host, port = s.rsplit(":", 1)
+        return host, int(port)
+    except (AttributeError, ValueError):
+        return None
+
+
+class PunchSealer(object):
+    """Packet tags: HMAC-SHA256 over the packet, the first 8 bytes. One key per direction."""
+
+    def __init__(self, key):
+        self.key = key
+
+    def packet(self, kind, role, seq=0, ack=0, sack=0, wnd=0, payload=b""):
+        b = struct.pack(">BBIIQH", kind, role, seq & 0xFFFFFFFF, ack & 0xFFFFFFFF, sack, wnd) + payload
+        return b + hmac.new(self.key, b, hashlib.sha256).digest()[:P_TAG]
+
+    def valid(self, b):
+        return len(b) >= P_HEADER + P_TAG and hmac.compare_digest(
+            b[-P_TAG:], hmac.new(self.key, b[:-P_TAG], hashlib.sha256).digest()[:P_TAG])
+
+
+def punch_knock(main, hard_here, theirs, hard_there, tx, rx, role):
+    """Knocks at the other side (from P_SOCKETS sockets when this NAT is hard, spraying its ports
+    when its NAT is) until a packet of its comes back: (socket, address), or None."""
+    socks = [main]
+    if hard_here and not hard_there:
+        for _ in range(P_SOCKETS - 1):
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.bind(("0.0.0.0", 0))
+                socks.append(s)
+            except OSError:
+                break
+    found, done = [], threading.Event()
+    seal, check = PunchSealer(tx), PunchSealer(rx)
+    probe, ack = seal.packet(P_PROBE, role), seal.packet(P_PROBE_ACK, role)
+
+    def listen(s):
+        s.settimeout(0.25)
+        while not done.is_set():
+            try:
+                data, frm = s.recvfrom(2048)
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            if not check.valid(data):
+                continue
+            if data[0] == P_PROBE:
+                for _ in range(3):
+                    try:
+                        s.sendto(ack, frm)
+                    except OSError:
+                        pass
+            if data[0] in (P_PROBE, P_PROBE_ACK):
+                found.append((s, frm))
+                done.set()
+                return
+
+    for s in socks:
+        threading.Thread(target=listen, args=(s,), daemon=True).start()
+    ports = []
+    if hard_there and not hard_here and theirs:
+        # The ports near the one STUN saw first (NATs that count up), then the rest at random.
+        seen = theirs[0][1]
+        near = [p for d in range(1, 257) for p in (seen + d, seen - d) if 1024 <= p <= 65535]
+        skip = set(near)
+        skip.add(seen)
+        rest = [p for p in range(1024, 65536) if p not in skip]
+        random.shuffle(rest)
+        ports = near + rest
+    start, last, nxt = time.time(), 0, 0
+    while not done.is_set() and time.time() - start < P_PUNCH:
+        if time.time() - last >= 0.2:
+            last = time.time()
+            for s in socks:
+                for t in theirs:
+                    try:
+                        s.sendto(probe, t)
+                    except OSError:
+                        pass
+        for _ in range(30 if ports else 0):
+            try:
+                main.sendto(probe, (theirs[0][0], ports[nxt % len(ports)]))
+            except OSError:
+                pass
+            nxt += 1
+        done.wait(0.1 if ports else 0.05)
+    done.set()
+    got = found[0] if found else None
+    for s in socks:
+        if not got or s is not got[0]:
+            try:
+                s.close()
+            except OSError:
+                pass
+    return got
+
+
+class UdpCarrier(object):
+    """A reliable, ordered byte stream over one UDP path, shaped like a socket for the Tunnel:
+    numbered packets, cumulative and selective acks, resending on loss, a congestion window."""
+
+    def __init__(self, sock, peer, tx, rx, role):
+        self.sock, self.peer, self.role = sock, peer, role
+        self.seal, self.check = PunchSealer(tx), PunchSealer(rx)
+        self.cv = threading.Condition()
+        self.order = threading.Lock()                 # new packets leave in the order numbered
+        self.again = False                            # someone asked to send while another was
+        self.alive = True
+        self.pending = collections.deque()
+        self.inflight = collections.OrderedDict()     # seq -> [data, sent at, tries]
+        self.next_seq, self.cwnd, self.ssthresh, self.recover = 0, 16.0, 1e9, 0
+        self.peer_wnd, self.srtt, self.rttvar, self.rto = P_WINDOW, 0.0, 0.0, 1.0
+        self.min_rtt, self.wmax, self.epoch = 0.0, 0.0, None   # CUBIC
+        self.expected, self.early, self.unacked = 0, {}, 0
+        self.chunks, self.buf = collections.deque(), b""
+        self.timeout = None
+        self.last_sent = self.last_heard = time.time()
+        sock.settimeout(0.2)
+        threading.Thread(target=self._recv_loop, daemon=True).start()
+        threading.Thread(target=self._tick_loop, daemon=True).start()
+
+    # The socket calls the Tunnel makes.
+    def settimeout(self, t):
+        self.timeout = t
+
+    def setsockopt(self, *_):
+        pass
+
+    def sendall(self, data):
+        for i in range(0, len(data), P_MSS):
+            with self.cv:
+                while self.alive and len(self.pending) + len(self.inflight) >= P_QUEUE:
+                    self.cv.wait(1)
+                if not self.alive:
+                    raise OSError("the path is closed")
+                self.pending.append(bytes(data[i:i + P_MSS]))
+        self._pump()
+
+    def recv(self, n):
+        end = time.time() + self.timeout if self.timeout else None
+        with self.cv:
+            while not self.buf and not self.chunks and self.alive:
+                left = end - time.time() if end else 1
+                if left <= 0:
+                    raise socket.timeout("nothing in time")
+                self.cv.wait(left)
+            if not self.buf and self.chunks:
+                self.buf = self.chunks.popleft()
+            out, self.buf = self.buf[:n], self.buf[n:]
+            return out
+
+    def close(self):
+        if self.alive:
+            for _ in range(3):
+                self._send(P_CLOSE)
+        self._finish()
+
+    # Inside.
+    def _sack(self):
+        bits = 0
+        for i in range(64):
+            if self.expected + 1 + i in self.early:
+                bits |= 1 << i
+        return bits
+
+    def _send(self, kind, seq=0, payload=b""):
+        with self.cv:
+            ack, sack, wnd = self.expected, self._sack(), max(0, P_WINDOW - len(self.early))
+            if kind in (P_DATA, P_ACK, P_KEEP):
+                self.unacked = 0
+        try:
+            self.sock.sendto(self.seal.packet(kind, self.role, seq, ack, sack, wnd, payload), self.peer)
+        except OSError:
+            pass
+        self.last_sent = time.time()
+
+    def _pump(self):
+        """Sends what the window allows. One thread at a time, so packets leave in order; a thread
+        that finds another at it leaves it to that one, which goes round again."""
+        self.again = True
+        while self.again:
+            if not self.order.acquire(False):
+                return
+            try:
+                self.again = False
+                out = []
+                with self.cv:
+                    room = min(int(self.cwnd), self.peer_wnd) - len(self.inflight)
+                    while room > 0 and len(out) < 256 and self.pending:
+                        seq = self.next_seq
+                        self.next_seq += 1
+                        data = self.pending.popleft()
+                        self.inflight[seq] = [data, time.time(), 0]
+                        out.append((seq, data))
+                        room -= 1
+                for seq, data in out:
+                    self._send(P_DATA, seq, data)
+            finally:
+                self.order.release()
+
+    def _recv_loop(self):
+        while self.alive:
+            try:
+                data, frm = self.sock.recvfrom(2048)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            if not self.check.valid(data) or data[1] == self.role:
+                continue
+            self.last_heard = time.time()
+            if frm != self.peer:
+                self.peer = frm       # the other end's NAT moved it
+            kind, _, seq, ack, sack, wnd = struct.unpack(">BBIIQH", data[:P_HEADER])
+            if kind == P_PROBE:
+                try:
+                    self.sock.sendto(self.seal.packet(P_PROBE_ACK, self.role), frm)
+                except OSError:
+                    pass
+            elif kind == P_CLOSE:
+                self._finish()
+                return
+            elif kind in (P_DATA, P_ACK, P_KEEP):
+                self._acked(ack, sack, wnd)
+                if kind == P_DATA:
+                    self._data(seq, data[P_HEADER:-P_TAG])
+
+    def _data(self, seq, payload):
+        with self.cv:
+            d = (seq - self.expected) & 0xFFFFFFFF
+            if d >= 0x80000000:
+                now = True                                  # a copy of one already had
+            elif d == 0:
+                self.chunks.append(payload)
+                self.expected += 1
+                filled = bool(self.early)
+                while self.expected in self.early:
+                    self.chunks.append(self.early.pop(self.expected))
+                    self.expected += 1
+                self.unacked += 1
+                now = filled or self.unacked >= 2
+                self.cv.notify_all()
+            elif d < P_WINDOW:
+                self.early[seq] = payload
+                now = True
+            else:
+                now = False
+        if now:
+            self._send(P_ACK)
+
+    def _acked(self, ack, sack, wnd):
+        resend = []
+        with self.cv:
+            self.peer_wnd = max(wnd, 4)
+            now, newly, sample, cumulative, latest = time.time(), 0, None, False, None
+            for seq in list(self.inflight):
+                if seq >= ack:
+                    break
+                e = self.inflight.pop(seq)
+                if not e[2]:
+                    sample = now - e[1]
+                latest = e[1] if latest is None else max(latest, e[1])
+                newly += 1
+                cumulative = True
+            for i in range(64):
+                if sack >> i & 1:
+                    e = self.inflight.pop(ack + 1 + i, None)
+                    if e:
+                        if not e[2]:
+                            sample = now - e[1]
+                        latest = e[1] if latest is None else max(latest, e[1])
+                        newly += 1
+            if sample is not None:
+                if not self.srtt:
+                    self.srtt, self.rttvar = sample, sample / 2
+                else:
+                    self.rttvar = 0.75 * self.rttvar + 0.25 * abs(self.srtt - sample)
+                    self.srtt = 0.875 * self.srtt + 0.125 * sample
+                self.min_rtt = min(self.min_rtt, sample) if self.min_rtt else sample
+            if cumulative:
+                self.rto = min(3.0, self.srtt + max(4 * self.rttvar, 0.2))   # Linux: at least 200 ms over the round trip
+            self._grow(newly, now)
+            # A packet sent after this one has come and this one has not (allowing a little
+            # reordering): lost, send it again. Originals leave in order, so the first one never
+            # resent and sent too late to count ends the search.
+            lost = []
+            if latest is not None:
+                reo = max(self.srtt / 4, 0.005)
+                for s, e in self.inflight.items():
+                    if len(lost) >= 64:
+                        break
+                    if e[1] < latest - reo:
+                        lost.append(s)
+                    elif not e[2]:
+                        break
+            if lost:
+                if lost[0] >= self.recover:       # once per window: one loss, one step back
+                    self.wmax, self.epoch = self.cwnd, None
+                    self.ssthresh = max(self.cwnd * 0.7, 8.0)
+                    self.cwnd, self.recover = self.ssthresh, self.next_seq
+                for s in lost[:64]:
+                    e = self.inflight[s]
+                    e[1], e[2] = now, e[2] + 1
+                    resend.append((s, e[0]))
+            self.cv.notify_all()
+        for s, d in resend:
+            self._send(P_DATA, s, d)
+        self._pump()
+
+    def _grow(self, n, now):
+        """The window after n packets were acknowledged, as Linux grows it: doubling each round trip
+        until the first loss, then CUBIC, back to the size it last lost at in a few seconds whatever
+        the round trip, and probing past it; never slower than Reno's one packet per round trip."""
+        if not n:
+            return
+        if self.cwnd < self.ssthresh:
+            self.cwnd += n
+        else:
+            if self.epoch is None:
+                self.epoch = now
+                self.k = (max(0.0, self.wmax - self.cwnd) / 0.4) ** (1 / 3.0)
+                self.origin = max(self.wmax, self.cwnd)
+            t = now - self.epoch + self.min_rtt
+            target = self.origin + 0.4 * (t - self.k) ** 3
+            self.cwnd += n * max(target - self.cwnd, 1.0) / self.cwnd
+        self.cwnd = min(self.cwnd, 2048.0)
+
+    def _tick_loop(self):
+        while self.alive:
+            time.sleep(0.01)
+            now, resend = time.time(), []
+            with self.cv:
+                # Nothing back for the oldest packet in a whole timeout: send it again, and start
+                # slow (once per loss; the acks for it then show what else is missing).
+                first = next(iter(self.inflight), None)
+                if first is not None and now - self.inflight[first][1] > self.rto:
+                    if first >= self.recover:
+                        self.wmax, self.epoch = self.cwnd, None
+                        self.ssthresh = max(self.cwnd * 0.7, 8.0)
+                        self.cwnd, self.recover = 8.0, self.next_seq
+                    self.rto = min(self.rto * 2, 5.0)
+                    e = self.inflight[first]
+                    e[1], e[2] = now, e[2] + 1
+                    resend.append((first, e[0]))
+                due = self.unacked > 0
+            for s, d in resend:
+                self._send(P_DATA, s, d)
+            if due:
+                self._send(P_ACK)
+            self._pump()
+            if now - self.last_sent > 5:
+                self._send(P_KEEP)
+            if now - self.last_heard > 60:
+                self._finish()
+
+    def _finish(self):
+        with self.cv:
+            if not self.alive:
+                return
+            self.alive = False
+            self.cv.notify_all()
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+
+
+def punch_post(topic, text):
+    r = urllib.request.Request(P_BOARD + "/" + topic, data=text.encode(), method="POST",
+                               headers={"Cache": "no", "Firebase": "no"})
+    urllib.request.urlopen(r, timeout=10).read()
+
+
+def punch_dial(c):
+    """Across IPv4: a note to the phone through the board, its answer, then the punch. Returns
+    the UdpCarrier and the phone's address; OSError when it cannot."""
+    psk = base64.b64decode(c["key"])
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("0.0.0.0", 0))
+    try:
+        me = punch_mapped(sock)
+        if not me:
+            raise OSError("this network gives no public IPv4 address to punch from (STUN did not answer)")
+        session = os.urandom(8)
+        lan = punch_lan_ip()
+        note = {"t": "punch", "s": session.hex(), "at": int(time.time()), "addr": "%s:%d" % me[0],
+                "hard": me[1], "lan": ["%s:%d" % (lan, sock.getsockname()[1])] if lan else []}
+        answer = None
+        try:
+            board = urllib.request.urlopen(P_BOARD + "/" + punch_topic(psk, b"L87P/1 down") + "/json", timeout=13)
+            try:
+                board.readline()                               # the board's "open"
+                punch_post(punch_topic(psk, b"L87P/1 up"), punch_seal(psk, json.dumps(note)))
+                end = time.time() + 12
+                while time.time() < end and answer is None:
+                    line = board.readline()
+                    if not line:
+                        break
+                    try:
+                        o = json.loads(line.decode("utf-8"))
+                        a = json.loads(punch_open(psk, o.get("message")) or "null") if o.get("event") == "message" else None
+                    except ValueError:
+                        continue
+                    if a and a.get("t") == "punch" and a.get("s") == session.hex():
+                        answer = a
+            finally:
+                board.close()
+        except (OSError, urllib.error.URLError) as e:
+            if not answer:
+                raise OSError("could not reach the board at %s (%s)" % (P_BOARD, e))
+        if not answer:
+            raise OSError("the phone did not answer through the board (is it on, with From other networks on?)")
+        theirs = [a for a in [punch_addr(answer.get("addr"))] + [punch_addr(x) for x in answer.get("lan") or []] if a]
+        if not theirs:
+            raise OSError("the phone could not see its own public address")
+        k = hmac.new(psk, b"L87P/1 udp" + session, hashlib.sha256).digest()
+        to_phone = hmac.new(k, b"dev", hashlib.sha256).digest()
+        to_dev = hmac.new(k, b"phone", hashlib.sha256).digest()
+        log("Punching to %s (here %s:%d, hard here %s, there %s)" % (
+            ", ".join("%s:%d" % t for t in theirs), me[0][0], me[0][1], me[1], answer.get("hard")))
+        got = punch_knock(sock, me[1], theirs, bool(answer.get("hard")), to_phone, to_dev, 0)
+        if not got:
+            raise OSError("no way through the two networks' NATs (%s here, %s there)" % (
+                "hard" if me[1] else "easy", "hard" if answer.get("hard") else "easy"))
+        return UdpCarrier(got[0], got[1], to_phone, to_dev, 0), got[1]
+    except BaseException:
+        try:
+            sock.close()
+        except OSError:
+            pass
+        raise
 
 
 tunnel = None               # the running Tunnel, while there is one
@@ -1139,6 +1695,14 @@ def tunnel_path():
                 return tunnel_local
             except OSError as e:
                 say_once("tunnel-" + host + str(e), "Could not reach the phone at %s over the internet (%s)." % (host, e))
+        # No IPv6 way to it: across IPv4, punched through both NATs.
+        try:
+            carrier, addr = punch_dial(c)
+            tunnel = tunnel_start(carrier, tid, psk, addr)
+            log("Tunnel to %s:%d over UDP, punched through" % addr)
+            return tunnel_local
+        except OSError as e:
+            say_once("punch-" + str(e), "Could not reach the phone across IPv4 (%s)." % e)
     return None
 
 

@@ -1808,7 +1808,7 @@ private fun RemoteRow(state: UiState, set: (Boolean) -> Unit) {
         !state.remote -> null
         peers.isNotEmpty() -> peers.map { p -> devices.firstOrNull { it.id == p.deviceId }?.let { dev.periy.bridge.server.shownName(it, devices) } ?: "A device" }
             .distinct().joinToString(", ") + " connected · " + formatBytes(used)
-        state.ipv6 == null -> "No IPv6 address right now"
+        state.ipv6 == null -> "No IPv6 right now · over IPv4"
         used > 0 -> formatBytes(used) + " so far"
         else -> "Paired devices only"
     }

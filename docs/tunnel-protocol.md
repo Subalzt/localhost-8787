@@ -138,6 +138,75 @@ type:u8  stream:u32be  body
   there is no server to ask: type the address shown on the phone's Home into the helper
   (`--phone`), or scan it.
 
+## Across IPv4
+
+When none of the phone's IPv6 addresses answers (the laptop's network has no IPv6), the two ends
+punch through their NATs over UDP and run the same tunnel (handshake, frames, streams) over a
+reliable stream on that path. Phone: `net/Punch.kt`; helpers: `punch_dial`, `Tunnel87.DialPunched`.
+
+**Swapping addresses.** Two notes on a public message board, [ntfy.sh](https://ntfy.sh) (no
+account), sent with `Cache: no` and `Firebase: no`, so the board keeps nothing and hands them only
+to whoever is listening right then:
+
+- Topics, per device: `up = "l87-" || hex(HMAC(psk, "L87P/1 up")[0:10])` (device to phone) and
+  `down` the same with `"L87P/1 down"`. Unguessable without the psk.
+- A note is `base64url(nonce[16] || ct || tag[16])`: `ct` is the JSON XOR
+  `SHAKE256(HMAC(psk, "L87P/1 seal") || nonce)`, `tag = HMAC(HMAC(psk, "L87P/1 seal mac"),
+  nonce || ct)[0:16]`.
+- The device's note: `{"t": "punch", "s": session (8 bytes, hex), "at": unix seconds,
+  "addr": "ip:port", "hard": bool, "lan": ["ip:port"]}`. The phone answers on `down` with the
+  same shape and the same `s`. Notes more than 120 s off, or with a session seen before, are ignored.
+- The phone listens on `up` for every paired device (one HTTPS stream,
+  `GET /<topic>,<topic>/json`) only while *From other networks* is on. The device opens its
+  `down` stream before posting, so the answer cannot be missed.
+
+**Seeing the NAT.** Each end sends STUN Binding requests from the one UDP socket it will punch
+with to `stun.l.google.com:19302` and `stun.cloudflare.com:3478`. The first answer is its public
+address; the NAT is *hard* when the two servers saw different ports (a new mapping for every
+destination), *easy* when they saw the same.
+
+**Punching.** Both ends knock (PROBE) at the other's public and LAN addresses every 200 ms for up
+to 15 s; the first valid PROBE or PROBE_ACK fixes the path (that socket, that address).
+
+- Both easy: that is enough.
+- One hard: the hard side knocks from 256 sockets, 256 mappings on its NAT; the easy side also
+  sprays its probes over the hard side's ports, the 512 around the port STUN saw first (NATs that
+  count up) and then the rest in a random order, 300 a second. One of its probes meets one of the
+  256 mappings within seconds.
+- Both hard: it fails, and the helper says so; use a hotspot, a cable, or IPv6.
+
+Tested between home broadband on Airtel (hard, carrier NAT) and the phone on Jio data (easy over
+NAT64): through in 5 to 9 s.
+
+**Packets.** Every datagram, both while punching and after:
+
+```
+kind:u8  role:u8  seq:u32  ack:u32  sack:u64  wnd:u16  payload  tag[8]
+tag = HMAC(dir_key, everything before it)[0:8]
+k = HMAC(psk, "L87P/1 udp" || session);  device to phone: HMAC(k, "dev");  phone to device: HMAC(k, "phone")
+```
+
+| Kind | Name | |
+| --- | --- | --- |
+| 1 | PROBE | knocking; answered with PROBE_ACK |
+| 2 | PROBE_ACK | |
+| 3 | DATA | `seq`, up to 1 200 bytes (with the headers, under IPv6's minimum MTU even after NAT64) |
+| 4 | ACK | |
+| 5 | KEEP | after 5 s with nothing sent, so the NATs keep the path |
+| 6 | CLOSE | |
+
+`role` is 0 from the device and 1 from the phone. Every packet carries `ack` (the next `seq`
+expected), `sack` (which of the 64 after it have arrived) and `wnd` (packets the receiver will
+still hold). The path follows the other end when its address changes (a NAT rebinding) as long as
+its packets check out.
+
+**Reliability.** The receiver acks every second packet (or after 10 ms), at once when one arrives
+out of order. The sender resends a packet when one sent after it has been acknowledged and it has
+not, allowing a quarter of the round trip for reordering (RACK); and the oldest one when nothing
+has come back for it in `srtt + max(4 rttvar, 200 ms)`. The window is Linux's: doubling each round
+trip until the first loss, then CUBIC (back off to 0.7, back to the old size in a few seconds,
+never slower than Reno), at most 2 048 packets. New packets leave strictly in order.
+
 ## Laptop to laptop
 
 Two laptops reaching the same phone, one through the tunnel and one on the phone's network (or
@@ -154,8 +223,8 @@ they try to connect browser to browser (WebRTC), else the file goes through the 
 
 ## Limits
 
-- The laptop needs IPv6 of its own when the phone is on mobile data. From an IPv4-only network
-  with carrier NAT on the phone's side, nothing short of a public server connects the two.
+- From an IPv4-only network the two ends punch through (Across IPv4), which works unless both
+  NATs are hard; then nothing short of a server carrying the traffic connects them.
 - The carrier or the laptop's router may firewall inbound IPv6; then the connection fails at
   the TCP level (a timeout), which the helper reports as such.
 - X25519 here uses ordinary big integers, not constant-time code. Its keys are ephemeral and
