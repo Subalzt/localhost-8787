@@ -6,6 +6,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
@@ -81,6 +82,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -250,9 +252,9 @@ fun MusicScreen(
                     alpha = 1f - 0.5f * off
                 }) {
                     when (PAGE_ORDER[index]) {
-                        0 -> TracksPage(shelf, now, hearts, acts, top, bottom, requestMusic)
+                        0 -> TracksPage(shelf, now, hearts, acts, top, bottom + 72.dp, requestMusic)
                         1 -> AlbumsPage(shelf, now, top, bottom, requestMusic)
-                        else -> LikedPage(shelf, now, likedOrder, hearts, acts, top, bottom, requestMusic)
+                        else -> LikedPage(shelf, now, likedOrder, hearts, acts, top, bottom + 72.dp, requestMusic)
                     }
                 }
             }
@@ -305,11 +307,28 @@ fun MusicScreen(
                     remember(shelf.tracks, shelf.query) { shelf.songs() }.size,
                     remember(shelf.tracks, shelf.query, likedOrder) { shelf.liked(likedOrder) }.size,
                 )
-                PageSwitch(counts, { pagePos }) { i ->
+                PageSwitch(counts, { pagePos }, Modifier.fillMaxWidth()) { i ->
                     shelf.open = null
                     scope.launch { pager.animateScrollToPage(i, animationSpec = tween(420, easing = PageEase)) }
                 }
             }
+
+            // Play and shuffle, floating at the bottom right over Songs and Liked (whichever shows,
+            // and for what it lists), above the mini player; they shrink away towards the albums
+            // or under an album's page.
+            val songsNow = remember(shelf.tracks, shelf.query) { shelf.songs() }
+            val likedNow = remember(shelf.tracks, shelf.query, likedOrder) { shelf.liked(likedOrder) }
+            FloatingPlay(
+                shown = {
+                    val p = pagePos
+                    val k = maxOf(1f - abs(p - 1f), 1f - abs(p - 2f)).coerceIn(0f, 1f)
+                    val list = if (p >= 1.5f) likedNow else songsNow
+                    if (list.isEmpty()) 0f else k * (1f - push.value)
+                },
+                onPlay = { val l = if (pagePos >= 1.5f) likedNow else songsNow; acts.play(l, 0) },
+                onShuffle = { val l = if (pagePos >= 1.5f) likedNow else songsNow; acts.shuffle(l) },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = bottom - 4.dp),
+            )
 
             NamidaSnackHost(acts.snack, statusTop)
         }
@@ -353,9 +372,6 @@ private fun TracksPage(
     Column(Modifier.fillMaxSize().padding(top = top)) {
         LazyColumn(Modifier.weight(1f), state = list, contentPadding = PaddingValues(top = 6.dp, bottom = bottom)) {
             noteFor(shelf, songs.isEmpty())?.let { n -> item(key = "note") { LibraryNote(n, requestMusic) } }
-            if (songs.isNotEmpty()) item(key = "lead") {
-                PlayShuffle({ acts.play(songs, 0) }, { acts.shuffle(songs) }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp))
-            }
             itemsIndexed(songs, key = { _, t -> t.id }) { i, t ->
                 TrackTile(
                     t, shelf.coverOf(t), current = t.id == playingId, hearted = t.id in hearts, acts = acts,
@@ -389,9 +405,6 @@ private fun LikedPage(
             val note = noteFor(shelf, songs.isEmpty() && shelf.query.isNotBlank())
                 ?: if (songs.isEmpty()) "No liked songs yet. Tap the heart on a song to keep it here." else null
             note?.let { n -> item(key = "note") { LibraryNote(n, requestMusic) } }
-            if (songs.isNotEmpty()) item(key = "lead") {
-                PlayShuffle({ acts.play(songs, 0) }, { acts.shuffle(songs) }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp))
-            }
             itemsIndexed(songs, key = { _, t -> t.id }) { i, t ->
                 TrackTile(
                     t, shelf.coverOf(t), current = t.id == playingId, hearted = t.id in hearts, acts = acts,
@@ -413,20 +426,52 @@ private fun AlbumsPage(
     val albums = remember(shelf.albums, shelf.query) { shelf.albumMatches() }
     val playingKey = now.current?.let { shelf.albumOf[it.id]?.key }
     val grid = shelf.albumGrid
+    val cols = shelf.albumCols
+    val view = LocalView.current
     Column(Modifier.fillMaxSize().padding(top = top)) {
         LazyVerticalGrid(
-            GridCells.Fixed(2), Modifier.weight(1f), state = grid,
+            GridCells.Fixed(cols),
+            Modifier.weight(1f)
+                // Two fingers pinch the grid: apart for bigger covers (fewer across), together for
+                // more of them; one step each time the pinch goes a quarter further. One finger
+                // is left to scroll.
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        var scale = 1f
+                        while (true) {
+                            val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                            if (ev.changes.none { it.pressed }) break
+                            if (ev.changes.count { it.pressed } < 2) continue
+                            scale *= ev.calculateZoom()
+                            ev.changes.forEach { it.consume() }
+                            val step = when {
+                                scale > 1.25f && shelf.albumCols > 2 -> -1
+                                scale < 0.8f && shelf.albumCols < 4 -> 1
+                                else -> 0
+                            }
+                            if (step != 0) {
+                                shelf.albumCols += step
+                                scale = 1f
+                                view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                            }
+                        }
+                    }
+                },
+            state = grid,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = bottom),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (cols == 2) 14.dp else 10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (cols == 2) 18.dp else 14.dp),
         ) {
             noteFor(shelf, albums.isEmpty())?.let { n -> item(key = "note", span = { GridItemSpan(maxLineSpan) }) { LibraryNote(n, requestMusic) } }
             itemsIndexed(albums, key = { _, a -> a.key }) { i, a ->
-                // Namida's grid comes in by row and column, each card over 400/3 ms.
+                // Namida's grid comes in by row and column, each card over 400/3 ms; a change in
+                // how many across slides each card to its new place.
                 val first = grid.firstVisibleItemIndex
                 AlbumCard(
-                    a, shelf, playing = a.key == playingKey, sounding = now.playing,
-                    modifier = Modifier.entrance(shelf.albumEntrance, (i / 2 - first / 2) + i % 2, duration = 400 / 3),
+                    a, shelf, playing = a.key == playingKey, sounding = now.playing, small = cols > 2,
+                    modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = tween(320, easing = PageEase))
+                        .entrance(shelf.albumEntrance, (i / cols - first / cols) + i % cols, duration = 400 / 3),
                 )
             }
         }
@@ -494,59 +539,96 @@ private fun DiscHeader(disc: Int, tracks: List<TrackDto>, modifier: Modifier = M
 private val PAGE_ORDER = listOf(1, 0, 2)
 
 /**
- * The switch between Albums, Songs and Liked: each its icon, its name and how many, on a
- * shallow track; the one showing lifted onto a pill of its own. The pill is drawn at [position]
- * (the pager's, so it slides with a swipe and stretches between two as it passes them).
+ * The switch between Albums, Songs and Liked: three equal parts across a shallow track, each its
+ * icon, its name and how many; the one showing lifted onto a pill of its own. The pill is drawn
+ * at [position] (the pager's, so it slides with a swipe). Its type keeps its size whatever the
+ * phone's text size, so the three always fit.
  */
 @Composable
-private fun PageSwitch(counts: List<Int>, position: () -> Float, onSelect: (Int) -> Unit) {
+private fun PageSwitch(counts: List<Int>, position: () -> Float, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
     val nc = Nm.c
     val track = nc.onSurface.copy(alpha = if (nc.dark) 0.10f else 0.06f)
     val pill = if (nc.dark) Color(0xFF2C2C2E) else Color.White
     val edge = nc.onSurface.copy(alpha = if (nc.dark) 0.10f else 0.06f)
-    // Where each segment is in the row, for the pill to go between.
-    val lefts = remember { androidx.compose.runtime.mutableStateListOf(0f, 0f, 0f) }
-    val widths = remember { androidx.compose.runtime.mutableStateListOf(0f, 0f, 0f) }
+    val d = LocalDensity.current
+    val labelSize = with(d) { 13.dp.toSp() }
+    val countSize = with(d) { 11.dp.toSp() }
     val items = listOf(Triple("Albums", Iconsax.Albums, counts[0]), Triple("Songs", Iconsax.Music, counts[1]), Triple("Liked", Iconsax.Heart, counts[2]))
+    val inset = 3.dp
     Row(
-        Modifier.height(38.dp).clip(CircleShape).background(track)
+        modifier.height(38.dp).clip(CircleShape).background(track)
             .drawBehind {
+                val ins = inset.toPx()
+                val part = (size.width - 2 * ins) / 3f
                 val p = position().coerceIn(0f, 2f)
-                val i = p.toInt().coerceAtMost(1)
-                val f = p - i
-                val l = androidx.compose.ui.util.lerp(lefts[i], lefts[i + 1], f)
-                val w = androidx.compose.ui.util.lerp(widths[i], widths[i + 1], f)
-                if (w <= 0f) return@drawBehind
-                val r = androidx.compose.ui.geometry.CornerRadius(size.height / 2f)
-                val inset = 3.dp.toPx()
-                val top = Offset(l, inset)
-                val sz = Size(w, size.height - 2 * inset)
+                val r = androidx.compose.ui.geometry.CornerRadius((size.height - 2 * ins) / 2f)
+                val top = Offset(ins + p * part, ins)
+                val sz = Size(part, size.height - 2 * ins)
                 // A soft shadow under the pill in the light theme; a hairline round it in both.
                 if (!nc.dark) drawRoundRect(Color.Black.copy(alpha = 0.06f), top + Offset(0f, 1.dp.toPx()), sz, r)
                 drawRoundRect(pill, top, sz, r)
                 drawRoundRect(edge, top, sz, r, style = androidx.compose.ui.graphics.drawscope.Stroke(1f))
             }
-            .padding(horizontal = 3.dp),
+            .padding(horizontal = inset),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         items.forEachIndexed { i, (label, icon, n) ->
             val on by remember { derivedStateOf { (1f - abs(position() - i)).coerceIn(0f, 1f) } }
             val ink = lerp(nc.onSurface.copy(alpha = 0.55f), nc.onSurface, on)
             Row(
-                Modifier.fillMaxHeight()
-                    .onGloballyPositioned { c -> lefts[i] = c.positionInParent().x; widths[i] = c.size.width.toFloat() }
+                Modifier.weight(1f).fillMaxHeight()
                     .clip(CircleShape)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) }
-                    .padding(horizontal = 12.dp),
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) },
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(if (i == 2 && on > 0.5f) Iconsax.HeartOn else icon, null, tint = ink, modifier = Modifier.size(15.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(label, style = TextStyle(fontFamily = MusicType, fontSize = 13.sp, fontWeight = if (on > 0.5f) FontWeight.SemiBold else FontWeight.Medium, color = ink), maxLines = 1)
                 Spacer(Modifier.width(5.dp))
-                Text("$n", style = TextStyle(fontFamily = MusicType, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = ink.copy(alpha = ink.alpha * 0.6f), fontFeatureSettings = "tnum"), maxLines = 1)
+                Text(label, style = TextStyle(fontFamily = MusicType, fontSize = labelSize, fontWeight = if (on > 0.5f) FontWeight.SemiBold else FontWeight.Medium, color = ink),
+                    maxLines = 1, softWrap = false)
+                Spacer(Modifier.width(4.dp))
+                Text("$n", style = TextStyle(fontFamily = MusicType, fontSize = countSize, fontWeight = FontWeight.Medium, color = ink.copy(alpha = ink.alpha * 0.6f), fontFeatureSettings = "tnum"),
+                    maxLines = 1, softWrap = false)
             }
         }
+    }
+}
+
+/**
+ * Play and shuffle as two round buttons floating over a list: shuffle on the raised surface with
+ * a hairline, play solid in the type colour. [shown] (0 to 1) grows and fades them in and out.
+ */
+@Composable
+private fun FloatingPlay(shown: () -> Float, onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier) {
+    val nc = Nm.c
+    val ink = nc.onSurface
+    // Gone altogether while hidden, so it never takes a touch meant for what is under it.
+    val now = rememberUpdatedState(shown)
+    val present by remember { derivedStateOf { now.value() > 0.02f } }
+    if (!present) return
+    Row(
+        modifier.graphicsLayer {
+            val k = shown()
+            alpha = k
+            val sc = 0.6f + 0.4f * k
+            scaleX = sc; scaleY = sc
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)
+        },
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(48.dp).shadow(10.dp, CircleShape, ambientColor = nc.shadow, spotColor = nc.shadow)
+                .clip(CircleShape).background(nc.cardColor).border(0.5.dp, hairline(), CircleShape)
+                .pressable(CircleShape, scaleTo = 0.9f) { if (shown() > 0.5f) onShuffle() },
+            contentAlignment = Alignment.Center,
+        ) { Icon(Iconsax.Shuffle, "Shuffle", tint = ink, modifier = Modifier.size(20.dp)) }
+        Box(
+            Modifier.size(56.dp).shadow(12.dp, CircleShape, ambientColor = nc.shadow, spotColor = nc.shadow)
+                .clip(CircleShape).background(ink)
+                .pressable(CircleShape, scaleTo = 0.9f) { if (shown() > 0.5f) onPlay() },
+            contentAlignment = Alignment.Center,
+        ) { Icon(BlazeIcons.Play, "Play", tint = nc.bg, modifier = Modifier.size(24.dp).offset(x = 1.dp)) }
     }
 }
 
@@ -756,7 +838,7 @@ private fun TrackMenu(t: TrackDto, acts: TrackActions, inAlbum: Boolean, hearted
  * it is by. The one playing has its name lit, with the bars before it.
  */
 @Composable
-private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: Boolean, modifier: Modifier = Modifier) {
+private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: Boolean, small: Boolean = false, modifier: Modifier = Modifier) {
     val nc = Nm.c
     val line = hairline()
     // Where the cover is, for the hero when it is tapped; it hides while its hero is flying.
@@ -773,10 +855,10 @@ private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: B
         Spacer(Modifier.height(7.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (playing) { PlayingBars(nc.primary, sounding, Modifier.size(11.dp)); Spacer(Modifier.width(6.dp)) }
-            Text(a.title, style = TextStyle(fontFamily = MusicType, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (playing) nc.primary else nc.large),
+            Text(a.title, style = TextStyle(fontFamily = MusicType, fontSize = if (small) 12.sp else 14.sp, fontWeight = FontWeight.Medium, color = if (playing) nc.primary else nc.large),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(a.artist, style = Nm.small.copy(fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(a.artist, style = Nm.small.copy(fontSize = if (small) 12.sp else 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -864,10 +946,10 @@ private fun AlbumMenu(a: Album, shelf: MusicShelf, acts: TrackActions) {
 }
 
 /**
- * Namida's app bar: 56 high, a shade lighter than the page, so a line of light to dark runs
- * along its foot. On the left, the page's count and what can be done to all of it ([lead]);
- * the search on the right. Opening the search (or an album) slides the count out to the left
- * as the search box grows across, and back when it closes; inside an album, back on the left.
+ * The app bar: the switch between the pages across it, and the search at its right end, both on
+ * one line 16 in from the edges as the pages are. Opening the search (or an album) fades the
+ * switch out first, then the search box grows leftwards out of its button over 400 ms, and back;
+ * inside an album, or searching, back on the left.
  */
 @Composable
 private fun AppBar(shelf: MusicShelf, statusTop: Dp, lead: @Composable () -> Unit) {
@@ -875,66 +957,71 @@ private fun AppBar(shelf: MusicShelf, statusTop: Dp, lead: @Composable () -> Uni
     val searching = if (album != null) shelf.albumSearching else shelf.searching
     val nc = Nm.c
     val inAlbum = album != null
-    // Namida's search: the box grows leftwards out of the search button over 400 ms, and back.
     val open by animateFloatAsState(if (searching) 1f else 0f, tween(400, easing = PageEase), label = "search")
     val back by animateFloatAsState(if (inAlbum || searching) 1f else 0f, tween(300), label = "back")
     val value = if (inAlbum) shelf.albumQuery else shelf.query
     val set: (String) -> Unit = { if (inAlbum) shelf.albumQuery = it else shelf.query = it }
     val away by animateFloatAsState(if (inAlbum || searching) 1f else 0f, tween(400, easing = PageEase), label = "lead")
     Box(Modifier.fillMaxWidth().background(nc.appBar).padding(top = statusTop).height(AppBarHeight)) {
-        // The switch sits in the middle, clear of the search; it shrinks back and fades as the
-        // search or an album takes the bar.
+        // The switch, from 16 in on the left to just short of the search button; gone in the
+        // first third of the search opening, so the two are never seen over each other.
         if (away < 0.999f) Box(
-            Modifier.fillMaxSize().padding(start = 12.dp, end = AppBarHeight - 4.dp)
+            Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp + BarButton + 8.dp)
                 .graphicsLayer {
-                    val k = 1f - 0.08f * away
+                    val k = 1f - 0.06f * away
                     scaleX = k; scaleY = k
-                    alpha = (1f - away * 1.4f).coerceIn(0f, 1f)
+                    alpha = (1f - away * 3f).coerceIn(0f, 1f)
                 },
             contentAlignment = Alignment.Center,
         ) { lead() }
-        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(AppBarHeight).graphicsLayer { alpha = back }) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(BarButton).graphicsLayer { alpha = back }) {
                 if (back > 0f) AppBarIcon(Iconsax.Back, if (searching) "Close the search" else "Back") { shelf.back() }
             }
-            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterEnd) {
+            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 6.dp), contentAlignment = Alignment.CenterEnd) {
                 if (open > 0.01f) SearchBox(
-                    value, set, when { inAlbum -> "Search this album"; shelf.page == 0 -> "Search tracks"; shelf.page == 1 -> "Search albums"; else -> "Search liked songs" },
+                    value, set, when { inAlbum -> "Search this album"; shelf.page == 0 -> "Search songs"; shelf.page == 1 -> "Search albums"; else -> "Search liked songs" },
                     Modifier.width(maxWidth * open).graphicsLayer { alpha = (open * 2f).coerceAtMost(1f) },
                 )
             }
-            Box(contentAlignment = Alignment.Center) {
-                Box(Modifier.graphicsLayer { alpha = 1f - open; rotationZ = -90f * open }) {
-                    AppBarIcon(Iconsax.Search, "Search") { if (inAlbum) shelf.albumSearching = true else shelf.searching = true }
+            // Search turns into clear: the one goes out before the other comes in.
+            Box(Modifier.size(BarButton), contentAlignment = Alignment.Center) {
+                val outA = (1f - open * 2f).coerceIn(0f, 1f)
+                val inA = (open * 2f - 1f).coerceIn(0f, 1f)
+                if (outA > 0f) Box(Modifier.graphicsLayer { alpha = outA; rotationZ = -45f * open }) {
+                    AppBarIcon(BlazeIcons.Search, "Search") { if (inAlbum) shelf.albumSearching = true else shelf.searching = true }
                 }
-                if (open > 0f) Box(Modifier.graphicsLayer { alpha = open; rotationZ = 90f * (1f - open) }) {
+                if (inA > 0f) Box(Modifier.graphicsLayer { alpha = inA; rotationZ = 45f * (1f - open) }) {
                     AppBarIcon(Iconsax.Clear, "Clear the search") { if (value.isEmpty()) shelf.back() else set("") }
                 }
             }
-            Spacer(Modifier.width(4.dp))
         }
     }
 }
 
+/** The bar's round buttons: back, search and clear. */
+private val BarButton = 44.dp
+
 @Composable
 private fun AppBarIcon(icon: ImageVector, description: String, onClick: () -> Unit) {
-    Box(Modifier.size(AppBarHeight).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, description, tint = Nm.c.icon, modifier = Modifier.size(24.dp))
+    Box(Modifier.size(BarButton).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, description, tint = Nm.c.icon, modifier = Modifier.size(22.dp))
     }
 }
 
-/** Namida's search box: the card colour, the hint in its small style at 17, what is typed in its medium one. */
+/** The search box: the same shallow track as the switch, the hint dim, what is typed in the type colour. */
 @Composable
 private fun SearchBox(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier) {
     val nc = Nm.c
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    val box = if (nc.dark) nc.cardColor.copy(alpha = 200 / 255f) else nc.cardColor.copy(alpha = 200 / 255f).compositeOver(nc.onSurface.copy(alpha = 40 / 255f))
-    Box(modifier.height(42.dp).clip(CircleShape).background(box).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
-        if (value.isEmpty()) Text(placeholder, style = Nm.small.copy(fontSize = 17.nsp), maxLines = 1)
+    val style = TextStyle(fontFamily = MusicType, fontSize = 15.sp, color = nc.onSurface)
+    Box(modifier.height(38.dp).clip(CircleShape).background(nc.onSurface.copy(alpha = if (nc.dark) 0.10f else 0.06f)).padding(horizontal = 16.dp),
+        contentAlignment = Alignment.CenterStart) {
+        if (value.isEmpty()) Text(placeholder, style = style.copy(color = nc.onSurface.copy(alpha = 0.45f)), maxLines = 1)
         BasicTextField(
             value, onChange, singleLine = true,
-            textStyle = Nm.medium,
+            textStyle = style,
             cursorBrush = SolidColor(nc.onSurface),
             modifier = Modifier.fillMaxWidth().focusRequester(focus),
         )

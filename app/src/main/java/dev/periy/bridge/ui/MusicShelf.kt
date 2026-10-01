@@ -74,6 +74,8 @@ class MusicShelf {
     var albumQuery by mutableStateOf("")
     /** How an album's songs are ordered: 0 disc number, 1 title, 2 duration, 3 artist; and reversed. */
     var albumSort by mutableIntStateOf(0)
+    /** How many albums across the grid, 2 to 4: pinched in for more, out for fewer. */
+    var albumCols by mutableIntStateOf(2)
     var albumDesc by mutableStateOf(false)
 
     /** Where each page is scrolled to, kept while the screen is closed. */
@@ -239,6 +241,9 @@ fun fmtMinutes(ms: Long): String {
     return if (min >= 60) "${min / 60}h ${min % 60}min" else "${min}min"
 }
 
+/** How high the bars stand while paused: three heights, so they never read as "···". */
+private val PAUSED_BARS = floatArrayOf(0.55f, 1f, 0.75f)
+
 /** Three bars rising and falling: this one is playing (still, while paused). */
 @Composable
 fun PlayingBars(color: Color, moving: Boolean, modifier: Modifier = Modifier) {
@@ -248,8 +253,8 @@ fun PlayingBars(color: Color, moving: Boolean, modifier: Modifier = Modifier) {
             initialStartOffset = androidx.compose.animation.core.StartOffset(delay)), label = "bar$delay")
     }
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
-        phases.forEach { p ->
-            val h = if (moving) p.value else 0.35f
+        phases.forEachIndexed { i, p ->
+            val h = if (moving) p.value else PAUSED_BARS[i]
             Box(Modifier.weight(1f).fillMaxHeight(h).clip(RoundedCornerShape(1.dp)).background(color))
         }
     }
