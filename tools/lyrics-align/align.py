@@ -6,15 +6,18 @@ from the phone, lines each word of each line up with the singing (PyTorch's mult
 aligner, MMS_FA, on the GPU when there is one), and gives the phone the lyrics back as Enhanced LRC
 (<mm:ss.xx> before each word), which the phone's player and the page light word by word.
 
-  tools/lyrics-align/venv/Scripts/python tools/lyrics-align/align.py --phone 192.168.1.14:8787
-      [--ids 151,206] [--redo] [--dry] [--restore] [--vocals] [--pad 600] [--min 0.15] [--stats]
+New songs, the easy way: tools\lyrics-align\align.bat (sets itself up the first time, reaches the
+phone over USB when it is plugged in, and only does songs not yet timed by the word). By hand:
 
---vocals pulls the singing out of the mix first (Demucs, htdemucs), which places far more lines
-on busy songs; --pad is how far either side of a line's time its words are looked for, --min the
-least confidence kept. A line the aligner is unsure of is tried again without its bracketed
-ad-libs, which are fitted in between. A word pushed to the edge of where it was looked for was not
-found there: the line is looked for again closer in. A line whose singing starts before its time
-starts when it is sung. The library was done with --vocals --pad 600 --min 0.15.
+  tools/lyrics-align/venv/Scripts/python tools/lyrics-align/align.py --phone 192.168.1.14:8787
+      [--ids 151,206] [--redo] [--dry] [--restore] [--mix] [--pad 600] [--min 0.15] [--stats]
+
+The singing is pulled out of the mix first (Demucs, htdemucs), which places far more lines on
+busy songs (--mix skips that: faster, less exact); --pad is how far either side of a line's time
+its words are looked for, --min the least confidence kept. A line the aligner is unsure of is tried
+again without its bracketed ad-libs, which are fitted in between. A word pushed to the edge of
+where it was looked for was not found there: the line is looked for again closer in. A line whose
+singing starts before its time starts when it is sung.
 
 It signs in as this computer's helper (its session in %APPDATA%\\Xoosh\\session.txt). Every song's
 lyrics as they were are kept in tools/lyrics-align/backup/<id>.json first; --restore puts those
@@ -206,8 +209,8 @@ class Aligner:
 
 # ---------------------------------------------------------------- one song
 
-MIN_SCORE = 0.2
-PAD_MS = 250
+MIN_SCORE = 0.15
+PAD_MS = 600
 # A word this close to the edge of where it was looked for was pushed there, not found.
 EDGE_MS = 60
 # How far apart words that cannot be heard are put, past the last word that can.
@@ -292,7 +295,7 @@ def main():
     ap.add_argument("--stats", action="store_true", help="report how close each line's first word lands to the line's own time, by confidence")
     ap.add_argument("--pad", type=int, default=PAD_MS, help="how far either side of a line's time to look for its words (ms)")
     ap.add_argument("--min", type=float, default=MIN_SCORE, help="the least confidence a line's word times are kept at")
-    ap.add_argument("--vocals", action="store_true", help="align against the vocals alone, pulled out of the mix with Demucs (slower, more accurate)")
+    ap.add_argument("--mix", action="store_true", help="align against the whole mix, without pulling the vocals out first (faster, less exact)")
     args = ap.parse_args()
     PAD_MS, MIN_SCORE = args.pad, args.min
     phone = Phone(args.phone)
@@ -328,7 +331,7 @@ def main():
                 json.dump(doc, open(bp, "w", encoding="utf-8"), ensure_ascii=False)
             t0 = time.time()
             path = phone.audio(t)
-            audio = aligner.load(path, vocals=args.vocals)
+            audio = aligner.load(path, vocals=not args.mix)
             os.remove(path)  # the song's copy is only needed for this
             lrc, placed, total = enhance(aligner, audio, doc, t["durationMs"])
             print(f"{label} - {placed}/{total} lines by the word ({time.time() - t0:.1f} s)", flush=True)

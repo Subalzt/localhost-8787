@@ -516,6 +516,13 @@ instrumental gap, three dots swell until the singing starts again.
 - **Your own files first.** A `.lrc` file already beside a song is used as it is and never
   overwritten.
 - Saving `.lrc` files beside songs needs *All files access* for Localhost 8787 on the phone.
+- **Word by word, worked out on the laptop.** LRCLIB times most songs by the line only. With the
+  phone plugged in, run `tools\lyrics-align\align.bat`: it fetches each song not yet timed by the
+  word, pulls the vocals out of the mix (Demucs), lines every word up with the singing (PyTorch's
+  MMS_FA aligner, on an NVIDIA GPU when there is one) and gives the phone the lyrics back word by
+  word. Run it again after adding songs; it skips the ones already done. The first run sets itself
+  up in `tools\lyrics-align\venv` (Python 3.11 and ffmpeg needed, about 3 GB). Every song's lyrics
+  as they were are kept in `tools\lyrics-align\backup`, and `align.bat usb --restore` puts them back.
 
 | On the laptop | At phone width |
 | --- | --- |

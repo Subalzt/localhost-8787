@@ -1,0 +1,6 @@
+# What align.py runs on: PyTorch with CUDA 12.8 (RTX 50-series and older), MMS_FA from
+# torchaudio, Demucs to pull the vocals out. Python 3.11; ffmpeg on PATH.
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.7.1+cu128
+torchaudio==2.7.1+cu128
+demucs==4.1.0
