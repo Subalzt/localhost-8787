@@ -50,6 +50,8 @@ data class ShownLyrics(
 class LyricsFinder(val store: LyricsStore) {
 
     private val known = ConcurrentHashMap<Long, ShownLyrics>()
+    /** Songs whose untimed lyrics have been looked for timed ones this run, found or not. */
+    private val triedTimed = ConcurrentHashMap.newKeySet<Long>()
     private val lock = Mutex()
     private val _changed = MutableStateFlow(0L)
 
@@ -65,15 +67,19 @@ class LyricsFinder(val store: LyricsStore) {
             known[t.id] ?: run {
                 var doc = runCatching { store.get(t) }.getOrNull()
                 val stale = doc != null && doc.source == "none" && System.currentTimeMillis() - doc.at > RETRY_MS
+                // Words kept with the song but with no timing (a plain .lrc, or the file's own tag):
+                // LRCLIB is asked once a run for timed ones, which then take their place.
+                val untimed = doc != null && doc.source != "none" && !doc.instrumental &&
+                    doc.lrc.isBlank() && doc.lyricsfile.isBlank() && triedTimed.add(t.id)
                 var failed = false
-                if (doc == null || stale) {
-                    val found = lrclib(t)
+                if (doc == null || stale || untimed) {
+                    val found = lrclib(t)?.takeIf { f -> !untimed || f.lrc.isNotBlank() || f.lyricsfile.isNotBlank() }
                     if (found != null) {
                         // The .lrc the phone keeps beside the song, for every music player on it.
                         val kept = if (found.source != "none") found.copy(sidecar = LyricsText.lrcFile(t, found, LyricsText.parse(found))) else found
                         runCatching { store.put(t, kept) }
                         doc = kept
-                    } else failed = doc == null
+                    } else failed = doc == null && !untimed
                 }
                 val shown = LyricsText.parse(doc).let { if (doc == null && failed) it.copy(offline = true) else it }
                 if (!shown.offline) known[t.id] = shown
@@ -102,24 +108,38 @@ class LyricsFinder(val store: LyricsStore) {
             plain = o.str("plainLyrics"),
             instrumental = o.bool("instrumental"),
         )
-        return try {
-            val q = "artist_name=${enc(t.artist)}&track_name=${enc(t.title)}&album_name=${enc(t.album)}" + (if (secs > 0) "&duration=$secs" else "")
-            val (code, body) = get("$LRCLIB/get?$q")
-            if (code == 200) return doc(json.parseToJsonElement(body).jsonObject)
-            if (code != 404) return null
-            val (c2, b2) = get("$LRCLIB/search?track_name=${enc(plainTitle(t.title))}&artist_name=${enc(mainArtist(t.artist))}")
-            if (c2 != 200) return null
-            // The closest in length, preferring timed lyrics; nothing more than ten seconds out.
+        // LRCLIB's search for the song: the closest in length, nothing more than ten seconds out;
+        // with [timedOnly], only timed lyrics, and within three seconds.
+        fun search(timedOnly: Boolean): Pair<JsonObject?, Double>? {
+            val (code, body) = get("$LRCLIB/search?track_name=${enc(plainTitle(t.title))}&artist_name=${enc(mainArtist(t.artist))}")
+            if (code != 200) return null
             var best: JsonObject? = null
             var bestScore = 1e9
-            for (e in json.parseToJsonElement(b2).jsonArray) {
+            for (e in json.parseToJsonElement(body).jsonArray) {
                 val x = e as? JsonObject ?: continue
                 val off = if (secs > 0) kotlin.math.abs((x.num("duration") ?: 0.0) - secs) else 0.0
-                if (secs > 0 && off > 10) continue
-                val score = off + (if (x.str("syncedLyrics").isNotEmpty()) 0 else 20) +
+                val timed = x.str("syncedLyrics").isNotEmpty()
+                if (secs > 0 && off > (if (timedOnly) 3 else 10)) continue
+                if (timedOnly && !timed) continue
+                val score = off + (if (timed) 0 else 20) +
                     (if (x.str("plainLyrics").isNotEmpty() || x.bool("instrumental")) 0 else 100)
                 if (score < bestScore) { bestScore = score; best = x }
             }
+            return best to bestScore
+        }
+        return try {
+            val q = "artist_name=${enc(t.artist)}&track_name=${enc(t.title)}&album_name=${enc(t.album)}" + (if (secs > 0) "&duration=$secs" else "")
+            val (code, body) = get("$LRCLIB/get?$q")
+            if (code == 200) {
+                val exact = json.parseToJsonElement(body).jsonObject
+                if (exact.str("syncedLyrics").isNotEmpty() || exact.bool("instrumental")) return doc(exact)
+                // The song's own entry has no timing; another entry for it often has (LRCLIB keeps
+                // several per song): the timed one of the same length, else the untimed words.
+                val timed = runCatching { search(timedOnly = true) }.getOrNull()?.first
+                return doc(timed ?: exact)
+            }
+            if (code != 404) return null
+            val (best, bestScore) = search(timedOnly = false) ?: return null
             best?.takeIf { bestScore < 100 }?.let(::doc) ?: LyricsDoc(source = "none")
         } catch (e: Exception) {
             null

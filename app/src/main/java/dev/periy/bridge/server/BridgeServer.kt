@@ -314,7 +314,13 @@ class BridgeServer(
         get("/api/music/lyrics/{id}") {
             val track = call.parameters["id"]?.toLongOrNull()?.let { withContext(Dispatchers.IO) { music.find(it) } }
             call.response.header(HttpHeaders.CacheControl, "no-store")
-            val doc = track?.let { withContext(Dispatchers.IO) { lyrics.get(it) } }
+            var doc = track?.let { withContext(Dispatchers.IO) { lyrics.get(it) } }
+            // Words kept with no timing: the phone asks LRCLIB for timed ones first (once a run),
+            // and answers with those when it finds them.
+            if (track != null && doc != null && doc.source != "none" && !doc.instrumental && doc.lrc.isBlank() && doc.lyricsfile.isBlank()) {
+                runCatching { lyricsFinder.forTrack(track) }
+                doc = withContext(Dispatchers.IO) { lyrics.get(track) } ?: doc
+            }
             call.respond(LyricsDto(doc != null, doc))
         }
         put("/api/music/lyrics/{id}") {
