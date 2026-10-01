@@ -57,6 +57,55 @@ class ClipTextActivity : Activity() {
     }
 }
 
+/**
+ * "Copy to laptop" in the share sheet of any app: a picture or file (under 50 MB) shared from
+ * Gallery, Files, WhatsApp... goes onto the shared clipboard, and from there onto the laptop's,
+ * ready to paste; shared text likewise. The reliable way off the phone where the system no
+ * longer announces copies to an app in the background (HyperOS 3, Android 16). It stays open,
+ * unseen, until the file is read, as the share's permission to read it ends with it.
+ */
+class ClipShareActivity : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        overridePendingTransition(0, 0)
+        val i = intent
+        val uri: android.net.Uri? = if (Build.VERSION.SDK_INT >= 33) i?.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)
+        else @Suppress("DEPRECATION") i?.getParcelableExtra(Intent.EXTRA_STREAM)
+        val text = i?.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+        if (uri == null) {
+            val msg = when {
+                text.isNullOrEmpty() -> "Nothing to copy"
+                container.clipboard.set(text) -> { SystemClipboard.write(this, text); "Copied to the laptop" }
+                else -> "Too long to copy"
+            }
+            done(msg)
+            return
+        }
+        val app = applicationContext
+        val mime = contentResolver.getType(uri) ?: i?.type?.takeIf { '*' !in it } ?: "application/octet-stream"
+        val name = runCatching {
+            contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        }.getOrNull() ?: uri.lastPathSegment?.substringAfterLast('/') ?: if (mime.startsWith("image/")) "Picture" else "File"
+        Thread {
+            val meta = runCatching { contentResolver.openInputStream(uri)?.use { app.container.clipboard.setBlob(name, mime, it) } }.getOrNull()
+            runOnUiThread {
+                done(when {
+                    meta == null -> "Too big for the clipboard (over 50 MB); send it as a file"
+                    mime.startsWith("image/") -> "Picture copied to the laptop"
+                    else -> "File copied to the laptop"
+                })
+            }
+        }.start()
+    }
+
+    private fun done(msg: String) {
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        finish()
+        overridePendingTransition(0, 0)
+    }
+}
+
 /** The quick-settings tile: one tap from the shade sends what you just copied. */
 class ClipTileService : TileService() {
     override fun onStartListening() {

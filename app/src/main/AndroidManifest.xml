@@ -169,6 +169,23 @@
             </intent-filter>
         </activity>
 
+        <!-- "Copy to laptop" in the share sheet: a picture, file or text onto the shared clipboard
+             (and the laptop's), unseen; "Localhost 8787" beside it still sends a file to save. -->
+        <activity
+            android:name=".ui.ClipShareActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:label="Copy to laptop"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".ui.ClipTileService"
             android:exported="true"
