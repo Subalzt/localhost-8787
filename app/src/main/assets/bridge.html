@@ -1228,8 +1228,8 @@
      After Namida's player, as the phone's is. The bar along the bottom grows into it: drag the
      bar up (or click its cover) and its cover, title and buttons fly to their places in a player
      the size of the window, the waveform and the rest coming in last; drag on up for the queue.
-     Sideways, the cover and title slide to the song before or after. The cover swells on the
-     loud moments, the seek bar is the song's own waveform, the colour is the cover's, and specks
+     Sideways, the cover and title slide to the song before or after. The cover keeps still (no
+     swell, unlike the phone's), the seek bar is the song's own waveform, the colour is the cover's, and specks
      drift behind it. Every piece is placed by the script from one number as it moves, so the
      pieces here are laid out at their full size and only scaled on the way. */
   /* Everything in it takes the cover's colour, as Namida's player does: the ground a deep (in
@@ -2124,8 +2124,8 @@
     .mx-side { bottom: var(--player-h, 0px); }
   }
 
-  /* ---- The player, open: every Namida move kept (the bar growing into it, the cover flying and
-     swelling with the song, the waveform and rows coming in last, sideways to the next song, up
+  /* ---- The player, open: every Namida move kept (the bar growing into it, the cover flying (but
+     not swelling with the song), the waveform and rows coming in last, sideways to the next song, up
      to the queue), on black with the cover's colour only as a glow behind the cover; white type;
      what the file is between the times. On a wide window the lyrics take the right half. */
   #np { --nm-bg: var(--bg); --nm-wash-top: transparent; --nm-wash-bottom: transparent; --nm-large: var(--txt); --nm-medium: var(--txt);
@@ -7404,9 +7404,8 @@ function setupPlayer() {
 // shrink into a row at the top while the queue rises under it. Let go, and it settles where the
 // speed and distance of the drag say, into the bar with a small bounce. np.s does the same
 // sideways, -1 to 1: the cover and title slide to the song before or after, the title a little
-// quicker than the cover. The cover swells with the loud moments of the song (how loud each
-// moment is comes from the phone, which works it out once), the seek bar is the song's own
-// waveform, the colour is the cover's (--pl-tint), and specks drift behind, quicker when loud.
+// quicker than the cover. The seek bar is the song's own waveform (how loud each moment is
+// comes from the phone, which works it out once); the cover keeps still, unlike the phone's; the colour is the cover's (--pl-tint), and specks drift behind, quicker when loud.
 
 var NP_HEAD = 0.12, NP_ACT = 100, NP_FLICK = 500, NP_SWIPE_FLICK = 1000, NP_OVERSHOOT = 1.25;
 var np = {
@@ -7414,7 +7413,7 @@ var np = {
   hover: null,
   p: 0, s: 0, bounceUp: false, frozen: null, g: null, shown: false, layered: false, dragged: 0,
   vStop: null, sStop: null, startP: 0, sStart: 0, sOffset: 0, busy: 0,
-  track: null, env: {}, envOrder: [], grow: 0, pulse: 0, loud: 0, raf: 0, last: 0,
+  track: null, env: {}, envOrder: [], grow: 0, loud: 0, raf: 0, last: 0,
   seek: null, specks: [], slotIds: {}, tintRgb: [156, 153, 193], txtRgb: [255, 255, 255], qShownFor: "", info: {}, speed: 1,
   // Frozen only for still pictures of it (a test sets this); it moves whatever the system's
   // reduce-motion setting says, as the phone's does.
@@ -7670,7 +7669,8 @@ function npRender() {
   var alphaOf = function (slot) { return slot === 0 ? 1 - Math.abs(s) : slot < 0 ? npClamp(-s, 0, 1) : npClamp(s, 0, 1); };
   var radius = npLerp(row.radius, 16, t.bcp);
   Array.prototype.forEach.call(document.querySelectorAll("#np-slots .np-art"), function (el) {
-    var slot = +el.dataset.slot, swell = slot === 0 && !np.still ? 1 + np.pulse * npLerp(0.045, 0.07, t.bcp) : 1, size = aS * swell;
+    // The cover keeps still on the page (no swell with the music, unlike the phone's).
+    var slot = +el.dataset.slot, size = aS;
     el.style.width = f.art + "px"; el.style.height = f.art + "px";
     el.style.borderRadius = (radius * f.art / Math.max(1, size)).toFixed(2) + "px";
     npPlace(el, aX - (size - aS) / 2 - s * spacing + slot * spacing, aY - (size - aS) / 2, size / f.art, el.dataset.has ? alphaOf(slot) : 0);
@@ -8004,7 +8004,7 @@ function nplTick() {
   });
 }
 
-// ---- every frame: the swell, the waveform and the specks
+// ---- every frame: the waveform and the specks
 
 function npWake() { if (!np.raf) np.raf = requestAnimationFrame(npTick); }
 
@@ -8015,11 +8015,9 @@ function npTick(now) {
   var t = npTrack(), env = t ? np.env[t.id] : null, playing = isPlaying();
   var v = playing && env && !np.still ? npLoudAt(env, npPos() * 1000) : 0, k = 1 - Math.exp(-dt / 70);
   np.loud += (v - np.loud) * k;
-  np.pulse += (Math.pow(v, 2.4) - np.pulse) * k;
   if (env && np.grow < 1) np.grow = Math.min(1, np.grow + dt / 700);
   if (np.shown) { if (!np.busy) npRender(); nplTick(); }
-  else { var art = $("pl-art"); if (art) art.style.scale = np.pulse > 0.002 ? (1 + np.pulse * 0.05).toFixed(4) : ""; }
-  var more = playing || np.pulse > 0.002 || (np.shown && (np.grow < 1 || (np.speckFade || 0) > 0 || np.seek !== null));
+  var more = playing || (np.shown && (np.grow < 1 || (np.speckFade || 0) > 0 || np.seek !== null));
   if (more) np.raf = requestAnimationFrame(npTick); else np.last = 0;
 }
 
