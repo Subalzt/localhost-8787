@@ -99,17 +99,22 @@ class MusicShelf {
     suspend fun load(library: MusicLibrary, refresh: Boolean) {
         if (loading) return
         loading = true
-        val (g, t) = withContext(Dispatchers.IO) { library.granted() to library.tracks(refresh) }
-        val (grouped, sorted) = withContext(Dispatchers.Default) {
-            groupAlbums(t) to t.sortedWith(compareBy<TrackDto, String>(String.CASE_INSENSITIVE_ORDER) { it.title }.thenBy { it.artist })
+        // A load cut off part way (Music opened as the permission settles) must not leave the
+        // flag set, or every later load would stop here and the page say "Looking" for good.
+        try {
+            val (g, t) = withContext(Dispatchers.IO) { library.granted() to library.tracks(refresh) }
+            val (grouped, sorted) = withContext(Dispatchers.Default) {
+                groupAlbums(t) to t.sortedWith(compareBy<TrackDto, String>(String.CASE_INSENSITIVE_ORDER) { it.title }.thenBy { it.artist })
+            }
+            granted = g
+            tracks = sorted
+            albums = grouped
+            albumOf = buildMap { grouped.forEach { a -> a.tracks.forEach { put(it.id, a) } } }
+            open = open?.let { o -> grouped.firstOrNull { it.key == o.key } }
+            loaded = true
+        } finally {
+            loading = false
         }
-        granted = g
-        tracks = sorted
-        albums = grouped
-        albumOf = buildMap { grouped.forEach { a -> a.tracks.forEach { put(it.id, a) } } }
-        open = open?.let { o -> grouped.firstOrNull { it.key == o.key } }
-        loaded = true
-        loading = false
     }
 
     fun matches(t: TrackDto, q: String) = q.isEmpty() || (t.title + " " + t.artist + " " + t.album).lowercase().contains(q)
