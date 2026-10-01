@@ -7404,6 +7404,8 @@ function setupPlayer() {
 
 var NP_HEAD = 0.12, NP_ACT = 100, NP_FLICK = 500, NP_SWIPE_FLICK = 1000, NP_OVERSHOOT = 1.25;
 var np = {
+  // Where a mouse over the waveform points (seconds into the song), or null.
+  hover: null,
   p: 0, s: 0, bounceUp: false, frozen: null, g: null, shown: false, layered: false, dragged: 0,
   vStop: null, sStop: null, startP: 0, sStart: 0, sOffset: 0, busy: 0,
   track: null, env: {}, envOrder: [], grow: 0, pulse: 0, loud: 0, raf: 0, last: 0,
@@ -7802,14 +7804,41 @@ function npDrawWave() {
     }
     x.fill();
   }
-  var on = np.txtRgb || [255, 255, 255];
-  draw("rgba(" + on.join(",") + ",.22)");
-  if (played > 0) {
+  var on = np.txtRgb || [255, 255, 255], rgb = on.join(",");
+  function band(from, to, alpha) {
+    if (to <= from) return;
     x.save();
-    x.beginPath(); x.rect(0, 0, played, h); x.clip();
-    draw("rgba(" + on.join(",") + ",.9)");
+    x.beginPath(); x.rect(from, 0, to - from, h); x.clip();
+    draw("rgba(" + rgb + "," + alpha + ")");
     x.restore();
   }
+  // With a mouse over it (not dragging): from where the song is to the pointer the bars come up
+  // half way, ahead or behind, so where a click would go shows before it is made; and the time
+  // there sits on a small pill at the pointer.
+  var hx = np.hover !== null && np.seek === null && dur > 0 ? npClamp(np.hover / dur, 0, 1) * w : -1;
+  draw("rgba(" + rgb + ",.22)");
+  if (hx >= 0 && hx > played) { band(0, played, ".9"); band(played, hx, ".5"); }
+  else if (hx >= 0) { band(0, hx, ".9"); band(hx, played, ".55"); }
+  else band(0, played, ".9");
+  if (hx >= 0) {
+    var label = fmtTime(np.hover);
+    x.font = "600 11px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+    var tw = x.measureText(label).width, pw = tw + 12, ph = 18, px = npClamp(hx - pw / 2, 0, w - pw), py = cy - ph / 2;
+    x.fillStyle = "rgba(" + rgb + ",.92)";
+    if (x.roundRect) { x.beginPath(); x.roundRect(px, py, pw, ph, 4); x.fill(); } else x.fillRect(px, py, pw, ph);
+    var bg = on[0] > 128 ? [0, 0, 0] : [255, 255, 255];
+    x.fillStyle = "rgb(" + bg.join(",") + ")";
+    x.textBaseline = "middle";
+    x.fillText(label, px + 6, cy + 0.5);
+  }
+}
+
+/** A mouse over the waveform: where it points, for the drawing above (not on touch, which seeks). */
+function npWaveHover(e) {
+  if (e.pointerType !== "mouse") return;
+  var wv = $("np-wave"), r = wv.getBoundingClientRect(), dur = npDur();
+  np.hover = e.type === "pointerleave" || dur <= 0 ? null : npClamp((e.clientX - r.left) / Math.max(1, r.width), 0, 1) * dur;
+  npRender();
 }
 
 /**
@@ -8867,6 +8896,8 @@ function setupFullPlayer() {
     if (performance.now() - np.dragged > 350 && np.p >= 0.95 && np.p <= 1.05) togglePlay();
   });
   $("np-wave").addEventListener("pointerdown", npWaveGesture);
+  $("np-wave").addEventListener("pointermove", npWaveHover);
+  $("np-wave").addEventListener("pointerleave", npWaveHover);
   $("np-play").onclick = togglePlay;
   $("np-prev").onclick = function () { npToSong(-1); };
   $("np-next").onclick = function () { npToSong(1); };
