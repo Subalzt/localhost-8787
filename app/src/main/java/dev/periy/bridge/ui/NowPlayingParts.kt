@@ -308,11 +308,11 @@ internal fun QueuePanel(
     Box(modifier) {
         // Namida's queue: a sheet with corners of 32, its header washed in the song's colour.
         Column(Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).background(nc.bg)) {
-            QueueHeader(state, onClose = { motion.expand() })
+            QueueHeader(state, onShuffle = { player.setShuffle(!state.shuffle) }, onClose = { motion.expand() })
             LazyColumn(
                 Modifier.weight(1f).nestedScroll(pull),
                 state = list,
-                contentPadding = PaddingValues(bottom = navBottom + 48.dp + 12.dp),
+                contentPadding = PaddingValues(bottom = navBottom + 12.dp),
             ) {
                 itemsIndexed(state.queue, key = { i, _ -> keys.getOrElse(i) { "x$i" } }) { i, t ->
                     val k = keys.getOrElse(i) { "x$i" }
@@ -331,35 +331,15 @@ internal fun QueuePanel(
             }
         }
 
-        // Namida's row along the foot: clear some of it, and shuffle what is left. In from the right
-        // edge, clear of a screen that curves away there.
-        Row(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(nc.bg)
-                .padding(start = 4.dp, end = 20.dp, top = 4.dp, bottom = 4.dp + navBottom).height(48.dp - 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            var clearing by remember { mutableStateOf(false) }
-            Box {
-                NamidaButton(null, Iconsax.Broom) { clearing = true }
-                if (clearing) NamidaMenu(onDismiss = { clearing = false }) { close ->
-                    NamidaMenuItem(Iconsax.Up, "Remove the songs before", onClick = { close(); player.removeBefore() })
-                    NamidaMenuItem(Iconsax.Down, "Remove the songs after", onClick = { close(); player.removeAfter() })
-                    NamidaMenuItem(Iconsax.Broom, "Remove them all", onClick = { close(); player.clear() })
-                }
-            }
-            NamidaButton("Shuffle", Iconsax.Shuffle) { player.shuffleUpcoming() }
-        }
     }
 }
 
 /**
- * Namida's queue header: "Queue", where in it and the time left after the song playing, washed
- * in the song's colour; and the arrow back down to the player.
+ * The queue's header: "Queue", where in it and the time left after the song playing; Shuffle
+ * (the same switch as the page's); and the arrow back down to the player.
  */
 @Composable
-private fun QueueHeader(state: PhonePlayer.State, onClose: () -> Unit) {
+private fun QueueHeader(state: PhonePlayer.State, onShuffle: () -> Unit, onClose: () -> Unit) {
     val nc = Nm.c
     val left = state.queue.drop(state.index.coerceAtLeast(0)).sumOf { it.durationMs }
     Row(
@@ -379,6 +359,15 @@ private fun QueueHeader(state: PhonePlayer.State, onClose: () -> Unit) {
                 Text(fmtMinutes(left), style = small)
             }
         }
+        // Shuffle, as on the page: dim while off, the icon colour while on.
+        val shuffleTint by androidx.compose.animation.animateColorAsState(
+            if (state.shuffle) nc.icon else nc.icon.copy(alpha = 0.4f), tween(200), label = "shuffle",
+        )
+        Box(
+            Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onShuffle)
+                .semantics { contentDescription = if (state.shuffle) "Shuffle is on" else "Shuffle" },
+            contentAlignment = Alignment.Center,
+        ) { Icon(Iconsax.Shuffle, null, tint = shuffleTint, modifier = Modifier.size(21.dp)) }
         Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
             Icon(Iconsax.Down, "Back to the player", tint = nc.icon, modifier = Modifier.size(24.dp))
         }
