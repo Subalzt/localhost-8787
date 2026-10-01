@@ -119,24 +119,28 @@ class MusicShelf {
         }
     }
 
-    fun matches(t: TrackDto, q: String) = q.isEmpty() || (t.title + " " + t.artist + " " + t.album).lowercase().contains(q)
+    /**
+     * Whether a song answers the search [q] (as [searchKey] makes it): dots, dashes and spaces
+     * don't count, so "pov", "P.O.V" and "p. o. v" all find "P.O.V.".
+     */
+    fun matches(t: TrackDto, q: String) = q.isEmpty() || searchKey(t.title + t.artist + t.album).contains(q)
 
     fun songs(): List<TrackDto> {
-        val q = query.trim().lowercase()
+        val q = searchKey(query)
         return if (q.isEmpty()) tracks else tracks.filter { matches(it, q) }
     }
 
     /** The liked songs on the phone, in the order given (newest heart first), through the search. */
     fun liked(order: List<Long>): List<TrackDto> {
         val byId = tracks.associateBy { it.id }
-        val q = query.trim().lowercase()
+        val q = searchKey(query)
         return order.mapNotNull { byId[it] }.filter { matches(it, q) }
     }
 
     fun albumMatches(): List<Album> {
-        val q = query.trim().lowercase()
+        val q = searchKey(query)
         if (q.isEmpty()) return albums
-        return albums.filter { a -> (a.title + " " + a.artist).lowercase().contains(q) || a.tracks.any { matches(it, q) } }
+        return albums.filter { a -> searchKey(a.title + a.artist).contains(q) || a.tracks.any { matches(it, q) } }
     }
 
     /** An album's songs in the order chosen on its page, and only those matching its search. */
@@ -147,10 +151,13 @@ class MusicShelf {
             3 -> a.tracks.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.artist })
             else -> a.tracks
         }
-        val q = albumQuery.trim().lowercase()
+        val q = searchKey(albumQuery)
         val ordered = if (albumDesc) base.reversed() else base
         return if (q.isEmpty()) ordered else ordered.filter { matches(it, q) }
     }
+
+    /** Text as the search compares it: lower case, letters and digits only. */
+    private fun searchKey(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
 
     /** The cover a song is shown with: its album's, however the files split the album up. */
     fun coverOf(t: TrackDto): String = albumOf[t.id]?.coverId ?: t.albumId

@@ -22,6 +22,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.runtime.key
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.boundsInRoot
@@ -39,6 +40,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -313,19 +315,27 @@ fun MusicScreen(
                 }
             }
 
-            // Play and shuffle, floating at the bottom right over Songs and Liked (whichever shows,
+            // The mini player's foot: the page's own colour from just above it to the bottom of the
+            // screen, the list fading into it, so no song shows (or is swiped) around the player.
+            // It takes the touches that land on it, outside the player.
+            if (cur != null) Box(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(bottomInset + miniRoom)
+                    .background(Brush.verticalGradient(0f to nc.bg.copy(alpha = 0f), 0.14f to nc.bg, 1f to nc.bg))
+                    .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
+            )
+
+            // Shuffle-play, floating at the bottom right over Songs and Liked (whichever shows,
             // and for what it lists), above the mini player; they shrink away towards the albums
             // or under an album's page.
             val songsNow = remember(shelf.tracks, shelf.query) { shelf.songs() }
             val likedNow = remember(shelf.tracks, shelf.query, likedOrder) { shelf.liked(likedOrder) }
-            FloatingPlay(
+            FloatingShuffle(
                 shown = {
                     val p = pagePos
                     val k = maxOf(1f - abs(p - 1f), 1f - abs(p - 2f)).coerceIn(0f, 1f)
                     val list = if (p >= 1.5f) likedNow else songsNow
                     if (list.isEmpty()) 0f else k * (1f - push.value)
                 },
-                onPlay = { val l = if (pagePos >= 1.5f) likedNow else songsNow; acts.play(l, 0) },
                 onShuffle = { val l = if (pagePos >= 1.5f) likedNow else songsNow; acts.shuffle(l) },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = bottom - 4.dp),
             )
@@ -595,41 +605,30 @@ private fun PageSwitch(counts: List<Int>, position: () -> Float, modifier: Modif
 }
 
 /**
- * Play and shuffle as two round buttons floating over a list: shuffle on the raised surface with
- * a hairline, play solid in the type colour. [shown] (0 to 1) grows and fades them in and out.
+ * Shuffle-play, floating over a list: one round button solid in the type colour, with the shuffle
+ * on it. [shown] (0 to 1) grows and fades it in and out.
  */
 @Composable
-private fun FloatingPlay(shown: () -> Float, onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier) {
+private fun FloatingShuffle(shown: () -> Float, onShuffle: () -> Unit, modifier: Modifier = Modifier) {
     val nc = Nm.c
-    val ink = nc.onSurface
     // Gone altogether while hidden, so it never takes a touch meant for what is under it.
     val now = rememberUpdatedState(shown)
     val present by remember { derivedStateOf { now.value() > 0.02f } }
     if (!present) return
-    Row(
-        modifier.graphicsLayer {
-            val k = shown()
-            alpha = k
-            val sc = 0.6f + 0.4f * k
-            scaleX = sc; scaleY = sc
-            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)
-        },
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier.size(48.dp).shadow(10.dp, CircleShape, ambientColor = nc.shadow, spotColor = nc.shadow)
-                .clip(CircleShape).background(nc.cardColor).border(0.5.dp, hairline(), CircleShape)
-                .pressable(CircleShape, scaleTo = 0.9f) { if (shown() > 0.5f) onShuffle() },
-            contentAlignment = Alignment.Center,
-        ) { Icon(Iconsax.Shuffle, "Shuffle", tint = ink, modifier = Modifier.size(20.dp)) }
-        Box(
-            Modifier.size(56.dp).shadow(12.dp, CircleShape, ambientColor = nc.shadow, spotColor = nc.shadow)
-                .clip(CircleShape).background(ink)
-                .pressable(CircleShape, scaleTo = 0.9f) { if (shown() > 0.5f) onPlay() },
-            contentAlignment = Alignment.Center,
-        ) { Icon(BlazeIcons.Play, "Play", tint = nc.bg, modifier = Modifier.size(24.dp).offset(x = 1.dp)) }
-    }
+    Box(
+        modifier
+            .graphicsLayer {
+                val k = shown()
+                alpha = k
+                val sc = 0.6f + 0.4f * k
+                scaleX = sc; scaleY = sc
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)
+            }
+            .size(56.dp).shadow(12.dp, CircleShape, ambientColor = nc.shadow, spotColor = nc.shadow)
+            .clip(CircleShape).background(nc.onSurface)
+            .pressable(CircleShape, scaleTo = 0.9f) { if (shown() > 0.5f) onShuffle() },
+        contentAlignment = Alignment.Center,
+    ) { Icon(Iconsax.Shuffle, "Shuffle play", tint = nc.bg, modifier = Modifier.size(22.dp)) }
 }
 
 /** The hairline between rows and around covers. */
@@ -774,61 +773,67 @@ private fun TrackTile(
                         scope.launch { dx.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 420f)) }
                     }
                 }
-                .background(nc.bg).clickable(onClick = onClick),
+                .background(nc.bg)
+                // The song playing sits on a soft band of the type colour, in from the edges.
+                .drawBehind {
+                    if (lit > 0f) drawRoundRect(
+                        nc.onSurface.copy(alpha = 0.075f * lit), Offset(8.dp.toPx(), 3.dp.toPx()),
+                        Size(size.width - 16.dp.toPx(), size.height - 6.dp.toPx()), CornerRadius(12.dp.toPx()),
+                    )
+                }
+                // A long press shows the song's album (from the songs and the liked; on an album's
+                // own page it is already there).
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = if (inAlbum) null else ({
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                        acts.album(t)
+                    }),
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Spacer(Modifier.width(16.dp))
             if (number != null) {
                 // In an album: the song's number, or bars where it is the one playing.
                 Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
-                    if (current) PlayingBars(nc.primary, sounding, Modifier.size(12.dp))
+                    if (current) PlayingBars(nc.primary, sounding, Modifier.size(14.dp))
                     else Text("$number", style = Nm.small.copy(fontSize = 14.sp, fontFeatureSettings = "tnum"), maxLines = 1)
                 }
             } else Box(
                 Modifier.size(46.dp).graphicsLayer { scaleX = shrink; scaleY = shrink }
                     .clip(RoundedCornerShape(6.dp)).border(0.5.dp, line, RoundedCornerShape(6.dp)),
-            ) { Cover(coverId, t.album, Modifier.fillMaxSize(), radius = 6.dp) }
+                contentAlignment = Alignment.Center,
+            ) {
+                Cover(coverId, t.album, Modifier.fillMaxSize(), radius = 6.dp)
+                // The song playing: its cover dimmed under the bars.
+                if (lit > 0f) {
+                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f * lit)))
+                    PlayingBars(Color.White.copy(alpha = lit), sounding, Modifier.size(15.dp))
+                }
+            }
             Spacer(Modifier.width(14.dp))
             // The words, with the hairline under them (not under the cover), as a list in iOS.
             Row(
                 Modifier.weight(1f).fillMaxHeight().drawBehind {
-                    drawLine(line, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), strokeWidth = 1f)
+                    if (lit < 0.5f) drawLine(line, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), strokeWidth = 1f)
                 },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                     Text(
                         t.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(fontFamily = MusicType, fontSize = 16.sp, fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
+                        style = TextStyle(fontFamily = MusicType, fontSize = 16.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
                             color = lerp(nc.large, nc.primary, lit)),
                     )
-                    if (!inAlbum) Text(t.artist, style = Nm.small.copy(fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (!inAlbum) Text(t.artist, style = Nm.small.copy(fontSize = 14.sp, color = lerp(nc.small, nc.large.copy(alpha = 0.75f), lit)),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (hearted) Box(Modifier.size(30.dp).clip(CircleShape).clickable { acts.heart(t) }, contentAlignment = Alignment.Center) {
                     Icon(Iconsax.HeartOn, "Take the heart off", tint = nc.small, modifier = Modifier.size(14.dp))
                 }
                 Text(fmtTime(t.durationMs), style = Nm.small.copy(fontSize = 13.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 4.dp))
-                TrackMenu(t, acts, inAlbum, hearted, nc.small)
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(16.dp))
             }
-        }
-    }
-}
-
-/** A song's menu, Namida's "more": play it next or last, give it a heart, or go to its album. */
-@Composable
-private fun TrackMenu(t: TrackDto, acts: TrackActions, inAlbum: Boolean, hearted: Boolean, tint: Color) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        Box(Modifier.clip(CircleShape).clickable { open = true }.padding(8.dp), contentAlignment = Alignment.Center) {
-            Icon(BlazeIcons.Dots, "More for ${t.title}", tint = tint, modifier = Modifier.size(18.dp))
-        }
-        if (open) NamidaMenu(onDismiss = { open = false }) { close ->
-            NamidaMenuItem(Iconsax.Next, "Play next", onClick = { close(); acts.next(t) })
-            NamidaMenuItem(Iconsax.PlayLast, "Play last", onClick = { close(); acts.last(listOf(t)) })
-            NamidaMenuItem(if (hearted) Iconsax.HeartOn else Iconsax.Heart, if (hearted) "Take the heart off" else "Add to Favourites",
-                onClick = { close(); acts.heart(t) })
-            if (!inAlbum) NamidaMenuItem(Iconsax.Albums, "Go to album", onClick = { close(); acts.album(t) })
         }
     }
 }

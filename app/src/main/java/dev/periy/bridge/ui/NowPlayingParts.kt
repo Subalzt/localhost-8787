@@ -434,6 +434,13 @@ private fun QueueRow(
             Modifier.fillMaxSize()
                 .offset { IntOffset(dx.value.roundToInt(), 0) }
                 .background(nc.bg)
+                // The song playing on a soft band of the type colour, as in the library.
+                .drawBehind {
+                    if (current) drawRoundRect(
+                        nc.onSurface.copy(alpha = 0.075f), Offset(8.dp.toPx(), 3.dp.toPx()),
+                        Size(size.width - 16.dp.toPx(), size.height - 6.dp.toPx()), CornerRadius(12.dp.toPx()),
+                    )
+                }
                 .pointerInput(key) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -469,12 +476,12 @@ private fun QueueRow(
             Spacer(Modifier.width(14.dp))
             Row(
                 Modifier.weight(1f).fillMaxHeight().drawBehind {
-                    drawLine(line, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
+                    if (!current) drawLine(line, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
                 },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(t.title, style = TextStyle(fontFamily = MusicType, fontSize = 16.sp, fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
+                    Text(t.title, style = TextStyle(fontFamily = MusicType, fontSize = 16.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
                         color = if (current) nc.primary else nc.large), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(t.artist, style = TextStyle(fontFamily = MusicType, fontSize = 14.sp, color = nc.small), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
