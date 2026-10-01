@@ -153,7 +153,8 @@ internal fun NamidaMenu(onDismiss: () -> Unit, content: @Composable ColumnScope.
                             val a = p(0.66f, 0.86f); lineTo(a.x, a.y)
                             val c1 = p(0.58f, 1.05f); val c2 = p(0.42f, 1.05f); val b = p(0.34f, 0.86f)
                             cubicTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
-                            close()
+                            // The path's own close (a bare close() here would be the menu's, and shut it as it draws).
+                            this.close()
                         }
                         drawPath(path, nc.main)
                     }
