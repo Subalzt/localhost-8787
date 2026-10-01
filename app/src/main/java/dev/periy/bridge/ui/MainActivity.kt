@@ -581,7 +581,7 @@ private fun BlazeItUi(vm: MainViewModel) {
             }
         }
 
-        // Music, full screen over the app: Namida's Tracks and Albums pages.
+        // Music, full screen over the app: Albums, Songs and Favourites.
         androidx.compose.animation.AnimatedVisibility(
             shelf.showing && !showOem,
             enter = androidx.compose.animation.fadeIn(tween(240)) + androidx.compose.animation.scaleIn(tween(340, easing = androidx.compose.animation.core.CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)), initialScale = 0.94f),
@@ -594,10 +594,10 @@ private fun BlazeItUi(vm: MainViewModel) {
             ) }
         }
 
-        // What is playing: the mini player over the tabs, or 12 above Namida's bar in Music (it
-        // glides between the two), dragged up to full screen and on to the queue.
+        // What is playing: the mini player over the tabs, or floating 12 above the foot in Music
+        // (it glides between the two), dragged up to full screen and on to the queue.
         val miniLift by androidx.compose.animation.core.animateDpAsState(
-            if (shelf.showing) bottomInset + MusicBarHeight + 12.dp else bottomInset + 66.dp, tween(320), label = "lift",
+            if (shelf.showing) bottomInset + 12.dp else bottomInset + 66.dp, tween(320), label = "lift",
         )
         if (hasPlayer) NowPlaying(
             player, now, motion, ctx.container.loudness,

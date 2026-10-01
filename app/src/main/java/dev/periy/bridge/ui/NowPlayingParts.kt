@@ -765,7 +765,7 @@ private fun CuteSlider(
     val inactive = nc.secondary.copy(alpha = 0.2f)
     val bubble = if (nc.dark) Color(0xFF232323) else Color.White
     val labelStyle = TextStyle(
-        fontFamily = LexendDeca, fontSize = 14.nsp,
+        fontFamily = MusicType, fontSize = 14.nsp,
         color = if (nc.dark) Color.White.copy(alpha = 210 / 255f) else Color.Black.copy(alpha = 160 / 255f),
     )
     val measurer = rememberTextMeasurer()

@@ -232,6 +232,24 @@ object BlazeIcons {
         "M6.5 4.5h3a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1Z",
         "M14.5 4.5h3a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1Z",
     )
+    /** Two solid triangles to a bar: the next song, and (mirrored) the one before. */
+    val NextSolid: ImageVector = filled(
+        "next-solid",
+        "M2.5 6.3v11.4a1 1 0 0 0 1.55.83l8.2-5.7a1 1 0 0 0 0-1.66l-8.2-5.7A1 1 0 0 0 2.5 6.3Z",
+        "M11.5 6.3v11.4a1 1 0 0 0 1.55.83l8.2-5.7a1 1 0 0 0 0-1.66l-8.2-5.7a1 1 0 0 0-1.55.83Z",
+    )
+    /** Three solid dots: more. */
+    val Dots: ImageVector = filled(
+        "dots",
+        "M5 10.2a1.8 1.8 0 1 1 0 3.6a1.8 1.8 0 1 1 0-3.6Z",
+        "M12 10.2a1.8 1.8 0 1 1 0 3.6a1.8 1.8 0 1 1 0-3.6Z",
+        "M19 10.2a1.8 1.8 0 1 1 0 3.6a1.8 1.8 0 1 1 0-3.6Z",
+    )
+    val PreviousSolid: ImageVector = filled(
+        "previous-solid",
+        "M21.5 6.3v11.4a1 1 0 0 1-1.55.83l-8.2-5.7a1 1 0 0 1 0-1.66l8.2-5.7a1 1 0 0 1 1.55.83Z",
+        "M12.5 6.3v11.4a1 1 0 0 1-1.55.83l-8.2-5.7a1 1 0 0 1 0-1.66l8.2-5.7a1 1 0 0 1 1.55.83Z",
+    )
     val Plus: ImageVector = stroked("plus", "M12 5v14", "M5 12h14")
 
     /** Two notes on a beam: music. */

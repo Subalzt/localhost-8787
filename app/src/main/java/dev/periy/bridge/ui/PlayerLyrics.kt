@@ -189,7 +189,7 @@ internal fun LyricsOverCover(
 }
 
 /** A line on Namida's full-page lyrics: large and bold, from the left. */
-private val FullLine = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.Bold, fontSize = 22.nsp, lineHeight = 28.nsp)
+private val FullLine = TextStyle(fontFamily = MusicType, fontWeight = FontWeight.Bold, fontSize = 22.nsp, lineHeight = 28.nsp)
 
 /** Glides so item [index] sits in the middle (from further off, it goes there first). */
 private suspend fun LazyListState.centre(index: Int) {

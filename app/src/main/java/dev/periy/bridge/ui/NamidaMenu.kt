@@ -261,6 +261,6 @@ internal fun NamidaSnackHost(snack: NamidaSnack, statusTop: Dp) {
             .semantics { liveRegion = LiveRegionMode.Polite }
             .padding(horizontal = 12.dp, vertical = 16.dp),
     ) {
-        Text(words, style = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.SemiBold, fontSize = 14.nsp, lineHeight = 1.25.em, color = nc.onSurface.copy(alpha = 0.7f)))
+        Text(words, style = TextStyle(fontFamily = MusicType, fontWeight = FontWeight.SemiBold, fontSize = 14.nsp, lineHeight = 1.25.em, color = nc.onSurface.copy(alpha = 0.7f)))
     }
 }

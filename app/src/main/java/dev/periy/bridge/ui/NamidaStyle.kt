@@ -115,6 +115,28 @@ fun namidaColors(tint: Color, dark: Boolean): NamidaColors {
     )
 }
 
+/**
+ * The music screens' clean look (2026-10): the page's black (or white), white (or black) type at
+ * full strength and at 58% for what is quieter, nothing tinted by the song; [accent] lights what
+ * is playing (the type colour itself when the app's colour is Automatic). The player keeps the
+ * cover's colour, but only as a glow behind the cover.
+ */
+fun cleanColors(dark: Boolean, accent: Color): NamidaColors {
+    val ink = if (dark) Color.White else Color.Black
+    val bg = if (dark) Color.Black else Color.White
+    val surface = if (dark) Color(0xFF1A1A1C) else Color(0xFFF2F2F7)
+    return NamidaColors(
+        dark = dark, tint = accent, main = accent, bg = bg, appBar = bg,
+        card = Color.Transparent, cardColor = surface, bar = bg, indicator = ink.copy(alpha = 0.12f),
+        primary = accent, secondary = ink.copy(alpha = 0.6f), secondaryContainer = ink.copy(alpha = 0.1f), onSecondaryContainer = ink,
+        onSurface = ink, icon = ink.copy(alpha = 0.92f), shadow = Color.Black.copy(alpha = 0.5f), dialog = surface,
+        large = ink, medium = ink, small = ink.copy(alpha = 0.58f),
+    )
+}
+
+/** The music screens' type: the phone's own (Roboto, or the maker's), as the page uses the computer's. */
+val MusicType: androidx.compose.ui.text.font.FontFamily = androidx.compose.ui.text.font.FontFamily.Default
+
 val LocalNamida = staticCompositionLocalOf { namidaColors(NamidaDefaultColour, dark = true) }
 
 /**
@@ -138,11 +160,11 @@ val NamidaThumb = 63.dp
 object Nm {
     val c: NamidaColors @Composable @ReadOnlyComposable get() = LocalNamida.current
     /** Namida's displayLarge: 17, bold. */
-    val large: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.Bold, fontSize = 17.nsp, color = LocalNamida.current.large)
+    val large: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = MusicType, fontWeight = FontWeight.Bold, fontSize = 17.nsp, color = LocalNamida.current.large)
     /** Namida's displayMedium: 15, semibold. */
-    val medium: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.SemiBold, fontSize = 15.nsp, color = LocalNamida.current.medium)
+    val medium: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = MusicType, fontWeight = FontWeight.SemiBold, fontSize = 15.nsp, color = LocalNamida.current.medium)
     /** Namida's displaySmall: 13, regular. */
-    val small: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.Normal, fontSize = 13.nsp, color = LocalNamida.current.small)
+    val small: TextStyle @Composable @ReadOnlyComposable get() = TextStyle(fontFamily = MusicType, fontWeight = FontWeight.Normal, fontSize = 13.nsp, color = LocalNamida.current.small)
 }
 
 /** Hue (0 to 360), saturation and lightness (0 to 1) of a colour. */

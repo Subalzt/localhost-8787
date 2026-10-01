@@ -1271,11 +1271,11 @@ private fun BottomRow(
                     if (badge.isNotEmpty()) { append(" "); appendInlineContent("bits", badge) }
                 }
                 val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-                val badgeStyle = TextStyle(fontFamily = LexendDeca, fontSize = 11.nsp, color = nc.primary)
+                val badgeStyle = TextStyle(fontFamily = MusicType, fontSize = 11.nsp, color = nc.primary)
                 val badgeW = with(LocalDensity.current) { (measurer.measure(badge, badgeStyle).size.width.toDp() + 4.dp + 12.dp + 2.dp + 4.dp).toSp() }
                 Text(
                     text,
-                    style = TextStyle(fontFamily = LexendDeca, fontSize = 15.nsp, fontWeight = FontWeight.Medium, color = nc.onSecondaryContainer, lineHeight = 17.nsp),
+                    style = TextStyle(fontFamily = MusicType, fontSize = 15.nsp, fontWeight = FontWeight.Medium, color = nc.onSecondaryContainer, lineHeight = 17.nsp),
                     maxLines = 2, overflow = TextOverflow.Ellipsis,
                     inlineContent = if (badge.isEmpty()) emptyMap() else mapOf(
                         "bits" to androidx.compose.foundation.text.InlineTextContent(
@@ -1314,6 +1314,14 @@ internal fun audioDetails(info: dev.periy.bridge.server.TrackInfoDto, mime: Stri
     info.sampleRate.takeIf { it > 0 }?.let { "${it / 1000.0} kHz" },
 ).joinToString(" \u2022 ")
 
+/** The file as the clean look says it: FLAC · 16-bit · 44.1 kHz · 968 kbps (only what the file tells). */
+internal fun formatLine(info: dev.periy.bridge.server.TrackInfoDto, mime: String = "", kbps: Boolean = true): String = listOfNotNull(
+    info.format.ifEmpty { formatBadge(mime) }.takeIf { it.isNotEmpty() },
+    info.bits.takeIf { it > 0 }?.let { "$it-bit" },
+    info.sampleRate.takeIf { it > 0 }?.let { r -> (if (r % 1000 == 0) "${r / 1000}" else "%.1f".format(java.util.Locale.US, r / 1000.0)) + " kHz" },
+    info.kbps.takeIf { kbps && it > 0 }?.let { "$it kbps" },
+).joinToString(" · ")
+
 /** Namida's badge after the details: 24-bit Hi-Res Lossless (Hi-Res from 24 bits, Lossless for a lossless kind of file). */
 internal fun bitsBadge(info: dev.periy.bridge.server.TrackInfoDto): String {
     if (info.bits <= 0) return ""
@@ -1346,7 +1354,7 @@ private fun RepeatIcon(mode: PhonePlayer.Repeat, times: Int, tint: Color, size: 
         Icon(icon, null, tint = tint, modifier = Modifier.fillMaxSize())
         if (mode == PhonePlayer.Repeat.TIMES) {
             val fs = with(LocalDensity.current) { (size * 0.46f).toSp() }
-            Text("$times", style = TextStyle(fontFamily = LexendDeca, fontWeight = FontWeight.SemiBold, fontSize = fs, lineHeight = fs, color = tint), maxLines = 1)
+            Text("$times", style = TextStyle(fontFamily = MusicType, fontWeight = FontWeight.SemiBold, fontSize = fs, lineHeight = fs, color = tint), maxLines = 1)
         }
         if (mode == PhonePlayer.Repeat.ALL_SHUFFLE) Icon(
             Iconsax.Shuffle, null, tint = tint,
