@@ -2158,9 +2158,12 @@
   #np.wide .npl-list { align-items: flex-start; }
   #np.wide .npl-line { max-width: 100%; margin: 0 0 6px; padding: 8px 0; border-radius: 0; text-align: left; background: none;
     font: 700 clamp(22px, 2.2vw, 34px)/1.22 system-ui, -apple-system, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif; letter-spacing: -.02em;
-    color: color-mix(in srgb, var(--txt) 30%, transparent); filter: blur(.5px); transition: color .4s, filter .4s; }
+    color: color-mix(in srgb, var(--txt) 22%, transparent); filter: blur(.5px); transition: color .4s, filter .4s; }
   #np.wide .npl-line.d0 { color: var(--txt); filter: none; background: none; }
-  #np.wide .npl-line.d1 { color: color-mix(in srgb, var(--txt) 36%, transparent); filter: none; }
+  #np.wide .npl-line.d1 { color: color-mix(in srgb, var(--txt) 30%, transparent); filter: none; }
+  /* Its words still to come stay readable, well above the lines around it. */
+  #np.wide .npl-line.d0 .w { background: linear-gradient(90deg, var(--txt) var(--p, 0%), color-mix(in srgb, var(--txt) 62%, transparent) calc(var(--p, 0%) + 4%));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
   #np.wide .npl-plain { text-align: left; font: 600 20px/1.8 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   #np:not(.wide) .npl-line { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   /* What plays next, beside the cover on a wide window while the lyrics are hidden. */
@@ -6855,8 +6858,9 @@ function lyricsFor(t) {
     }
     var parsed = parseLyrics(doc);
     parsed.offline = !doc && (!navigator.onLine || failed);
-    // A lookup that could not be made is tried again next time; anything else is kept.
-    if (!parsed.offline) lyr.byId[t.id] = parsed;
+    // Kept for this visit once timed (or instrumental); plain words or none are asked for again
+    // next time, as the phone may have found timed ones since.
+    if (!parsed.offline && parsed.kind !== "plain" && parsed.kind !== "none") lyr.byId[t.id] = parsed;
     delete lyr.pending[t.id];
     return parsed;
   })();
@@ -6892,27 +6896,49 @@ function lrcFile(t, doc, d) {
 async function lrclibFind(t) {
   var secs = Math.round((t.durationMs || 0) / 1000);
   function doc(r) {
-    return { source: "LRCLIB", lrc: r.syncedLyrics || "", lyricsfile: r.hasWordSync ? (r.lyricsfile || "") : "",
+    var ok = fits(r);
+    return { source: "LRCLIB", lrc: ok ? r.syncedLyrics || "" : "", lyricsfile: ok && r.hasWordSync ? (r.lyricsfile || "") : "",
       plain: r.plainLyrics || "", instrumental: !!r.instrumental };
+  }
+  // Timed lyrics that run well past the song's end are another version's: their timing is no use.
+  function fits(r) {
+    if (!r.syncedLyrics || !secs) return true;
+    var last = 0;
+    r.syncedLyrics.replace(/\[(\d+):(\d+(?:\.\d+)?)\]/g, function (m, mm, ss) { last = Math.max(last, +mm * 60 + +ss); return m; });
+    return last <= secs + 15;
   }
   try {
     var q = "artist_name=" + encodeURIComponent(t.artist) + "&track_name=" + encodeURIComponent(t.title) +
       "&album_name=" + encodeURIComponent(t.album) + (secs ? "&duration=" + secs : "");
+    // LRCLIB's search for the song: the closest in length, nothing more than ten seconds out
+    // (with timedOnly, only timed lyrics, within three).
+    async function search(timedOnly) {
+      var s = await fetch(LRCLIB + "/search?track_name=" + encodeURIComponent(plainTitle(t.title)) + "&artist_name=" + encodeURIComponent(mainArtist(t.artist)));
+      if (!s.ok) return null;
+      var best = null, bestScore = 1e9;
+      ((await s.json()) || []).forEach(function (x) {
+        var off = secs ? Math.abs((x.duration || 0) - secs) : 0;
+        if (secs && off > (timedOnly ? 3 : 10)) return;
+        var timed = !!x.syncedLyrics && fits(x);
+        if (timedOnly && !timed) return;
+        var score = off + (timed ? 0 : 20) + (x.plainLyrics || x.instrumental ? 0 : 100);
+        if (score < bestScore) { bestScore = score; best = x; }
+      });
+      return { best: best, score: bestScore };
+    }
     var r = await fetch(LRCLIB + "/get?" + q);
-    if (r.ok) return doc(await r.json());
+    if (r.ok) {
+      var exact = await r.json();
+      if ((exact.syncedLyrics && fits(exact)) || exact.instrumental) return doc(exact);
+      // The song's own entry has no timing; another entry for it often has.
+      var timed = null;
+      try { timed = (await search(true) || {}).best; } catch (e) {}
+      return doc(timed || exact);
+    }
     if (r.status !== 404) return null;
-    var s = await fetch(LRCLIB + "/search?track_name=" + encodeURIComponent(plainTitle(t.title)) + "&artist_name=" + encodeURIComponent(mainArtist(t.artist)));
-    if (!s.ok) return null;
-    var list = await s.json();
-    // The closest in length, preferring timed lyrics; nothing more than ten seconds out.
-    var best = null, bestScore = 1e9;
-    (list || []).forEach(function (x) {
-      var off = secs ? Math.abs((x.duration || 0) - secs) : 0;
-      if (secs && off > 10) return;
-      var score = off + (x.syncedLyrics ? 0 : 20) + (x.plainLyrics || x.instrumental ? 0 : 100);
-      if (score < bestScore) { bestScore = score; best = x; }
-    });
-    return best && bestScore < 100 ? doc(best) : { source: "none" };
+    var found = await search(false);
+    if (!found) return null;
+    return found.best && found.score < 100 ? doc(found.best) : { source: "none" };
   } catch (e) { return null; }
 }
 
