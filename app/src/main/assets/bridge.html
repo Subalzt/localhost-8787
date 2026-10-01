@@ -2126,6 +2126,99 @@
   .nml-pop > button.on { background: var(--mx-fill2); }
   .nml-toast { background: color-mix(in srgb, var(--surface) 80%, transparent); color: var(--txt); font-weight: 500; }
   .nml-ghost { background: var(--bg); }
+
+  /* ---- The bar: floating at the foot of every tab (over the music, not under a sidebar), the
+     cover, the song and who by, the buttons; the song's progress a hairline along its foot. It is
+     still the bar Namida's player grows out of, so its pieces are where the player starts. */
+  #player { left: 50%; right: auto; width: min(720px, calc(100vw - 24px)); transform: translateX(-50%); height: 64px; padding: 0 12px 0 10px; border-radius: 18px;
+    background: var(--surface); color: var(--txt); font-family: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--txt) 10%, transparent), 0 16px 40px rgba(0,0,0,.5); }
+  @media (min-width: 1000px) { body[data-tab="music"] #player { left: calc(50% + 116px); width: min(720px, calc(100vw - 280px)); } }
+  #player .pl-left { gap: 12px; }
+  #player .cover { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 8px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--txt) 10%, transparent); }
+  #player .pl-title { font-size: 14px; font-weight: 600; color: var(--txt); letter-spacing: -.01em; }
+  #player .pl-sub { font-size: 12.5px; font-weight: 400; color: color-mix(in srgb, var(--txt) 58%, transparent); }
+  #player .pl-btn { color: var(--txt); }
+  #player .pl-btn:hover { background: color-mix(in srgb, var(--txt) 8%, transparent); }
+  #player .pl-btn.play { width: 44px; height: 44px; color: var(--txt); background: none; box-shadow: none; }
+  #player .pl-btn.play svg { width: 26px; height: 26px; }
+  #player .pl-btn.on { color: var(--accent); }
+  @media (min-width: 1000px) {
+    #player #pl-shuffle, #player .pl-ctrls .lyr-btn, #player #pl-repeat { display: grid; }
+    #player #pl-shuffle, #player .pl-ctrls .lyr-btn, #player #pl-repeat { color: color-mix(in srgb, var(--txt) 58%, transparent); }
+    #player #pl-shuffle svg, #player .pl-ctrls .lyr-btn svg, #player #pl-repeat svg { width: 18px; height: 18px; }
+    #player #pl-shuffle.on, #player #pl-repeat.on, #player .pl-ctrls .lyr-btn.on { color: var(--txt); }
+    #player .pl-ctrls { gap: 4px; }
+  }
+  #player #pl-seek { left: 18px; right: 18px;
+    background: linear-gradient(to right, color-mix(in srgb, var(--txt) 75%, transparent) var(--p, 0%), color-mix(in srgb, var(--txt) 12%, transparent) var(--p, 0%)); }
+
+  /* ---- The player, open: every Namida move kept (the bar growing into it, the cover flying and
+     swelling with the song, the waveform and rows coming in last, sideways to the next song, up
+     to the queue), on black with the cover's colour only as a glow behind the cover; white type;
+     what the file is between the times. On a wide window the lyrics take the right half. */
+  #np { --nm-bg: var(--bg); --nm-wash-top: transparent; --nm-wash-bottom: transparent; --nm-large: var(--txt); --nm-medium: var(--txt);
+    --nm-small: color-mix(in srgb, var(--txt) 58%, transparent); --nm-icon: var(--txt); --nm-on-sec: var(--txt); --nm-primary: var(--accent);
+    --nm-tint40: color-mix(in srgb, var(--txt) 9%, transparent); --np-sub: color-mix(in srgb, var(--txt) 58%, transparent);
+    font-family: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif; }
+  #np .np-panel::before { content: ""; position: absolute; left: calc(var(--gx, 50%) - var(--gs, 300px)); top: calc(var(--gy, 40%) - var(--gs, 300px));
+    width: calc(var(--gs, 300px) * 2); height: calc(var(--gs, 300px) * 2); border-radius: 50%; pointer-events: none; opacity: calc(var(--ga, 1) * .9);
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--pl-tint) 42%, transparent), transparent); }
+  #np .np-art { background: var(--surface); box-shadow: 0 0 0 1px color-mix(in srgb, var(--txt) 10%, transparent), 0 30px 60px -24px rgba(0,0,0,.7); }
+  #np-slots .np-art::after { background: color-mix(in srgb, var(--bg) 55%, transparent); }
+  #np .np-slots.full .np-line.t { font-weight: 700; letter-spacing: -.02em; color: var(--txt); }
+  #np .np-slots.full .np-line.a { font-weight: 400; color: color-mix(in srgb, var(--txt) 58%, transparent); }
+  #np .np-play .np-btn { background: none; box-shadow: none; color: var(--txt); }
+  #np .np-play .np-btn::before { display: none; }
+  #np .np-play .np-btn .i1 { color: var(--txt); }
+  #np .np-play .np-btn .i1 svg { width: 62%; height: 62%; stroke-width: 1.7; }
+  #np .np-play .np-btn:hover { background: color-mix(in srgb, var(--txt) 8%, transparent); filter: none; }
+  #np .np-times { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: color-mix(in srgb, var(--txt) 55%, transparent); font-variant-numeric: tabular-nums; }
+  #np-fmt { min-width: 0; padding: 1px 8px; border-radius: 5px; background: color-mix(in srgb, var(--txt) 11%, transparent); color: color-mix(in srgb, var(--txt) 82%, transparent);
+    font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #np-fmt:empty { visibility: hidden; }
+  #np .np-chip { display: none; }
+  #np #np-bottom { justify-content: center; gap: 22px; }
+  #np .np-where b { font-weight: 600; }
+  #np .np-where span { color: color-mix(in srgb, var(--txt) 55%, transparent); }
+  /* The lyrics down the right on a wide window: large, the line being sung bright, the rest dim
+     and a little soft the further off. */
+  #np.wide .np-lyr { -webkit-mask-image: linear-gradient(transparent, #000 16%, #000 80%, transparent); mask-image: linear-gradient(transparent, #000 16%, #000 80%, transparent); }
+  #np.wide .npl-list { align-items: flex-start; }
+  #np.wide .npl-line { max-width: 100%; margin: 0 0 6px; padding: 8px 0; border-radius: 0; text-align: left; background: none;
+    font: 700 clamp(22px, 2.2vw, 34px)/1.22 system-ui, -apple-system, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif; letter-spacing: -.02em;
+    color: color-mix(in srgb, var(--txt) 30%, transparent); filter: blur(.5px); transition: color .4s, filter .4s; }
+  #np.wide .npl-line.d0 { color: var(--txt); filter: none; background: none; }
+  #np.wide .npl-line.d1 { color: color-mix(in srgb, var(--txt) 36%, transparent); filter: none; }
+  #np.wide .npl-plain { text-align: left; font: 600 20px/1.8 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #np:not(.wide) .npl-line { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  /* What plays next, beside the cover on a wide window while the lyrics are hidden. */
+  .np-next { display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+  .np-next h4 { margin: 0 0 10px; font-size: 20px; font-weight: 700; letter-spacing: -.02em; color: var(--txt); }
+  .np-next-row { display: flex; align-items: center; gap: 14px; width: 100%; height: 60px; padding: 0 10px; margin: 0 -10px; border: 0; border-radius: 10px;
+    background: none; color: var(--txt); font: inherit; text-align: left; cursor: pointer; }
+  .np-next-row:hover { background: color-mix(in srgb, var(--txt) 7%, transparent); }
+  .np-next-row .cover { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 7px; overflow: hidden; box-shadow: 0 0 0 1px color-mix(in srgb, var(--txt) 10%, transparent); }
+  .np-next-row .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .np-next-row .t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  .np-next-row .t b, .np-next-row .t span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-next-row .t b { font-size: 14.5px; font-weight: 500; }
+  .np-next-row .t span { font-size: 13px; color: color-mix(in srgb, var(--txt) 58%, transparent); }
+  .np-next-row .d { font-size: 13px; color: color-mix(in srgb, var(--txt) 45%, transparent); font-variant-numeric: tabular-nums; }
+  .np-next-none { margin: 0; color: color-mix(in srgb, var(--txt) 45%, transparent); }
+  /* A song coming up that is already in memory: "Ready"; the one loading: how far it has got. */
+  .np-ready { flex: 0 0 auto; padding: 1px 7px; border-radius: 5px; font-style: normal; font-size: 10.5px; font-weight: 650; letter-spacing: .02em;
+    color: var(--txt); background: color-mix(in srgb, var(--txt) 13%, transparent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .np-ready.loading { color: color-mix(in srgb, var(--txt) 60%, transparent); background: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--txt) 20%, transparent); }
+  .np-next-row .np-ready { margin-right: 4px; }
+  /* The queue, on the black too: the song playing on a grey wash, no colour of its own. */
+  #np { --nm-qhead: transparent; --nm-card: transparent; --nm-now: color-mix(in srgb, var(--txt) 10%, transparent); }
+  #np .np-queue { background: var(--bg); box-shadow: 0 0 0 1px color-mix(in srgb, var(--txt) 9%, transparent); }
+  #np .np-qrow.now .t b, #np .np-qrow.now .d { color: var(--txt); }
+  #np .np-qrow.now .t span { color: color-mix(in srgb, var(--txt) 60%, transparent); }
+  #np .np-qrow.now .np-qh, #np .np-qrow.now .np-qx, #np .np-qrow.now .np-qheart { color: color-mix(in srgb, var(--txt) 60%, transparent); }
+  #np .np-qrow .cover { width: 52px; height: 52px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--txt) 10%, transparent); }
+  #np .np-qrow { grid-template-columns: 52px minmax(0, 1fr) auto 40px 30px; }
 </style>
 </head>
 <body>
@@ -2452,9 +2545,11 @@
     <div class="np-el np-line t" data-slot="1"></div><div class="np-el np-line a" data-slot="1"></div>
     <div class="np-el np-line t" data-slot="0"></div><div class="np-el np-line a" data-slot="0"></div>
   </div>
+  <!-- On a wide window, beside the cover while the lyrics are hidden: the songs coming up. -->
+  <div class="np-el np-next" id="np-next"><h4>Playing next</h4><div id="np-next-list"></div></div>
   <div class="np-el np-wave" id="np-wave" title="Drag to go to a place in the song; drag up off it to cancel"><canvas id="np-wave-c"></canvas></div>
   <span class="np-el np-seek" id="np-seek"></span>
-  <div class="np-el np-times" id="np-times"><span id="np-cur">0:00</span><span id="np-dur">0:00</span></div>
+  <div class="np-el np-times" id="np-times"><span id="np-cur">0:00</span><em id="np-fmt"></em><span id="np-dur">0:00</span></div>
   <div class="np-el np-hit" id="np-prev-w"><button class="np-btn" data-nx="prev" id="np-prev" type="button" title="Previous" aria-label="Previous"></button></div>
   <div class="np-el np-hit np-play" id="np-play-w"><button class="np-btn" id="np-play" type="button" title="Play / pause (space)" aria-label="Play or pause"></button></div>
   <div class="np-el np-hit" id="np-next-w"><button class="np-btn" data-nx="next" id="np-next" type="button" title="Next" aria-label="Next"></button></div>
@@ -5389,7 +5484,7 @@ var music = { tracks: [], granted: true, loaded: false, loading: false,
 // source: where the queue was started, so the banner can say it, and where Music was then
 // (place), so the player bar's cover can go back there: { kind: "album" | "songs", key, label, place }.
 var player = { queue: [], order: [], pos: -1, shuffle: false, repeat: "off", repeatTimes: 1, source: null,
-               blobs: {}, prefetchCtl: null, prefetchTimer: null,
+               blobs: {}, blobBytes: {}, loading: null, prefetchCtl: null, prefetchTimer: null,
                parkTimer: null, parked: false, parkedAt: 0 };
 
 function fmtTime(sec) {
@@ -6547,23 +6642,66 @@ async function prefetchAhead() {
   wanted.forEach(function (t) { keep[t.id] = true; });
   // Let go of anything no longer near the playhead, so memory stays bounded.
   Object.keys(player.blobs).forEach(function (id) {
-    if (!keep[id]) { URL.revokeObjectURL(player.blobs[id]); delete player.blobs[id]; }
+    if (!keep[id]) { URL.revokeObjectURL(player.blobs[id]); delete player.blobs[id]; delete player.blobBytes[id]; }
   });
+  npReadyMarks();
 
   for (var i = 0; i < wanted.length; i++) {
     var tr = wanted[i];
     if (ctl.signal.aborted) return;
     if (player.blobs[tr.id] || tr.size > PREFETCH_MAX_BYTES) continue;
     try {
+      // Read as it comes, so the queue can show how far along it is.
+      player.loading = { id: tr.id, got: 0, of: tr.size || 0 };
+      npReadyMarks();
       var r = await fetch(streamUrl(tr.id), { credentials: "same-origin", signal: ctl.signal });
       if (!r.ok) continue;
-      var blob = await r.blob();
+      var parts = [], reader = r.body && r.body.getReader(), shown = 0;
+      if (reader) {
+        for (;;) {
+          var c = await reader.read();
+          if (c.done) break;
+          parts.push(c.value);
+          player.loading.got += c.value.byteLength;
+          if (player.loading.got - shown > 1 << 20) { shown = player.loading.got; npReadyMarks(); }
+        }
+      } else parts.push(await r.arrayBuffer());
       if (ctl.signal.aborted) return;
+      var blob = new Blob(parts, { type: r.headers.get("Content-Type") || tr.mime || "audio/flac" });
       player.blobs[tr.id] = URL.createObjectURL(blob);
+      player.blobBytes[tr.id] = blob.size;
     } catch (e) {
       if (ctl.signal.aborted) return;
+    } finally {
+      if (player.loading && player.loading.id === tr.id) player.loading = null;
+      npReadyMarks();
     }
   }
+}
+
+/**
+ * Which songs coming up are already in this page's memory (they start at once, even if the link
+ * drops), and the one loading now with how far it has got: on the queue's rows, the rows beside
+ * the cover, and the queue's header.
+ */
+function npReadyMarks() {
+  var cur = currentTrack();
+  function mark(row, id) {
+    var tag = row.querySelector(".np-ready");
+    var ld = player.loading && String(player.loading.id) === String(id) ? player.loading : null;
+    var text = player.blobs[id] && !(cur && String(cur.id) === String(id)) ? "Ready" :
+      ld ? "Loading" + (ld.of > 0 ? " " + Math.min(99, Math.floor(ld.got * 100 / ld.of)) + "%" : "") : "";
+    if (!text) { if (tag) tag.remove(); return; }
+    if (!tag) { tag = document.createElement("em"); tag.className = "np-ready"; var host = row.querySelector(".d") || row; host.parentNode.insertBefore(tag, host); }
+    tag.textContent = text;
+    tag.classList.toggle("loading", text !== "Ready");
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("#np-qlist .np-qrow"), function (row) {
+    var t = player.queue[player.order[+row.dataset.i]];
+    if (t) mark(row, t.id);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("#np-next-list .np-next-row"), function (row) { mark(row, row.dataset.id); });
+  npQueueInfo();
 }
 
 
@@ -7595,7 +7733,8 @@ function npMeasure() {
   // a narrow screen), in the middle.
   var k = W < 600 ? 1 : npClamp(H / 820, 1, 1.4);
   var topT = 0, topH = 60 * k, bottomH = 60 * k, bottomTop = H - 8 * k - bottomH, big = 68 * k;
-  var ctrlY = bottomTop - 18 * k - big / 2, waveH = 60 * k, waveTop = ctrlY - big / 2 - 18 * k - waveH;
+  // The times, with what the file is between them, have their own row under the waveform.
+  var ctrlY = bottomTop - 18 * k - big / 2, waveH = 52 * k, timesH = 22 * k, waveTop = ctrlY - big / 2 - 14 * k - timesH - waveH;
   var tt = 18 * k, ta = 13.5 * k, textH = tt * 1.3 + ta * 1.35 + 4 * k, textTop = waveTop - 18 * k - textH;
   var areaTop = topT + topH + 12 * k, areaBottom = textTop - 22 * k;
   var cw = Math.min(W, Math.max(360, areaBottom - areaTop + 56 * k)), x0 = (W - cw) / 2;
@@ -7603,7 +7742,7 @@ function npMeasure() {
   var f = { artX: x0 + (cw - s2) / 2, artY: areaTop + (areaBottom - areaTop - s2) / 2, art: s2,
     textX: x0 + 24 * k, textW: cw - 44 * k - 48, title: tt, artist: ta, titleTop: textTop, artistTop: textTop + tt * 1.3 + 4 * k,
     waveX: x0 + 20 * k, waveW: cw - 40 * k, waveTop: waveTop, waveH: waveH,
-    timesX: x0 + 20 * k, timesW: cw - 40 * k, timesY: ctrlY - 10,
+    timesX: x0 + 20 * k, timesW: cw - 40 * k, timesY: waveTop + waveH + 4 * k,
     play: { cx: x0 + cw / 2, cy: ctrlY, size: big },
     prev: { cx: x0 + cw / 2 - big, cy: ctrlY, size: 60 * k }, next: { cx: x0 + cw / 2 + big, cy: ctrlY, size: 60 * k },
     bottomX: x0, bottomW: cw, bottomTop: bottomTop, bottomH: bottomH, topTop: topT, topH: topH,
@@ -7616,7 +7755,35 @@ function npMeasure() {
     x: qx, w: qw, listTop: qt + 54 + 16,
   };
   q.prev = q.play; q.next = q.play;
-  return { W: W, H: H, bar: bar, mini: mini, f: f, q: q };
+  return { W: W, H: H, bar: bar, mini: mini, f: f, q: q, fW: npWide(W, H, f) };
+}
+
+/**
+ * On a wide window, with the lyrics showing: the cover and everything under it in a column on
+ * the left, the lyrics large down the right. npRender blends from the one column (f) to this as
+ * the lyrics come in, so the cover slides aside rather than jumping. Null on a narrow window.
+ */
+function npWide(W, H, f) {
+  if (W < 1000 || H < 560) return null;
+  // A desktop's player, the width of the window: the cover on the left, the lyrics beside it;
+  // under them the song on the left, the waveform from edge to edge, the times and what the file
+  // is, and the controls in the middle with the other buttons on the right.
+  var k = npClamp(H / 900, 0.85, 1.25), m = Math.max(48, W * 0.05);
+  var bigW = 60 * k, titleS = 26 * k, artistS = 17 * k, textH = titleS * 1.25 + artistS * 1.4 + 4 * k, waveH = 56 * k, timesH = 22 * k;
+  var ctrlY = H - 34 * k - bigW / 2;
+  var timesY = ctrlY - bigW / 2 - 12 * k - timesH, waveTop = timesY - 4 * k - waveH, titleTop = waveTop - 18 * k - textH;
+  var top = f.topH + 6 * k, art = Math.max(160, Math.min(titleTop - 26 * k - top, W * 0.42));
+  var lx = m + art + 72 * k, bw = f.bottomH * 3 + 40;
+  return {
+    artX: m, artY: top, art: art,
+    textX: m, textW: Math.min(W * 0.55, W - 2 * m - 60), title: titleS, artist: artistS, titleTop: titleTop, artistTop: titleTop + titleS * 1.25 + 4 * k,
+    waveX: m, waveW: W - 2 * m, waveTop: waveTop, waveH: waveH,
+    timesX: m, timesW: W - 2 * m, timesY: timesY,
+    play: { cx: W / 2, cy: ctrlY, size: bigW }, prev: { cx: W / 2 - bigW * 1.7, cy: ctrlY, size: 54 * k }, next: { cx: W / 2 + bigW * 1.7, cy: ctrlY, size: 54 * k },
+    bottomX: W - m - bw, bottomW: bw, bottomTop: ctrlY - f.bottomH / 2, bottomH: f.bottomH, topTop: f.topTop, topH: f.topH,
+    heart: { x: W - m - 44, y: titleTop + (textH - 44) / 2 }, col: { x: m, w: W - 2 * m, k: k },
+    lyr: { x: lx, y: top - 10, w: Math.min(W - m - lx, 760), h: art + 20 },
+  };
 }
 
 /** Terms of np.p, as the phone splits it: towards full (c), towards the queue (q). */
@@ -7641,7 +7808,11 @@ function npRender() {
   var full = np.p > 0.98;
   if (full !== document.documentElement.classList.contains("np-full")) { document.documentElement.classList.toggle("np-full", full); np.g = npMeasure(); }
   var g = np.g;
-  var t = npTerms(), f = g.f, row = t.qp > 0 ? g.q : g.mini, root = $("np");
+  // On a wide window, the desktop's layout; the lyrics fade in beside the cover.
+  var f = g.fW || g.f;
+  np.f = f;
+  var t = npTerms(), row = t.qp > 0 ? g.q : g.mini, root = $("np");
+  root.classList.toggle("wide", !!g.fW);
   var dip = t.under * 240, lift = t.over * g.H * 0.35, slide = (1 - t.cp) * 60 - lift;
   root.style.opacity = t.under > 0.04 ? npClamp(1 - (t.under - 0.04) * 9, 0, 1).toFixed(3) : "";
 
@@ -7668,7 +7839,8 @@ function npRender() {
     npPlace(el, aX - (size - aS) / 2 - s * spacing + slot * spacing, aY - (size - aS) / 2, size / f.art, el.dataset.has ? alphaOf(slot) : 0);
     // Under the lyrics, the cover blurred (in its sharp corners) and veiled, as Namida's.
     if (slot === 0) {
-      var veil = npl.vis * t.bcp, img = el.querySelector("img");
+      // Beside the lyrics on a wide window, the cover stays clear.
+      var veil = g.fW ? 0 : npl.vis * t.bcp, img = el.querySelector("img");
       el.style.setProperty("--veil", (0.25 * veil).toFixed(3));
       if (img) img.style.filter = veil > 0.01 ? "blur(" + (12 * veil * f.art / Math.max(1, size)).toFixed(1) + "px)" : "";
     }
@@ -7676,9 +7848,29 @@ function npRender() {
   // The lyrics over this song's cover: at their own size, riding on the cover's middle as it
   // shrinks into the queue or the bar, fading as they go.
   var ly = $("np-lyr"), lv = npl.vis * t.bcp * (1 - Math.abs(s));
-  ly.style.width = f.art + "px"; ly.style.height = f.art + "px";
-  npPlace(ly, aX + (aS - f.art) / 2 - s * spacing, aY + (aS - f.art) / 2, 1, lv);
+  if (g.fW) {
+    // Down the right of a wide window, in from the right as they show, gone into the queue.
+    var lr = g.fW.lyr;
+    lv = npl.vis * t.bcp * (1 - t.qcp);
+    ly.style.width = lr.w + "px"; ly.style.height = lr.h + "px";
+    npPlace(ly, lr.x + (1 - npl.vis) * 40, lr.y - lift + (1 - t.bcp) * 80, 1, lv);
+  } else {
+    ly.style.width = f.art + "px"; ly.style.height = f.art + "px";
+    npPlace(ly, aX + (aS - f.art) / 2 - s * spacing, aY + (aS - f.art) / 2, 1, lv);
+  }
   ly.style.pointerEvents = lv > 0.5 && t.bcp > 0.95 && t.qp <= 0 ? "auto" : "none";
+  // Where the lyrics go on a wide window, while they are hidden: what plays next.
+  var up = $("np-next"), ua = g.fW ? (1 - npl.vis) * t.bcp * (1 - t.qcp) : 0;
+  if (g.fW) {
+    up.style.width = g.fW.lyr.w + "px"; up.style.height = g.fW.lyr.h + "px";
+    npPlace(up, g.fW.lyr.x + npl.vis * 40, g.fW.lyr.y - lift + (1 - t.bcp) * 80, 1, ua);
+  } else npPlace(up, 0, 0, 1, 0);
+  up.style.pointerEvents = ua > 0.5 && t.qp <= 0 ? "auto" : "none";
+  // The cover's colour glows from behind the cover (the only colour on the black).
+  root.style.setProperty("--gx", (aX + aS / 2 - L).toFixed(0) + "px");
+  root.style.setProperty("--gy", (aY + aS / 2 - T).toFixed(0) + "px");
+  root.style.setProperty("--gs", (aS * 0.95).toFixed(0) + "px");
+  root.style.setProperty("--ga", (t.bcp * (1 - t.qcp * 0.7)).toFixed(3));
   // The song over its artist, in the bar and open alike: the song on the larger line.
   var topS = npLerp(row.title / f.title, 1, t.bcp), subS = npLerp(row.artist / f.artist, 1, t.bcp);
   var tx = npLerp(row.textX, f.textX, t.bcp), tw = npLerp(row.textW, f.textW, t.bcp), tsp = spacing * 1.15;
@@ -7763,35 +7955,50 @@ function npCanvas(c, w, h) {
 }
 
 function npDrawWave() {
-  var wv = $("np-wave"), c = $("np-wave-c"), w = np.g.f.waveW, h = np.g.f.waveH;
+  var ff = np.f || np.g.f, wv = $("np-wave"), c = $("np-wave-c"), w = ff.waveW, h = ff.waveH;
   if (wv.style.visibility === "hidden") return;
   var x = npCanvas(c, w, h), t = npTrack(), env = t ? np.env[t.id] : null;
-  // Namida's waveform: many fine bars close together, each a little over half its pitch wide.
-  var pitch = 2.5, bw = pitch * 0.54, n = Math.max(8, Math.floor(w / pitch));
-  if (np.barsFor !== (t && t.id) + ":" + n + ":" + !!env) { np.bars = npBars(env, n); np.barsFor = (t && t.id) + ":" + n + ":" + !!env; }
-  var bars = np.bars, step = n > 1 ? (w - bw) / (n - 1) : 0, minH = 2, cy = h / 2, grow = np.grow;
+  // Namida's waveform, as a voice recorder draws one: many fine bars close together, growing in
+  // as the song's loudness arrives; what has played in the text colour, the rest faint.
+  var pitch = 3, bw = 1.7, n = Math.max(8, Math.floor(w / pitch));
+  if (np.barsFor !== (t && t.id) + ":" + n + ":" + !!env) { np.bars = npBarsSpread(env, n); np.barsFor = (t && t.id) + ":" + n + ":" + !!env; }
+  var bars = np.bars, step = n > 1 ? (w - bw) / (n - 1) : 0, minH = 3, cy = h / 2, grow = np.grow;
   var dur = npDur(), at = np.seek !== null ? np.seek : npPos(), played = dur > 0 ? npClamp(at / dur, 0, 1) * w : 0;
   function draw(style) {
     x.fillStyle = style;
     x.beginPath();
     for (var i = 0; i < n; i++) {
-      var bh = minH + (h - minH) * Math.pow(bars[i], 1.4) * grow, bx = i * step;
+      var bh = minH + (h - minH) * bars[i] * grow, bx = i * step;
       if (x.roundRect) x.roundRect(bx, cy - bh / 2, bw, bh, bw / 2); else x.rect(bx, cy - bh / 2, bw, bh);
     }
     x.fill();
   }
-  // Namida's colours: the text colour faint behind; what has played, the main colour over it.
-  var nm = np.nm || { base: np.tintRgb, onSurface: np.txtRgb }, on = nm.onSurface, base = nm.base;
-  draw("rgba(" + on.join(",") + "," + (40 / 255).toFixed(3) + ")");
+  var on = np.txtRgb || [255, 255, 255];
+  draw("rgba(" + on.join(",") + ",.22)");
   if (played > 0) {
     x.save();
     x.beginPath(); x.rect(0, 0, played, h); x.clip();
-    var gr = x.createLinearGradient(0, 0, Math.max(1, played), 0), a = (110 / 255).toFixed(3);
-    gr.addColorStop(0, "rgba(" + npOver(base, 180 / 255, on).join(",") + "," + a + ")");
-    gr.addColorStop(1, "rgba(" + npOver(base, 140 / 255, on).join(",") + "," + a + ")");
-    draw(gr);
+    draw("rgba(" + on.join(",") + ",.9)");
     x.restore();
   }
+}
+
+/**
+ * The bars for the waveform: each the average loudness under it, spread between the song's quiet
+ * and loud ends, so a loud mastered song still shows its shape instead of a solid block.
+ */
+function npBarsSpread(env, n) {
+  var out = new Float32Array(n);
+  if (!env || !env.length) return out;
+  for (var b = 0; b < n; b++) {
+    var from = Math.floor(b * env.length / n), to = Math.max(from + 1, Math.floor((b + 1) * env.length / n)), m = 0;
+    for (var k = from; k < to && k < env.length; k++) m += env[k];
+    out[b] = m / (to - from) / 255;
+  }
+  var sorted = Array.prototype.slice.call(out).sort(function (a, b) { return a - b; });
+  var lo = sorted[Math.floor(n * 0.04)], hi = sorted[Math.floor(n * 0.98)] || 1;
+  for (var i = 0; i < n; i++) out[i] = Math.pow(npClamp((out[i] - lo) / Math.max(0.01, hi - lo), 0, 1), 1.6);
+  return out;
 }
 
 function npDrawSpecks(t) {
@@ -8042,6 +8249,9 @@ function npText() {
   $("np-album").textContent = t.album;
   // The chip: the kind of file, then its bitrate and sample rate (and the speed, when changed).
   var info = np.info[t.id], chip = $("np-chip-t");
+  // Under the waveform, what the file is: FLAC · 16-bit · 44.1 kHz · 968 kbps.
+  $("np-fmt").textContent = mxFormat(t, info || null);
+  npNextRender();
   var details = [info ? npFileDetails(info) : "", np.speed !== 1 ? npSpeedText(np.speed) : ""].filter(Boolean).join(" \u2022 ");
   // The details in the lit colour, then the bit depth.
   chip.textContent = "";
@@ -8104,6 +8314,10 @@ function npQueueInfo() {
   el.appendChild(document.createTextNode((player.pos + 1) + "/" + player.order.length + " \u2022"));
   el.insertAdjacentHTML("beforeend", nx("timer"));
   el.appendChild(document.createTextNode(min >= 60 ? Math.floor(min / 60) + "h " + (min % 60) + "min" : min + "min"));
+  // How many songs coming up are already in memory, and how much room they take.
+  var cur = currentTrack(), n = 0, bytes = 0;
+  Object.keys(player.blobs).forEach(function (id) { if (!cur || String(cur.id) !== id) { n++; bytes += player.blobBytes[id] || 0; } });
+  if (n) el.appendChild(document.createTextNode(" • " + n + " ready in memory (" + Math.round(bytes / 1048576) + " MB)"));
 }
 
 function npSpeedText(v) { return (Math.round(v * 100) / 100).toString() + "\u00d7"; }
@@ -8231,10 +8445,11 @@ function npTrackChanged(t) {
  * with, the same set the phone's player uses. Path data from the iconsax-react package.
  */
 var NX = {
-  prev: '<path d="m12.269 7.392 4.15-2.39c1.7-.98 3.83.24 3.83 2.21v9.57c0 1.96-2.13 3.19-3.83 2.21l-4.15-2.39-4.15-2.4c-1.7-.98-1.7-3.43 0-4.41M3.762 18.18V17M3.762 14V5.82" stroke-linecap="round" stroke-linejoin="round"/>',
-  next: '<path d="m11.73 7.392-4.15-2.39c-1.7-.98-3.83.24-3.83 2.21v9.57c0 1.96 2.13 3.19 3.83 2.21l4.15-2.39 4.15-2.4c1.7-.98 1.7-3.43 0-4.41M20.238 18.18V17M20.238 14V5.82" stroke-linecap="round" stroke-linejoin="round"/>',
-  play: '<path d="M17.13 7.98c3.83 2.21 3.83 5.83 0 8.04l-3.09 1.78-3.09 1.78C7.13 21.79 4 19.98 4 15.56V8.44c0-4.42 3.13-6.23 6.96-4.02l2.25 1.3" stroke-linecap="round" stroke-linejoin="round"/>',
-  pause: '<path d="M5.01 3C3.57 3 3 3.54 3 4.89v14.22C3 20.46 3.57 21 5.01 21h3.63c1.43 0 2.01-.54 2.01-1.89V4.89c0-1.35-.57-1.89-2.01-1.89M18.992 21c1.43 0 2.01-.54 2.01-1.89V4.89c0-1.35-.57-1.89-2.01-1.89h-3.63c-1.43 0-2.01.54-2.01 1.89v14.22c0 1.35.57 1.89 2.01 1.89" stroke-linecap="round" stroke-linejoin="round"/>',
+  // Solid, for the player and its bar: play, pause, and the double triangles either way.
+  prev: '<path fill="currentColor" stroke="none" d="M12.1 6.4v11.2c0 .8-.9 1.3-1.6.8l-7.6-5.6a1 1 0 0 1 0-1.6l7.6-5.6c.7-.5 1.6 0 1.6.8Zm9.4 0v11.2c0 .8-.9 1.3-1.6.8l-7.6-5.6a1 1 0 0 1 0-1.6l7.6-5.6c.7-.5 1.6 0 1.6.8Z"/>',
+  next: '<path fill="currentColor" stroke="none" d="M11.9 6.4v11.2c0 .8.9 1.3 1.6.8l7.6-5.6a1 1 0 0 0 0-1.6l-7.6-5.6c-.7-.5-1.6 0-1.6.8Zm-9.4 0v11.2c0 .8.9 1.3 1.6.8l7.6-5.6a1 1 0 0 0 0-1.6L4.1 5.6c-.7-.5-1.6 0-1.6.8Z"/>',
+  play: '<path fill="currentColor" stroke="none" d="M7 5.1v13.8c0 .9 1 1.5 1.8 1l11.2-6.9a1.2 1.2 0 0 0 0-2L8.8 4.1C8 3.6 7 4.2 7 5.1Z"/>',
+  pause: '<rect fill="currentColor" stroke="none" x="5.5" y="4" width="4.6" height="16" rx="1.4"/><rect fill="currentColor" stroke="none" x="13.9" y="4" width="4.6" height="16" rx="1.4"/>',
   heart: '<path d="M20.59 4.972c.88.99 1.41 2.29 1.41 3.72 0 7-6.48 11.13-9.38 12.13-.34.12-.9.12-1.24 0-2.9-1-9.38-5.13-9.38-12.13 0-3.09 2.49-5.59 5.56-5.59 1.82 0 3.43.88 4.44 2.24a5.53 5.53 0 0 1 4.44-2.24" stroke-linecap="round" stroke-linejoin="round"/>',
   heartOn: '<path d="M16.44 3.102c-1.81 0-3.43.88-4.44 2.23a5.549 5.549 0 0 0-4.44-2.23c-3.07 0-5.56 2.5-5.56 5.59 0 1.19.19 2.29.52 3.31 1.58 5 6.45 7.99 8.86 8.81.34.12.9.12 1.24 0 2.41-.82 7.28-3.81 8.86-8.81.33-1.02.52-2.12.52-3.31 0-3.09-2.49-5.59-5.56-5.59Z" fill="currentColor" stroke="none"/>',
   headphone: '<path d="M2 12.22C1.89 6.6 6.33 2.05 11.95 2.05 17.57 2.05 22 6.6 22 12.11v6.16c0 1.95-1.62 3.57-3.57 3.57-1.95 0-3.57-1.62-3.57-3.57v-2.81c0-.97.76-1.84 1.84-1.84.97 0 1.84.76 1.84 1.84v3.03" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.46 18.49v-2.92c0-.97.76-1.84 1.84-1.84.97 0 1.84.76 1.84 1.84v2.81c0 1.95-1.62 3.57-3.57 3.57-1.95 0-3.57-1.63-3.57-3.57V16" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -8389,6 +8604,9 @@ function npShow() {
   $("np").hidden = false;
   document.body.classList.add("np-open");
   np.g = npMeasure();
+  // Full screen on a wide window, the lyrics are on each time it opens (beside the cover); a song
+  // without any shows what plays next there instead. Hidden by hand, they stay hidden until it closes.
+  if (np.g.fW && !npl.on) { npl.on = true; npl.jump = true; npl.active = -1; nplIcon(); nplFade(); }
   np.slotIds = {};
   np.txtRgb = npRgb(getComputedStyle(document.body).color, np.txtRgb);
   np.tintRgb = npRgb(getComputedStyle(pl).getPropertyValue("--pl-tint").trim() || "#48484F", np.tintRgb);
@@ -8608,6 +8826,7 @@ function npQueueRender() {
     frag.appendChild(row);
   });
   host.appendChild(frag);
+  npReadyMarks();
   host.classList.toggle("paused", !isPlaying());
   npQueueInfo();
 }
@@ -8661,6 +8880,41 @@ function npShuffleUpcoming() {
 }
 
 /** The queue changed here: what follows is fetched again, and everything showing the queue follows. */
+/** The next few songs, for the space beside the cover on a wide window; one plays when clicked. */
+function npNextRender() {
+  var host = $("np-next-list");
+  if (!host) return;
+  var ids = [];
+  for (var i = player.pos + 1; i < player.order.length && ids.length < 7; i++) ids.push(i);
+  var key = player.pos + ":" + ids.map(function (i) { var t = player.queue[player.order[i]]; return t ? t.id : "-"; }).join(",");
+  if (host.dataset.key === key) return;
+  host.dataset.key = key;
+  host.innerHTML = "";
+  if (!ids.length) { var p = document.createElement("p"); p.className = "np-next-none"; p.textContent = "Nothing after this song"; host.appendChild(p); return; }
+  ids.forEach(function (i) {
+    var t = player.queue[player.order[i]];
+    if (!t) return;
+    var row = document.createElement("button");
+    row.type = "button";
+    row.className = "np-next-row";
+    row.dataset.id = t.id;
+    row.appendChild(coverEl("cover", (music.albumByKey[t.ak] || {}).coverId || t.albumId, t.album));
+    var tx = document.createElement("span");
+    tx.className = "t";
+    tx.innerHTML = "<b></b><span></span>";
+    tx.firstChild.textContent = t.title;
+    tx.lastChild.textContent = t.artist;
+    row.appendChild(tx);
+    var d = document.createElement("span");
+    d.className = "d";
+    d.textContent = fmtTime(t.durationMs / 1000);
+    row.appendChild(d);
+    row.onclick = function () { player.pos = i; playCurrent(); };
+    host.appendChild(row);
+  });
+  npReadyMarks();
+}
+
 function npQueueChanged() {
   clearTimeout(player.prefetchTimer);
   player.prefetchTimer = setTimeout(prefetchAhead, 600);
