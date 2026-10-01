@@ -7,7 +7,12 @@ aligner, MMS_FA, on the GPU when there is one), and gives the phone the lyrics b
 (<mm:ss.xx> before each word), which the phone's player and the page light word by word.
 
   tools/lyrics-align/venv/Scripts/python tools/lyrics-align/align.py --phone 192.168.1.14:8787
-      [--ids 151,206] [--redo] [--dry] [--restore]
+      [--ids 151,206] [--redo] [--dry] [--restore] [--vocals] [--pad 600] [--min 0.15] [--stats]
+
+--vocals pulls the singing out of the mix first (Demucs, htdemucs), which places far more lines
+on busy songs; --pad is how far either side of a line's time its words are looked for, --min the
+least confidence kept. A line the aligner is unsure of is tried again without its bracketed
+ad-libs, which are fitted in between. The library was done with --vocals --pad 600 --min 0.15.
 
 It signs in as this computer's helper (its session in %APPDATA%\\Xoosh\\session.txt). Every song's
 lyrics as they were are kept in tools/lyrics-align/backup/<id>.json first; --restore puts those
@@ -113,18 +118,42 @@ class Aligner:
         self.align = b.get_aligner()
         self.chars = set(b.get_dict(star=None).keys())
 
-    def load(self, path):
+    def load(self, path, vocals=False):
+        """The song as the aligner hears it: 16 kHz mono; with [vocals], the singing alone (Demucs)."""
+        if vocals:
+            return self.separated(path)
         pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", str(self.sr), "-f", "f32le", "-"],
                              capture_output=True, check=True).stdout
         return self.torch.frombuffer(bytearray(pcm), dtype=self.torch.float32)
 
-    def line(self, audio, start_ms, end_ms, words):
-        """Times (ms) for each word of one line between start_ms and end_ms, and the mean confidence; None if it cannot."""
-        keys = [("".join(c for c in norm(w) if c in self.chars)) for w in words]
+    def separated(self, path):
+        """The vocals pulled out of the mix by Demucs (htdemucs) on the GPU, so the beat does not
+        get in the aligner's way; 16 kHz mono."""
+        torch = self.torch
+        if not hasattr(self, "demucs"):
+            from demucs.pretrained import get_model
+            from demucs.apply import apply_model
+            self.demucs = get_model("htdemucs").to(self.device).eval()
+            self.apply_model = apply_model
+        m = self.demucs
+        pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-ac", "2", "-ar", str(m.samplerate), "-f", "f32le", "-"],
+                             capture_output=True, check=True).stdout
+        wav = torch.frombuffer(bytearray(pcm), dtype=torch.float32).view(-1, 2).t().contiguous()
+        ref = wav.mean(0)
+        mean, std = ref.mean(), ref.std() + 1e-8
+        with torch.inference_mode():
+            out = self.apply_model(m, ((wav - mean) / std)[None], device=self.device, split=True, overlap=0.25, progress=False)[0]
+        voc = (out[m.sources.index("vocals")] * std + mean).mean(0)
+        return self.ta.functional.resample(voc.cpu(), m.samplerate, self.sr).contiguous()
+
+    def line(self, audio, start_ms, end_ms, words, pad=250, skip=()):
+        """Times (ms) for each word of one line between start_ms and end_ms (searched [pad] ms either
+        side), and the mean confidence; None if it cannot. Words in [skip] (ad-libs) are not looked
+        for, only placed between their neighbours."""
+        keys = [("".join(c for c in norm(w) if c in self.chars)) if i not in skip else "" for i, w in enumerate(words)]
         idx = [i for i, k in enumerate(keys) if k]
-        if not idx or len(idx) < len(words) * 0.6:
+        if not idx or len(idx) < (len(words) - len(skip)) * 0.6:
             return None
-        pad = 250
         a = max(0, int((start_ms - pad) * self.sr / 1000))
         b = min(audio.numel(), int((end_ms + pad) * self.sr / 1000))
         if b - a < self.sr * 0.2:
@@ -161,6 +190,19 @@ class Aligner:
 # ---------------------------------------------------------------- one song
 
 MIN_SCORE = 0.2
+PAD_MS = 250
+# For --stats: each placed line's confidence and how far its first word is from the line's own time.
+STATS = []
+
+def adlibs(words):
+    """The words inside brackets, (yeah, yeah) [Future], which are often barely heard."""
+    out, depth = set(), 0
+    for i, w in enumerate(words):
+        opens = w.count("(") + w.count("[")
+        if depth > 0 or opens:
+            out.add(i)
+        depth = max(0, depth + opens - w.count(")") - w.count("]"))
+    return out
 
 def enhance(aligner, audio, doc, length_ms):
     lines, head = parse_lines(doc["lrc"])
@@ -169,12 +211,20 @@ def enhance(aligner, audio, doc, length_ms):
         nxt = lines[k + 1][0] if k + 1 < len(lines) else min(length_ms, t + 8000)
         end = min(nxt, t + 12000)
         words = text.split()
-        res = aligner.line(audio, t, end, words) if words else None
+        res = aligner.line(audio, t, end, words, pad=PAD_MS) if words else None
+        # Not sure of the whole line: the main words alone, the ad-libs fitted in between.
+        if words and (not res or res[1] < MIN_SCORE):
+            skip = adlibs(words)
+            if skip and len(skip) < len(words):
+                again = aligner.line(audio, t, end, words, pad=PAD_MS, skip=skip)
+                if again and again[1] >= MIN_SCORE:
+                    res = again
         if words:
             total += 1
         if res and res[1] >= MIN_SCORE:
             placed += 1
             times, _ = res
+            STATS.append((res[1], abs(times[0] - t)))
             body = "".join(f"<{fmt(ms)}>{w}{' ' if i < len(words) - 1 else ''}" for i, (w, ms) in enumerate(zip(words, times)))
             out.append(f"[{fmt(t)}]{body}")
         else:
@@ -182,6 +232,7 @@ def enhance(aligner, audio, doc, length_ms):
     return "\n".join(out) + "\n", placed, total
 
 def main():
+    global PAD_MS, MIN_SCORE
     ap = argparse.ArgumentParser()
     ap.add_argument("--phone", required=True)
     ap.add_argument("--ids", default="")
@@ -189,7 +240,12 @@ def main():
     ap.add_argument("--dry", action="store_true", help="work it out and report, but give the phone nothing")
     ap.add_argument("--restore", action="store_true", help="give the phone back the lyrics kept in the backup")
     ap.add_argument("--show", type=int, default=0, help="print this many of each song's new lines")
+    ap.add_argument("--stats", action="store_true", help="report how close each line's first word lands to the line's own time, by confidence")
+    ap.add_argument("--pad", type=int, default=PAD_MS, help="how far either side of a line's time to look for its words (ms)")
+    ap.add_argument("--min", type=float, default=MIN_SCORE, help="the least confidence a line's word times are kept at")
+    ap.add_argument("--vocals", action="store_true", help="align against the vocals alone, pulled out of the mix with Demucs (slower, more accurate)")
     args = ap.parse_args()
+    PAD_MS, MIN_SCORE = args.pad, args.min
     phone = Phone(args.phone)
     tracks = phone.tracks()
     if args.ids:
@@ -223,7 +279,7 @@ def main():
                 json.dump(doc, open(bp, "w", encoding="utf-8"), ensure_ascii=False)
             t0 = time.time()
             path = phone.audio(t)
-            audio = aligner.load(path)
+            audio = aligner.load(path, vocals=args.vocals)
             os.remove(path)  # the song's copy is only needed for this
             lrc, placed, total = enhance(aligner, audio, doc, t["durationMs"])
             print(f"{label} - {placed}/{total} lines by the word ({time.time() - t0:.1f} s)", flush=True)
@@ -238,6 +294,13 @@ def main():
         except Exception as e:
             print(label, "- failed:", str(e)[:120], flush=True)
     print(f"done: {done} songs given word timing, {skipped} skipped")
+    if args.stats and STATS:
+        import statistics
+        for lo, hi in ((0.0, 0.15), (0.15, 0.2), (0.2, 0.3), (0.3, 0.5), (0.5, 1.01)):
+            d = sorted(off for sc, off in STATS if lo <= sc < hi)
+            if d:
+                print(f"  confidence {lo:.2f}-{hi:.2f}: {len(d):4} lines, first word off by median {statistics.median(d):.0f} ms,"
+                      f" 90% within {d[int(len(d) * 0.9) - 1 if len(d) > 1 else 0]:.0f} ms")
 
 if __name__ == "__main__":
     main()
