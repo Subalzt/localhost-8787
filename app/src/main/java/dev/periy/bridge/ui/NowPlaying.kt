@@ -8,6 +8,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.ui.draw.blur
@@ -417,9 +418,9 @@ private class Geo(
     val heart = dp(48f)
     val textBigH = titleBig * 1.3f + artistBig * 1.35f + dp(4f)
     val textBigTop = waveTop - dp(18f) - textBigH
-    private val artAreaTop = topRowTop + topRowH + dp(12f)
-    private val artAreaBottom = textBigTop - dp(22f)
-    val artBig = min(w - dp(56f), artAreaBottom - artAreaTop).coerceAtLeast(dp(120f))
+    private val artAreaTop = topRowTop + topRowH + dp(6f)
+    private val artAreaBottom = textBigTop - dp(16f)
+    val artBig = min(w - dp(40f), artAreaBottom - artAreaTop).coerceAtLeast(dp(120f))
     val artBigX = (w - artBig) / 2
     val artBigY = artAreaTop + ((artAreaBottom - artAreaTop) - artBig) / 2
 
@@ -572,26 +573,19 @@ fun NowPlaying(
     val info by produceState<dev.periy.bridge.server.TrackInfoDto?>(null, cur.id) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { library.info(cur.id) }.getOrNull() }
     }
-    // The lyrics, over the cover while Namida's lyrics button is on: kept on the phone, else
-    // looked up (LyricsFinder), and read again when a page leaves new ones.
+    // The lyrics, on a page of their own over the player, opened from the lyrics button: kept on
+    // the phone, else looked up (LyricsFinder) once the page opens, and read again when a page
+    // in the browser leaves new ones. The page stays open from song to song; it closes with the
+    // player folding away, or Back.
     val container = androidx.compose.ui.platform.LocalContext.current.container
-    var lyricsOn by remember { mutableStateOf(container.prefs.lyricsShown) }
-    val lyricsVer by container.lyrics.changed.collectAsState()
-    val lyrics by produceState(container.lyrics.cached(cur), cur.id, lyricsVer, lyricsOn) {
-        value = container.lyrics.cached(cur)
-        if (lyricsOn) value = runCatching { container.lyrics.forTrack(cur) }.getOrNull()
-    }
-    val lyricsShowing = lyricsOn && lyrics?.let { it.timed || it.kind == dev.periy.bridge.server.ShownLyrics.Kind.PLAIN } == true
-    val lyricsVis by animateFloatAsState(if (lyricsShowing) 1f else 0f, tween(400), label = "lyrics")
-    // Only while the player is open on them do they take taps and scrolling.
-    val lyricsLive by remember { derivedStateOf { Terms(motion.p, motion.bounceUp).let { it.bcp > 0.95f && it.qcp < 0.05f } && abs(motion.s) < 0.05f } }
-    // Namida's full-page lyrics, opened by a tap on those over the cover. They go with the lyrics,
-    // and when the player folds away; Back closes them first.
     var lyricsFull by remember { mutableStateOf(false) }
+    val lyricsVer by container.lyrics.changed.collectAsState()
+    val lyrics by produceState(container.lyrics.cached(cur), cur.id, lyricsVer, lyricsFull) {
+        value = container.lyrics.cached(cur)
+        if (lyricsFull) value = runCatching { container.lyrics.forTrack(cur) }.getOrNull()
+    }
     val playerOpen by remember { derivedStateOf { motion.p > 0.9f } }
-    // Kept open from song to song (the next one's lyrics come in under it); only turning the
-    // lyrics off, or the player folding away, closes it.
-    if (lyricsFull && (!lyricsOn || !playerOpen)) lyricsFull = false
+    if (lyricsFull && !playerOpen) lyricsFull = false
     // Back follows the finger: the lyrics slide aside and fade, back to the player under them.
     val lyricsSwipe = rememberBackSwipe(enabled = lyricsFull) { lyricsFull = false }
 
@@ -613,6 +607,11 @@ fun NowPlaying(
         val onDismiss = rememberUpdatedState { player.clear() }
         val around = rememberUpdatedState { i: Int -> aroundIndex(player.state.value, i) }
 
+        // The layout as a state the layers read, so their shape (and with it where a touch lands
+        // on the mini player) follows it when it moves: down into Music, back up over the tabs.
+        val geo = remember { mutableStateOf(g) }
+        geo.value = g
+
         // ---- the panel: from the mini player's card to the whole screen
         Box(
             Modifier
@@ -620,6 +619,7 @@ fun NowPlaying(
                 .then(behindDialog)
                 .graphicsLayer {
                     val t = Terms(motion.p, motion.bounceUp)
+                    val g = geo.value
                     val r = panelRect(g, t)
                     val radius = lerp(g.miniRadius, 0f, t.cp)
                     shape = RectShape(r, radius)
@@ -660,7 +660,7 @@ fun NowPlaying(
             // The covers and titles slide within the mini row's own corner at first (short of
             // its buttons), and across the whole screen once the player is open.
             Box(Modifier.fillMaxSize().graphicsLayer {
-                shape = RectShape(slideClip(g, Terms(motion.p, motion.bounceUp)), 0f)
+                shape = RectShape(slideClip(geo.value, Terms(motion.p, motion.bounceUp)), 0f)
                 clip = true
             }) {
             // ---- the titles, sliding a little faster than the covers; drawn under them, as Namida's are,
@@ -698,28 +698,9 @@ fun NowPlaying(
                             val tm = Terms(motion.p, motion.bounceUp)
                             val sz = artBox(g, tm)[2]
                             lerp(g.dp(6f), g.dp(14f), tm.bcp) * g.artBig / sz.coerceAtLeast(1f)
-                        }, glow = tint, glowOf = { Terms(motion.p, motion.bounceUp).bcp },
-                            veil = if (slot == 0) ({ lyricsVis * Terms(motion.p, motion.bounceUp).bcp }) else ({ 0f }),
-                            veilColor = tint.copy(alpha = 0.25f).compositeOver(nc.bg))
+                        }, glow = tint, glowOf = { Terms(motion.p, motion.bounceUp).bcp })
                     }
                 }
-            }
-            // ---- the lyrics, over this song's cover. As Namida's, they keep their size and ride on the
-            // cover's middle as it shrinks into the queue or the mini player, fading as they go.
-            val shownLyrics = lyrics
-            if (shownLyrics != null && (lyricsShowing || lyricsVis > 0f)) key("lyrics", curT.id) {
-                LyricsOverCover(
-                    shownLyrics, state, tick, tint, live = lyricsLive && lyricsShowing,
-                    onSeek = { ms -> player.seekTo(ms) },
-                    onOpen = { lyricsFull = true },
-                    modifier = Modifier.placed(g.artBig, g.artBig) {
-                        val tm = Terms(motion.p, motion.bounceUp)
-                        val a = artBox(g, tm)
-                        val sv = motion.s
-                        val inset = (a[2] - g.artBig) / 2
-                        floatArrayOf(a[0] + inset - sv * slideSpacing(g, tm, a[2]), a[1] + inset, 1f, lyricsVis * tm.bcp * (1f - abs(sv)).coerceIn(0f, 1f))
-                    },
-                )
             }
 
             }
@@ -803,8 +784,8 @@ fun NowPlaying(
                 onRepeat = { player.setRepeat(it) },
                 onRepeatTimes = { player.setRepeatTimes(it) },
                 onSound = { sound = true },
-                lyricsOn = lyricsOn, lyrics = lyrics,
-                onLyrics = { lyricsOn = !lyricsOn; container.prefs.lyricsShown = lyricsOn },
+                lyrics = lyrics,
+                onLyrics = { lyricsFull = true },
                 modifier = Modifier.placed(g.w, g.bottomRowH) {
                     val t = Terms(motion.p, motion.bounceUp)
                     floatArrayOf(0f, g.bottomRowTop + (1f - t.cp) * g.dp(100f) + slideDown(g, t), 1f, t.mid)
@@ -828,9 +809,8 @@ fun NowPlaying(
         ) {
             Box(SharedAxisBack.over(lyricsSwipe)) {
                 FullLyrics(
-                    cur, lyrics, state, tick, tint, env, lyricsOn, statusTop, navBottom,
+                    cur, lyrics, state, tick, tint, env, statusTop, navBottom,
                     onClose = { lyricsFull = false },
-                    onLyricsOff = { lyricsFull = false; lyricsOn = false; container.prefs.lyricsShown = false },
                     onSeek = { ms -> player.seekTo(ms) },
                     onPrev = { motion.toSong(-1, player) { around.value(it) } },
                     onToggle = { player.toggle() },
@@ -844,10 +824,11 @@ fun NowPlaying(
 }
 
 /**
- * Namida's full-page lyrics: the cover blurred far out behind a wash of the page colour; along
- * the top, back, who and what is playing, and the lyrics button (which turns them off); the lines
- * large from the left, the one being sung on a soft card (a tap on a line goes to it); along the
- * foot, the waveform, then the times either side of previous, play and next.
+ * The lyrics, full screen: the cover blown up and blurred far out, drifting slowly, under a dark
+ * veil with its colour glowing through, light words whatever the theme. Along the top, the song
+ * (its cover small, its name and who it is by) and the way back down; the lines large from the
+ * left, the one being sung bright and the rest dim (a tap on a line goes to it); along the foot,
+ * the waveform, then the times either side of previous, play and next.
  */
 @Composable
 private fun FullLyrics(
@@ -857,35 +838,42 @@ private fun FullLyrics(
     tick: State<Long>,
     tint: Color,
     env: ByteArray?,
-    lyricsOn: Boolean,
     statusTop: Dp,
     navBottom: Dp,
     onClose: () -> Unit,
-    onLyricsOff: () -> Unit,
     onSeek: (Long) -> Unit,
     onPrev: () -> Unit,
     onToggle: () -> Unit,
     onNext: () -> Unit,
 ) {
-    val nc = Nm.c
+    val nc = remember { cleanColors(dark = true, accent = Color.White) }
     val seek = remember { mutableStateOf<Long?>(null) }
+    val drift = androidx.compose.animation.core.rememberInfiniteTransition(label = "drift")
+    val turn by drift.animateFloat(
+        0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(24000, easing = androidx.compose.animation.core.LinearEasing)), label = "turn",
+    )
+    CompositionLocalProvider(LocalNamida provides nc, LocalPalette provides nc.asPalette(LocalPalette.current)) {
     // It takes every touch on it: none reaches the player under it.
-    Box(Modifier.fillMaxSize().pointerInput(Unit) {}.background(nc.bg)) {
-        Cover(cur.albumId, cur.album, Modifier.fillMaxSize().blur(90.dp), radius = 0.dp, big = true)
-        Box(Modifier.fillMaxSize().background(nc.bg.copy(alpha = if (nc.dark) 0.78f else 0.7f)))
+    Box(Modifier.fillMaxSize().pointerInput(Unit) {}.background(Color.Black)) {
+        Cover(cur.albumId, cur.album, Modifier.fillMaxSize().graphicsLayer {
+            val a = turn * 2f * Math.PI.toFloat()
+            scaleX = 1.6f + 0.12f * kotlin.math.sin(a); scaleY = scaleX
+            rotationZ = 8f * kotlin.math.sin(a)
+            translationX = size.width * 0.06f * kotlin.math.cos(a)
+        }.blur(110.dp), radius = 0.dp, big = true)
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.58f)))
+        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(tint.copy(alpha = 0.32f), Color.Transparent), Offset(0f, 0f), 1400f)))
         Column(Modifier.fillMaxSize().padding(top = statusTop, bottom = navBottom)) {
-            Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
-                    Icon(Iconsax.Back, "Back to the player", tint = nc.icon, modifier = Modifier.size(22.dp))
-                }
-                Column(Modifier.weight(1f).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(cur.title, style = Nm.large.copy(fontSize = 16.nsp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(cur.artist, style = Nm.medium.copy(fontSize = 13.5.nsp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.fillMaxWidth().height(72.dp).padding(start = 24.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Cover(cur.albumId, cur.album, Modifier.size(46.dp), radius = 6.dp)
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    Text(cur.title, style = TextStyle(fontFamily = MusicType, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(cur.artist, style = TextStyle(fontFamily = MusicType, fontSize = 14.sp, color = Color.White.copy(alpha = 0.6f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Box(
-                    Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onLyricsOff).semantics { contentDescription = "Hide the lyrics" },
+                    Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)).clickable(onClick = onClose),
                     contentAlignment = Alignment.Center,
-                ) { LyricsIcon(lyricsOn, lyrics, nc.icon) }
+                ) { Icon(Iconsax.Down, "Back to the player", tint = Color.White, modifier = Modifier.size(20.dp)) }
             }
             val shown = lyrics?.takeIf { it.timed || it.kind == dev.periy.bridge.server.ShownLyrics.Kind.PLAIN }
             if (shown != null) key(cur.id) {
@@ -894,26 +882,26 @@ private fun FullLyrics(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
             } else Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 28.dp), contentAlignment = Alignment.CenterStart) {
-                // The next song's lyrics on their way, or none to be had: said where the lines go.
+                // The lyrics on their way, or none to be had: said where the lines go.
                 Text(
                     when {
-                        lyrics == null -> "Looking for the lyrics\u2026"
+                        lyrics == null -> "Looking for the lyrics…"
                         lyrics.kind == dev.periy.bridge.server.ShownLyrics.Kind.INSTRUMENTAL -> "Instrumental"
                         lyrics.offline -> "Lyrics come when the phone is online"
                         else -> "No lyrics for this song"
                     },
-                    style = Nm.large.copy(fontSize = 22.nsp, lineHeight = 28.nsp, color = nc.medium),
+                    style = TextStyle(fontFamily = MusicType, fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.45f)),
                 )
             }
             Box(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 WaveSeek(
                     env = env, state = state, tint = tint, tick = tick, active = { true },
                     onScrub = { seek.value = it }, onSeek = onSeek,
-                    modifier = Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(52.dp),
+                    modifier = Modifier.padding(horizontal = 18.dp).fillMaxWidth().height(40.dp),
                 )
                 SeekLabel(seek, state, Modifier.fillMaxWidth().height(22.dp).offset(y = (-24).dp).graphicsLayer { alpha = if (seek.value != null) 1f else 0f })
             }
-            Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().height(92.dp), contentAlignment = Alignment.Center) {
                 Times(state, tick, Modifier.fillMaxWidth().padding(horizontal = 20.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
                     TransportButton(BlazeIcons.PreviousSolid, "Previous", Modifier.size(52.dp), onClick = onPrev)
@@ -922,6 +910,7 @@ private fun FullLyrics(
                 }
             }
         }
+    }
     }
 }
 
@@ -1081,7 +1070,7 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.playerGe
  * follow it. [veil]: with the lyrics over it, as Namida's: blurred, under a faint veil of [veilColor].
  */
 @Composable
-private fun ArtFace(t: TrackDto, radiusOf: () -> Float, glow: Color, glowOf: () -> Float, veil: () -> Float = { 0f }, veilColor: Color = Color.Transparent) {
+private fun ArtFace(t: TrackDto, radiusOf: () -> Float, glow: Color, glowOf: () -> Float) {
     val img = rememberCover(t.albumId, big = true)
     Box(
         Modifier.fillMaxSize()
@@ -1092,27 +1081,12 @@ private fun ArtFace(t: TrackDto, radiusOf: () -> Float, glow: Color, glowOf: () 
                 shadowElevation = 24.dp.toPx() * glowOf()
                 ambientShadowColor = glow.copy(alpha = 0.5f)
                 spotShadowColor = glow
-            }
-            .drawWithContent {
-                drawContent()
-                val v = veil()
-                if (v > 0f) drawRect(veilColor.copy(alpha = veilColor.alpha * LYRICS_VEIL * v))
             },
     ) {
-        // Blurred within the rounded corners, which stay sharp.
-        val inner = Modifier.fillMaxSize().graphicsLayer {
-            val v = veil()
-            val r = LYRICS_BLUR.toPx() * v
-            renderEffect = if (r > 0.5f) androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Clamp) else null
-        }
-        if (img != null) androidx.compose.foundation.Image(img, null, inner, contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-        else MadeUpCover(t.album, inner)
+        if (img != null) androidx.compose.foundation.Image(img, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+        else MadeUpCover(t.album, Modifier.fillMaxSize())
     }
 }
-
-/** Namida's blur on the cover under the lyrics (its 12, as a radius), and how much of its veil shows. */
-private val LYRICS_BLUR = 20.dp
-private const val LYRICS_VEIL = 0.25f
 
 /** One of the two lines, laid out at the full player's size; the motion scales it. Both are in Namida's medium style. */
 @Composable
@@ -1243,42 +1217,37 @@ private fun BottomRow(
     onRepeat: (PhonePlayer.Repeat) -> Unit,
     onRepeatTimes: (Int) -> Unit,
     onSound: () -> Unit,
-    lyricsOn: Boolean,
     lyrics: dev.periy.bridge.server.ShownLyrics?,
     onLyrics: () -> Unit,
     modifier: Modifier,
 ) {
     val nc = Nm.c
     Row(modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        // The chip takes what room the buttons leave, and its details give way first.
+        // What the file is, as it is: FLAC · 16-bit · 44.1 kHz · 968 kbps, on a faint pill, in
+        // the room the buttons leave. It keeps its size whatever the phone's text size, and stays
+        // on one line: the bitrate gives way first, then the type gets a little smaller.
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            Row(
-                Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onSound).padding(horizontal = 4.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // What the file is, as it is: FLAC · 16-bit · 44.1 kHz · 968 kbps, on a faint pill;
-                // the bitrate gives way first where the row is short of room.
-                var roomy by remember(info) { mutableStateOf(true) }
-                val line = info?.let { formatLine(it, state.current?.mime.orEmpty(), kbps = roomy) }
-                    ?: state.current?.mime?.let(::formatBadge).orEmpty()
-                if (line.isNotEmpty()) Text(
-                    line,
-                    onTextLayout = { if (it.hasVisualOverflow && roomy) roomy = false },
-                    style = TextStyle(fontFamily = MusicType, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.2.sp,
-                        color = nc.onSurface.copy(alpha = 0.8f), fontFeatureSettings = "tnum"),
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(nc.onSurface.copy(alpha = 0.1f)).padding(horizontal = 8.dp, vertical = 3.dp),
-                )
-            }
+            var level by remember(info) { mutableStateOf(0) }
+            val d = LocalDensity.current
+            val line = info?.let { formatLine(it, state.current?.mime.orEmpty(), kbps = level == 0) }
+                ?: state.current?.mime?.let(::formatBadge).orEmpty()
+            if (line.isNotEmpty()) Text(
+                line,
+                onTextLayout = { if (it.hasVisualOverflow && level < 2) level++ },
+                style = TextStyle(fontFamily = MusicType, fontSize = with(d) { (if (level < 2) 12f else 10.5f).dp.toSp() }, fontWeight = FontWeight.SemiBold,
+                    color = nc.onSurface.copy(alpha = 0.8f), fontFeatureSettings = "tnum"),
+                maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(nc.onSurface.copy(alpha = 0.1f)).padding(horizontal = 8.dp, vertical = 4.dp),
+            )
         }
         RepeatButton(state.repeat, state.repeatTimes, onRepeat, onRepeatTimes)
         RowButton(Iconsax.Sound, "Sound: pitch, speed and volume", size = 21.dp, onClick = onSound)
-        // Namida's lyrics button, after the sound controls: the lyrics over the cover, on or off.
+        // The lyrics button, after the sound controls: opens the lyrics, full screen.
         Box(
-            Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.88f, onClick = onLyrics)
-                .semantics { contentDescription = if (lyricsOn) "Hide the lyrics" else "Show the lyrics" },
+            Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.85f, ripple = false, onClick = onLyrics)
+                .semantics { contentDescription = "Lyrics" },
             contentAlignment = Alignment.Center,
-        ) { LyricsIcon(lyricsOn, lyrics, nc.onSecondaryContainer) }
+        ) { LyricsIcon(true, lyrics, nc.onSecondaryContainer) }
         Spacer(Modifier.width(6.dp))
     }
 }
@@ -1353,7 +1322,7 @@ private fun RepeatButton(mode: PhonePlayer.Repeat, times: Int, onPick: (PhonePla
     val iconColour = nc.main.copy(alpha = 120 / 255f).compositeOver(nc.onSurface)
     Box {
         Box(
-            Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.88f) { open = !open }
+            Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.85f, ripple = false) { open = !open }
                 .semantics { contentDescription = repeatLabel(mode, times).let { if (it.startsWith("Repeat")) it else "Repeat: " + it.replaceFirstChar(Char::lowercase) } },
             contentAlignment = Alignment.Center,
         ) { RepeatIcon(mode, times, nc.onSecondaryContainer) }
@@ -1383,7 +1352,7 @@ private fun RepeatButton(mode: PhonePlayer.Repeat, times: Int, onPick: (PhonePla
 /** One of the bottom row's buttons: the icon alone, in the row's colour. */
 @Composable
 private fun RowButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, size: Dp = 20.dp, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.88f, onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(44.dp).pressable(CircleShape, scaleTo = 0.85f, ripple = false, onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, description, tint = Nm.c.onSecondaryContainer, modifier = Modifier.size(size))
     }
 }

@@ -161,7 +161,7 @@ internal fun LyricsOverCover(
             list.centre(current.coerceAtLeast(0))
         }
         // Over the cover, the line on a wash of the song's colour; on the full page, a soft card of the text colour.
-        val selectedBg = if (full) nc.onSurface.copy(alpha = 0.09f) else tint.copy(alpha = 140 / 255f).compositeOver(nc.bg).copy(alpha = 0.5f)
+        val selectedBg = if (full) Color.Transparent else tint.copy(alpha = 140 / 255f).compositeOver(nc.bg).copy(alpha = 0.5f)
         LazyColumn(
             state = list,
             userScrollEnabled = live,
@@ -189,7 +189,7 @@ internal fun LyricsOverCover(
 }
 
 /** A line on Namida's full-page lyrics: large and bold, from the left. */
-private val FullLine = TextStyle(fontFamily = MusicType, fontWeight = FontWeight.Bold, fontSize = 22.nsp, lineHeight = 28.nsp)
+private val FullLine = TextStyle(fontFamily = MusicType, fontWeight = FontWeight.Bold, fontSize = 28.sp, lineHeight = 34.sp, letterSpacing = (-0.3).sp)
 
 /** Glides so item [index] sits in the middle (from further off, it goes there first). */
 private suspend fun LazyListState.centre(index: Int) {
@@ -218,15 +218,20 @@ private fun Line(
     val nc = Nm.c
     val on = distance == 0
     val k by animateFloatAsState(
-        if (full) when (distance) { 0 -> 1f; 1 -> 0.72f; 2 -> 0.5f; else -> 0.3f } else when (distance) { 0 -> 1f; 1 -> 0.5f; 2 -> 0.4f; else -> 0.25f },
+        if (full) when (distance) { 0 -> 1f; 1 -> 0.42f; 2 -> 0.3f; else -> 0.2f } else when (distance) { 0 -> 1f; 1 -> 0.5f; 2 -> 0.4f; else -> 0.25f },
         tween(300), label = "line",
     )
     val bg by animateColorAsState(if (on) selectedBg else selectedBg.copy(alpha = 0f), tween(300), label = "card")
+    val grow by animateFloatAsState(if (on || !full) 1f else 0.94f, tween(420, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "grow")
     val base = nc.medium
     val style = if (full) FullLine.copy(color = base.copy(alpha = base.alpha * k))
     else Nm.medium.copy(color = base.copy(alpha = base.alpha * k), textAlign = TextAlign.Center)
     Box(
-        (if (full) Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp).clip(RoundedCornerShape(12.dp))
+        (if (full) Modifier.fillMaxWidth().graphicsLayer {
+            // The line being sung a little larger than the rest, growing from its left edge.
+            scaleX = grow; scaleY = grow
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+        }.padding(horizontal = 14.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp))
         else Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(8.dp)))
             .background(bg)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)

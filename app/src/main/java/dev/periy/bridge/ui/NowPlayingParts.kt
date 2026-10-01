@@ -38,6 +38,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -301,7 +303,6 @@ internal fun QueuePanel(
     val liveKeys = rememberUpdatedState(keys)
     val drag = remember { QueueDrag() }
     val nc = Nm.c
-    val lit = Color.White
     val favourites = androidx.compose.ui.platform.LocalContext.current.container.favourites
     val hearts by favourites.ids.collectAsState()
     Box(modifier) {
@@ -317,7 +318,7 @@ internal fun QueuePanel(
                     val k = keys.getOrElse(i) { "x$i" }
                     val dragging = drag.key == k
                     QueueRow(
-                        t, k, current = i == state.index, sounding = state.playing, tint = tint, lit = lit, drag = drag,
+                        t, k, current = i == state.index, sounding = state.playing, tint = tint, drag = drag,
                         hearted = t.id in hearts, onHeart = { favourites.toggle(t.id) },
                         modifier = (if (dragging) Modifier else Modifier.animateItem())
                             .zIndex(if (dragging) 1f else 0f),
@@ -362,16 +363,13 @@ private fun QueueHeader(state: PhonePlayer.State, onClose: () -> Unit) {
     val nc = Nm.c
     val left = state.queue.drop(state.index.coerceAtLeast(0)).sumOf { it.durationMs }
     Row(
-        Modifier.fillMaxWidth()
-            .background(Brush.linearGradient(listOf(
-                nc.bg.copy(alpha = 0.9f).compositeOver(nc.tint).copy(alpha = 0.5f).compositeOver(nc.bg),
-                nc.bg.copy(alpha = 0.65f).compositeOver(nc.tint).copy(alpha = 0.5f).compositeOver(nc.bg),
-            )))
-            .padding(vertical = 12.dp).heightIn(min = 42.dp),
+        Modifier.fillMaxWidth().background(nc.bg)
+            .drawBehind { drawLine(nc.onSurface.copy(alpha = 0.12f), Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f) }
+            .padding(top = 16.dp, bottom = 10.dp).heightIn(min = 42.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f).padding(start = 18.dp)) {
-            Text("Queue", style = Nm.medium)
+        Column(Modifier.weight(1f).padding(start = 20.dp)) {
+            Text("Queue", style = TextStyle(fontFamily = MusicType, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = nc.large))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val small = Nm.small.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum")
                 Text("${state.index + 1}/${state.queue.size} \u2022", style = small)
@@ -397,7 +395,6 @@ private fun QueueRow(
     current: Boolean,
     sounding: Boolean,
     tint: Color,
-    lit: Color,
     drag: QueueDrag,
     hearted: Boolean,
     onHeart: () -> Unit,
@@ -431,15 +428,12 @@ private fun QueueRow(
                 .padding(horizontal = 24.dp).size(22.dp).graphicsLayer { alpha = (abs(dx.value) / rowW * 4f).coerceIn(0f, 1f) })
         }
         val nc = Nm.c
-        val shrink by animateFloatAsState(if (current) 0.96f else 1f, tween(400), label = "thumb")
+        val shrink by animateFloatAsState(if (current) 0.94f else 1f, tween(400), label = "thumb")
+        val line = nc.onSurface.copy(alpha = 0.12f)
         Row(
-            Modifier.fillMaxWidth().height(NamidaTileHeight)
+            Modifier.fillMaxSize()
                 .offset { IntOffset(dx.value.roundToInt(), 0) }
-                .background(
-                    // Held stronger in light mode, so the white type on it reads.
-                    if (current) Brush.linearGradient(0.6f to if (nc.dark) nc.main else nc.main.copy(alpha = 220 / 255f), 1f to nc.tint.copy(alpha = 0.4f))
-                    else androidx.compose.ui.graphics.SolidColor(nc.card.copy(alpha = 0.9f)),
-                )
+                .background(nc.bg)
                 .pointerInput(key) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -454,68 +448,68 @@ private fun QueueRow(
                         onDragCancel = { scope.launch { dx.animateTo(0f) } },
                     ) { ch, amount -> ch.consume(); scope.launch { dx.snapTo(dx.value + amount) } }
                 }
-                .clickable(onClick = onTap)
-                .padding(vertical = 4.dp),
+                .clickable(onClick = onTap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // As Namida's queue has it: its track tile, with a handle on the right.
-            Spacer(Modifier.width(12.dp))
-            Box(Modifier.size(NamidaThumb).graphicsLayer { scaleX = shrink; scaleY = shrink }) {
-                Cover(t.albumId, t.album, Modifier.fillMaxSize(), radius = 8.dp)
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(t.title, style = Nm.medium.copy(color = if (current) lit.copy(alpha = 170 / 255f) else nc.medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(t.artist, style = Nm.small.copy(fontWeight = FontWeight.Medium, color = if (current) lit.copy(alpha = 140 / 255f) else nc.small),
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(listOfNotNull(t.album, t.year.takeIf { it > 0 }?.toString()).joinToString(" \u2022 "),
-                    style = Nm.small.copy(color = if (current) lit.copy(alpha = 130 / 255f) else nc.small), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Spacer(Modifier.width(6.dp))
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(fmtTime(t.durationMs), style = Nm.small.copy(fontWeight = FontWeight.Medium, color = if (current) lit.copy(alpha = 170 / 255f) else nc.small))
-                Box(Modifier.size(28.dp).clip(CircleShape).clickable(onClick = onHeart), contentAlignment = Alignment.Center) {
-                    Icon(if (hearted) Iconsax.HeartOn else Iconsax.Heart, if (hearted) "Take the heart off" else "Give it a heart",
-                        tint = if (current) lit.copy(alpha = 140 / 255f) else nc.icon, modifier = Modifier.size(20.dp))
-                }
-            }
-            // The handle: drag it up or down and the song moves through the queue.
+            // A plain row, as the library's: the cover, the song and who it is by, how long; the one
+            // playing in the lit colour with bars on its cover. A swipe either way takes it off;
+            // the handle moves it.
+            Spacer(Modifier.width(16.dp))
             Box(
-                Modifier.size(44.dp).pointerInput(key) {
-                    detectDragGestures(
-                        onDragStart = { drag.key = key; drag.offset = 0f },
-                        onDragEnd = { drag.key = null; drag.offset = 0f },
-                        onDragCancel = { drag.key = null; drag.offset = 0f },
-                    ) { ch, amount ->
-                        ch.consume()
-                        drag.offset += amount.y
-                        val keys = keysNow()
-                        val i = keys.indexOf(key)
-                        if (i < 0) return@detectDragGestures
-                        if (drag.offset > rowH / 2 && i < keys.lastIndex) { onMove(i, i + 1); drag.offset -= rowH }
-                        else if (drag.offset < -rowH / 2 && i > 0) { onMove(i, i - 1); drag.offset += rowH }
-                    }
-                },
+                Modifier.size(46.dp).graphicsLayer { scaleX = shrink; scaleY = shrink }
+                    .clip(RoundedCornerShape(6.dp)).border(0.5.dp, line, RoundedCornerShape(6.dp)),
                 contentAlignment = Alignment.Center,
-            ) { Icon(Iconsax.Handle, "Move", tint = if (current) lit.copy(alpha = 160 / 255f) else nc.icon, modifier = Modifier.size(22.dp)) }
-            // Namida's "more", upright: take it off the queue.
-            var menu by remember { mutableStateOf(false) }
-            Box {
-                Box(Modifier.clip(RoundedCornerShape(4.dp)).clickable { menu = true }.padding(6.dp), contentAlignment = Alignment.Center) {
-                    Icon(Iconsax.More, "More for ${t.title}", tint = if (current) lit.copy(alpha = 160 / 255f) else nc.icon,
-                        modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = 90f })
-                }
-                if (menu) NamidaMenu(onDismiss = { menu = false }) { close ->
-                    NamidaMenuItem(Iconsax.MinusCircle, "Take it off the queue", onClick = { close(); onRemove() })
+            ) {
+                Cover(t.albumId, t.album, Modifier.fillMaxSize(), radius = 6.dp)
+                if (current) {
+                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
+                    PlayingBars(Color.White, sounding, Modifier.size(14.dp))
                 }
             }
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(14.dp))
+            Row(
+                Modifier.weight(1f).fillMaxHeight().drawBehind {
+                    drawLine(line, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
+                },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(t.title, style = TextStyle(fontFamily = MusicType, fontSize = 16.sp, fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (current) nc.primary else nc.large), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(t.artist, style = TextStyle(fontFamily = MusicType, fontSize = 14.sp, color = nc.small), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (hearted) Box(Modifier.size(30.dp).clip(CircleShape).clickable(onClick = onHeart), contentAlignment = Alignment.Center) {
+                    Icon(Iconsax.HeartOn, "Take the heart off", tint = nc.small, modifier = Modifier.size(14.dp))
+                }
+                Text(fmtTime(t.durationMs), style = TextStyle(fontFamily = MusicType, fontSize = 13.sp, color = nc.small, fontFeatureSettings = "tnum"),
+                    modifier = Modifier.padding(start = 4.dp))
+                // The handle: drag it up or down and the song moves through the queue.
+                Box(
+                    Modifier.size(44.dp).pointerInput(key) {
+                        detectDragGestures(
+                            onDragStart = { drag.key = key; drag.offset = 0f },
+                            onDragEnd = { drag.key = null; drag.offset = 0f },
+                            onDragCancel = { drag.key = null; drag.offset = 0f },
+                        ) { ch, amount ->
+                            ch.consume()
+                            drag.offset += amount.y
+                            val keys = keysNow()
+                            val i = keys.indexOf(key)
+                            if (i < 0) return@detectDragGestures
+                            if (drag.offset > rowH / 2 && i < keys.lastIndex) { onMove(i, i + 1); drag.offset -= rowH }
+                            else if (drag.offset < -rowH / 2 && i > 0) { onMove(i, i - 1); drag.offset += rowH }
+                        }
+                    },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Iconsax.Handle, "Move", tint = nc.small, modifier = Modifier.size(20.dp)) }
+                Spacer(Modifier.width(6.dp))
+            }
         }
     }
 }
 
-/** Namida's track tile, with the gap under it. */
-private val ROW_H = NamidaTileHeight + NamidaTileGap
+/** A row of the queue. */
+private val ROW_H = 64.dp
 
 // ---------------------------------------------------------------------------- the sound controls
 

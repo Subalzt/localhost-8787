@@ -252,14 +252,14 @@ fun Modifier.tap(shape: Shape? = null, onClick: () -> Unit): Modifier =
  * back when let go, as Apple's cards and buttons do.
  */
 @Composable
-fun Modifier.pressable(shape: Shape? = null, scaleTo: Float = 0.96f, enabled: Boolean = true, onClick: () -> Unit): Modifier {
+fun Modifier.pressable(shape: Shape? = null, scaleTo: Float = 0.96f, enabled: Boolean = true, ripple: Boolean = true, onClick: () -> Unit): Modifier {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val s by animateFloatAsState(if (pressed) scaleTo else 1f, spring(dampingRatio = 0.55f, stiffness = 700f), label = "press")
     return this
         .graphicsLayer { scaleX = s; scaleY = s }
         .then(if (shape != null) Modifier.clip(shape) else Modifier)
-        .clickable(interactionSource = source, indication = ripple(), enabled = enabled, onClick = onClick)
+        .clickable(interactionSource = source, indication = if (ripple) ripple() else null, enabled = enabled, onClick = onClick)
 }
 
 /** What the screen sits on: the plain background. */
