@@ -1316,6 +1316,9 @@
   .np-play .np-btn .i1 svg { width: 59%; height: 59%; stroke-width: 1.5; }
   .np-row { display: flex; align-items: center; gap: 6px; padding: 0 12px; pointer-events: auto; }
   .np-row .np-sq { width: 44px; height: 44px; flex: 0 0 44px; }
+  /* Shuffle in the player's row: dim while off, the icon colour while on (as in the queue). */
+  .np-row .np-shuf { color: color-mix(in srgb, var(--nm-icon, var(--txt)) 45%, transparent); }
+  .np-row .np-shuf.on { color: var(--nm-icon, var(--txt)); }
   .np-where { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 10px; border: 0;
     border-radius: 14px; background: none; cursor: pointer; transition: background .15s; }
   .np-where:hover { background: color-mix(in srgb, var(--txt) 7%, transparent); }
@@ -2529,6 +2532,7 @@
   </div>
   <div class="np-el np-row" id="np-bottom">
     <button class="np-chip" id="np-chip" type="button" title="Sound: speed and volume"><span id="np-chip-t"></span></button>
+    <div class="np-sq"><button class="np-btn np-shuf" data-nx="shuffle" id="np-shuffle" type="button" title="Shuffle" aria-label="Shuffle" aria-pressed="false"></button></div>
     <div class="np-sq"><button class="np-btn" id="np-repeat" type="button" title="Repeat" aria-label="Repeat" aria-haspopup="menu"></button></div>
     <div class="np-sq"><button class="np-btn" data-nx="sound" id="np-sound" type="button" title="Sound: speed and volume" aria-label="Sound: speed and volume"></button></div>
     <div class="np-sq"><button class="np-btn" data-nx="lyrics" id="np-lyrics" type="button" title="Lyrics" aria-label="Lyrics"></button></div>
@@ -6506,8 +6510,10 @@ function toggleShuffle() {
 /** The bar's Shuffle and the queue's, lit while it is on. */
 function shuffleMarks() {
   $("pl-shuffle").classList.toggle("on", player.shuffle);
-  var q = $("np-qshuf");
-  if (q) { q.classList.toggle("on", player.shuffle); q.setAttribute("aria-pressed", player.shuffle ? "true" : "false"); }
+  ["np-qshuf", "np-shuffle"].forEach(function (id) {
+    var q = $(id);
+    if (q) { q.classList.toggle("on", player.shuffle); q.setAttribute("aria-pressed", player.shuffle ? "true" : "false"); }
+  });
 }
 
 /** What the Songs list is showing, as a queue's source: a search, or every song. */
@@ -8914,6 +8920,7 @@ function setupFullPlayer() {
   }
   nxFill(document);
   $("np-repeat").onclick = function () { npRepeatMenu(this); };
+  $("np-shuffle").onclick = toggleShuffle;
   $("np-heart").onclick = function () { var t = npTrack(); if (t) toggleFavourite(t.id); };
   // The sound controls: from the chip or the button beside repeat.
   $("np-chip").onclick = $("np-sound").onclick = npSoundOpen;
