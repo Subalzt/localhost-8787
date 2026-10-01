@@ -144,7 +144,9 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
                     val f = ex.getTrackFormat(i)
                     val m = f.getString(android.media.MediaFormat.KEY_MIME) ?: continue
                     if (!m.startsWith("audio/")) continue
-                    mime = m
+                    // Some phones' extractors hand FLAC over already decoded, as audio/raw: the
+                    // file's own type is the one to show then, not "WAV".
+                    if (m != "audio/raw") mime = m
                     if (f.containsKey(android.media.MediaFormat.KEY_SAMPLE_RATE)) rate = f.getInteger(android.media.MediaFormat.KEY_SAMPLE_RATE)
                     if (f.containsKey(android.media.MediaFormat.KEY_CHANNEL_COUNT)) channels = f.getInteger(android.media.MediaFormat.KEY_CHANNEL_COUNT)
                     if (f.containsKey(android.media.MediaFormat.KEY_BIT_RATE)) kbps = f.getInteger(android.media.MediaFormat.KEY_BIT_RATE) / 1000
@@ -224,7 +226,7 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
                     val rawTrack = c.getInt(8)
                     out += TrackDto(
                         id = c.getLong(0),
-                        title = c.getString(1)?.takeIf { it.isNotBlank() }
+                        title = c.getString(1)?.takeIf { it.isNotBlank() }?.let(::unmangle)
                             ?: displayName.substringBeforeLast('.'),
                         artist = c.getString(2).cleanTag("Unknown artist"),
                         album = c.getString(3).cleanTag("Unknown album"),
@@ -328,7 +330,21 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
     }
 
     private fun String?.cleanTag(fallback: String): String =
-        this?.takeIf { it.isNotBlank() && it != "<unknown>" } ?: fallback
+        this?.takeIf { it.isNotBlank() && it != "<unknown>" }?.let(::unmangle) ?: fallback
+
+    /**
+     * Tags written as UTF-8 but read as Latin-1 come out as "JhenÃ© Aiko": such text is turned
+     * back into its bytes and read again as UTF-8. Text that does not decode cleanly is left as it was.
+     */
+    private fun unmangle(s: String): String {
+        if (s.none { it == 'Ã' || it == 'Â' || it == 'â' } || s.any { it.code > 0xFF }) return s
+        return runCatching {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(s.toByteArray(Charsets.ISO_8859_1))).toString()
+        }.getOrDefault(s)
+    }
 
     private companion object {
         const val CACHE_MS = 60_000L
