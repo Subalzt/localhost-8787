@@ -12,7 +12,9 @@ aligner, MMS_FA, on the GPU when there is one), and gives the phone the lyrics b
 --vocals pulls the singing out of the mix first (Demucs, htdemucs), which places far more lines
 on busy songs; --pad is how far either side of a line's time its words are looked for, --min the
 least confidence kept. A line the aligner is unsure of is tried again without its bracketed
-ad-libs, which are fitted in between. The library was done with --vocals --pad 600 --min 0.15.
+ad-libs, which are fitted in between. A word pushed to the edge of where it was looked for was not
+found there: the line is looked for again closer in. A line whose singing starts before its time
+starts when it is sung. The library was done with --vocals --pad 600 --min 0.15.
 
 It signs in as this computer's helper (its session in %APPDATA%\\Xoosh\\session.txt). Every song's
 lyrics as they were are kept in tools/lyrics-align/backup/<id>.json first; --restore puts those
@@ -148,8 +150,9 @@ class Aligner:
 
     def line(self, audio, start_ms, end_ms, words, pad=250, skip=()):
         """Times (ms) for each word of one line between start_ms and end_ms (searched [pad] ms either
-        side), and the mean confidence; None if it cannot. Words in [skip] (ad-libs) are not looked
-        for, only placed between their neighbours."""
+        side), the mean confidence, and whether a word was pressed against the edge of the search
+        (forced there, not found: the line's words are likely further off, or not all sung); None if
+        it cannot. Words in [skip] (ad-libs) are not looked for, only placed between their neighbours."""
         keys = [("".join(c for c in norm(w) if c in self.chars)) if i not in skip else "" for i, w in enumerate(words)]
         idx = [i for i, k in enumerate(keys) if k]
         if not idx or len(idx) < (len(words) - len(skip)) * 0.6:
@@ -169,28 +172,46 @@ class Aligner:
         except Exception:
             return None
         per_frame = (b - a) / emission.size(1) / self.sr * 1000
-        starts, score = {}, []
+        a_ms, b_ms = a * 1000 / self.sr, b * 1000 / self.sr
+        starts, ends, score = {}, {}, []
         for i, sp in zip(idx, spans):
-            starts[i] = a * 1000 / self.sr + sp[0].start * per_frame
+            starts[i] = a_ms + sp[0].start * per_frame
+            ends[i] = a_ms + sp[-1].end * per_frame
             score.append(sum(s.score for s in sp) / len(sp))
-        # Words the aligner cannot read (numbers, symbols): placed between their neighbours.
-        times = []
-        for i in range(len(words)):
+        edge = (a > 0 and min(starts.values()) < a_ms + EDGE_MS) or \
+               (b < audio.numel() and max(ends.values()) > b_ms - EDGE_MS)
+        # Words the aligner cannot read (numbers, symbols) or was not asked to (ad-libs): spread
+        # through the gap between the words either side, a beat apart past the first or last.
+        times, i = [], 0
+        while i < len(words):
             if i in starts:
-                times.append(starts[i])
+                times.append(starts[i]); i += 1; continue
+            j = i
+            while j < len(words) and j not in starts:
+                j += 1
+            n = j - i
+            prev = ends[max(k for k in starts if k < i)] if any(k < i for k in starts) else None
+            nxt = starts[j] if j < len(words) else None
+            if prev is not None and nxt is not None:
+                times += [prev + (nxt - prev) * (k + 1) / (n + 1) for k in range(n)]
+            elif nxt is not None:
+                times += [max(a_ms, nxt - GAP_MS * (n - k)) for k in range(n)]
             else:
-                prev = next((starts[j] for j in range(i - 1, -1, -1) if j in starts), start_ms)
-                nxt = next((starts[j] for j in range(i + 1, len(words)) if j in starts), None)
-                times.append(prev + 1 if nxt is None else (prev + nxt) / 2)
-        # In order, and the first word not before the line itself.
+                last = min(b_ms, max(end_ms, prev + GAP_MS * n))
+                times += [prev + (last - prev) * k / n for k in range(n)]
+            i = j
         for k in range(1, len(times)):
             times[k] = max(times[k], times[k - 1] + 1)
-        return times, sum(score) / len(score)
+        return times, sum(score) / len(score), edge
 
 # ---------------------------------------------------------------- one song
 
 MIN_SCORE = 0.2
 PAD_MS = 250
+# A word this close to the edge of where it was looked for was pushed there, not found.
+EDGE_MS = 60
+# How far apart words that cannot be heard are put, past the last word that can.
+GAP_MS = 220
 # For --stats: each placed line's confidence and how far its first word is from the line's own time.
 STATS = []
 
@@ -204,31 +225,59 @@ def adlibs(words):
         depth = max(0, depth + opens - w.count(")") - w.count("]"))
     return out
 
+def settle(times, t, nxt):
+    """A first word heard well before the line and far ahead of the rest of it (or a last word well
+    after the next line and far behind the rest) was taken from a sound nearby: put beside its neighbour."""
+    if len(times) < 3:
+        return times
+    times = list(times)
+    gaps = sorted(b - a for a, b in zip(times, times[1:]))
+    step = max(gaps[len(gaps) // 2], 120)
+    if times[0] < t - 250 and times[1] - times[0] > max(3 * step, 500):
+        times[0] = times[1] - step
+    if times[-1] > nxt + 250 and times[-1] - times[-2] > max(3 * step, 500):
+        times[-1] = times[-2] + step
+    return times
+
 def enhance(aligner, audio, doc, length_ms):
     lines, head = parse_lines(doc["lrc"])
     out, placed, total = list(head), 0, 0
+    last_t = last_word = -1
     for k, (t, text) in enumerate(lines):
         nxt = lines[k + 1][0] if k + 1 < len(lines) else min(length_ms, t + 8000)
         end = min(nxt, t + 12000)
         words = text.split()
-        res = aligner.line(audio, t, end, words, pad=PAD_MS) if words else None
-        # Not sure of the whole line: the main words alone, the ad-libs fitted in between.
-        if words and (not res or res[1] < MIN_SCORE):
-            skip = adlibs(words)
-            if skip and len(skip) < len(words):
-                again = aligner.line(audio, t, end, words, pad=PAD_MS, skip=skip)
-                if again and again[1] >= MIN_SCORE:
-                    res = again
+        skip = adlibs(words)
+        res = None
+        # The whole line, then (not sure of it) the main words alone with the ad-libs fitted in
+        # between; and if a word was pushed to the edge of where it was looked for, again closer in.
+        for pad in sorted({PAD_MS, min(PAD_MS, 250), min(PAD_MS, 100)}, reverse=True):
+            for sk in ((), skip) if skip and len(skip) < len(words) else ((),):
+                got = aligner.line(audio, t, end, words, pad=pad, skip=sk) if words else None
+                if got and got[1] >= MIN_SCORE and not got[2]:
+                    res = got
+                    break
+            if res:
+                break
         if words:
             total += 1
-        if res and res[1] >= MIN_SCORE:
+        if res:
             placed += 1
-            times, _ = res
+            times = settle(res[0], t, nxt)
             STATS.append((res[1], abs(times[0] - t)))
+            # Sung before the line's own time: the line starts with its first word, after the last one's.
+            start = t if times[0] >= t - 120 else max(times[0], last_word + 1, last_t + 10)
+            # Words heard before that (the last line still being sung): spread up to the first after it.
+            early = sum(1 for ms in times if ms < start)
+            if early:
+                upto = times[early] if early < len(times) else start + GAP_MS * early
+                times[:early] = [start + (upto - start) * i / early for i in range(early)]
             body = "".join(f"<{fmt(ms)}>{w}{' ' if i < len(words) - 1 else ''}" for i, (w, ms) in enumerate(zip(words, times)))
-            out.append(f"[{fmt(t)}]{body}")
+            out.append(f"[{fmt(start)}]{body}")
+            last_t, last_word = start, times[-1]
         else:
             out.append(f"[{fmt(t)}]{text}")
+            last_t = t
     return "\n".join(out) + "\n", placed, total
 
 def main():
@@ -275,7 +324,7 @@ def main():
                 doc = json.load(open(bp, encoding="utf-8"))
             if not doc or not doc.get("lrc") or doc.get("instrumental") or doc.get("lyricsfile"):
                 print(label, "- no line-timed lyrics to work from"); skipped += 1; continue
-            if not os.path.exists(bp):
+            if not WORD_STAMP.search(doc["lrc"]):  # the line-timed lyrics worked from, kept as they are now
                 json.dump(doc, open(bp, "w", encoding="utf-8"), ensure_ascii=False)
             t0 = time.time()
             path = phone.audio(t)
