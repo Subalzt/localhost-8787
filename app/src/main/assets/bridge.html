@@ -1943,6 +1943,189 @@
     transform-origin: 0 0; transform: scaleX(1); }
   .nml-toast.in::after { transform: scaleX(0); transition: transform 2s linear .6s; }
   @media (prefers-reduced-motion: reduce) { .nml *, .nml-drawer *, .nml-pop { animation: none !important; transition: none !important; } }
+
+  /* ================================================================ Music, clean (2026-10)
+     Over Namida's library above, everything it moves kept (the pages rising in, the album pushed
+     over with its cover flying, the views sliding, a song pulled aside for Play After): on the
+     page's own black (pure black when dark), in the page's type, white and greys, the accent from
+     Settings only where a thing is lit. Namida's colours (--nm-*) are the page's own here, so the
+     library no longer takes the colour of the song playing; the player still does. */
+  .nml, .nml-pop, .nml-toast, .nml-drawer {
+    --mx-dim: color-mix(in srgb, var(--txt) 58%, transparent); --mx-faint: color-mix(in srgb, var(--txt) 32%, transparent);
+    --mx-fill: color-mix(in srgb, var(--txt) 6%, transparent); --mx-fill2: color-mix(in srgb, var(--txt) 11%, transparent);
+    --mx-edge: color-mix(in srgb, var(--txt) 11%, transparent);
+    --nm-bg: var(--bg); --nm-appbar: var(--bg); --nm-bar: var(--bg); --nm-card: transparent; --nm-cardc: var(--surface);
+    --nm-large: var(--txt); --nm-medium: var(--txt); --nm-small: var(--mx-dim); --nm-icon: var(--txt); --nm-on-surface: var(--txt);
+    --nm-primary: var(--accent); --nm-main: var(--accent); --nm-sec: var(--mx-fill2); --nm-on-sec: var(--txt); --nm-secondary: var(--txt);
+    --nm-shadow: rgba(0,0,0,.35); --nm-dialog: var(--surface); --nm-menu-edge: var(--mx-edge); --nm-menu-a: var(--surface); --nm-menu-b: var(--surface);
+    font-family: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "MiSans", sans-serif; letter-spacing: -.01em; }
+  .nml button, .nml-pop > button, .nml-dnav button, .nml-find input { font-family: inherit; }
+  body[data-tab="music"] { background: var(--bg); }
+  .nml svg { stroke-width: 1.8; }
+  .nml-nav { display: none; }
+
+  /* The bar: the page's name large on the left (how many beside it, Play and Shuffle for songs);
+     back, the search and a fresh look on the phone's music on the right. */
+  .nml-bar { height: 64px; background: var(--bg); }
+  .nml-lead { height: 64px; right: 132px; }
+  .nml-lead > div { gap: 12px; align-items: baseline; }
+  .nml-lead h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.025em; color: var(--txt); }
+  .nml-lead .mx-n { font-size: 13px; color: var(--mx-dim); white-space: nowrap; }
+  .nml-lead .mx-acts { display: inline-flex; gap: 8px; margin-left: 10px; align-self: center; }
+  .nml-ib { top: 4px; color: var(--txt); }
+  .nml-end { top: 4px; }
+  .nml-find { top: 11px; background: var(--mx-fill); }
+  .nml-find input { color: var(--txt); font-weight: 500; font-size: 14px; }
+  .nml-find input::placeholder { color: var(--mx-faint); font-size: 14px; }
+  .nml-page { padding-top: 4px; }
+
+  /* Albums, Songs, Favourites as words under the bar on a narrow window, the one shown lit. */
+  .mx-chips { display: flex; gap: 6px; padding: 2px 16px 12px; }
+  .mx-chips button { padding: 6px 13px; border: 0; border-radius: 16px; background: var(--mx-fill); color: var(--txt); font-size: 13.5px; font-weight: 500; cursor: pointer; }
+  .mx-chips button.on { background: var(--txt); color: var(--bg); }
+
+  /* The library down the left on a wide window. */
+  .mx-side { display: none; }
+  @media (min-width: 1000px) {
+    .nml { padding-left: 232px; }
+    .mx-chips, .nml-menu { display: none !important; }
+    .mx-side { display: flex; flex-direction: column; position: fixed; z-index: 31; left: 0; top: 72px; bottom: 0; width: 232px; padding: 14px 10px;
+      background: var(--bg); border-right: 1px solid var(--line); }
+    .mx-search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; margin-bottom: 18px; border-radius: 9px; background: var(--mx-fill); color: var(--mx-faint); cursor: text; }
+    .mx-search svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .mx-search input { flex: 1 1 auto; min-width: 0; height: 100%; border: 0; outline: 0; background: none; color: var(--txt); font: inherit; font-size: 13.5px; }
+    .mx-search input::placeholder { color: var(--mx-faint); }
+    .mx-search input::-webkit-search-cancel-button { display: none; }
+    .mx-side h6 { margin: 0 0 6px; padding: 0 9px; font-size: 11px; font-weight: 600; color: var(--mx-faint); }
+    .mx-side button { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 9px; border: 0; border-radius: 8px; background: none;
+      color: var(--txt); font-size: 14px; text-align: left; cursor: pointer; }
+    .mx-side button svg { width: 17px; height: 17px; color: var(--mx-dim); }
+    .mx-side button:hover { background: var(--mx-fill); }
+    .mx-side button.on { background: var(--mx-fill2); }
+    .mx-count { margin-top: auto; padding: 0 9px calc(var(--player-h, 0px) + 6px); font-size: 12px; color: var(--mx-faint); }
+    .nml-bar { height: 84px; }
+    .nml-lead { height: 84px; left: 40px; }
+    .nml-lead h1 { font-size: 30px; }
+    .nml-ib, .nml-end { top: 14px; }
+    .nml-back { left: 24px; }
+    .nml-find { top: 21px; }
+    .nml-open { display: none; }
+    .nml-bar.away .nml-back { opacity: 1; }
+  }
+
+  /* Albums: covers on the black with a hairline edge (a black cover keeps its shape), the name
+     and who it is by under each. Play shows on a cover under the pointer, and stays while it plays. */
+  .nml-albums { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 24px 20px; padding: 6px 16px 0; row-gap: 24px; }
+  @media (min-width: 1000px) { .nml-albums { padding: 4px 40px 0; } }
+  @media (max-width: 600px) { .nml-albums { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; } }
+  .nc { padding: 0; }
+  .nc-card { aspect-ratio: auto; display: block; border-radius: 0; overflow: visible; background: none; box-shadow: none; transition: none; }
+  .nc-card:hover { transform: none; box-shadow: none; }
+  .nc-card:active { transform: scale(.98); }
+  .nc-art { border-radius: 8px; box-shadow: 0 0 0 1px var(--mx-edge); }
+  .nc-art.gen { font-size: 26cqw; }
+  .nc-play { left: 8px; right: auto; bottom: 8px; width: 34px; height: 34px; padding: 0; border-radius: 50%; color: #fff; background: rgba(0,0,0,.55);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); box-shadow: none; opacity: 0; transition: opacity .15s, transform .15s; }
+  .nc-play svg, .nc-play .bars { width: 15px; height: 15px; }
+  .nc-play svg { fill: currentColor; stroke: none; }
+  .nc-card:hover .nc-play, .nc.playing .nc-play, .nc-card:focus-visible .nc-play { opacity: 1; }
+  @media (hover: none) { .nc-play { display: none; } .nc.playing .nc-play { display: grid; } }
+  .nc-cap { display: block; padding: 7px 0 0; }
+  .nc-cap b { display: block; font-size: 13.5px; font-weight: 500; color: var(--txt); line-height: 1.3; }
+  .nc-cap span { display: block; font-size: 13.5px; color: var(--mx-dim); line-height: 1.35; }
+  .nc.playing .nc-cap b { color: var(--txt); font-weight: 650; }
+
+  /* Songs: one row each on a hairline; a small cover, or the number on an album's page. */
+  .nml-tracks { display: block; padding: 0 16px; }
+  @media (min-width: 1000px) { .nml-tracks { padding: 0 40px; } }
+  .nt { height: 54px; margin: 0; }
+  .nml-tracks .nt.in-album { height: 46px; }
+  .nt-after { top: 4px; bottom: 4px; right: 0; border-radius: 10px; background: var(--mx-fill2); color: var(--txt); }
+  .nt-row { gap: 12px; padding: 0 6px 0 4px; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .nt-row:hover { background: color-mix(in srgb, var(--txt) 5%, var(--bg)); }
+  .nt.playing .nt-row { background: var(--bg); }
+  .nt-art { width: 40px; height: 40px; flex: 0 0 40px; margin: 0; border-radius: 5px; box-shadow: 0 0 0 1px var(--mx-edge); }
+  .nt.playing .nt-art { transform: none; }
+  .nt-art.gen { font-size: 14px; }
+  .nt-no { position: static; width: 26px; flex: 0 0 26px; padding: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+    font-size: 13px; color: var(--mx-faint); text-align: center; font-variant-numeric: tabular-nums; display: grid; place-items: center; }
+  .nt-no .bars { display: none; align-items: flex-end; gap: 2px; height: 12px; }
+  .nt-no .bars i { width: 2.5px; height: 40%; border-radius: 1px; background: var(--accent); animation: nml-bar 1s ease-in-out infinite alternate; }
+  .nt-no .bars i:nth-child(2) { animation-delay: -.4s; } .nt-no .bars i:nth-child(3) { animation-delay: -.7s; }
+  body:not(.music-on) .nt-no .bars i { animation-play-state: paused; }
+  .nt.playing .nt-no > i { display: none; }
+  .nt.playing .nt-no .bars { display: inline-flex; }
+  .nt-text { flex: 1 1 0; min-width: 0; flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 0; overflow: hidden; }
+  .nt-heart, .nt-more { flex: 0 0 auto; }
+  .nt-no > i { font-style: normal; }
+  .nt:not(.in-album) .nt-text { flex-direction: column; align-items: stretch; gap: 0; }
+  .nt-text b { font-size: 14px; font-weight: 400; color: var(--txt); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .nt-text .who { font-size: 13px; font-weight: 400; color: var(--mx-dim); flex: 0 1 auto; min-width: 0; }
+  .nt.in-album .nt-text .who::before { content: "\00a0\00b7\00a0"; }
+  .nt:not(.in-album) .nt-text { justify-content: center; }
+  .nt.playing .nt-text b { color: var(--accent); font-weight: 600; }
+  .nt.playing .nt-text .who, .nt.playing .nt-text .al { color: var(--mx-dim); }
+  .nt-al { flex: 0 0 30%; min-width: 0; font-size: 13px; color: var(--mx-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 999px) { .nt-al { display: none; } }
+  .nt-heart { width: 30px; height: 30px; color: var(--txt); opacity: 0; transition: opacity .12s; }
+  .nt-heart svg { width: 17px; height: 17px; }
+  .nt-heart.on { opacity: 1; color: var(--accent); }
+  .nt-row:hover .nt-heart, .nt-heart:focus-visible { opacity: 1; }
+  .nt.playing .nt-heart { color: var(--txt); }
+  .nt.playing .nt-heart.on { color: var(--accent); }
+  .nt-d { width: 42px; flex: 0 0 auto; text-align: right; font-size: 13px; font-weight: 400; color: var(--mx-dim); }
+  .nt.playing .nt-d { color: var(--mx-dim); }
+  .nt-more { color: var(--mx-dim); margin: 0; }
+  .nt-more svg { transform: none; }
+  .nt.playing .nt-more { color: var(--mx-dim); }
+  @media (hover: hover) { .nt-more { opacity: 0; } .nt-row:hover .nt-more, .nt-more:focus-visible { opacity: 1; } }
+  .nml-disc { margin: 18px 0 2px; }
+  .nml-disc span:first-child { padding: 0 4px; background: none; font-size: 13px; color: var(--mx-dim); }
+  .nml-disc span:last-child { font-size: 12px; color: var(--mx-faint); }
+
+  /* An album: the cover with a hairline edge, the name, who by, the kind and the file; Play (a
+     white pill), Shuffle (its outline) and the rest under "···". Centred on a narrow window. */
+  .nml-head { gap: 30px; align-items: flex-end; padding: 18px 16px 26px; }
+  @media (min-width: 1000px) { .nml-head { padding: 20px 40px 28px; } }
+  .nml-head-art { width: 240px; margin: 0; padding: 0; border-radius: 8px; background: none; box-shadow: none; }
+  .nml-head-art > div { border-radius: 8px; box-shadow: 0 0 0 1px var(--mx-edge); }
+  .nml-head-info { padding: 0; }
+  .nml-head-info h2 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -.025em; line-height: 1.12; white-space: normal;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .nml-head-info .by { margin: 5px 0 0; font-size: 21px; font-weight: 500; letter-spacing: -.015em; color: var(--mx-dim); }
+  .nml-head-info .yr { margin: 7px 0 0; font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--mx-dim); }
+  .nml-head-btns { gap: 10px; margin-top: 18px; padding: 0; }
+  .nml-btn.mx-play, .nml-btn.mx-shuf { height: 36px; min-height: 0; padding: 0 22px; border-radius: 18px; font-size: 14px; font-weight: 600; gap: 7px; }
+  .nml-btn.mx-play { background: var(--txt); color: var(--bg); border: 0; }
+  .nml-btn.mx-shuf { background: none; color: var(--txt); border: 0; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--txt) 30%, transparent); }
+  .nml-btn.mx-play:hover { background: color-mix(in srgb, var(--txt) 88%, var(--bg)); }
+  .nml-btn.mx-shuf:hover { background: var(--mx-fill); }
+  .nml-btn.mx-play svg { width: 15px; height: 15px; fill: currentColor; stroke: none; }
+  .nml-btn.mx-shuf svg { width: 16px; height: 16px; }
+  .nml-btn.mx-more { width: 36px; height: 36px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: var(--mx-fill); color: var(--txt); }
+  .nml-btn.mx-more svg { width: 18px; height: 18px; }
+  .nml-lead .nml-btn.mx-play, .nml-lead .nml-btn.mx-shuf { height: 32px; padding: 0 16px; font-size: 13px; }
+  .mx-foot { margin: 0; padding: 14px 20px 0; font-size: 13px; color: var(--mx-dim); }
+  @media (min-width: 1000px) { .mx-foot { padding: 14px 44px 0; } }
+  @media (max-width: 999px) {
+    .nml-head { flex-direction: column; align-items: center; text-align: center; gap: 16px; }
+    .nml-head-art { width: min(64vw, 260px); }
+    .nml-head-info { width: 100%; }
+    .nml-head-info h2 { font-size: 21px; }
+    .nml-head-info .by { font-size: 19px; }
+    .nml-head-info .yr { text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .nml-head-btns { justify-content: center; }
+    .nml-btn.mx-play, .nml-btn.mx-shuf { flex: 1 1 0; height: 44px; border-radius: 22px; font-size: 15px; }
+    .nml-btn.mx-more { width: 44px; height: 44px; }
+  }
+
+  /* Menus and notes on the page's surface, a hairline round them. */
+  .nml-pop { background: var(--surface); border: 1px solid var(--mx-edge); box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+  .nml-arrow { color: var(--surface); }
+  .nml-pop > button { font-weight: 500; font-size: 14px; color: var(--txt); }
+  .nml-pop > button.on { background: var(--mx-fill2); }
+  .nml-toast { background: color-mix(in srgb, var(--surface) 80%, transparent); color: var(--txt); font-weight: 500; }
+  .nml-ghost { background: var(--bg); }
 </style>
 </head>
 <body>
@@ -2083,6 +2266,15 @@
          to the left); under it the page, Tracks, Albums or Liked, or an album pushed over them;
          and Namida's bar along the foot to go between them, the mini player just above it. -->
     <div class="nml" id="nml">
+      <!-- On a wide window: the library down the left, its search on top, the song count at its foot. -->
+      <aside class="mx-side" id="mx-side">
+        <label class="mx-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input id="mx-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false" aria-label="Search the music"></label>
+        <h6>Library</h6>
+        <button type="button" data-v="albums"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><circle cx="12" cy="12" r="3.5"/></svg>Albums</button>
+        <button type="button" data-v="songs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>Songs</button>
+        <button type="button" data-v="liked"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.6 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10Z"/></svg>Favourites</button>
+        <div class="mx-count" id="mx-count"></div>
+      </aside>
       <header class="nml-bar" id="nml-bar">
         <button class="nml-ib nml-menu" id="nml-menu" type="button" title="Menu" aria-label="Menu" data-nx="handle"></button>
         <button class="nml-ib nml-back" id="nml-back" type="button" title="Back" aria-label="Back" data-nx="back"></button>
@@ -2100,6 +2292,10 @@
         <b>Localhost 8787 needs to read your music</b>
         <span>On the phone: Settings, then Music, then Allow music access.</span>
       </div>
+      <!-- On a narrow window: the page's name large, the other two beside it as plain words. -->
+      <nav class="mx-chips" id="mx-chips" aria-label="Show">
+        <button type="button" data-v="albums">Albums</button><button type="button" data-v="songs">Songs</button><button type="button" data-v="liked">Favourites</button>
+      </nav>
       <div class="nml-page" id="music-list"><p class="nml-note">Looking for music...</p></div>
       <div id="music-more" class="nml-more"></div>
       <nav class="nml-nav" id="music-view" role="tablist" aria-label="Show" data-on="albums">
@@ -5533,28 +5729,31 @@ function renderTracks(host, shown, queue, source, numberOf, inAlbum, discs) {
  */
 function nmlTile(t, queue, source, number, inAlbum) {
   var el = document.createElement("div");
-  el.className = "nt";
+  el.className = "nt" + (inAlbum ? " in-album" : "");
   el.dataset.id = t.id;
+  // A list row: the number on an album's page (bars in its place while it plays), else a small
+  // cover; the song, and who it is by where that is not the album's own artist; the album on a
+  // wide window; its heart (shown when given, or under the pointer), how long, and its menu.
   el.innerHTML = '<div class="nt-after">' + nx("next") + "<span>Play After</span></div>" +
-    '<div class="nt-row" role="button" tabindex="0"><span></span><span class="nt-text"><b></b><span class="who"></span><span class="al"></span></span>' +
-    '<span class="nt-side"><em class="nt-kind"></em><span class="nt-d"></span><button class="nt-heart" type="button"></button></span>' +
+    '<div class="nt-row" role="button" tabindex="0"><span></span><span class="nt-text"><b></b><span class="who"></span></span>' +
+    '<span class="nt-al"></span><button class="nt-heart" type="button"></button><span class="nt-d"></span>' +
     '<button class="nt-more" type="button">' + nx("more") + "</button></div>";
   var row = el.lastChild;
-  var coverId = (music.albumByKey[t.ak] || {}).coverId || t.albumId;
-  var art = coverEl("nt-art", coverId, t.album);
-  if (number != null) {
-    var no = document.createElement("span");
-    no.className = "nt-no";
-    no.textContent = number;
-    art.appendChild(no);
+  var lead;
+  if (inAlbum) {
+    lead = document.createElement("span");
+    lead.className = "nt-no";
+    lead.innerHTML = '<i></i><span class="bars"><i></i><i></i><i></i></span>';
+    lead.firstChild.textContent = number != null ? number : "";
+  } else {
+    var coverId = (music.albumByKey[t.ak] || {}).coverId || t.albumId;
+    lead = coverEl("nt-art", coverId, t.album);
   }
-  row.replaceChild(art, row.firstChild);
-  var tx = row.querySelector(".nt-text").children;
+  row.replaceChild(lead, row.firstChild);
+  var tx = row.querySelector(".nt-text").children, a = music.albumByKey[t.ak];
   tx[0].textContent = t.title;
-  tx[1].textContent = t.artist;
-  tx[2].textContent = [t.album, t.year > 0 ? t.year : null].filter(Boolean).join(" • ");
-  var kind = formatBadge(t.mime), k = row.querySelector(".nt-kind");
-  if (kind) { k.textContent = kind; k.classList.toggle("lossless", NML_LOSSLESS.indexOf(kind) >= 0); } else k.remove();
+  if (inAlbum && a && t.artist === a.artist) tx[1].remove(); else tx[1].textContent = t.artist;
+  if (inAlbum) row.querySelector(".nt-al").remove(); else row.querySelector(".nt-al").textContent = t.album;
   row.querySelector(".nt-d").textContent = fmtTime(t.durationMs / 1000);
   var heart = row.querySelector(".nt-heart");
   nmlHeart(heart, t.id);
@@ -5737,12 +5936,6 @@ function renderAlbums(host) {
     card.className = "nc-card";
     card.setAttribute("aria-label", a.album + " by " + a.artist + ", " + nmlCount(n, "track"));
     var art = coverEl("nc-art", a.coverId, a.album);
-    if (a.year > 0) {
-      var y = document.createElement("span");
-      y.className = "nc-year";
-      y.textContent = a.year;
-      art.appendChild(y);
-    }
     var play = document.createElement("span");
     play.className = "nc-play";
     play.setAttribute("role", "button");
@@ -5753,10 +5946,9 @@ function renderAlbums(host) {
     card.appendChild(art);
     var cap = document.createElement("span");
     cap.className = "nc-cap";
-    cap.innerHTML = "<b></b><span></span><span></span>";
+    cap.innerHTML = "<b></b><span></span>";
     cap.children[0].textContent = a.album;
     cap.children[1].textContent = a.artist;
-    cap.children[2].textContent = nmlCount(n, "Track") + " • " + nmlMinutes(nmlSum(a.tracks));
     card.appendChild(cap);
     card.onclick = function () { openAlbum(a.key, art); };
     cell.appendChild(card);
@@ -5798,54 +5990,56 @@ function nmlButton(text, icon, title, onClick) {
 function renderAlbumPage(host) {
   var a = music.albumByKey[music.album];
   if (!a) { music.album = null; renderMusic(); return; }
+  // The cover, the album, who it is by, what kind of music and file; Play and Shuffle; the rest
+  // (play next or last, the order, its search) under "···".
   var head = document.createElement("div");
   head.className = "nml-head";
-  head.innerHTML = '<div class="nml-head-art"></div><div class="nml-head-info"><h2></h2><p class="by"></p><p class="yr"></p><div class="nml-head-btns"></div></div>';
+  head.innerHTML = '<div class="nml-head-art"></div><div class="nml-head-info"><h2></h2><p class="by"></p><p class="yr" id="mx-ameta"></p><div class="nml-head-btns"></div></div>';
   head.firstChild.appendChild(coverEl("nml-hc", a.coverId, a.album));
   var info = head.lastChild;
   info.querySelector("h2").textContent = a.album;
   info.querySelector(".by").textContent = a.artist;
-  if (a.year > 0) info.querySelector(".yr").textContent = a.year; else info.querySelector(".yr").remove();
   var btns = info.querySelector(".nml-head-btns");
-  btns.appendChild(nmlButton(null, "shuffle", "Shuffle " + a.album, function () { playAlbum(a.key, true); }));
-  btns.appendChild(nmlButton("Play Last", "playLast", "Play " + a.album + " after the queue", function () { queueInsert(a.tracks, false); nmlToast(a.album + ": at the end of the queue"); }));
+  var play = nmlButton("Play", "play", "Play " + a.album, function () { playAlbum(a.key, false); });
+  play.classList.add("mx-play");
+  var shuf = nmlButton("Shuffle", "shuffle", "Shuffle " + a.album, function () { playAlbum(a.key, true); });
+  shuf.classList.add("mx-shuf");
+  var more = nmlButton(null, "more", "More for " + a.album, function () {
+    nmlPop(more, [
+      { icon: "next", label: "Play next", run: function () { queueInsert(a.tracks, true); nmlToast(a.album + ": up next"); } },
+      { icon: "playLast", label: "Play last", run: function () { queueInsert(a.tracks, false); nmlToast(a.album + ": at the end of the queue"); } },
+      { icon: "search", label: "Search this album", run: function () { nmlFind(true); } },
+    ].concat(NML_SORTS.map(function (s, i) {
+      return { label: "Order by " + s.toLowerCase() + (i === nml.asort ? (nml.adesc ? ", last first" : "") : ""), on: i === nml.asort,
+        run: function () { if (nml.asort === i) nml.adesc = !nml.adesc; else { nml.asort = i; nml.adesc = false; } nmlRedrawAlbum(); } };
+    })));
+  });
+  more.classList.add("mx-more");
+  btns.appendChild(play);
+  btns.appendChild(shuf);
+  btns.appendChild(more);
   host.appendChild(head);
-
-  var bar = document.createElement("div");
-  bar.className = "nml-abar";
-  bar.innerHTML = nx("note") + "<b></b>";
-  bar.lastChild.textContent = nmlCount(a.tracks.length, "Track") + " - " + nmlMinutes(nmlSum(a.tracks));
-  var sort = document.createElement("button");
-  sort.type = "button";
-  sort.className = "nml-sort";
-  sort.textContent = NML_SORTS[nml.asort];
-  sort.title = "Order by";
-  sort.onclick = function () {
-    nmlPop(sort, NML_SORTS.map(function (s, i) { return { label: s, on: i === nml.asort, run: function () { nml.asort = i; nmlRedrawAlbum(); } }; }));
-  };
-  bar.appendChild(sort);
-  var order = document.createElement("button");
-  order.type = "button";
-  order.className = "nml-bi";
-  order.innerHTML = nx(nml.adesc ? "up" : "down");
-  order.title = nml.adesc ? "Last first" : "First first";
-  order.onclick = function () { nml.adesc = !nml.adesc; nmlRedrawAlbum(); };
-  bar.appendChild(order);
-  var find = document.createElement("button");
-  find.type = "button";
-  find.className = "nml-bi";
-  find.style.marginLeft = "6px";
-  find.innerHTML = nx("search");
-  find.title = "Search this album";
-  find.onclick = function () { nmlFind(true); };
-  bar.appendChild(find);
-  host.appendChild(bar);
+  mxAlbumMeta();
 
   var songs = nmlAlbumSongs(a);
   if (!songs.length) { nmlNote(host, "Nothing matches"); return; }
   var discs = nml.asort === 0 && songs.some(function (t) { return t.disc !== songs[0].disc; });
   renderTracks(host, songs, songs, { kind: "album", key: a.key, label: a.album },
     function (t) { return t.track > 0 ? t.track : a.tracks.indexOf(t) + 1; }, true, discs);
+  var foot = document.createElement("p");
+  foot.className = "mx-foot";
+  var mins = Math.round(nmlSum(a.tracks) / 60000);
+  foot.textContent = nmlCount(a.tracks.length, "song") + ", " + (mins >= 60 ? Math.floor(mins / 60) + (mins >= 120 ? " hours " : " hour ") : "") + (mins % 60) + " minutes";
+  host.appendChild(foot);
+}
+
+/** The open album's line under its artist: its kind of music, its year, and what its files are. */
+function mxAlbumMeta() {
+  var el = $("mx-ameta"), a = music.album !== null ? music.albumByKey[music.album] : null;
+  if (!el || !a || !a.tracks.length) return;
+  var first = a.tracks[0], info = np.info[first.id];
+  if (info === undefined) npInfo(first.id);
+  el.textContent = [first.genre, a.year > 0 ? a.year : "", mxFormat(first, info || null, false)].filter(Boolean).join(" · ");
 }
 
 /** The album's page again (a new order or search), where it was scrolled to. */
@@ -6023,27 +6217,37 @@ function nmlBar() {
   nmlLead();
 }
 
-/** The page's count, and what can be done to all of it: shuffle and play for the songs. */
+var MX_TITLES = { albums: "Albums", songs: "Songs", liked: "Favourites" };
+
+/** The page's name large, how many under it, and for songs Play and Shuffle for all of them. */
 function nmlLead() {
   var lead = $("nml-lead"), v = music.view;
   var ready = music.loaded && music.granted && music.tracks.length && music.albums;
   var d = document.createElement("div");
+  d.innerHTML = "<h1></h1><span class=\"mx-n\"></span>";
+  d.firstChild.textContent = MX_TITLES[v];
   if (v === "albums") {
-    d.className = "quiet";
-    d.innerHTML = nx("arrange") + "<b></b>";
-    d.lastChild.textContent = ready ? nmlCount(albumMatches().length, "Album") : "";
+    d.lastChild.textContent = ready ? nmlCount(albumMatches().length, "album") : "";
   } else {
     var liked = v === "liked", list = ready ? (liked ? likedMatches() : musicMatches()) : [];
-    d.innerHTML = '<button class="nml-bi" type="button">' + nx("shuffle") + '</button><button class="nml-bi" type="button">' + nx("play") + "</button><b></b>";
-    d.children[0].title = liked ? "Shuffle the liked songs" : "Shuffle every song";
-    d.children[1].title = liked ? "Play the liked songs" : "Play every song";
-    d.children[0].onclick = function () { nmlPlayAll(list, true); };
-    d.children[1].onclick = function () { nmlPlayAll(list, false); };
-    d.lastChild.textContent = ready ? nmlCount(list.length, liked ? "Liked song" : "Track") : "";
+    d.lastChild.textContent = ready ? nmlCount(list.length, "song") : "";
+    if (list.length) {
+      var acts = document.createElement("span");
+      acts.className = "mx-acts";
+      var p = nmlButton("Play", "play", liked ? "Play the favourites" : "Play every song", function () { nmlPlayAll(list, false); });
+      p.classList.add("mx-play");
+      var s = nmlButton("Shuffle", "shuffle", liked ? "Shuffle the favourites" : "Shuffle every song", function () { nmlPlayAll(list, true); });
+      s.classList.add("mx-shuf");
+      acts.appendChild(p);
+      acts.appendChild(s);
+      d.appendChild(acts);
+    }
   }
   if (lead.dataset.v !== v) { d.classList.add("in"); lead.dataset.v = v; }
   lead.innerHTML = "";
   lead.appendChild(d);
+  var count = $("mx-count");
+  if (count) count.textContent = ready ? nmlCount(music.tracks.length, "song") + " on the phone" : "";
 }
 
 /** Opens the search (Namida's box grows out of its button) or closes it, and what it had typed goes. */
@@ -6136,8 +6340,21 @@ function setupMusic() {
     e.preventDefault();
     nmlFind(true);
   });
-  Array.prototype.forEach.call($("music-view").querySelectorAll("button"), function (b) {
+  Array.prototype.forEach.call(document.querySelectorAll("#music-view button, #mx-side button, #mx-chips button"), function (b) {
     b.onclick = function () { nmlGo(b.dataset.v); };
+  });
+  // The sidebar's search is the same search as the bar's: songs and albums, or the open album.
+  var side = $("mx-q"), sideTimer = null;
+  side.addEventListener("input", function () {
+    clearTimeout(sideTimer);
+    var v = side.value;
+    sideTimer = setTimeout(function () {
+      if (music.album !== null) closeAlbum();
+      music.filter = v; music.shown = MUSIC_PAGE; renderMusic();
+    }, 120);
+  });
+  side.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && side.value) { e.preventDefault(); e.stopPropagation(); side.value = ""; side.dispatchEvent(new Event("input")); }
   });
   $("music-rescan").onclick = function () { musicLoad(true); };
   nxFill($("nml"));
@@ -6147,10 +6364,12 @@ function setupMusic() {
 function setViewButtons() {
   var seg = $("music-view");
   seg.dataset.on = music.view;
-  Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) {
-    b.classList.toggle("on", b.dataset.v === music.view);
-    b.setAttribute("aria-selected", b.dataset.v === music.view ? "true" : "false");
+  Array.prototype.forEach.call(document.querySelectorAll("#music-view button, #mx-side button, #mx-chips button"), function (b) {
+    var on = b.dataset.v === music.view && (music.album === null || b.closest("#mx-side") !== null);
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
   });
+  $("mx-chips").hidden = music.album !== null;
   nmlLead();
 }
 
@@ -7853,6 +8072,20 @@ function npFileDetails(info) {
   return out.join(" \u2022 ");
 }
 
+/**
+ * What the file is, in one line: "FLAC · 16-bit · 44.1 kHz · 968 kbps". The type is the song's own
+ * (from its file), what the phone measured fills in the rest; [rate] false leaves the bitrate out.
+ */
+function mxFormat(t, info, rate) {
+  var out = [formatBadge(t && t.mime) || (info && info.format) || ""];
+  if (info) {
+    if (info.bits > 0) out.push(info.bits + "-bit");
+    if (info.sampleRate > 0) out.push((info.sampleRate % 1000 === 0 ? info.sampleRate / 1000 : (info.sampleRate / 1000).toFixed(1)) + " kHz");
+    if (rate !== false && info.kbps > 0) out.push(info.kbps + " kbps");
+  }
+  return out.filter(Boolean).join(" · ");
+}
+
 /** Namida's badge after the details: 24-bit Hi-Res Lossless. */
 function npBitsBadge(info) {
   if (!(info.bits > 0)) return "";
@@ -7884,6 +8117,7 @@ function npInfo(id) {
     np.info[id] = j;
     var t = npTrack();
     if (t && t.id === id) npText();
+    mxAlbumMeta();
   }).catch(function () { delete np.info[id]; });
 }
 
