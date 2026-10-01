@@ -110,6 +110,17 @@ class LyricsFinder(val store: LyricsStore) {
         )
         // LRCLIB's search for the song: the closest in length, nothing more than ten seconds out;
         // with [timedOnly], only timed lyrics, and within three seconds.
+        // Timed lyrics that run well past the song's end are another version's (a 4:33 song's on
+        // a 1:30 mix, say): their timing is no use here.
+        val lastStamp = Regex("""\[(\d+):(\d+(?:\.\d+)?)]""")
+        fun fits(x: JsonObject): Boolean {
+            val lrc = x.str("syncedLyrics")
+            if (lrc.isEmpty() || secs <= 0) return true
+            val last = lastStamp.findAll(lrc).maxOfOrNull { it.groupValues[1].toInt() * 60 + it.groupValues[2].toDouble() } ?: return true
+            return last <= secs + 15
+        }
+        /** As [doc], without timing that does not fit the song (the words kept). */
+        fun fitted(o: JsonObject) = doc(o).let { if (fits(o)) it else it.copy(lrc = "", lyricsfile = "") }
         fun search(timedOnly: Boolean): Pair<JsonObject?, Double>? {
             val (code, body) = get("$LRCLIB/search?track_name=${enc(plainTitle(t.title))}&artist_name=${enc(mainArtist(t.artist))}")
             if (code != 200) return null
@@ -118,7 +129,7 @@ class LyricsFinder(val store: LyricsStore) {
             for (e in json.parseToJsonElement(body).jsonArray) {
                 val x = e as? JsonObject ?: continue
                 val off = if (secs > 0) kotlin.math.abs((x.num("duration") ?: 0.0) - secs) else 0.0
-                val timed = x.str("syncedLyrics").isNotEmpty()
+                val timed = x.str("syncedLyrics").isNotEmpty() && fits(x)
                 if (secs > 0 && off > (if (timedOnly) 3 else 10)) continue
                 if (timedOnly && !timed) continue
                 val score = off + (if (timed) 0 else 20) +
@@ -132,15 +143,15 @@ class LyricsFinder(val store: LyricsStore) {
             val (code, body) = get("$LRCLIB/get?$q")
             if (code == 200) {
                 val exact = json.parseToJsonElement(body).jsonObject
-                if (exact.str("syncedLyrics").isNotEmpty() || exact.bool("instrumental")) return doc(exact)
+                if ((exact.str("syncedLyrics").isNotEmpty() && fits(exact)) || exact.bool("instrumental")) return doc(exact)
                 // The song's own entry has no timing; another entry for it often has (LRCLIB keeps
                 // several per song): the timed one of the same length, else the untimed words.
                 val timed = runCatching { search(timedOnly = true) }.getOrNull()?.first
-                return doc(timed ?: exact)
+                return fitted(timed ?: exact)
             }
             if (code != 404) return null
             val (best, bestScore) = search(timedOnly = false) ?: return null
-            best?.takeIf { bestScore < 100 }?.let(::doc) ?: LyricsDoc(source = "none")
+            best?.takeIf { bestScore < 100 }?.let(::fitted) ?: LyricsDoc(source = "none")
         } catch (e: Exception) {
             null
         }
