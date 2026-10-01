@@ -2158,6 +2158,16 @@
   }
   #player #pl-seek { left: 18px; right: 18px;
     background: linear-gradient(to right, color-mix(in srgb, var(--txt) 75%, transparent) var(--p, 0%), color-mix(in srgb, var(--txt) 12%, transparent) var(--p, 0%)); }
+  /* The timeline can be dragged or clicked: a taller strip catches the pointer, the line stays
+     thin in its middle, and the time is a small upright bar rather than a dot (taller while held). */
+  #player #pl-seek { pointer-events: auto; cursor: pointer; touch-action: none; bottom: 0; height: 14px;
+    background-size: 100% 3px; background-position: center; background-repeat: no-repeat; }
+  #player #pl-seek::-webkit-slider-thumb { -webkit-appearance: none; opacity: 1; width: 3px; height: 10px; border-radius: 1.5px;
+    background: var(--txt); box-shadow: none; transition: width .12s, height .12s; }
+  #player #pl-seek::-moz-range-thumb { opacity: 1; width: 3px; height: 10px; border-radius: 1.5px; background: var(--txt); border: 0; }
+  #player #pl-seek:hover::-webkit-slider-thumb, #player #pl-seek:active::-webkit-slider-thumb { width: 4px; height: 14px; }
+  #player #pl-seek:hover::-moz-range-thumb, #player #pl-seek:active::-moz-range-thumb { width: 4px; height: 14px; }
+  #player #pl-seek:focus-visible { outline: none; }
   /* On a computer's width: a bar along the whole foot of the window, edge to edge, a hairline
      along its top that is also the song's progress; the song on the left, the controls in the
      middle of the window, the times on the right. The sidebar stops above it. */
@@ -2169,7 +2179,7 @@
     #player .pl-right { display: flex; flex: 1 1 0; justify-content: flex-end; align-items: center; gap: 6px; min-width: 0; }
     #player .pl-right #pl-lyrics, #player .pl-right #pl-mute, #player .pl-right #pl-vol, #player .pl-right #pl-time { display: none; }
     #player .pl-times { font-size: 12.5px; color: color-mix(in srgb, var(--txt) 58%, transparent); font-variant-numeric: tabular-nums; }
-    #player #pl-seek { left: 0; right: 0; top: 0; bottom: auto; height: 3px; }
+    #player #pl-seek { left: 0; right: 0; top: -7px; bottom: auto; height: 14px; }
     .mx-side { bottom: var(--player-h, 0px); }
   }
 
@@ -7523,7 +7533,14 @@ function setupPlayer() {
       seek.style.setProperty("--p", pct + "%");
     }
   });
-  seek.addEventListener("input", function () { seeking = true; seek.style.setProperty("--p", seek.value / 10 + "%"); });
+  seek.addEventListener("input", function () {
+    seeking = true;
+    seek.style.setProperty("--p", seek.value / 10 + "%");
+    // The time it would go to, where the bar shows the time, while it is dragged.
+    var t = currentTrack();
+    var dur = audio.duration && isFinite(audio.duration) ? audio.duration : (t ? t.durationMs / 1000 : 0);
+    if (dur > 0) $("pl-cur").textContent = fmtTime(seek.value / 1000 * dur);
+  });
   seek.addEventListener("change", function () {
     var t = currentTrack();
     var dur = audio.duration && isFinite(audio.duration) ? audio.duration : (t ? t.durationMs / 1000 : 0);
