@@ -89,6 +89,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.text.appendInlineContent
@@ -565,6 +566,8 @@ fun NowPlaying(
     // A seek being dragged on the waveform: where it would go. Read only by the label, so a
     // scrub redraws the label and nothing else.
     val seek = remember { mutableStateOf<Long?>(null) }
+    // A seek being dragged along the mini player's foot: how far through the song, or null.
+    val miniSeek = remember { mutableStateOf<Float?>(null) }
     // The sound controls, opened from the bottom row.
     var sound by remember { mutableStateOf(false) }
     // How far the sound dialog is in, for the player under it to blur by.
@@ -750,7 +753,10 @@ fun NowPlaying(
                 ctrlBox(g, Terms(motion.p, motion.bounceUp), 1)
             }) { motion.toSong(1, player) { around.value(it) } }
 
-            // ---- the mini player's progress, a hairline along its foot
+            // ---- the mini player's timeline along its foot: a thin bar with the time marked by a small
+            // upright one, which grows while it is dragged, with the time it would go to above it.
+            val timeText = androidx.compose.ui.text.rememberTextMeasurer()
+            val timeStyle = TextStyle(fontFamily = MusicType, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = nc.bg, fontFeatureSettings = "tnum")
             Box(
                 Modifier.fillMaxSize().drawBehind {
                     val t = Terms(motion.p, motion.bounceUp)
@@ -758,13 +764,45 @@ fun NowPlaying(
                     if (a <= 0f) return@drawBehind
                     tick.longValue
                     val s = live.value
-                    val f = if (s.durationMs > 0) s.positionNow().toFloat() / s.durationMs else 0f
+                    val g = geo.value
+                    val dragging = miniSeek.value
+                    // The song's length from the library until the player has read the file (a song
+                    // restored at launch, not yet started).
+                    val len = s.durationMs.takeIf { it > 0 } ?: s.current?.durationMs ?: 0L
+                    val f = (dragging ?: if (len > 0) s.positionNow().toFloat() / len else 0f).coerceIn(0f, 1f)
                     val r = panelRect(g, t)
                     val l = r.left + g.miniRadius; val w = r.width - g.miniRadius * 2
-                    val y = r.bottom - g.dp(2.5f)
-                    drawRoundRect(nc.onSurface.copy(alpha = 0.14f * a), Offset(l, y), Size(w, g.dp(2.5f)), CornerRadius(g.dp(2f)))
-                    drawRoundRect(nc.onSurface.copy(alpha = 0.85f * a), Offset(l, y), Size(w * f.coerceIn(0f, 1f), g.dp(2.5f)), CornerRadius(g.dp(2f)))
+                    val th = g.dp(3f)
+                    val cy = r.bottom - g.dp(6f)
+                    drawRoundRect(nc.onSurface.copy(alpha = 0.14f * a), Offset(l, cy - th / 2), Size(w, th), CornerRadius(th / 2))
+                    drawRoundRect(nc.onSurface.copy(alpha = 0.85f * a), Offset(l, cy - th / 2), Size(w * f, th), CornerRadius(th / 2))
+                    val bw = g.dp(if (dragging != null) 4f else 3f)
+                    val bh = g.dp(if (dragging != null) 15f else 10f)
+                    val x = l + w * f
+                    drawRoundRect(nc.onSurface.copy(alpha = a), Offset(x - bw / 2, cy - bh / 2), Size(bw, bh), CornerRadius(bw / 2))
+                    if (dragging != null && len > 0) {
+                        val label = timeText.measure(clock((dragging * len).toLong()) + " / " + clock(len), timeStyle)
+                        val pw = label.size.width + g.dp(12f)
+                        val ph = label.size.height + g.dp(4f)
+                        val px = (x - pw / 2).coerceIn(r.left + g.dp(6f), r.right - g.dp(6f) - pw)
+                        val py = cy - bh / 2 - g.dp(4f) - ph
+                        drawRoundRect(nc.onSurface.copy(alpha = 0.9f * a), Offset(px, py), Size(pw, ph), CornerRadius(ph / 2))
+                        drawText(label, topLeft = Offset(px + g.dp(6f), py + g.dp(2f)))
+                    }
                 },
+            )
+            // Where a finger takes the timeline: a strip along the mini player's foot. A drag along
+            // it moves through the song (let go, and it goes there); a tap past the cover goes
+            // straight there. A drag up from it still opens the player. Out of the way otherwise.
+            Box(
+                Modifier
+                    .placed({ geo.value.w - geo.value.side * 2 }, g.dp(MINI_SCRUB_DP)) {
+                        val t = Terms(motion.p, motion.bounceUp)
+                        val g = geo.value
+                        if (t.cp > 0.02f || t.under > 0f) floatArrayOf(0f, g.h * 3f, 1f, 0f)
+                        else { val r = panelRect(g, t); floatArrayOf(r.left, r.bottom - g.dp(MINI_SCRUB_DP), 1f, 1f) }
+                    }
+                    .pointerInput(Unit) { miniScrub(geo, motion, miniSeek, { live.value.let { it.durationMs.takeIf { d -> d > 0 } ?: it.current?.durationMs ?: 0L } }, { ms -> player.seekTo(ms) }, { motion.haptic() }) },
             )
 
             // ---- the top row: close, and where in the queue and which album
@@ -1060,6 +1098,57 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.playerGe
             2 -> motion.swipeRelease(v.x, player, around)
             0 -> if (lastUp != null && !lastUp.isConsumed && motion.p < 0.1f) { lastUp.consume(); motion.expand() }
         }
+    }
+}
+
+/** How tall the strip along the mini player's foot that takes the timeline is. */
+private const val MINI_SCRUB_DP = 18f
+
+/**
+ * The mini player's timeline under a finger: sideways it scrubs ([seek] follows, and the song goes
+ * there on letting go); a tap to the right of the cover goes there at once; upwards it lets go, so
+ * the player's own drag opens it. Positions are the strip's own, which starts at the card's left.
+ */
+private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.miniScrub(
+    geo: State<Geo>,
+    motion: PlayerMotion,
+    seek: androidx.compose.runtime.MutableState<Float?>,
+    duration: () -> Long,
+    onSeek: (Long) -> Unit,
+    tick: () -> Unit,
+) {
+    val slop = viewConfiguration.touchSlop
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (motion.p > 0.02f || duration() <= 0) return@awaitEachGesture
+        val g = geo.value
+        val r = panelRect(g, Terms(motion.p, motion.bounceUp))
+        val l = g.miniRadius
+        val w = r.width - g.miniRadius * 2
+        fun at(x: Float) = ((x - l) / w).coerceIn(0f, 1f)
+        var moved = Offset.Zero
+        var scrubbing = false
+        while (true) {
+            val ev = awaitPointerEvent()
+            val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+            if (!ch.pressed) {
+                val f = seek.value
+                when {
+                    scrubbing && f != null -> { ch.consume(); onSeek((f * duration()).toLong()) }
+                    !scrubbing && moved.getDistance() < slop && ch.position.x > g.miniPad + g.miniArt + g.dp(8f) -> {
+                        ch.consume(); onSeek((at(ch.position.x) * duration()).toLong())
+                    }
+                }
+                break
+            }
+            if (!scrubbing) {
+                moved += ch.positionChange()
+                if (abs(moved.x) > slop && abs(moved.x) > abs(moved.y)) { scrubbing = true; tick() }
+                else if (abs(moved.y) > slop) break
+            }
+            if (scrubbing) { ch.consume(); seek.value = at(ch.position.x) }
+        }
+        seek.value = null
     }
 }
 

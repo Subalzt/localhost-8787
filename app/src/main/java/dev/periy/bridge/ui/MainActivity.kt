@@ -594,10 +594,10 @@ private fun BlazeItUi(vm: MainViewModel) {
             ) }
         }
 
-        // What is playing: the mini player over the tabs, or floating 12 above the foot in Music
-        // (it glides between the two), dragged up to full screen and on to the queue.
+        // What is playing: the mini player over the tabs, or close to the foot in Music, on a foot
+        // of its own there (it glides between the two), dragged up to full screen and on to the queue.
         val miniLift by androidx.compose.animation.core.animateDpAsState(
-            if (shelf.showing) bottomInset + 12.dp else bottomInset + 66.dp, tween(320), label = "lift",
+            if (shelf.showing) bottomInset + 4.dp else bottomInset + 66.dp, tween(320), label = "lift",
         )
         if (hasPlayer) NowPlaying(
             player, now, motion, ctx.container.loudness,
