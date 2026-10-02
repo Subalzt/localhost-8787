@@ -1342,7 +1342,7 @@ public static class BlazeItPc
             string at = phone;
             try
             {
-                if (cookie == null) cookie = Pair();
+                if (cookie == null) { cookie = Pair(); session = cookie; TunnelLearn(); }
                 session = cookie;
                 at = phone;
                 HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + at + ":" + PhonePort + "/api/control/stream");
@@ -2339,6 +2339,17 @@ public static class BlazeItPc
         catch { }
     }
 
+    /** The tunnel's keys are from before the current session (an older pairing): out of date. */
+    static bool TunnelStale()
+    {
+        try
+        {
+            string s = Path.Combine(Dir, "session.txt");
+            return File.Exists(s) && (!File.Exists(TunnelFile) || File.GetLastWriteTimeUtc(TunnelFile) < File.GetLastWriteTimeUtc(s));
+        }
+        catch { return false; }
+    }
+
     static string TunnelConf() { try { return File.Exists(TunnelFile) ? File.ReadAllText(TunnelFile) : null; } catch { return null; } }
 
     static List<string> TunnelAddrs(string conf)
@@ -2456,7 +2467,9 @@ public static class BlazeItPc
                 if (phone == null || session == null) continue;
                 if (phone != TunnelHost)
                 {
-                    if (unchecked(Environment.TickCount - lastLearn) > 600000) { TunnelLearn(); lastLearn = Environment.TickCount; }
+                    // Every 10 minutes while close; at once when the keys are older than the session (a new
+                    // pairing gives this laptop new keys, and the old ones stop working the moment it does).
+                    if (unchecked(Environment.TickCount - lastLearn) > 600000 || (TunnelStale() && unchecked(Environment.TickCount - lastLearn) > 30000)) { TunnelLearn(); lastLearn = Environment.TickCount; }
                     Tunnel87.Conn t = tunnel;
                     bool used;
                     lock (relayed) used = relayed.Exists(delegate (Relayed r) { return r.host == TunnelHost; });

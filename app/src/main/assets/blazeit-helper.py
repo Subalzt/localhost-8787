@@ -1723,6 +1723,15 @@ def tunnel_save_addrs(addrs):
         write_file(os.path.join(CONF, "tunnel.json"), json.dumps(c), private=True)
 
 
+def tunnel_stale():
+    """The tunnel's keys are from before the current session (an older pairing): out of date."""
+    s, t = os.path.join(CONF, "session.txt"), os.path.join(CONF, "tunnel.json")
+    try:
+        return os.path.exists(s) and (not os.path.exists(t) or os.path.getmtime(t) < os.path.getmtime(s))
+    except OSError:
+        return False
+
+
 def tunnel_learn():
     """While the phone is reachable, keeps what the tunnel needs: its addresses, port and this computer's keys."""
     try:
@@ -1874,7 +1883,8 @@ def tunnel_loop():
         if phone is None or not session:
             continue
         if not on_tunnel():
-            if time.time() - last_learn > 600:
+            # Every 10 minutes while close; at once when the keys are older than the session.
+            if time.time() - last_learn > 600 or (tunnel_stale() and time.time() - last_learn > 30):
                 tunnel_learn()
                 last_learn = time.time()
             t = tunnel
@@ -3630,6 +3640,8 @@ def control_loop(no_browser):
         try:
             if cookie is None:
                 cookie = pair()
+                session = cookie
+                tunnel_learn()    # new pairing, new keys: the old ones stop working at once
             session = cookie
             at = phone
             conn, r = open_stream("/api/control/stream", headers={"Bridge-Heartbeat": "slow"})
