@@ -455,7 +455,11 @@ class BridgeServer(
             if (call.viaSite()) {
                 // Through the website: the name, and how the browser itself is connected.
                 val who = call.clientIp()
-                call.respond(RouteDto(via = "website", host = site?.state?.value?.name.orEmpty(), ip = if (':' in who) "IPv6" else "IPv4"))
+                // The phone's public STUN addresses too, so pages on two networks can still try to
+                // send to each other directly (WebRTC) before going through the phone.
+                val stun = dev.periy.bridge.net.NetInfo.publicAddresses(ctx)
+                    .map { if (':' in it) "[$it]:${dev.periy.bridge.net.StunServer.PORT}" else "$it:${dev.periy.bridge.net.StunServer.PORT}" }
+                call.respond(RouteDto(via = "website", host = site?.state?.value?.name.orEmpty(), stun = stun, ip = if (':' in who) "IPv6" else "IPv4"))
                 return@get
             }
             val all = dev.periy.bridge.net.NetInfo.addresses()
