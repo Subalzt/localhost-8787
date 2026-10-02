@@ -2275,20 +2275,32 @@ public static class BlazeItPc
             byte[] tid = new byte[16];
             for (int i = 0; i < 16; i++) tid[i] = Convert.ToByte(id.Substring(i * 2, 2), 16);
             byte[] psk = Convert.FromBase64String(key);
-            foreach (string host in TunnelAddrs(conf))
+            // Its saved addresses all at once; meanwhile the board is asked where it is now, in case
+            // its IPv6 changed while the two were apart, and any new ones join the race the moment they come.
+            List<string> saved = TunnelAddrs(conf);
+            Action<string, Exception> failed = delegate (string host, Exception e)
             {
-                try
+                string why = "Could not reach the phone at " + host + " over the internet (" + e.Message + ").";
+                lock (tunnelSaid) if (tunnelSaid.Add(why)) Say(why);
+            };
+            Tunnel87.Race race = new Tunnel87.Race(port, tid, psk, Environment.MachineName, TunnelSaveAddrs, Log, failed);
+            foreach (string a in saved) race.Add(a);
+            Thread asking = new Thread(delegate ()
+            {
+                List<string> now = Tunnel87.Where(psk), fresh = new List<string>();
+                foreach (string a in now) if (!saved.Contains(a)) fresh.Add(a);
+                if (fresh.Count > 0)
                 {
-                    tunnel = Tunnel87.Dial(host, port, tid, psk, Environment.MachineName, TunnelSaveAddrs, Log);
-                    Log("Tunnel to [" + host + "]:" + port);
-                    return TunnelHost;
+                    Log("The phone's addresses changed: " + string.Join(", ", fresh.ToArray()));
+                    TunnelSaveAddrs(now);
+                    foreach (string a in fresh) race.Add(a);
                 }
-                catch (Exception e)
-                {
-                    string why = "Could not reach the phone at " + host + " over the internet (" + e.Message + ").";
-                    lock (tunnelSaid) if (tunnelSaid.Add(why)) Say(why);
-                }
-            }
+                race.Close();
+            });
+            asking.IsBackground = true;
+            asking.Start();
+            tunnel = race.Wait(20000);
+            if (tunnel != null) return TunnelHost;
             // No IPv6 way to it: across IPv4, punched through both NATs.
             try
             {
@@ -2575,12 +2587,17 @@ public static class Tunnel87
     /** Connects to the phone over TCP and runs the handshake; the connection is running when this returns. */
     public static Conn Dial(string host, int port, byte[] tid, byte[] psk, string name, Action<List<string>> onAddrs, Action<string> log)
     {
+        return Dial(host, port, tid, psk, name, onAddrs, log, 8000);
+    }
+
+    public static Conn Dial(string host, int port, byte[] tid, byte[] psk, string name, Action<List<string>> onAddrs, Action<string> log, int timeoutMs)
+    {
         TcpClient tcp = new TcpClient(AddressFamily.InterNetworkV6);
         tcp.Client.DualMode = true;
         try
         {
             IAsyncResult ar = tcp.BeginConnect(IPAddress.Parse(host), port, null, null);
-            if (!ar.AsyncWaitHandle.WaitOne(8000)) throw new IOException("no answer in 8 s");
+            if (!ar.AsyncWaitHandle.WaitOne(timeoutMs)) throw new IOException("no answer in " + (timeoutMs / 1000) + " s");
             tcp.EndConnect(ar);
             tcp.NoDelay = true;
             tcp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
@@ -2590,6 +2607,58 @@ public static class Tunnel87
         {
             try { tcp.Close(); } catch { }
             throw;
+        }
+    }
+
+    /** Addresses dialled at once as they come; the first tunnel up wins, any later ones are closed. */
+    public class Race
+    {
+        readonly int port;
+        readonly byte[] tid, psk;
+        readonly string name;
+        readonly Action<List<string>> onAddrs;
+        readonly Action<string> log;
+        readonly Action<string, Exception> failed;
+        readonly object gate = new object();
+        Conn won;
+        int pending;
+        bool open = true;
+
+        public Race(int port, byte[] tid, byte[] psk, string name, Action<List<string>> onAddrs, Action<string> log, Action<string, Exception> failed)
+        {
+            this.port = port; this.tid = tid; this.psk = psk; this.name = name; this.onAddrs = onAddrs; this.log = log; this.failed = failed;
+        }
+
+        public void Add(string host)
+        {
+            lock (gate) { if (won != null) return; pending++; }
+            Thread t = new Thread(delegate ()
+            {
+                Conn c = null;
+                try { c = Dial(host, port, tid, psk, name, onAddrs, log, 4000); }
+                catch (Exception e) { if (failed != null) failed(host, e); }
+                lock (gate)
+                {
+                    pending--;
+                    if (c != null && won == null) { won = c; c = null; if (log != null) log("Tunnel to [" + host + "]:" + port); }
+                    Monitor.PulseAll(gate);
+                }
+                if (c != null) c.Close("another address answered first");
+            });
+            t.IsBackground = true;
+            t.Start();
+        }
+
+        /** No more addresses will come. */
+        public void Close() { lock (gate) { open = false; Monitor.PulseAll(gate); } }
+
+        /** The winner, or null once every address has failed and no more will come. */
+        public Conn Wait(int limitMs)
+        {
+            int end = Environment.TickCount + limitMs;
+            lock (gate)
+                while (won == null && (open || pending > 0) && unchecked(Environment.TickCount - end) < 0) Monitor.Wait(gate, 500);
+            return won;
         }
     }
 
@@ -2849,6 +2918,76 @@ public static class Tunnel87
     }
 
     /**
+     * Leaves a note for the phone on the board and returns its decrypted answer (the same kind and
+     * session), or null. Listens before posting, so the answer cannot be missed. Throws IOException
+     * when the board cannot be reached.
+     */
+    static string Ask(byte[] psk, string note, string kind, string sHex, int waitMs)
+    {
+        ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+        string answer = null;
+        HttpWebRequest sub = (HttpWebRequest)WebRequest.Create(Board + "/" + Topic(psk, "L87P/1 down") + "/json");
+        sub.Timeout = waitMs + 1000;
+        sub.ReadWriteTimeout = waitMs + 1000;
+        try
+        {
+            using (WebResponse r = sub.GetResponse())
+            using (StreamReader rd = new StreamReader(r.GetResponseStream(), Encoding.UTF8))
+            {
+                rd.ReadLine();   // the board's "open"
+                HttpWebRequest post = (HttpWebRequest)WebRequest.Create(Board + "/" + Topic(psk, "L87P/1 up"));
+                post.Method = "POST";
+                post.Timeout = 10000;
+                post.Headers["Cache"] = "no";
+                post.Headers["Firebase"] = "no";
+                byte[] body = Encoding.ASCII.GetBytes(Seal(psk, note));
+                using (Stream w = post.GetRequestStream()) w.Write(body, 0, body.Length);
+                post.GetResponse().Close();
+                int end = Environment.TickCount + waitMs;
+                while (answer == null && unchecked(Environment.TickCount - end) < 0)
+                {
+                    string line = rd.ReadLine();
+                    if (line == null) break;
+                    if (!line.Contains("\"event\":\"message\"")) continue;
+                    Match m = Regex.Match(line, "\"message\"\\s*:\\s*\"([A-Za-z0-9_-]+)\"");
+                    string a = m.Success ? Unseal(psk, m.Groups[1].Value) : null;
+                    if (a != null && a.Contains("\"t\":\"" + kind + "\"") && a.Contains("\"s\":\"" + sHex + "\"")) answer = a;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            if (answer == null) throw new IOException("could not reach the board at " + Board + " (" + e.Message + ")");
+        }
+        return answer;
+    }
+
+    static string NewSession()
+    {
+        byte[] session = new byte[8];
+        Rand(session);
+        StringBuilder sh = new StringBuilder();
+        foreach (byte b in session) sh.Append(b.ToString("x2"));
+        return sh.ToString();
+    }
+
+    static int Now() { return (int)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds; }
+
+    /** The phone's current addresses, asked through the board (its IPv6 changes when mobile data reconnects). Empty when it does not answer. */
+    public static List<string> Where(byte[] psk)
+    {
+        List<string> addrs = new List<string>();
+        string sHex = NewSession();
+        string a;
+        try { a = Ask(psk, "{\"t\":\"where\",\"s\":\"" + sHex + "\",\"at\":" + Now() + "}", "where", sHex, 6000); }
+        catch { return addrs; }
+        if (a == null) return addrs;
+        Match m = Regex.Match(a, "\"addrs\"\\s*:\\s*\\[([^\\]]*)\\]");
+        if (m.Success) foreach (Match x in Regex.Matches(m.Groups[1].Value, "\"([^\"]+)\"")) addrs.Add(x.Groups[1].Value);
+        return addrs;
+    }
+
+    /**
      * Across IPv4: a note to the phone through the board, its answer, then the punch, then the same
      * handshake as Dial over the punched path. Throws IOException with the reason when it cannot.
      */
@@ -2862,49 +3001,14 @@ public static class Tunnel87
             IPEndPoint me = a1 != null ? a1 : a2;
             if (me == null) throw new IOException("this network gives no public IPv4 address to punch from (STUN did not answer)");
             bool hard = a1 != null && a2 != null && a1.Port != a2.Port;
+            string sHex = NewSession();
             byte[] session = new byte[8];
-            Rand(session);
-            StringBuilder sh = new StringBuilder();
-            foreach (byte b in session) sh.Append(b.ToString("x2"));
-            string sHex = sh.ToString();
+            for (int i = 0; i < 8; i++) session[i] = Convert.ToByte(sHex.Substring(i * 2, 2), 16);
             string lan = LanIp();
-            int at = (int)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;
+            int at = Now();
             string note = "{\"t\":\"punch\",\"s\":\"" + sHex + "\",\"at\":" + at + ",\"addr\":\"" + me + "\",\"hard\":" + (hard ? "true" : "false") +
                 ",\"lan\":[" + (lan != null ? "\"" + lan + ":" + ((IPEndPoint)sock.LocalEndPoint).Port + "\"" : "") + "]}";
-            string answer = null;
-            HttpWebRequest sub = (HttpWebRequest)WebRequest.Create(Board + "/" + Topic(psk, "L87P/1 down") + "/json");
-            sub.Timeout = 13000;
-            sub.ReadWriteTimeout = 13000;
-            try
-            {
-                using (WebResponse r = sub.GetResponse())
-                using (StreamReader rd = new StreamReader(r.GetResponseStream(), Encoding.UTF8))
-                {
-                    rd.ReadLine();   // the board's "open"
-                    HttpWebRequest post = (HttpWebRequest)WebRequest.Create(Board + "/" + Topic(psk, "L87P/1 up"));
-                    post.Method = "POST";
-                    post.Timeout = 10000;
-                    post.Headers["Cache"] = "no";
-                    post.Headers["Firebase"] = "no";
-                    byte[] body = Encoding.ASCII.GetBytes(Seal(psk, note));
-                    using (Stream w = post.GetRequestStream()) w.Write(body, 0, body.Length);
-                    post.GetResponse().Close();
-                    int end = Environment.TickCount + 12000;
-                    while (answer == null && unchecked(Environment.TickCount - end) < 0)
-                    {
-                        string line = rd.ReadLine();
-                        if (line == null) break;
-                        if (!line.Contains("\"event\":\"message\"")) continue;
-                        Match m = Regex.Match(line, "\"message\"\\s*:\\s*\"([A-Za-z0-9_-]+)\"");
-                        string a = m.Success ? Unseal(psk, m.Groups[1].Value) : null;
-                        if (a != null && a.Contains("\"t\":\"punch\"") && a.Contains("\"s\":\"" + sHex + "\"")) answer = a;
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                if (answer == null) throw new IOException("could not reach the board at " + Board + " (" + e.Message + ")");
-            }
+            string answer = Ask(psk, note, "punch", sHex, 12000);
             if (answer == null) throw new IOException("the phone did not answer through the board (is it on, with From other networks on?)");
             List<IPEndPoint> theirs = new List<IPEndPoint>();
             IPEndPoint pub = ParseAddr(Regex.Match(answer, "\"addr\"\\s*:\\s*\"([^\"]+)\"").Groups[1].Value);

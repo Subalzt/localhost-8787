@@ -229,11 +229,15 @@ object Punch {
 
     /**
      * The phone's side: listens on the board for paired devices' notes (only while the tunnel is
-     * on), and for each one punches back and hands the path to [serve] as a tunnel connection.
+     * on). A "where" note gets the phone's current addresses back (its IPv6 changes when mobile
+     * data reconnects, and a device away from it has no other way to learn the new one); a
+     * "punch" note gets them too, and the phone punches back and hands the path to [serve].
      */
     class Listener(
         private val keys: TunnelKeys,
         private val deviceIds: () -> List<String>,
+        /** The phone's HELLO: its name, addresses and tunnel port. */
+        private val info: () -> String,
         private val serve: (TunnelLink, String) -> Unit,
     ) {
         @Volatile private var running = false
@@ -297,13 +301,26 @@ object Punch {
         private fun answer(deviceId: String, text: String) {
             val psk = keys.psk(deviceId)
             val note = open(psk, text)?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() } ?: return
-            if (note["t"]?.jsonPrimitive?.content != "punch") return
+            val kind = note["t"]?.jsonPrimitive?.content
+            if (kind != "punch" && kind != "where") return
             val at = note["at"]?.jsonPrimitive?.longOrNull ?: return
             if (kotlin.math.abs(System.currentTimeMillis() / 1000 - at) > NOTE_AGE_S) return
             val sHex = note["s"]?.jsonPrimitive?.content ?: return
             val session = session(sHex) ?: return
             if (seen.putIfAbsent(sHex, at) != null) return
             if (seen.size > 200) seen.entries.removeIf { System.currentTimeMillis() / 1000 - it.value > NOTE_AGE_S }
+            val phone = runCatching { Json.parseToJsonElement(info()).jsonObject }.getOrNull()
+            if (kind == "where") {
+                val reply = buildJsonObject {
+                    put("t", JsonPrimitive("where"))
+                    put("s", JsonPrimitive(sHex))
+                    put("at", JsonPrimitive(System.currentTimeMillis() / 1000))
+                    phone?.get("addrs")?.let { put("addrs", it) }
+                    phone?.get("port")?.let { put("port", it) }
+                }.toString()
+                post(topicDown(psk), seal(psk, reply))
+                return
+            }
             val theirs = listOfNotNull(parseAddr(note["addr"]?.jsonPrimitive?.content)) +
                 (note["lan"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { parseAddr(it.jsonPrimitive.content) }
             val hardThere = note["hard"]?.jsonPrimitive?.booleanOrNull ?: false
@@ -315,6 +332,7 @@ object Punch {
                 put("at", JsonPrimitive(System.currentTimeMillis() / 1000))
                 me?.let { put("addr", JsonPrimitive(addr(it.first))); put("hard", JsonPrimitive(it.second)) }
                 put("lan", kotlinx.serialization.json.JsonArray(lanAddresses().map { JsonPrimitive("${it.hostAddress}:${sock.localPort}") }))
+                phone?.get("addrs")?.let { put("addrs", it) }
             }.toString()
             if (!post(topicDown(psk), seal(psk, reply))) { sock.close(); return }
             Log.i(TAG, "Punching to ${theirs.joinToString { addr(it) }} (here ${me?.first?.let(::addr)}, hard here ${me?.second}, there $hardThere)")

@@ -132,11 +132,14 @@ type:u8  stream:u32be  body
 - While the helper can reach the phone (any link), it fetches `GET /api/tunnel` and keeps the
   phone's addresses, port, `tid` and `psk` in its config folder. Over the tunnel, ADDR frames
   keep them current.
-- When no local path answers (cable, hotspot, Wi-Fi, USB debugging), it dials the saved
-  addresses, and moves back to a local path as soon as one answers.
-- If the phone's address changed while the two were apart (mobile IPv6 changes on reconnect),
-  there is no server to ask: type the address shown on the phone's Home into the helper
-  (`--phone`), or scan it.
+- When no local path answers (cable, hotspot, Wi-Fi, USB debugging), it dials every saved
+  address at once (4 s each, the first up wins) and, at the same time, asks the phone where it
+  is now: a `where` note on the board (see Across IPv4), which the phone answers with its current
+  addresses and port. Mobile IPv6 changes when the phone reconnects; new addresses join the race
+  the moment the answer comes (about 3 s in all), and are saved. Only if no IPv6 address answers
+  does it punch over IPv4. It moves back to a local path as soon as one answers.
+- The `where` note: `{"t": "where", "s", "at"}`; the answer: `{"t": "where", "s", "at",
+  "addrs": [...], "port"}`. A `punch` answer carries `addrs` too.
 
 ## Across IPv4
 

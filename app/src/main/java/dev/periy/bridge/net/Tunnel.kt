@@ -394,7 +394,7 @@ class TunnelServer(
     private var server: ServerSocket? = null
     private val attempts = ConcurrentHashMap<String, ArrayDeque<Long>>()
     /** Across IPv4: devices that cannot reach the phone's IPv6 ask through the board (Punch.kt). */
-    private val punch = Punch.Listener(keys, deviceIds) { link, who -> serve(link, who) }
+    private val punch = Punch.Listener(keys, deviceIds, info) { link, who -> serve(link, who) }
 
     private val _peers = MutableStateFlow<List<TunnelPeer>>(emptyList())
     val peers: StateFlow<List<TunnelPeer>> = _peers

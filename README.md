@@ -315,8 +315,9 @@ Between two phones the tunnel is still IPv6 only.
 Through the tunnel: the clipboard, files, browsing the phone, music, notifications, the
 trackpad. The second screen and the phone's screen stay local. On mobile data every byte counts;
 Settings → Laptop access → From other networks shows who is connected that way and how much it
-has carried, and turns it off. If the phone's address changes while the two are apart, type
-the address its Home shows into the helper.
+has carried, and turns it off. If the phone's address changes while the two are apart (mobile IPv6
+changes whenever the phone reconnects), the helper asks the phone where it is now through the same
+message board and is back in about 3 seconds.
 
 </details>
 

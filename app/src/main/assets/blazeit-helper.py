@@ -1548,6 +1548,45 @@ def punch_post(topic, text):
     urllib.request.urlopen(r, timeout=10).read()
 
 
+def punch_ask(psk, note, wait=12):
+    """Leaves note for the phone on the board and returns its answer (same "t" and "s"), or None.
+    Listens before posting, so the answer cannot be missed. OSError when the board is unreachable."""
+    try:
+        board = urllib.request.urlopen(P_BOARD + "/" + punch_topic(psk, b"L87P/1 down") + "/json", timeout=wait + 1)
+    except (OSError, urllib.error.URLError) as e:
+        raise OSError("could not reach the board at %s (%s)" % (P_BOARD, e))
+    try:
+        board.readline()                               # the board's "open"
+        punch_post(punch_topic(psk, b"L87P/1 up"), punch_seal(psk, json.dumps(note)))
+        end = time.time() + wait
+        while time.time() < end:
+            line = board.readline()
+            if not line:
+                return None
+            try:
+                o = json.loads(line.decode("utf-8"))
+                a = json.loads(punch_open(psk, o.get("message")) or "null") if o.get("event") == "message" else None
+            except ValueError:
+                continue
+            if a and a.get("t") == note["t"] and a.get("s") == note["s"]:
+                return a
+    except (OSError, urllib.error.URLError):
+        return None
+    finally:
+        board.close()
+    return None
+
+
+def tunnel_where(c):
+    """The phone's current addresses, asked through the board (its IPv6 changes when mobile data
+    reconnects). [] when it does not answer."""
+    try:
+        a = punch_ask(base64.b64decode(c["key"]), {"t": "where", "s": os.urandom(8).hex(), "at": int(time.time())}, wait=6)
+    except OSError:
+        return []
+    return [x for x in (a or {}).get("addrs") or [] if isinstance(x, str)]
+
+
 def punch_dial(c):
     """Across IPv4: a note to the phone through the board, its answer, then the punch. Returns
     the UdpCarrier and the phone's address; OSError when it cannot."""
@@ -1562,29 +1601,7 @@ def punch_dial(c):
         lan = punch_lan_ip()
         note = {"t": "punch", "s": session.hex(), "at": int(time.time()), "addr": "%s:%d" % me[0],
                 "hard": me[1], "lan": ["%s:%d" % (lan, sock.getsockname()[1])] if lan else []}
-        answer = None
-        try:
-            board = urllib.request.urlopen(P_BOARD + "/" + punch_topic(psk, b"L87P/1 down") + "/json", timeout=13)
-            try:
-                board.readline()                               # the board's "open"
-                punch_post(punch_topic(psk, b"L87P/1 up"), punch_seal(psk, json.dumps(note)))
-                end = time.time() + 12
-                while time.time() < end and answer is None:
-                    line = board.readline()
-                    if not line:
-                        break
-                    try:
-                        o = json.loads(line.decode("utf-8"))
-                        a = json.loads(punch_open(psk, o.get("message")) or "null") if o.get("event") == "message" else None
-                    except ValueError:
-                        continue
-                    if a and a.get("t") == "punch" and a.get("s") == session.hex():
-                        answer = a
-            finally:
-                board.close()
-        except (OSError, urllib.error.URLError) as e:
-            if not answer:
-                raise OSError("could not reach the board at %s (%s)" % (P_BOARD, e))
+        answer = punch_ask(psk, note)
         if not answer:
             raise OSError("the phone did not answer through the board (is it on, with From other networks on?)")
         theirs = [a for a in [punch_addr(answer.get("addr"))] + [punch_addr(x) for x in answer.get("lan") or []] if a]
@@ -1688,13 +1705,28 @@ def tunnel_path():
         if tunnel_local is None and tunnel_serve() is None:
             return None
         tid, psk = bytes.fromhex(c["id"]), base64.b64decode(c["key"])
-        for host in c.get("addrs") or []:
-            try:
-                tunnel = tunnel_dial(host, int(c.get("port", TUNNEL_PORT)), tid, psk)
-                log("Tunnel to [%s]:%s" % (host, c.get("port", TUNNEL_PORT)))
-                return tunnel_local
-            except OSError as e:
-                say_once("tunnel-" + host + str(e), "Could not reach the phone at %s over the internet (%s)." % (host, e))
+        port = int(c.get("port", TUNNEL_PORT))
+        # Its saved addresses all at once; meanwhile the board is asked where it is now, in case
+        # its IPv6 changed while the two were apart, and any new ones join the race the moment they come.
+        saved = list(c.get("addrs") or [])
+        race = DialRace(port, tid, psk)
+        for a in saved:
+            race.add(a)
+
+        def ask():
+            now = tunnel_where(c)
+            fresh = [a for a in now if a not in saved]
+            if fresh:
+                log("The phone's addresses changed: %s" % ", ".join(fresh))
+                tunnel_save_addrs(now)
+                for a in fresh:
+                    race.add(a)
+            race.close()
+
+        threading.Thread(target=ask, daemon=True).start()
+        tunnel = race.wait(20)
+        if tunnel:
+            return tunnel_local
         # No IPv6 way to it: across IPv4, punched through both NATs.
         try:
             carrier, addr = punch_dial(c)
@@ -1704,6 +1736,52 @@ def tunnel_path():
         except OSError as e:
             say_once("punch-" + str(e), "Could not reach the phone across IPv4 (%s)." % e)
     return None
+
+
+class DialRace(object):
+    """Addresses dialled at once as they come; the first tunnel up wins, any later ones are closed."""
+
+    def __init__(self, port, tid, psk, timeout=4):
+        self.port, self.tid, self.psk, self.timeout = port, tid, psk, timeout
+        self.cv = threading.Condition()
+        self.won, self.pending, self.open = None, 0, True
+
+    def add(self, host):
+        with self.cv:
+            if self.won:
+                return
+            self.pending += 1
+        threading.Thread(target=self._one, args=(host,), daemon=True).start()
+
+    def close(self):
+        """No more addresses will come."""
+        with self.cv:
+            self.open = False
+            self.cv.notify_all()
+
+    def _one(self, host):
+        t = None
+        try:
+            t = tunnel_dial(host, self.port, self.tid, self.psk, self.timeout)
+        except OSError as e:
+            say_once("tunnel-" + host + str(e), "Could not reach the phone at %s over the internet (%s)." % (host, e))
+        with self.cv:
+            self.pending -= 1
+            if t and not self.won:
+                self.won = t
+                log("Tunnel to [%s]:%s" % (host, self.port))
+                t = None
+            self.cv.notify_all()
+        if t:
+            t.close()
+
+    def wait(self, limit):
+        """The winner, or None once every address has failed and no more will come."""
+        end = time.time() + limit
+        with self.cv:
+            while not self.won and (self.open or self.pending) and time.time() < end:
+                self.cv.wait(0.5)
+            return self.won
 
 
 def on_tunnel(addr=None):
