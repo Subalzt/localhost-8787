@@ -58,6 +58,9 @@ import urllib.parse
 import urllib.request
 
 PHONE_PORT = 8787
+# Downloaded through the phone's website: its name and a one-time sign-in code, put here by the
+# phone, so this computer signs itself in without a PIN.
+SITE_SIGNIN = None
 DISCOVERY_PORT = 8788
 LOCAL_PORTS = (8787, 8797, 8807)
 ADB_FORWARD_PORT = 18787
@@ -532,6 +535,41 @@ def find_phone(first_time, typed=None):
         time.sleep(2)
 
 
+def site_keep(name, cookie, conf):
+    """Keeps what a sign-in through the website gave: the session, and the tunnel's keys."""
+    if not conf.get("key"):
+        raise OSError("the phone gave no tunnel keys")
+    write_file(os.path.join(CONF, "session.txt"), cookie, private=True)
+    write_file(os.path.join(CONF, "tunnel.json"), json.dumps(conf), private=True)
+    write_file(os.path.join(CONF, "site.txt"), name, private=True)
+
+
+def site_enroll(name, code):
+    """With the one-time code baked into a helper downloaded through the website: no PIN."""
+    try:
+        r = urllib.request.Request("https://%s:8443/api/site/enroll" % name, data=json.dumps({"code": code}).encode(),
+                                   method="POST", headers={"Content-Type": "application/json", "User-Agent": user_agent()})
+        try:
+            resp = urllib.request.urlopen(r, timeout=20)
+        except urllib.error.HTTPError as e:
+            try:
+                why = json.loads(e.read().decode("utf-8")).get("message")
+            except ValueError:
+                why = None
+            say(why or "The phone refused this computer's sign-in code.")
+            return False
+        m = re.search(r"xoosh_session=([^;,\s]+)", resp.headers.get("Set-Cookie") or "")
+        if not m:
+            raise OSError("the phone sent no session")
+        site_keep(name, "xoosh_session=" + m.group(1), json.loads(resp.read().decode("utf-8")))
+        say("Signed in to the phone through %s. This computer finds it by itself from now on: the cable or Wi-Fi "
+            "when it is close, the internet when it is not." % name)
+        return True
+    except (OSError, ValueError, urllib.error.URLError) as e:
+        say("Could not sign in through %s (%s)." % (name, e))
+        return False
+
+
 def site_sign_in(name):
     """From anywhere: signs in through the phone's website (https://NAME:8443, a real certificate, so
     this is the phone and nobody reads along) with the PIN set on the phone, as a browser does, and
@@ -557,10 +595,7 @@ def site_sign_in(name):
         cookie = "xoosh_session=" + m.group(1)
         t = urllib.request.Request(base + "/api/tunnel", headers={"Cookie": cookie, "User-Agent": user_agent()})
         conf = json.loads(urllib.request.urlopen(t, timeout=15).read().decode("utf-8"))
-        if not conf.get("key"):
-            raise OSError("the phone gave no tunnel keys")
-        write_file(os.path.join(CONF, "session.txt"), cookie, private=True)
-        write_file(os.path.join(CONF, "tunnel.json"), json.dumps(conf), private=True)
+        site_keep(name, cookie, conf)
         say("Signed in to the phone at %s. This computer will not need to ask again." % name)
         return True
     except (OSError, ValueError, urllib.error.URLError) as e:
@@ -3715,6 +3750,8 @@ def main():
         say("The phone's trackpad and keyboard need one of: write access to /dev/uinput (for this session: "
             "sudo setfacl -m u:$USER:rw /dev/uinput), xdotool on X11 (%s), or ydotool." % install_hint("xdotool"))
 
+    if SITE_SIGNIN and not read_file(os.path.join(CONF, "session.txt")):
+        site_enroll(*SITE_SIGNIN)
     find_phone(True, typed=args.phone)
     for loop in (relay_loop, link_loop, direct_loop, events_loop, volume_loop, tunnel_loop) + ((clip_loop,) if clip else ()):
         threading.Thread(target=loop, daemon=True).start()

@@ -371,6 +371,25 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
 
     fun clientFor(localPort: Int): String = clients[localPort] ?: "?"
 
+    // ------------------------------------------------------------------ helpers' sign-in codes
+
+    /** One-time codes baked into a helper downloaded through the website: code -> expiry. */
+    private val codes = ConcurrentHashMap<String, Long>()
+
+    /** A fresh code, good once within the hour. */
+    fun newCode(): String {
+        val now = System.currentTimeMillis()
+        codes.entries.removeIf { it.value < now }
+        val b = ByteArray(18).also(rng::nextBytes)
+        return b64u(b).also { codes[it] = now + 3_600_000L }
+    }
+
+    /** True once for a code that is still good; it is gone after that. */
+    fun useCode(code: String): Boolean {
+        val until = codes.remove(code) ?: return false
+        return until >= System.currentTimeMillis()
+    }
+
     // ------------------------------------------------------------------ the PIN
 
     private val tries = ConcurrentHashMap<String, ArrayDeque<Long>>()

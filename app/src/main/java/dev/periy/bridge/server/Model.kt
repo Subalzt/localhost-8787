@@ -177,6 +177,9 @@ data class SiteDto(val site: Boolean, val name: String = "")
 @Serializable
 data class SiteLoginDto(val pin: String = "")
 
+@Serializable
+data class SiteEnrollDto(val code: String = "")
+
 /** The phone's own offline network, for a laptop helper or another phone to join. */
 @Serializable
 data class DirectDto(

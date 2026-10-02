@@ -264,7 +264,7 @@ class BridgeServer(
                     finish()
                     return@intercept
                 }
-                if (path in PUBLIC_PATHS || path == "/api/site" || path == "/api/site/login") return@intercept
+                if (path in PUBLIC_PATHS || path == "/api/site" || path == "/api/site/login" || path == "/api/site/enroll") return@intercept
             } else if (path in PUBLIC_PATHS || path.startsWith("/api/pair") || path == "/api/site") return@intercept
             val device = call.device()
             if (device != null) {
@@ -452,6 +452,12 @@ class BridgeServer(
         }
         get("/api/route") {
             call.response.header(HttpHeaders.CacheControl, "no-store")
+            if (call.viaSite()) {
+                // Through the website: the name, and how the browser itself is connected.
+                val who = call.clientIp()
+                call.respond(RouteDto(via = "website", host = site?.state?.value?.name.orEmpty(), ip = if (':' in who) "IPv6" else "IPv4"))
+                return@get
+            }
             val all = dev.periy.bridge.net.NetInfo.addresses()
             val (here, via) = call.arrivedOn(all)
             val usb = all.firstOrNull { it.kind == dev.periy.bridge.net.LinkKind.USB && !it.isIpv6 }
@@ -1274,7 +1280,19 @@ class BridgeServer(
             "blazeit-mac.py" to "blazeit-helper.py",
         )) {
             get("/$helper") {
-                val bytes = withContext(Dispatchers.IO) { ctx.assets.open(asset).use { it.readBytes() } }
+                var bytes = withContext(Dispatchers.IO) { ctx.assets.open(asset).use { it.readBytes() } }
+                // Downloaded through the website by a signed-in browser: the website's name and a
+                // one-time code go in, so the helper signs itself in when it starts (no PIN).
+                val door = site
+                if (call.viaSite() && door != null && call.device() != null) {
+                    val name = door.state.value.name
+                    val code = door.newCode()
+                    val text = String(bytes)
+                    bytes = (if (helper.endsWith(".bat")) text.replaceFirst(
+                        "\$ErrorActionPreference = 'Stop'",
+                        "\$ErrorActionPreference = 'Stop'\r\n\$env:L87_SITE = '$name'\r\n\$env:L87_CODE = '$code'",
+                    ) else text.replaceFirst("SITE_SIGNIN = None", "SITE_SIGNIN = (\"$name\", \"$code\")")).toByteArray()
+                }
                 call.response.header(
                     HttpHeaders.ContentDisposition,
                     ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, helper).toString(),
@@ -1379,6 +1397,32 @@ class BridgeServer(
                 )
             )
             call.respond(ApiResult(true))
+        }
+
+        // A helper downloaded through the website signs itself in with the one-time code baked into
+        // it: a paired device like any other, and the tunnel's keys in the same answer.
+        post("/api/site/enroll") {
+            val door = site
+            val code = runCatching { call.receive<SiteEnrollDto>().code }.getOrNull().orEmpty()
+            if (door == null || !call.viaSite() || !door.useCode(code)) {
+                call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That sign-in code is used up or too old: sign in with the PIN."))
+                return@post
+            }
+            val name = describeUserAgent(call.request.header(HttpHeaders.UserAgent))
+            val device = devices.add(name, call.clientIp())
+            call.response.cookies.append(
+                Cookie(
+                    name = SESSION_COOKIE,
+                    value = Session.issue(config.sessionKey(), config.sessionTtlMs, device.id),
+                    path = "/",
+                    httpOnly = true,
+                    secure = true,
+                    maxAge = (config.sessionTtlMs / 1000).toInt(),
+                    extensions = mapOf("SameSite" to "Strict"),
+                )
+            )
+            val tunnel = remote?.forDevice(device.id) ?: "{}"
+            call.respondText(tunnel, ContentType.Application.Json)
         }
 
         // Logging out also removes the computer from the phone's list, so the list only

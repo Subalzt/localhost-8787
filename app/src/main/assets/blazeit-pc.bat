@@ -116,6 +116,11 @@ public static class BlazeItPc
             return false;
         };
         SetConsoleCtrlHandler(onClose, true);
+        // Downloaded through the phone's website: it put its name and a one-time sign-in code in
+        // this file, so this laptop signs itself in without a PIN, before looking anywhere.
+        string site = Environment.GetEnvironmentVariable("L87_SITE"), code = Environment.GetEnvironmentVariable("L87_CODE");
+        if (!string.IsNullOrEmpty(site)) try { File.WriteAllText(SiteFile, site); } catch { }
+        if (!string.IsNullOrEmpty(site) && !string.IsNullOrEmpty(code) && !File.Exists(Path.Combine(Dir, "session.txt"))) SiteEnroll(site, code);
         FindPhone(true);
 
         Thread relay = new Thread(RelayLoop);
@@ -482,8 +487,9 @@ public static class BlazeItPc
             }
             if (firstTime)
             {
-                Console.Write("Could not find the phone. Is Localhost 8787 started? Type the address it shows, or its website " +
-                    "(yourname.dynv6.net) to sign in with the PIN from anywhere (or press Enter to search again): ");
+                string known = File.Exists(SiteFile) ? File.ReadAllText(SiteFile).Trim() : "";
+                Console.Write("Could not find the phone. Is Localhost 8787 started? Type the address it shows, or its website (" +
+                    (known.Length > 0 ? known : "yourname.dynv6.net") + ") to sign in with the PIN from anywhere (or press Enter to search again): ");
                 string typed = (Console.ReadLine() ?? "").Trim();
                 // The phone's website: sign in with its PIN, and get the tunnel's keys that way.
                 string site = Regex.Replace(typed.ToLowerInvariant(), "^https?://|[:/].*$", "");
@@ -528,6 +534,54 @@ public static class BlazeItPc
      * so this is the phone and nobody reads along) with the PIN set on the phone, as a browser does,
      * and keeps the session and the tunnel's keys; from then on the tunnel finds the phone by itself.
      */
+    static readonly string SiteFile = Path.Combine(Dir, "site.txt");
+
+    /** Keeps what a sign-in through the website gave: the session, and the tunnel's keys. */
+    static void SiteKeep(string name, string cookie, string conf)
+    {
+        if (!conf.Contains("\"key\"")) throw new Exception("the phone gave no tunnel keys");
+        File.WriteAllText(Path.Combine(Dir, "session.txt"), cookie);
+        File.WriteAllText(TunnelFile, conf);
+        File.WriteAllText(SiteFile, name);
+    }
+
+    /** With the one-time code baked into a helper downloaded through the website: no PIN. */
+    static bool SiteEnroll(string name, string code)
+    {
+        try
+        {
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("https://" + name + ":8443/api/site/enroll");
+            r.Method = "POST";
+            r.UserAgent = Ua;
+            r.Timeout = 20000;
+            r.ContentType = "application/json";
+            byte[] body = Encoding.UTF8.GetBytes("{\"code\":\"" + code + "\"}");
+            r.ContentLength = body.Length;
+            using (Stream w = r.GetRequestStream()) w.Write(body, 0, body.Length);
+            using (HttpWebResponse resp = (HttpWebResponse)r.GetResponse())
+            {
+                Match m = Regex.Match(resp.Headers["Set-Cookie"] ?? "", "xoosh_session=([^;,\\s]+)");
+                if (!m.Success) throw new Exception("the phone sent no session");
+                SiteKeep(name, "xoosh_session=" + m.Groups[1].Value, Body(resp));
+            }
+            Say("Signed in to the phone through " + name + ". This laptop finds it by itself from now on: the cable or Wi-Fi when it is close, the internet when it is not.");
+            return true;
+        }
+        catch (WebException e)
+        {
+            string why = "";
+            if (e.Response != null) using (HttpWebResponse resp = (HttpWebResponse)e.Response) why = Regex.Match(Body(resp), "\"message\"\\s*:\\s*\"([^\"]*)\"").Groups[1].Value;
+            Say(why.Length > 0 ? why : "Could not sign in through " + name + " (" + e.Message + ").");
+            return false;
+        }
+        catch (Exception e)
+        {
+            Say("Could not sign in through " + name + " (" + e.Message + ").");
+            return false;
+        }
+    }
+
     static bool SiteSignIn(string name)
     {
         Console.Write("PIN for " + name + " (set on the phone, Settings, Website): ");
@@ -576,9 +630,7 @@ public static class BlazeItPc
             t.Headers["Cookie"] = cookie;
             string conf;
             using (HttpWebResponse resp = (HttpWebResponse)t.GetResponse()) conf = Body(resp);
-            if (!conf.Contains("\"key\"")) throw new Exception("the phone gave no tunnel keys");
-            File.WriteAllText(Path.Combine(Dir, "session.txt"), cookie);
-            File.WriteAllText(TunnelFile, conf);
+            SiteKeep(name, cookie, conf);
             Say("Signed in to the phone at " + name + ". This laptop will not need to ask again.");
             return true;
         }

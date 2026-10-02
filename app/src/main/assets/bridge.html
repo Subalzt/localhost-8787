@@ -5067,10 +5067,12 @@ function renderHelperState() {
   }
   var el = $("helper-state");
   var local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-  el.className = local ? "ok" : "warn";
+  el.className = local ? "ok" : siteMode ? "" : "warn";
   el.textContent = local
     ? "Running. Full speed, on the fastest link."
-    : "Not running: downloads use one connection, and no faster link is picked for you.";
+    : siteMode
+      ? "Not on this computer. Get it to use the phone as a trackpad and second screen, and to reach it the fastest way: the cable or Wi-Fi when it is close, the internet when it is not. It signs itself in."
+      : "Not running: downloads use one connection, and no faster link is picked for you.";
 }
 
 async function measure() {
@@ -5363,7 +5365,7 @@ var viaHelper = location.hostname === "localhost" || location.hostname === "127.
 // helper the page only sees localhost, so it asks the phone; that is also how it notices a
 // USB cable sitting unused (an old helper that never learned about cables, say).
 var route = null, usbMissed = 0;
-var ROUTE_NAMES = { usb: "Over the USB cable", direct: "On the direct link", hotspot: "On the phone's hotspot", wifi: "Over your Wi-Fi", internet: "Over the internet" };
+var ROUTE_NAMES = { usb: "Over the USB cable", direct: "On the direct link", hotspot: "On the phone's hotspot", wifi: "Over your Wi-Fi", internet: "Over the internet", website: "Through the phone's website" };
 
 async function refreshRoute() {
   try {
@@ -5383,6 +5385,7 @@ var ROUTE_BADGES = {
   hotspot: { name: "Phone's hotspot", speed: "about 65 MB/s", icon: '<path d="M8.2 11.6a5.4 5.4 0 0 1 7.6 0"/><path d="M5.2 8.6a9.6 9.6 0 0 1 13.6 0"/><path d="M12 13.5v7"/>' },
   wifi: { name: "Wi-Fi", speed: "router speed", icon: '<path d="M8.3 14.6a5.2 5.2 0 0 1 7.4 0"/><path d="M5.2 11.5a9.6 9.6 0 0 1 13.6 0"/><path d="M2.3 8.4a13.8 13.8 0 0 1 19.4 0"/><path d="M12 18.5h.01"/>' },
   internet: { name: "Internet", speed: "through the tunnel", icon: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18Z"/>' },
+  website: { name: "Website", speed: "HTTPS", icon: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/>' },
 };
 
 /** The link as a badge in the hero: the cable lit white; any other link says a cable is faster. */
@@ -5396,6 +5399,7 @@ function renderRouteBadge(r) {
   el.lastChild.textContent = b.name + " · ";
   var em = document.createElement("em");
   em.textContent = usb2 ? "USB 2, about 40 MB/s" : r.via === "internet" ? (r.punched ? "IPv4, punched through" : "IPv6 tunnel")
+    : r.via === "website" ? "HTTPS, " + (r.ip || "IPv6")
     : usb ? b.speed : b.speed + ", USB is faster";
   el.appendChild(em);
 }
@@ -5420,9 +5424,10 @@ function renderLinkRow(r) {
     direct: "On the phone's own private network, " + at,
     internet: r.punched ? "Across the internet, punched through both networks over UDP"
       : "Across the internet, straight to the phone's IPv6 over TCP",
+    website: "Straight to the phone at " + r.host + ", over HTTPS with its own certificate",
   }[r.via] || ("Over your network, " + at);
   $("link-icon").innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + (b ? b.icon : ROUTE_BADGES.wifi.icon) + "</svg>";
-  $("link-name").textContent = r.via === "internet" ? "Through the tunnel" : b ? b.name : "Connected";
+  $("link-name").textContent = r.via === "internet" ? "Through the tunnel" : r.via === "website" ? "Through the phone's website" : b ? b.name : "Connected";
   $("link-detail").textContent = detail + (viaHelper ? ", through the laptop helper." : ".");
   var pill = $("link-ip");
   pill.textContent = ip;
@@ -9280,6 +9285,7 @@ $("pin-idle").addEventListener("submit", async function (e) {
 
 
 (async function boot() {
+  if (location.port === "8443") siteMode = true;
   // Paint the last-known theme immediately; the phone's real setting follows a moment later.
   var saved = "system";
   try { saved = localStorage.getItem("blazeit.theme") || "system"; } catch (e) {}
