@@ -363,6 +363,10 @@
   #login .btn.lg-go::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(11,47,102,.12) 50%, transparent 70%);
     transform: translateX(-100%); animation: lg-shine 3.4s ease-in-out 1s infinite; }
   @keyframes lg-shine { 0%, 60% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+  #login .pin-in { width: min(300px, 100%); height: 58px; margin: 0 auto 14px; display: block; padding: 0 20px; border: 0; border-radius: 18px;
+    background: #FFFFFF; color: #0B1B33; font: 800 26px/1 var(--mono); letter-spacing: .35em; text-align: center; box-shadow: 5px 6px 0 rgba(0,0,0,.28); }
+  #login .pin-in::placeholder { color: rgba(11,27,51,.35); letter-spacing: .08em; font-weight: 600; font-size: 18px; }
+  #login .pin-in:focus { outline: 3px solid rgba(255,255,255,.55); outline-offset: 2px; }
   #login .btn.ghost { height: 44px; padding: 0 22px; border-radius: 22px; background: rgba(255,255,255,.14); color: #FFFFFF; }
   #login .btn.ghost:hover { background: rgba(255,255,255,.24); }
   #login .note.lg-ask { margin: 0 auto; max-width: none; color: rgba(255,255,255,.85); font-size: 15px; }
@@ -2216,6 +2220,10 @@
     <div id="pair-idle">
       <div class="actions"><button id="pair" class="btn lg-go">Ask to connect<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6.5 18.5 12 13 17.5"/></svg></button></div>
     </div>
+    <form id="pin-idle" hidden>
+      <input id="pin-in" class="pin-in" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN" aria-label="PIN">
+      <div class="actions"><button id="pin-go" class="btn lg-go" type="submit">Sign in<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6.5 18.5 12 13 17.5"/></svg></button></div>
+    </form>
     <div id="pair-wait" hidden>
       <p class="note lg-ask">Tap <b>Allow</b> on your phone if it shows this code</p>
       <div class="code" id="pair-code">----</div>
@@ -2223,7 +2231,7 @@
       <div class="actions"><button id="pair-cancel" class="btn ghost">Cancel</button></div>
     </div>
   </div>
-    <div class="lg-chips"><span>No account</span><span>No cloud</span><span>Stays on your network</span></div>
+    <div class="lg-chips" id="lg-chips"><span>No account</span><span>No cloud</span><span>Stays on your network</span></div>
   </div>
 </section>
 
@@ -9063,6 +9071,7 @@ function isPlaying() { return !$("audio").paused; }
 
 var pairPoll = null;
 var appStarted = false;
+var siteMode = false;
 
 function showLogin() {
   $("app").hidden = true;
@@ -9124,7 +9133,8 @@ function pairStop() {
 
 function pairReset() {
   pairStop();
-  $("pair-idle").hidden = false;
+  // Through the website the PIN, never the pairing button (siteLogin).
+  $("pair-idle").hidden = siteMode;
   $("pair-wait").hidden = true;
   $("login").classList.remove("waiting");
 }
@@ -9233,6 +9243,41 @@ window.addEventListener("beforeunload", function (e) {
 $("pair").addEventListener("click", pair);
 $("pair-cancel").addEventListener("click", pairReset);
 
+/**
+ * Through the website (https://NAME.dynv6.net:8443) there is no pairing: strangers on the internet
+ * must not be able to make the phone ask. The PIN set on the phone signs this browser in instead.
+ */
+async function siteLogin() {
+  var r; try { r = await fetch("/api/site", { credentials: "same-origin", cache: "no-store" }); } catch (e) { return; }
+  var d = {}; try { d = await r.json(); } catch (e) {}
+  if (!d.site) return;
+  siteMode = true;
+  document.querySelector("#login h1").innerHTML = "Sign in to<br>your phone";
+  $("login-device").textContent = "Type the PIN you set on the phone, in Settings \u2192 Website.";
+  $("pair-idle").hidden = true;
+  $("pin-idle").hidden = false;
+  $("lg-chips").innerHTML = "<span>No account</span><span>Encrypted</span><span>Straight to your phone</span>";
+  setTimeout(function () { $("pin-in").focus(); }, 50);
+}
+
+$("pin-idle").addEventListener("submit", async function (e) {
+  e.preventDefault();
+  $("login-error").hidden = true;
+  var pin = $("pin-in").value.trim();
+  if (!pin) { $("pin-in").focus(); return; }
+  $("pin-go").disabled = true;
+  try {
+    var r = await fetch("/api/site/login", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: pin }) });
+    var d = {}; try { d = await r.json(); } catch (err) {}
+    if (r.ok) { $("pin-in").value = ""; showApp(); }
+    else { $("login-error").textContent = d.message || "That did not work."; $("login-error").hidden = false; $("pin-in").select(); }
+  } catch (err) {
+    $("login-error").textContent = "Could not reach the phone."; $("login-error").hidden = false;
+  }
+  $("pin-go").disabled = false;
+});
+
 
 (async function boot() {
   // Paint the last-known theme immediately; the phone's real setting follows a moment later.
@@ -9245,8 +9290,8 @@ $("pair-cancel").addEventListener("click", pairReset);
     var info = await res.json();
     $("login-device").textContent =
       (info.device || "The phone") + " will ask you to allow it.";
-    info.paired ? showApp() : showLogin();
-  } catch (e) { showLogin(); }
+    info.paired ? showApp() : (showLogin(), siteLogin());
+  } catch (e) { showLogin(); siteLogin(); }
 })();
 </script>
 

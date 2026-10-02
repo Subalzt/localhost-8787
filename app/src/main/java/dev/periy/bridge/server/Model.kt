@@ -170,6 +170,13 @@ data class RouteDto(
     val punched: Boolean = false,
 )
 
+/** Whether the page came through the website (and so signs in with a PIN), and its name. */
+@Serializable
+data class SiteDto(val site: Boolean, val name: String = "")
+
+@Serializable
+data class SiteLoginDto(val pin: String = "")
+
 /** The phone's own offline network, for a laptop helper or another phone to join. */
 @Serializable
 data class DirectDto(

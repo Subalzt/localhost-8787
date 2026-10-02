@@ -167,6 +167,16 @@ class BridgeServer(
     /** The tunnel, for paired devices on other networks; set by the container before [start]. */
     var remote: RemoteDoor? = null
 
+    /** The phone as a website (docs/website.md); set by the container before [start]. */
+    var site: dev.periy.bridge.net.Site? = null
+
+    /** Came through the website's TLS door: the PIN, never a pairing prompt. */
+    private fun ApplicationCall.viaSite(): Boolean = remoteIp() == dev.periy.bridge.net.Site.LOCAL_HOST
+
+    /** Who is really there: through the website, the browser's own address. */
+    private fun ApplicationCall.clientIp(): String =
+        if (viaSite()) site?.clientFor(request.origin.remotePort) ?: "?" else remoteIp()
+
     fun start() {
         if (engine != null) return
         storage.refresh()
@@ -194,6 +204,7 @@ class BridgeServer(
         server.start(wait = false)
         engine = server
         remote?.let { if (it.enabled()) it.tunnel.start() }
+        site?.start()
         beacon.start()
         Monitor.start(ctx)
         Log.i(TAG, "Listening on :${config.port}")
@@ -201,6 +212,7 @@ class BridgeServer(
 
     fun stop() {
         remote?.tunnel?.stop()
+        site?.stop()
         beacon.stop()
         Monitor.stop()
         engine?.stop(GRACE_MS, TIMEOUT_MS)
@@ -244,10 +256,19 @@ class BridgeServer(
                 return@intercept
             }
             val path = call.request.path()
-            if (path in PUBLIC_PATHS || path.startsWith("/api/pair")) return@intercept
+            // Through the website: the page, the PIN and nothing else until signed in; no
+            // pairing prompts on the phone from strangers on the internet.
+            if (call.viaSite()) {
+                if (path.startsWith("/api/pair")) {
+                    call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Sign in with the PIN."))
+                    finish()
+                    return@intercept
+                }
+                if (path in PUBLIC_PATHS || path == "/api/site" || path == "/api/site/login") return@intercept
+            } else if (path in PUBLIC_PATHS || path.startsWith("/api/pair") || path == "/api/site") return@intercept
             val device = call.device()
             if (device != null) {
-                devices.touch(device.id, call.remoteIp())
+                devices.touch(device.id, call.clientIp())
                 return@intercept
             }
             call.response.header("Tus-Resumable", TUS_VERSION)
@@ -1320,6 +1341,44 @@ class BridgeServer(
                 )
             }
             call.respond(PairStatusDto(req.state.name))
+        }
+
+        // How the page reached the phone, for its sign-in screen: through the website, a PIN.
+        get("/api/site") {
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respond(SiteDto(site = call.viaSite(), name = site?.state?.value?.name.orEmpty()))
+        }
+
+        // The website's sign-in: the PIN set on the phone, a few tries at a time (see Site.checkPin).
+        // Right, and this browser is a paired device like any other, listed and removable on the phone.
+        post("/api/site/login") {
+            val door = site
+            if (door == null || !call.viaSite()) {
+                call.respond(HttpStatusCode.NotFound, ApiResult(false, "No website"))
+                return@post
+            }
+            val pin = runCatching { call.receive<SiteLoginDto>().pin }.getOrNull().orEmpty()
+            val who = call.clientIp()
+            val why = withContext(Dispatchers.IO) { door.checkPin(pin, who) }
+            if (why != null) {
+                call.respond(HttpStatusCode.Forbidden, ApiResult(false, why))
+                return@post
+            }
+            val name = describeUserAgent(call.request.header(HttpHeaders.UserAgent)) + " (website)"
+            val device = devices.add(name, who)
+            call.response.cookies.append(
+                Cookie(
+                    name = SESSION_COOKIE,
+                    value = Session.issue(config.sessionKey(), config.sessionTtlMs, device.id),
+                    path = "/",
+                    httpOnly = true,
+                    // Over HTTPS here, so Secure: the cookie never travels in the clear.
+                    secure = true,
+                    maxAge = (config.sessionTtlMs / 1000).toInt(),
+                    extensions = mapOf("SameSite" to "Strict"),
+                )
+            )
+            call.respond(ApiResult(true))
         }
 
         // Logging out also removes the computer from the phone's list, so the list only

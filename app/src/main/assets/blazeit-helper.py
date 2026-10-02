@@ -512,10 +512,16 @@ def find_phone(first_time, typed=None):
             return
         if first_time and sys.stdin.isatty():
             try:
-                t = input("Could not find the phone. Is Localhost 8787 switched on? Type the address it shows "
-                          "(or press Enter to search again): ").strip()
+                t = input("Could not find the phone. Is Localhost 8787 switched on? Type the address it shows, or its "
+                          "website (yourname.dynv6.net) to sign in with the PIN from anywhere (or press Enter to "
+                          "search again): ").strip()
             except EOFError:
                 t = ""
+            # The phone's website: sign in with its PIN, and get the tunnel's keys that way.
+            site = re.sub(r"^https?://|[:/].*$", "", t.lower())
+            if re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", site) and re.search(r"[a-z]", site):
+                site_sign_in(site)
+                continue
             m = re.search(r"(\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{0,4}){2,7})", t)
             if m:
                 typed = m.group(1)
@@ -524,6 +530,43 @@ def find_phone(first_time, typed=None):
             say("Waiting for the phone. Switch Localhost 8787 on, or check both are on the same Wi-Fi.")
             told = True
         time.sleep(2)
+
+
+def site_sign_in(name):
+    """From anywhere: signs in through the phone's website (https://NAME:8443, a real certificate, so
+    this is the phone and nobody reads along) with the PIN set on the phone, as a browser does, and
+    keeps the session and the tunnel's keys; from then on the tunnel finds the phone by itself."""
+    import getpass
+    pin = getpass.getpass("PIN for %s (set on the phone, Settings, Website): " % name).strip()
+    base = "https://%s:8443" % name
+    try:
+        r = urllib.request.Request(base + "/api/site/login", data=json.dumps({"pin": pin}).encode(), method="POST",
+                                   headers={"Content-Type": "application/json", "User-Agent": user_agent()})
+        try:
+            resp = urllib.request.urlopen(r, timeout=15)
+        except urllib.error.HTTPError as e:
+            try:
+                why = json.loads(e.read().decode("utf-8")).get("message")
+            except ValueError:
+                why = None
+            say(why or "The phone refused the PIN.")
+            return False
+        m = re.search(r"xoosh_session=([^;,\s]+)", resp.headers.get("Set-Cookie") or "")
+        if not m:
+            raise OSError("the phone sent no session")
+        cookie = "xoosh_session=" + m.group(1)
+        t = urllib.request.Request(base + "/api/tunnel", headers={"Cookie": cookie, "User-Agent": user_agent()})
+        conf = json.loads(urllib.request.urlopen(t, timeout=15).read().decode("utf-8"))
+        if not conf.get("key"):
+            raise OSError("the phone gave no tunnel keys")
+        write_file(os.path.join(CONF, "session.txt"), cookie, private=True)
+        write_file(os.path.join(CONF, "tunnel.json"), json.dumps(conf), private=True)
+        say("Signed in to the phone at %s. This computer will not need to ask again." % name)
+        return True
+    except (OSError, ValueError, urllib.error.URLError) as e:
+        say("Could not sign in at %s (%s). The website needs IPv6 on this network; or pair once on the same "
+            "network instead." % (base, e))
+        return False
 
 
 def pair():

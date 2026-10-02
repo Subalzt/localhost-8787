@@ -78,6 +78,9 @@ class Container(ctx: Context) {
         storage = storage, index = index, clipboard = clipboard, clipSync = { prefs.clipSync },
     )
 
+    /** The phone as a website, NAME.dedyn.io:8443 with a PIN (docs/website.md). */
+    val site = dev.periy.bridge.net.Site(app) { prefs.port }
+
     /** From other networks: paired devices reach the phone through its tunnel (docs/tunnel-protocol.md). */
     val tunnelKeys = dev.periy.bridge.net.TunnelKeys(app.filesDir)
     val tunnel = dev.periy.bridge.net.TunnelServer(
@@ -155,7 +158,7 @@ class Container(ctx: Context) {
             deviceName = deviceName(),
         )
         return BridgeServer(app, config, storage, tus, index, clipboard, devices, pairing, music, direct, peers, loudness, favourites, lyrics)
-            .also { it.remote = dev.periy.bridge.server.RemoteDoor(tunnel, tunnelKeys, { prefs.remote }, ::tunnelInfo) }
+            .also { it.remote = dev.periy.bridge.server.RemoteDoor(tunnel, tunnelKeys, { prefs.remote }, ::tunnelInfo); it.site = site }
             .also { server = it }
     }
 

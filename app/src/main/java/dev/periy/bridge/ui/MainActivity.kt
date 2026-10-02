@@ -178,6 +178,10 @@ class MainActivity : ComponentActivity() {
             intent.getStringExtra("accent")?.let { vm.setAccent(it) }
             intent.getStringExtra("theme")?.let { vm.setTheme(it) }
             intent.getIntExtra("tab", -1).let { if (it >= 0) debugTab.value = it }
+            // `--ez sitestaging true|false` points the website's certificate at Let's Encrypt's test
+            // server (looser limits) or back; `--ez siteretry true` tries again at once.
+            if (intent.hasExtra("sitestaging")) (application as dev.periy.bridge.BridgeApp).container.site.setStaging(intent.getBooleanExtra("sitestaging", false))
+            if (intent.getBooleanExtra("siteretry", false)) (application as dev.periy.bridge.BridgeApp).container.site.start()
             // `--ez directtest true|false` starts or stops the direct link without a laptop joining it.
             if (intent.hasExtra("directtest")) (application as dev.periy.bridge.BridgeApp).container.direct.let {
                 if (intent.getBooleanExtra("directtest", false)) it.start(8787, laptop = false) else it.stop()
@@ -1904,6 +1908,7 @@ private fun LazyListScope.settingsTab(
                 Toggle(state.clipSync) { vm.setClipSync(it) }
             }
             RemoteRow(state) { vm.setRemote(it) }
+            WebsiteRow()
             SettingRow(
                 "Notifications on the laptop",
                 if (state.notifAccess) null else "Needs notification access",
