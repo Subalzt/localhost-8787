@@ -438,6 +438,15 @@ class BridgeServer(
             val stunPort = dev.periy.bridge.net.StunServer.PORT
             val stun = (listOfNotNull(here.takeIf { !it.startsWith("127.") }) + dev.periy.bridge.net.NetInfo.publicAddresses(ctx))
                 .distinct().map { if (':' in it) "[$it]:$stunPort" else "$it:$stunPort" }
+            // Through the tunnel: this device's tunnel says how it came (IPv6 over TCP, or IPv4
+            // punched through over UDP). Otherwise the phone's address that answered says it.
+            val far = if (tunnelled) call.device()?.let { d -> remote?.tunnel?.peers?.value?.firstOrNull { it.deviceId == d.id }?.remote } else null
+            val punched = far?.endsWith("(UDP)") == true
+            val ip = when {
+                tunnelled -> if (punched || far == null || ':' !in far) "IPv4" else "IPv6"
+                ':' in here -> "IPv6"
+                else -> "IPv4"
+            }
             call.respond(
                 RouteDto(
                     via = if (tunnelled) "internet" else via.name.lowercase(),
@@ -446,6 +455,8 @@ class BridgeServer(
                     usb = usb?.host?.takeIf { via != dev.periy.bridge.net.LinkKind.USB && !tunnelled },
                     usbMbps = if (via == dev.periy.bridge.net.LinkKind.USB) Monitor.laptopUsbMbps() else 0,
                     stun = stun,
+                    ip = ip,
+                    punched = punched,
                 )
             )
         }

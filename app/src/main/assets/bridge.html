@@ -962,6 +962,9 @@
   .sr-text > span { font-size: 13px; color: var(--sub); }
   .sr-text > span b { color: var(--txt); font-weight: 600; }
   #helper-state.ok { color: var(--good); }
+  .ip-pill { flex: 0 0 auto; padding: 4px 11px; border-radius: 999px; font-size: 13px; font-weight: 700; letter-spacing: .3px;
+    color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
+  .ip-pill.v6 { color: var(--good); background: color-mix(in srgb, var(--good) 16%, transparent); }
   #helper-state.warn { color: var(--orange); }
   .sr-value { font-size: 15px; color: var(--sub); }
   .sr-action { flex: 0 0 auto; padding: 6px 2px; border: 0; background: none; color: var(--blue); font: inherit; font-size: 15.5px; font-weight: 500;
@@ -2405,6 +2408,11 @@
         <a class="sr-action" id="helper-dl" href="/blazeit-pc.bat" download="blazeit-pc.bat">Download</a>
       </div>
       <div class="set-row sr-note" id="helper-note">Full speed, the fastest link, and the phone as a trackpad. Nothing is installed; close its window to stop it.</div>
+      <div class="set-row" id="link-row" hidden>
+        <span class="sq blue" id="link-icon"></span>
+        <div class="sr-text"><b id="link-name"></b><span id="link-detail"></span></div>
+        <span class="ip-pill" id="link-ip"></span>
+      </div>
     </div>
 
     <h2 class="set-title">Speed</h2>
@@ -5077,30 +5085,42 @@ async function measure() {
     clearTimeout(timer);
     var down = got / ((performance.now() - t0) / 1000);
 
+    // What the download left in flight (a slow link holds seconds of it) drains first, or the
+    // upload would be measured against it.
     out.textContent = "Measuring upload for 5 seconds...";
-    // One 16 MB buffer referenced many times: the blob is 1 GB of content but only
-    // 16 MB is ever held as a typed array.
+    await new Promise(function (r) { setTimeout(r, down > 5e6 ? 300 : 3000); });
+    // Counted only as the phone confirms each piece, not as the browser hands it to the
+    // network (on a slow link that is just a buffer filling, and says nothing). Each connection
+    // sends pieces one after another, doubling the piece while one takes under half a second.
     var unit = new Uint8Array(16 * 1024 * 1024);
-    var blob = new Blob(new Array(64).fill(unit));
-    var sent = new Array(n).fill(0), xhrs = [];
-    var t1 = performance.now();
-    await new Promise(function (resolve) {
-      var left = n;
-      for (var i = 0; i < n; i++) (function (k) {
-        var x = new XMLHttpRequest();
-        xhrs.push(x);
-        x.open("POST", "/api/bench/upload", true);
-        x.withCredentials = true;
-        x.upload.onprogress = function (e) { sent[k] = e.loaded; };
-        x.onloadend = function () { if (--left === 0) resolve(); };
-        x.send(blob);
-      })(i);
-      setTimeout(function () { xhrs.forEach(function (x) { x.abort(); }); }, MEASURE_MS);
-    });
-    var up = sent.reduce(function (a, v) { return a + v; }, 0) / ((performance.now() - t1) / 1000);
+    var confirmed = 0, lastAt = 0;
+    var t1 = performance.now(), until = t1 + MEASURE_MS;
+    await Promise.all(new Array(n).fill(0).map(async function () {
+      var size = 256 * 1024;
+      while (performance.now() < until) {
+        var t = performance.now(), ctl = new AbortController();
+        // A piece still going 2 s past the end is left uncounted.
+        var cut = setTimeout(function () { ctl.abort(); }, Math.max(0, until + 2000 - t));
+        try {
+          var res = await fetch("/api/bench/upload", { method: "POST", body: unit.subarray(0, size),
+            credentials: "same-origin", cache: "no-store", signal: ctl.signal });
+          await res.text();
+          if (!res.ok) throw new Error("the phone said " + res.status);
+        } catch (e) {
+          clearTimeout(cut);
+          if (ctl.signal.aborted) return;
+          throw e;
+        }
+        clearTimeout(cut);
+        confirmed += size;
+        lastAt = performance.now();
+        if (lastAt - t < 500 && size < unit.length) size *= 2;
+      }
+    }));
+    var up = lastAt > t1 ? confirmed / ((lastAt - t1) / 1000) : 0;
 
-    out.innerHTML = "Network only, " + n + " connection(s): <b>down " + rate(down) +
-      "</b>, <b>up " + rate(up) + "</b>. A real transfer close to these numbers is " +
+    out.innerHTML = "Network only, " + n + " connection(s)" + (route ? ", over " + esc(linkWords(route)) : "") +
+      ": <b>down " + rate(down) + "</b>, <b>up " + rate(up) + "</b>. A real transfer close to these numbers is " +
       "network-limited; much slower means storage is the ceiling.";
   } catch (e) {
     out.textContent = "Measurement failed: " + (e && e.message ? e.message : "unknown");
@@ -5367,8 +5387,38 @@ function renderRouteBadge(r) {
   el.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + b.icon + "</svg><span></span>";
   el.lastChild.textContent = b.name + " · ";
   var em = document.createElement("em");
-  em.textContent = usb2 ? "USB 2, about 40 MB/s" : usb || r.via === "internet" ? b.speed : b.speed + ", USB is faster";
+  em.textContent = usb2 ? "USB 2, about 40 MB/s" : r.via === "internet" ? (r.punched ? "IPv4, punched through" : "IPv6 tunnel")
+    : usb ? b.speed : b.speed + ", USB is faster";
   el.appendChild(em);
+}
+
+/** The link, said plainly, at the foot of Settings' helper card: what it is, and IPv4 or IPv6. */
+function linkWords(r) {
+  if (!r) return "";
+  var b = ROUTE_BADGES[r.via];
+  return (b ? b.name : "the network") + ", " + (r.ip || (r.host.indexOf(":") >= 0 ? "IPv6" : "IPv4"));
+}
+
+function renderLinkRow(r) {
+  var row = $("link-row"), b = r && ROUTE_BADGES[r.via];
+  row.hidden = !r;
+  if (!r) return;
+  var ip = r.ip || (r.host.indexOf(":") >= 0 ? "IPv6" : "IPv4");
+  var at = "phone at " + r.host;
+  var detail = {
+    usb: "Over the cable, " + at + (r.usbMbps > 0 && r.usbMbps < 600 ? " (a USB 2 cable, about 40 MB/s)" : ""),
+    hotspot: "This laptop is on the phone's hotspot, " + at,
+    wifi: "Both on the same Wi-Fi, " + at,
+    direct: "On the phone's own private network, " + at,
+    internet: r.punched ? "Across the internet, punched through both networks over UDP"
+      : "Across the internet, straight to the phone's IPv6 over TCP",
+  }[r.via] || ("Over your network, " + at);
+  $("link-icon").innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + (b ? b.icon : ROUTE_BADGES.wifi.icon) + "</svg>";
+  $("link-name").textContent = r.via === "internet" ? "Through the tunnel" : b ? b.name : "Connected";
+  $("link-detail").textContent = detail + (viaHelper ? ", through the laptop helper." : ".");
+  var pill = $("link-ip");
+  pill.textContent = ip;
+  pill.className = "ip-pill" + (ip === "IPv6" ? " v6" : "");
 }
 
 /** How this page reaches the phone, for the card at the top of Home. */
@@ -5380,6 +5430,7 @@ function renderRoute() {
     ? (r && ROUTE_BADGES[r.via] ? "Through the laptop helper" : how ? how + ", through the laptop helper" : "Through the laptop helper")
     : (r && ROUTE_BADGES[r.via] ? host : (how || "Over your network") + ", " + host);
   renderRouteBadge(r);
+  renderLinkRow(r);
   var hint = $("route-hint");
   // Over a cable that came up at USB 2 (the helper reports ~426 Mbps): only a better cable helps.
   if (r && r.via === "usb" && r.usbMbps > 0 && r.usbMbps < 600) {

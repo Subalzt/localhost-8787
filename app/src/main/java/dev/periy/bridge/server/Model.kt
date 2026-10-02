@@ -164,6 +164,10 @@ data class RouteDto(
      * its own global address.
      */
     val stun: List<String> = emptyList(),
+    /** "IPv4" or "IPv6": how this page's requests reach the phone (through the tunnel, the tunnel's own). */
+    val ip: String = "IPv4",
+    /** Through the tunnel over a path punched through two NATs (IPv4, UDP), not straight to the phone's IPv6. */
+    val punched: Boolean = false,
 )
 
 /** The phone's own offline network, for a laptop helper or another phone to join. */
