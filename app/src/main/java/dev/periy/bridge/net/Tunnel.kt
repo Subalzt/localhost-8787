@@ -511,7 +511,9 @@ class TunnelServer(
             publish()
             Log.i(TAG, "Tunnel from $who")
             conn.send(TunnelProto.HELLO, 0, info().toByteArray())
-            conn.run()
+            // Awake while it lasts: with the screen off every request would otherwise wait for the CPU.
+            KeepAwake.start()
+            try { conn.run() } finally { KeepAwake.end() }
         } catch (e: Exception) {
             runCatching { link.close() }
         }

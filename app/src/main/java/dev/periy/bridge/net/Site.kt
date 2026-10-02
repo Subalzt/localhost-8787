@@ -106,7 +106,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
     @Volatile private var status = ""
     @Volatile private var problem = false
 
-    init { publish() }
+    init { publish(); KeepAwake.init(ctx) }
 
     // ------------------------------------------------------------------ settings
 
@@ -172,6 +172,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
     }
 
     private fun say(s: String, bad: Boolean = false) {
+        if (s == status && bad == problem) return
         status = s
         problem = bad
         if (s.isNotEmpty()) Log.i(TAG, s)
@@ -191,19 +192,26 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
     private fun loop() {
         val me = Thread.currentThread()
         while (worker === me) {
-            try {
-                val c = conf
-                if (!c.ready) { say(missing(c), bad = true); return }
-                dns()
-                cert()
-                serve()
-                if (door != null) say("On at $url")
-            } catch (e: InterruptedException) {
-                return
-            } catch (e: Exception) {
-                say(e.message ?: e.javaClass.simpleName, bad = true)
+            val c = conf
+            if (!c.ready) { say(missing(c), bad = true); return }
+            // Each step on its own: the door opens with the certificate there is, whatever dynv6
+            // or Let's Encrypt say this time; a step that fails is tried again on the next round.
+            val problems = ArrayList<String>()
+            for (step in listOf(::serve, ::dns, ::cert, ::serve)) {
+                try {
+                    step()
+                } catch (e: InterruptedException) {
+                    return
+                } catch (e: Exception) {
+                    problems += e.message ?: e.javaClass.simpleName
+                }
             }
-            try { Thread.sleep(60_000) } catch (e: InterruptedException) { return }
+            when {
+                problems.isNotEmpty() -> say(problems.distinct().joinToString("; ") + if (door != null) " (the website is still on)" else "", bad = true)
+                door != null -> say("On at $url")
+            }
+            // Every 20 s: a new IPv6 (mobile data reconnecting) reaches dynv6 within half a minute.
+            try { Thread.sleep(20_000) } catch (e: InterruptedException) { return }
         }
     }
 
@@ -216,7 +224,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
 
     /** The name points at the phone's current IPv6 (its IPv4 is carrier NAT: no A record). */
     private fun dns() {
-        val v6 = NetInfo.publicAddresses(ctx).firstOrNull { ':' in it } ?: run { say("No IPv6 address right now", bad = true); return }
+        val v6 = bestV6() ?: throw IOException("No IPv6 address right now")
         if (v6 == conf.published) return
         say("Pointing ${conf.name} at $v6")
         pointAt(v6)
@@ -245,6 +253,26 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         }
     }
 
+    /**
+     * The address to give the name: mobile data's own IPv6 when there is one, even while Wi-Fi is
+     * up (the carrier lets connections in; a home router usually does not), a stable one rather
+     * than a temporary one; else whatever global IPv6 the phone has.
+     */
+    private fun bestV6(): String? = runCatching {
+        val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java)
+        @Suppress("DEPRECATION")
+        val nets = cm.allNetworks.mapNotNull { n -> cm.getNetworkCapabilities(n)?.let { n to it } }
+            .filter { it.second.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) }
+            .sortedBy { if (it.second.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)) 0 else 1 }
+        for ((n, _) in nets) {
+            val lp = cm.getLinkProperties(n) ?: continue
+            val a = lp.linkAddresses.sortedBy { it.flags and 0x01 }.map { it.address }
+                .firstOrNull { it is java.net.Inet6Address && (it.address[0].toInt() and 0xe0) == 0x20 }
+            if (a != null) return@runCatching a.hostAddress?.substringBefore('%')
+        }
+        null
+    }.getOrNull()
+
     // ------------------------------------------------------------------ dynv6
 
     private fun dynv6Error(code: Int, text: String): IOException = IOException(
@@ -255,10 +283,10 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         }
     )
 
-    /** The name's AAAA, through dynv6's update URL; "-" removes the A record (carrier NAT has no use for it). */
+    /** The name's AAAA, through dynv6's update URL. IPv4 is left alone: dynv6 refuses "-" now, and carrier NAT has no use for one. */
     private fun pointAt(v6: String) {
         val q = "zone=" + java.net.URLEncoder.encode(conf.name, "UTF-8") + "&token=" + java.net.URLEncoder.encode(conf.token, "UTF-8") +
-            "&ipv6=" + java.net.URLEncoder.encode(v6, "UTF-8") + "&ipv4=-"
+            "&ipv6=" + java.net.URLEncoder.encode(v6, "UTF-8")
         val (code, text) = http("GET", "https://dynv6.com/api/update?$q", null)
         if (code !in 200..299) throw dynv6Error(code, text)
     }
@@ -326,6 +354,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         if (recent.size > 1000) recent.clear()
         if (!ok) { runCatching { s.close() }; return }
         var page: Socket? = null
+        KeepAwake.start()
         try {
             s.soTimeout = 15_000
             s.startHandshake()
@@ -345,6 +374,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         } finally {
             page?.let { clients.remove(it.localPort); runCatching { it.close() } }
             runCatching { s.close() }
+            KeepAwake.end()
         }
     }
 
