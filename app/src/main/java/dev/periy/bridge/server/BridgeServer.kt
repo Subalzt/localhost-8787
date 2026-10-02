@@ -1094,6 +1094,18 @@ class BridgeServer(
         }
     }
 
+    /** The session cookie through the website: Secure, and for NAME and lan.NAME alike. */
+    private fun siteCookie(deviceId: String, name: String) = Cookie(
+        name = SESSION_COOKIE,
+        value = Session.issue(config.sessionKey(), config.sessionTtlMs, deviceId),
+        path = "/",
+        domain = name,
+        httpOnly = true,
+        secure = true,
+        maxAge = (config.sessionTtlMs / 1000).toInt(),
+        extensions = mapOf("SameSite" to "Strict"),
+    )
+
     /** How this request reached the phone: the link, what the website or tunnel ran over, IPv4 or IPv6. */
     private fun ApplicationCall.way(deviceId: String?): Way {
         val all = dev.periy.bridge.net.NetInfo.addresses()
@@ -1419,7 +1431,9 @@ class BridgeServer(
                 return@get
             }
             val deviceId = req.deviceId
-            if (req.state == PairRequest.State.APPROVED && deviceId != null) {
+            if (req.state == PairRequest.State.APPROVED && deviceId != null && call.viaSite() && site != null) {
+                call.response.cookies.append(siteCookie(deviceId, site!!.state.value.name))
+            } else if (req.state == PairRequest.State.APPROVED && deviceId != null) {
                 call.response.cookies.append(
                     Cookie(
                         name = SESSION_COOKIE,
@@ -1440,7 +1454,15 @@ class BridgeServer(
         // How the page reached the phone, for its sign-in screen: through the website, a PIN.
         get("/api/site") {
             call.response.header(HttpHeaders.CacheControl, "no-store")
-            call.respond(SiteDto(site = call.viaSite(), name = site?.state?.value?.name.orEmpty()))
+            val door = site
+            val via = call.viaSite()
+            val name = door?.state?.value?.name.orEmpty()
+            // A browser signed in through the website before the session covered lan.NAME too:
+            // the same session again, for the whole name, so moving over keeps it signed in.
+            val d = call.device()
+            if (via && d != null && name.isNotEmpty()) call.response.cookies.append(siteCookie(d.id, name))
+            val near = via && door != null && call.request.headers[HttpHeaders.Host]?.substringBefore(':') != door.lanHost && door.nearby(call.clientIp())
+            call.respond(SiteDto(site = via, name = name, lan = door?.lanHost.orEmpty(), near = near))
         }
 
         // A helper downloaded through the website signs itself in with the one-time code baked into
@@ -1454,17 +1476,7 @@ class BridgeServer(
             }
             val name = describeUserAgent(call.request.header(HttpHeaders.UserAgent))
             val device = devices.add(name, call.clientIp())
-            call.response.cookies.append(
-                Cookie(
-                    name = SESSION_COOKIE,
-                    value = Session.issue(config.sessionKey(), config.sessionTtlMs, device.id),
-                    path = "/",
-                    httpOnly = true,
-                    secure = true,
-                    maxAge = (config.sessionTtlMs / 1000).toInt(),
-                    extensions = mapOf("SameSite" to "Strict"),
-                )
-            )
+            call.response.cookies.append(siteCookie(device.id, door.state.value.name))
             val tunnel = remote?.forDevice(device.id) ?: "{}"
             call.respondText(tunnel, ContentType.Application.Json)
         }

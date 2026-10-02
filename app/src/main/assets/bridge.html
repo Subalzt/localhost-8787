@@ -9275,8 +9275,24 @@ async function siteLogin() {
   $("lg-chips").innerHTML = "<span>No account</span><span>Encrypted</span><span>Straight to your phone</span>";
 }
 
+/**
+ * Through the website from a browser on the phone's own Wi-Fi: every byte would go out to the
+ * internet and back in through mobile data. lan.NAME points at the phone's Wi-Fi addresses and is
+ * in the same certificate (and the session covers it), so move there, once it is seen to answer.
+ */
+async function siteHop() {
+  var d; try { d = await (await fetch("/api/site", { credentials: "same-origin", cache: "no-store" })).json(); } catch (e) { return; }
+  if (!d || !d.near || !d.lan || location.hostname === d.lan) return;
+  var base = "https://" + d.lan + ":" + location.port, ctl = new AbortController();
+  var t = setTimeout(function () { ctl.abort(); }, 2500);
+  try { await fetch(base + "/api/ping", { mode: "no-cors", cache: "no-store", signal: ctl.signal }); }
+  catch (e) { return; }
+  finally { clearTimeout(t); }
+  location.replace(base + location.pathname + location.search + location.hash);
+}
+
 (async function boot() {
-  if (location.port === "8443") siteMode = true;
+  if (location.port === "8443") { siteMode = true; siteHop(); }
   // Paint the last-known theme immediately; the phone's real setting follows a moment later.
   var saved = "system";
   try { saved = localStorage.getItem("blazeit.theme") || "system"; } catch (e) {}

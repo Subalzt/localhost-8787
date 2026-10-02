@@ -72,6 +72,10 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         val certChain: String = "",
         val certUntil: Long = 0,
         val published: String = "",
+        /** The names the certificate is for, comma-separated. */
+        val certFor: String = "",
+        /** What lan.NAME points at now: "ipv6|ipv4". */
+        val lanPublished: String = "",
     ) {
         val ready: Boolean get() = name.isNotBlank() && token.isNotBlank() && agreed
     }
@@ -190,7 +194,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
             // Each step on its own: the door opens with the certificate there is, whatever dynv6
             // or Let's Encrypt say this time; a step that fails is tried again on the next round.
             val problems = ArrayList<String>()
-            for (step in listOf(::serve, ::dns, ::cert, ::serve)) {
+            for (step in listOf(::serve, ::dns, ::lanDns, ::cert, ::serve)) {
                 try {
                     step()
                 } catch (e: InterruptedException) {
@@ -225,7 +229,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
 
     private fun cert() {
         val c = conf
-        if (c.certChain.isNotBlank() && c.certUntil - System.currentTimeMillis() > RENEW_MS) return
+        if (c.certChain.isNotBlank() && c.certFor == names().joinToString(",") && c.certUntil - System.currentTimeMillis() > RENEW_MS) return
         // A failed attempt waits 15 minutes: Let's Encrypt allows 5 failures an hour per name.
         if (System.currentTimeMillis() - lastIssueTry < 900_000L) return
         lastIssueTry = System.currentTimeMillis()
@@ -287,6 +291,69 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         val (code, text) = http("GET", "$DYNV6/zones/by-name/${conf.name}", null, mapOf("Authorization" to "Bearer ${conf.token}"))
         if (code !in 200..299) throw dynv6Error(code, text)
         return Json.parseToJsonElement(text).jsonObject["id"]!!.jsonPrimitive.content.toLong()
+    }
+
+    // ------------------------------------------------------------------ the local shortcut
+
+    /** The names the certificate covers: the website's, and its local shortcut. */
+    internal fun names(): List<String> = listOf(conf.name, "lan." + conf.name)
+
+    /** lan.NAME, once it points somewhere. */
+    val lanHost: String get() = if (conf.lanPublished.isNotBlank() && conf.name.isNotBlank()) "lan." + conf.name else ""
+
+    /** The phone's own addresses on its Wi-Fi (not mobile data): a global IPv6 and the local IPv4. */
+    private fun wifiAddresses(): Pair<String?, String?> = runCatching {
+        val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java)
+        @Suppress("DEPRECATION")
+        val n = cm.allNetworks.firstOrNull { cm.getNetworkCapabilities(it)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true }
+            ?: return@runCatching null to null
+        val addrs = cm.getLinkProperties(n)?.linkAddresses.orEmpty().sortedBy { it.flags and 0x01 }.map { it.address }
+        val v6 = addrs.firstOrNull { it is java.net.Inet6Address && (it.address[0].toInt() and 0xe0) == 0x20 }?.hostAddress?.substringBefore('%')
+        val v4 = addrs.firstOrNull { it is java.net.Inet4Address && it.isSiteLocalAddress }?.hostAddress
+        v6 to v4
+    }.getOrDefault(null to null)
+
+    /**
+     * Keeps lan.NAME pointing at the phone's Wi-Fi addresses, so a browser on the same Wi-Fi can
+     * reach the website without going out to the internet and back (the page moves it there).
+     * The private IPv4 is fine in public DNS: only a browser on that network can reach it.
+     */
+    private fun lanDns() {
+        val (v6, v4) = wifiAddresses()
+        if (v6 == null && v4 == null) return
+        val key = (v6 ?: "") + "|" + (v4 ?: "")
+        if (key == conf.lanPublished) return
+        val zone = zoneId()
+        val (code, text) = http("GET", "$DYNV6/zones/$zone/records", null, mapOf("Authorization" to "Bearer ${conf.token}"))
+        if (code !in 200..299) throw dynv6Error(code, text)
+        val records = Json.parseToJsonElement(text).jsonArray.map { it.jsonObject }
+        for ((type, data) in listOf("AAAA" to v6, "A" to v4)) {
+            val old = records.filter { it["name"]?.jsonPrimitive?.content == "lan" && it["type"]?.jsonPrimitive?.content == type }
+            if (data == null) {
+                old.forEach { r -> http("DELETE", "$DYNV6/zones/$zone/records/${r["id"]!!.jsonPrimitive.content}", null, mapOf("Authorization" to "Bearer ${conf.token}")) }
+                continue
+            }
+            if (old.size == 1 && old[0]["data"]?.jsonPrimitive?.content == data) continue
+            old.forEach { r -> http("DELETE", "$DYNV6/zones/$zone/records/${r["id"]!!.jsonPrimitive.content}", null, mapOf("Authorization" to "Bearer ${conf.token}")) }
+            val body = buildJsonObject { put("name", JsonPrimitive("lan")); put("type", JsonPrimitive(type)); put("data", JsonPrimitive(data)) }.toString()
+            val (c2, t2) = http("POST", "$DYNV6/zones/$zone/records", body, mapOf("Authorization" to "Bearer ${conf.token}"))
+            if (c2 !in 200..299) throw dynv6Error(c2, t2)
+        }
+        say("Pointing lan.${conf.name} at the Wi-Fi: " + listOfNotNull(v6, v4).joinToString(", "))
+        save(conf.copy(lanPublished = key))
+    }
+
+    /**
+     * A browser that came over the internet but is on the phone's own Wi-Fi (its address in the
+     * same network as the phone's there): the page can move it to lan.NAME, without the detour.
+     */
+    fun nearby(client: String): Boolean {
+        if (lanHost.isEmpty()) return false
+        val (v6, v4) = wifiAddresses()
+        val c = runCatching { java.net.InetAddress.getByName(client).address }.getOrNull() ?: return false
+        val mine = (if (c.size == 16) v6 else v4)?.let { runCatching { java.net.InetAddress.getByName(it).address }.getOrNull() } ?: return false
+        val n = if (c.size == 16) 8 else 3
+        return mine.size == c.size && mine.copyOf(n).contentEquals(c.copyOf(n))
     }
 
     /** A TXT record on the name, for the certificate check. Returns how to remove it again. */
@@ -490,6 +557,51 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
     }
 }
 
+/** Just enough DNS to ask dynv6's nameservers for a TXT record directly (no cache in between). */
+private object Dns {
+    private val servers = listOf("ns1.dynv6.com", "ns2.dynv6.com", "ns3.dynv6.com")
+
+    /** True when every nameserver answers [name] with a TXT record holding [value]. */
+    fun everywhere(name: String, value: String): Boolean = servers.all { ns ->
+        runCatching { txt(InetAddress.getByName(ns), name).any { it == value } }.getOrDefault(false)
+    }
+
+    private fun txt(server: InetAddress, name: String): List<String> {
+        val id = (System.nanoTime() and 0xFFFF).toInt()
+        val q = ByteArrayOutputStream()
+        q.write(byteArrayOf((id shr 8).toByte(), id.toByte(), 0, 0, 0, 1, 0, 0, 0, 0, 0, 0))
+        for (label in name.trimEnd('.').split('.')) { q.write(label.length); q.write(label.toByteArray()) }
+        q.write(byteArrayOf(0, 0, 16, 0, 1))   // QTYPE TXT, QCLASS IN
+        val query = q.toByteArray()
+        java.net.DatagramSocket().use { s ->
+            s.soTimeout = 3_000
+            s.send(java.net.DatagramPacket(query, query.size, server, 53))
+            val buf = ByteArray(1500)
+            val p = java.net.DatagramPacket(buf, buf.size)
+            s.receive(p)
+            val n = p.length
+            val answers = ((buf[6].toInt() and 0xFF) shl 8) or (buf[7].toInt() and 0xFF)
+            var i = query.size
+            val out = ArrayList<String>()
+            repeat(answers) {
+                // The name: a pointer (2 bytes) or labels to a zero.
+                if (buf[i].toInt() and 0xC0 == 0xC0) i += 2 else { while (buf[i].toInt() != 0) i += (buf[i].toInt() and 0xFF) + 1; i++ }
+                val type = ((buf[i].toInt() and 0xFF) shl 8) or (buf[i + 1].toInt() and 0xFF)
+                val len = ((buf[i + 8].toInt() and 0xFF) shl 8) or (buf[i + 9].toInt() and 0xFF)
+                val data = i + 10
+                if (type == 16 && data + len <= n) {
+                    var j = data
+                    val sb = StringBuilder()
+                    while (j < data + len) { val l = buf[j].toInt() and 0xFF; sb.append(String(buf, j + 1, l)); j += l + 1 }
+                    out += sb.toString()
+                }
+                i = data + len
+            }
+            return out
+        }
+    }
+}
+
 /**
  * Let's Encrypt (ACME, RFC 8555) for one name, proved by a DNS TXT record set through dynv6:
  * account (an EC key of the phone's own), order, the TXT, the check, a CSR, the certificate.
@@ -505,13 +617,14 @@ private class Acme(private val site: Site) {
     fun issue() {
         val c = site.confNow
         val name = c.name
-        site.progress("Getting a certificate for $name")
+        val names = site.names()
+        site.progress("Getting a certificate for ${names.joinToString(" and ")}")
         dir = Json.parseToJsonElement(site.http("GET", if (c.staging) Site.ACME_STAGING else Site.ACME, null).second).jsonObject
         account()
         val (orderUrl, order) = post(url("newOrder"), buildJsonObject {
-            put("identifiers", buildJsonArray { add(buildJsonObject { put("type", JsonPrimitive("dns")); put("value", JsonPrimitive(name)) }) })
+            put("identifiers", buildJsonArray { names.forEach { n -> add(buildJsonObject { put("type", JsonPrimitive("dns")); put("value", JsonPrimitive(n)) }) } })
         }.toString()).let { (h, b) -> (h["location"]?.firstOrNull() ?: throw IOException("Let's Encrypt gave no order")) to b }
-        var removeTxt: (() -> Unit)? = null
+        val removeTxt = ArrayList<() -> Unit>()
         try {
             for (a in order["authorizations"]!!.jsonArray) {
                 val authz = post(a.jsonPrimitive.content, null).second
@@ -519,9 +632,17 @@ private class Acme(private val site: Site) {
                 val ch = authz["challenges"]!!.jsonArray.map { it.jsonObject }.first { it["type"]?.jsonPrimitive?.content == "dns-01" }
                 val token = ch["token"]!!.jsonPrimitive.content
                 val keyAuth = "$token.${thumbprint()}"
-                removeTxt = site.txt("_acme-challenge", Site.b64u(sha256(keyAuth.toByteArray())))
-                site.progress("Waiting for the DNS check record to spread")
-                Thread.sleep(45_000)
+                // _acme-challenge for the name itself, _acme-challenge.lan for lan.NAME.
+                val value = authz["identifier"]?.jsonObject?.get("value")?.jsonPrimitive?.content ?: name
+                val sub = value.removeSuffix(name).removeSuffix(".")
+                val digest = Site.b64u(sha256(keyAuth.toByteArray()))
+                removeTxt += site.txt("_acme-challenge" + (if (sub.isEmpty()) "" else ".$sub"), digest)
+                site.progress("Waiting for the DNS check record to reach all of dynv6's nameservers")
+                // Let's Encrypt checks from several places at once: ask dynv6's own nameservers until
+                // every one has the record, then a little longer for good measure.
+                val until0 = System.currentTimeMillis() + 240_000
+                while (!Dns.everywhere("_acme-challenge.$value", digest) && System.currentTimeMillis() < until0) Thread.sleep(5_000)
+                Thread.sleep(10_000)
                 post(ch["url"]!!.jsonPrimitive.content, "{}")
                 val until = System.currentTimeMillis() + 120_000
                 while (true) {
@@ -537,7 +658,7 @@ private class Acme(private val site: Site) {
             }
             // The certificate's own key, and a request for it.
             val kp = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1"), rng) }.generateKeyPair()
-            val csr = csr(name, kp.public.encoded, kp.private)
+            val csr = csr(names, kp.public.encoded, kp.private)
             post(order["finalize"]!!.jsonPrimitive.content, buildJsonObject { put("csr", JsonPrimitive(Site.b64u(csr))) }.toString())
             var certUrl: String? = null
             val until = System.currentTimeMillis() + 120_000
@@ -552,10 +673,10 @@ private class Acme(private val site: Site) {
             }
             val pem = postRaw(certUrl!!, null, "application/pem-certificate-chain").second
             val first = CertificateFactory.getInstance("X.509").generateCertificate(pem.byteInputStream()) as X509Certificate
-            site.update { it.copy(certKey = Site.b64(kp.private.encoded), certChain = pem, certUntil = first.notAfter.time) }
+            site.update { it.copy(certKey = Site.b64(kp.private.encoded), certChain = pem, certUntil = first.notAfter.time, certFor = names.joinToString(",")) }
             site.progress("Certificate for $name until ${java.text.DateFormat.getDateInstance().format(first.notAfter)}")
         } finally {
-            removeTxt?.let { runCatching { it() } }
+            removeTxt.forEach { runCatching { it() } }
         }
     }
 
@@ -654,14 +775,14 @@ private class Acme(private val site: Site) {
         return byteArrayOf(tag.toByte()) + l + body
     }
 
-    private fun csr(name: String, spki: ByteArray, key: PrivateKey): ByteArray {
+    private fun csr(names: List<String>, spki: ByteArray, key: PrivateKey): ByteArray {
         val oidCn = byteArrayOf(0x06, 0x03, 0x55, 0x04, 0x03)
         val oidExtReq = byteArrayOf(0x06, 0x09, 0x2A, 0x86.toByte(), 0x48, 0x86.toByte(), 0xF7.toByte(), 0x0D, 0x01, 0x09, 0x0E)
         val oidSan = byteArrayOf(0x06, 0x03, 0x55, 0x1D, 0x11)
         val oidEcdsa256 = byteArrayOf(0x06, 0x08, 0x2A, 0x86.toByte(), 0x48, 0xCE.toByte(), 0x3D, 0x04, 0x03, 0x02)
-        val n = name.toByteArray()
+        val n = names[0].toByteArray()
         val subject = der(0x30, der(0x31, der(0x30, oidCn, der(0x0C, n))))
-        val san = der(0x30, oidSan, der(0x04, der(0x30, der(0x82, n))))
+        val san = der(0x30, oidSan, der(0x04, der(0x30, *names.map { der(0x82, it.toByteArray()) }.toTypedArray())))
         val attrs = der(0xA0, der(0x30, oidExtReq, der(0x31, der(0x30, san))))
         val info = der(0x30, byteArrayOf(0x02, 0x01, 0x00), subject, spki, attrs)
         val sig = Signature.getInstance("SHA256withECDSA").apply { initSign(key); update(info) }.sign()

@@ -174,7 +174,14 @@ data class RouteDto(
 
 /** Whether the page came through the website (and so signs in with a PIN), and its name. */
 @Serializable
-data class SiteDto(val site: Boolean, val name: String = "")
+data class SiteDto(
+    val site: Boolean,
+    val name: String = "",
+    /** lan.NAME: the website without the internet, for a browser on the phone's Wi-Fi. */
+    val lan: String = "",
+    /** This browser came over the internet but is on the phone's Wi-Fi: it can move to [lan]. */
+    val near: Boolean = false,
+)
 
 @Serializable
 data class SiteEnrollDto(val code: String = "")
