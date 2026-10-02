@@ -42,8 +42,9 @@ import dev.periy.bridge.net.Site
 
 /**
  * The phone as a website (docs/website.md): the switch, and under it what it needs, typed here by
- * the person: the name made at dynv6, its token, a PIN, and their own "I agree" to Let's Encrypt's
- * terms. The token and the PIN never show once saved.
+ * the person: the name made at dynv6, its token, and their own "I agree" to Let's Encrypt's terms.
+ * The token never shows once saved. A browser coming through it asks the phone, as on the local
+ * network.
  */
 @Composable
 fun WebsiteRow() {
@@ -55,12 +56,12 @@ fun WebsiteRow() {
         s.on && s.serving -> site.url.removePrefix("https://")
         s.on && s.status.isNotEmpty() -> s.status
         s.name.isNotEmpty() -> s.name + " · off"
-        else -> "From any browser, with a PIN"
+        else -> "From any browser, anywhere"
     }
     SettingRow("Website", detail, icon = BlazeIcons.Lock, iconColor = Bridge.Indigo, onClick = { open = !open }) {
         Toggle(s.on) { on ->
             site.setOn(on)
-            if (on && !(s.hasToken && s.hasPin && s.agreed && s.name.isNotEmpty())) open = true
+            if (on && !(s.hasToken && s.agreed && s.name.isNotEmpty())) open = true
         }
     }
     AnimatedVisibility(open) { WebsiteFields(site, s) }
@@ -71,13 +72,12 @@ private fun WebsiteFields(site: Site, s: Site.State) {
     val ctx = LocalContext.current
     var name by rememberSaveable { mutableStateOf(s.name) }
     var token by remember { mutableStateOf("") }
-    var pin by remember { mutableStateOf("") }
     var agreed by rememberSaveable { mutableStateOf(s.agreed) }
     Column(Modifier.padding(start = 60.dp, end = 16.dp, bottom = 16.dp)) {
         Text(
             "Make a free name at dynv6 (yourname.dynv6.net) and an HTTP token (Keys, in its menu), then type both here. " +
                 "The phone keeps the name pointing at it, gets an HTTPS certificate from Let's Encrypt, and opens " +
-                "https://yourname.dynv6.net:${Site.PORT} to any browser that knows the PIN. Needs IPv6 where the browser is.",
+                "https://yourname.dynv6.net:${Site.PORT} to any browser: it asks, you tap Allow here. Needs IPv6 where the browser is.",
             style = CaptionStyle, color = Bridge.Muted,
         )
         Spacer(Modifier.height(10.dp))
@@ -89,8 +89,7 @@ private fun WebsiteFields(site: Site, s: Site.State) {
         Spacer(Modifier.height(8.dp))
         SecretField(token, { token = it }, if (s.hasToken) "Token saved · type to replace" else "dynv6 HTTP token")
         Spacer(Modifier.height(8.dp))
-        SecretField(pin, { pin = it.filter(Char::isDigit).take(12) }, if (s.hasPin) "PIN set · type to change" else "PIN, 6 digits or more", digits = true)
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Toggle(agreed) { agreed = it }
             Spacer(Modifier.width(12.dp))
@@ -103,12 +102,10 @@ private fun WebsiteFields(site: Site, s: Site.State) {
             }
         }
         Spacer(Modifier.height(12.dp))
-        val pinOk = pin.isEmpty() || pin.length >= 6
         Row(verticalAlignment = Alignment.CenterVertically) {
             SoftButton("Save", tint = Bridge.Blue, onClick = {
-                if (!pinOk) { Toast.makeText(ctx, "The PIN needs 6 digits or more", Toast.LENGTH_SHORT).show(); return@SoftButton }
-                site.configure(name, token, pin, agreed)
-                token = ""; pin = ""
+                site.configure(name, token, agreed)
+                token = ""
                 Toast.makeText(ctx, "Saved", Toast.LENGTH_SHORT).show()
             })
             if (s.serving) {
@@ -131,7 +128,7 @@ private fun WebsiteFields(site: Site, s: Site.State) {
     }
 }
 
-/** A field whose text never shows: the token, the PIN. */
+/** A field whose text never shows: the token. */
 @Composable
 private fun SecretField(value: String, onChange: (String) -> Unit, placeholder: String, digits: Boolean = false) {
     Box(

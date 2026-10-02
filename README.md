@@ -301,7 +301,7 @@ two notes goes through anyone else. It works unless both networks have the hard 
 port for every destination); from Airtel home broadband to a phone on Jio data it takes 5 to 9 s.
 Between two phones the tunnel is still IPv6 only.
 
-**The phone as a website.** With a free name from [dynv6](https://dynv6.com) set up in Settings, Website, the phone is also `https://yourname.v6.navy:8443` to any browser on a network with IPv6, with a real Let's Encrypt certificate it gets and renews itself, and a PIN instead of pairing. The laptop helper signs in with the same PIN from anywhere, once. [How it works](docs/website.md).
+**The phone as a website.** With a free name from [dynv6](https://dynv6.com) set up in Settings, Website, the phone is also `https://yourname.v6.navy:8443` to any browser on a network with IPv6, with a real Let's Encrypt certificate it gets and renews itself; a browser there asks, and you tap Allow on the phone, as on the local network. The laptop helper signs in the same way from anywhere, once. [How it works](docs/website.md).
 
 | Situation | Works? |
 | :--- | :--- |

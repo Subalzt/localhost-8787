@@ -549,12 +549,12 @@ def find_phone(first_time, typed=None):
             # phone that turns up (plugged in, switched on) is found without anyone pressing a key.
             known = read_file(os.path.join(CONF, "site.txt")).strip()
             ask_once("Could not find the phone; still looking. Type the address it shows, or its website (%s) to "
-                     "sign in with the PIN from anywhere: " % (known or "yourname.dynv6.net"))
+                     "ask the phone from anywhere: " % (known or "yourname.dynv6.net"))
             t = take_typed()
             if t is None:
                 time.sleep(2)
                 continue
-            # The phone's website: sign in with its PIN, and get the tunnel's keys that way.
+            # The phone's website: ask the phone through it, and get the tunnel's keys that way.
             site = re.sub(r"^https?://|[:/].*$", "", t.lower())
             if re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", site) and re.search(r"[a-z]", site):
                 site_sign_in(site)
@@ -605,35 +605,50 @@ def site_enroll(name, code):
 
 
 def site_sign_in(name):
-    """From anywhere: signs in through the phone's website (https://NAME:8443, a real certificate, so
-    this is the phone and nobody reads along) with the PIN set on the phone, as a browser does, and
-    keeps the session and the tunnel's keys; from then on the tunnel finds the phone by itself."""
-    import getpass
-    pin = getpass.getpass("PIN for %s (set on the phone, Settings, Website): " % name).strip()
+    """From anywhere: asks the phone through its website (https://NAME:8443, a real certificate, so
+    this is the phone and nobody reads along), as a browser there does; on Allow on the phone, keeps
+    the session and the tunnel's keys, and from then on the tunnel finds the phone by itself."""
     base = "https://%s:8443" % name
+    ua = {"User-Agent": user_agent()}
     try:
-        r = urllib.request.Request(base + "/api/site/login", data=json.dumps({"pin": pin}).encode(), method="POST",
-                                   headers={"Content-Type": "application/json", "User-Agent": user_agent()})
         try:
-            resp = urllib.request.urlopen(r, timeout=15)
+            r = urllib.request.urlopen(urllib.request.Request(base + "/api/pair", data=b"", method="POST", headers=ua), timeout=15)
         except urllib.error.HTTPError as e:
             try:
                 why = json.loads(e.read().decode("utf-8")).get("message")
             except ValueError:
                 why = None
-            say(why or "The phone refused the PIN.")
+            say(why or "The phone refused to ask.")
             return False
-        m = re.search(r"xoosh_session=([^;,\s]+)", resp.headers.get("Set-Cookie") or "")
-        if not m:
-            raise OSError("the phone sent no session")
-        cookie = "xoosh_session=" + m.group(1)
-        t = urllib.request.Request(base + "/api/tunnel", headers={"Cookie": cookie, "User-Agent": user_agent()})
-        conf = json.loads(urllib.request.urlopen(t, timeout=15).read().decode("utf-8"))
-        site_keep(name, cookie, conf)
-        say("Signed in to the phone at %s. This computer will not need to ask again." % name)
-        return True
+        d = json.loads(r.read().decode("utf-8") or "{}")
+        say('On the phone, allow "Laptop control on %s (website)". Code: %s' % (NAME, d.get("code", "")))
+        for _ in range(125):
+            time.sleep(1)
+            try:
+                resp = urllib.request.urlopen(urllib.request.Request(base + "/api/pair/" + d.get("id", ""), headers=ua), timeout=15)
+            except (OSError, urllib.error.URLError):
+                continue
+            text = resp.read().decode("utf-8", "replace")
+            if "DENIED" in text:
+                say("The phone said no.")
+                return False
+            if "EXPIRED" in text:
+                say("Nobody answered on the phone.")
+                return False
+            if "APPROVED" not in text:
+                continue
+            m = re.search(r"xoosh_session=([^;,\s]+)", resp.headers.get("Set-Cookie") or "")
+            if not m:
+                raise OSError("the phone approved but sent no session")
+            cookie = "xoosh_session=" + m.group(1)
+            t = urllib.request.Request(base + "/api/tunnel", headers={"Cookie": cookie, "User-Agent": user_agent()})
+            site_keep(name, cookie, json.loads(urllib.request.urlopen(t, timeout=15).read().decode("utf-8")))
+            say("Allowed through %s. This computer finds the phone by itself from now on." % name)
+            return True
+        say("Nobody answered on the phone.")
+        return False
     except (OSError, ValueError, urllib.error.URLError) as e:
-        say("Could not sign in at %s (%s). The website needs IPv6 on this network; or pair once on the same "
+        say("Could not reach the phone at %s (%s). The website needs IPv6 on this network; or pair once on the same "
             "network instead." % (base, e))
         return False
 

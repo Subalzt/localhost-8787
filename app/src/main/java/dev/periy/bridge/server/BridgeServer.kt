@@ -256,15 +256,10 @@ class BridgeServer(
                 return@intercept
             }
             val path = call.request.path()
-            // Through the website: the page, the PIN and nothing else until signed in; no
-            // pairing prompts on the phone from strangers on the internet.
+            // Through the website, as on the local network: the page and asking the phone (each ask
+            // limited, see Site.mayAsk); nothing else until the phone says yes.
             if (call.viaSite()) {
-                if (path.startsWith("/api/pair")) {
-                    call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Sign in with the PIN."))
-                    finish()
-                    return@intercept
-                }
-                if (path in PUBLIC_PATHS || path == "/api/site" || path == "/api/site/login" || path == "/api/site/enroll") return@intercept
+                if (path in PUBLIC_PATHS || path.startsWith("/api/pair") || path == "/api/site" || path == "/api/site/enroll") return@intercept
             } else if (path in PUBLIC_PATHS || path.startsWith("/api/pair") || path == "/api/site") return@intercept
             val device = call.device()
             if (device != null) {
@@ -1385,8 +1380,16 @@ class BridgeServer(
 
         // A computer asks to be let in. The phone shows who is asking and a code.
         post("/api/pair") {
-            val ip = call.remoteIp()
-            val name = describeUserAgent(call.request.header(HttpHeaders.UserAgent))
+            val ip = call.clientIp()
+            var name = describeUserAgent(call.request.header(HttpHeaders.UserAgent))
+            if (call.viaSite()) {
+                val why = site?.mayAsk(ip)
+                if (why != null) {
+                    call.respond(HttpStatusCode.TooManyRequests, ApiResult(false, why))
+                    return@post
+                }
+                name += " (website)"
+            }
             val req = pairing.request(name, ip)
             if (req == null) {
                 call.respond(
@@ -1414,9 +1417,9 @@ class BridgeServer(
                         value = Session.issue(config.sessionKey(), config.sessionTtlMs, deviceId),
                         path = "/",
                         httpOnly = true,
-                        // Not Secure: this is served over plain HTTP on the local network,
-                        // and a Secure cookie would never be sent back.
-                        secure = false,
+                        // Secure through the website (HTTPS); not on the local network, served
+                        // over plain HTTP, where a Secure cookie would never be sent back.
+                        secure = call.viaSite(),
                         maxAge = (config.sessionTtlMs / 1000).toInt(),
                         extensions = mapOf("SameSite" to "Strict"),
                     )
@@ -1429,38 +1432,6 @@ class BridgeServer(
         get("/api/site") {
             call.response.header(HttpHeaders.CacheControl, "no-store")
             call.respond(SiteDto(site = call.viaSite(), name = site?.state?.value?.name.orEmpty()))
-        }
-
-        // The website's sign-in: the PIN set on the phone, a few tries at a time (see Site.checkPin).
-        // Right, and this browser is a paired device like any other, listed and removable on the phone.
-        post("/api/site/login") {
-            val door = site
-            if (door == null || !call.viaSite()) {
-                call.respond(HttpStatusCode.NotFound, ApiResult(false, "No website"))
-                return@post
-            }
-            val pin = runCatching { call.receive<SiteLoginDto>().pin }.getOrNull().orEmpty()
-            val who = call.clientIp()
-            val why = withContext(Dispatchers.IO) { door.checkPin(pin, who) }
-            if (why != null) {
-                call.respond(HttpStatusCode.Forbidden, ApiResult(false, why))
-                return@post
-            }
-            val name = describeUserAgent(call.request.header(HttpHeaders.UserAgent)) + " (website)"
-            val device = devices.add(name, who)
-            call.response.cookies.append(
-                Cookie(
-                    name = SESSION_COOKIE,
-                    value = Session.issue(config.sessionKey(), config.sessionTtlMs, device.id),
-                    path = "/",
-                    httpOnly = true,
-                    // Over HTTPS here, so Secure: the cookie never travels in the clear.
-                    secure = true,
-                    maxAge = (config.sessionTtlMs / 1000).toInt(),
-                    extensions = mapOf("SameSite" to "Strict"),
-                )
-            )
-            call.respond(ApiResult(true))
         }
 
         // A helper downloaded through the website signs itself in with the one-time code baked into

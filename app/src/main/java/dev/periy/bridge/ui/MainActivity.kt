@@ -1201,7 +1201,7 @@ private fun HeroExtras(
     if (!running) return
     Column(modifier.fillMaxWidth().padding(top = 6.dp)) {
         ConnectedNow()
-        if (siteUrl != null) WayIn("Any browser", siteUrl.removePrefix("https://"), "with the PIN, from anywhere with IPv6")
+        if (siteUrl != null) WayIn("Any browser", siteUrl.removePrefix("https://"), "from anywhere with IPv6; you allow it here")
         WayIn("With the helper", "localhost:8787", "the fastest way, by itself")
         // Each link the phone is on, for a browser on the same one: the hotspot, Wi-Fi, the cable.
         state.addresses.filter { !it.isIpv6 && !it.host.startsWith("192.0.0.") }.distinctBy { it.host }.forEach { a ->

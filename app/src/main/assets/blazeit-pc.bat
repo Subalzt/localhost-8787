@@ -492,12 +492,12 @@ public static class BlazeItPc
             {
                 string known = File.Exists(SiteFile) ? File.ReadAllText(SiteFile).Trim() : "";
                 AskOnce("Could not find the phone; still looking. Type the address it shows, or its website (" +
-                    (known.Length > 0 ? known : "yourname.dynv6.net") + ") to sign in with the PIN from anywhere: ");
+                    (known.Length > 0 ? known : "yourname.dynv6.net") + ") to ask the phone from anywhere: ");
                 told = true;
             }
             if (typed != null)
             {
-                // The phone's website: sign in with its PIN, and get the tunnel's keys that way.
+                // The phone's website: ask the phone through it, and get the tunnel's keys that way.
                 string site = Regex.Replace(typed.ToLowerInvariant(), "^https?://|[:/].*$", "");
                 if (Regex.IsMatch(site, @"^[a-z0-9-]+(\.[a-z0-9-]+)+$") && Regex.IsMatch(site, "[a-z]"))
                 {
@@ -631,38 +631,30 @@ public static class BlazeItPc
         }
     }
 
+    /**
+     * From anywhere: asks the phone through its website (https://NAME:8443, a real certificate, so
+     * this is the phone and nobody reads along), as a browser there does; on Allow on the phone,
+     * keeps the session and the tunnel's keys, and from then on the tunnel finds the phone by itself.
+     */
     static bool SiteSignIn(string name)
     {
-        Console.Write("PIN for " + name + " (set on the phone, Settings, Website): ");
-        StringBuilder pin = new StringBuilder();
-        while (true)
-        {
-            ConsoleKeyInfo k = Console.ReadKey(true);
-            if (k.Key == ConsoleKey.Enter) break;
-            if (k.Key == ConsoleKey.Backspace) { if (pin.Length > 0) { pin.Length--; Console.Write("\b \b"); } continue; }
-            if (char.IsDigit(k.KeyChar)) { pin.Append(k.KeyChar); Console.Write("*"); }
-        }
-        Console.WriteLine();
         string bas = "https://" + name + ":8443";
         try
         {
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
-            HttpWebRequest r = (HttpWebRequest)WebRequest.Create(bas + "/api/site/login");
+            string id, code;
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create(bas + "/api/pair");
             r.Method = "POST";
             r.UserAgent = Ua;
             r.Timeout = 15000;
-            r.ContentType = "application/json";
-            byte[] body = Encoding.UTF8.GetBytes("{\"pin\":\"" + pin + "\"}");
-            r.ContentLength = body.Length;
-            using (Stream w = r.GetRequestStream()) w.Write(body, 0, body.Length);
-            string cookie;
+            r.ContentLength = 0;
             try
             {
                 using (HttpWebResponse resp = (HttpWebResponse)r.GetResponse())
                 {
-                    Match m = Regex.Match(resp.Headers["Set-Cookie"] ?? "", "xoosh_session=([^;,\\s]+)");
-                    if (!m.Success) throw new Exception("the phone sent no session");
-                    cookie = "xoosh_session=" + m.Groups[1].Value;
+                    string b = Body(resp);
+                    id = Regex.Match(b, "\"id\":\"([^\"]+)\"").Groups[1].Value;
+                    code = Regex.Match(b, "\"code\":\"([^\"]+)\"").Groups[1].Value;
                 }
             }
             catch (WebException e)
@@ -670,22 +662,41 @@ public static class BlazeItPc
                 if (e.Response == null) throw;
                 string why;
                 using (HttpWebResponse resp = (HttpWebResponse)e.Response) why = Regex.Match(Body(resp), "\"message\"\\s*:\\s*\"([^\"]*)\"").Groups[1].Value;
-                Say(why.Length > 0 ? why : "The phone refused the PIN.");
+                Say(why.Length > 0 ? why : "The phone refused to ask.");
                 return false;
             }
-            HttpWebRequest t = (HttpWebRequest)WebRequest.Create(bas + "/api/tunnel");
-            t.UserAgent = Ua;
-            t.Timeout = 15000;
-            t.Headers["Cookie"] = cookie;
-            string conf;
-            using (HttpWebResponse resp = (HttpWebResponse)t.GetResponse()) conf = Body(resp);
-            SiteKeep(name, cookie, conf);
-            Say("Signed in to the phone at " + name + ". This laptop will not need to ask again.");
-            return true;
+            Say("On the phone, allow \"Laptop control on " + Environment.MachineName + " (website)\". Code: " + code);
+            for (int i = 0; i < 125; i++)
+            {
+                Thread.Sleep(1000);
+                HttpWebRequest p = (HttpWebRequest)WebRequest.Create(bas + "/api/pair/" + id);
+                p.UserAgent = Ua;
+                p.Timeout = 15000;
+                string b, set;
+                try { using (HttpWebResponse resp = (HttpWebResponse)p.GetResponse()) { b = Body(resp); set = resp.Headers["Set-Cookie"] ?? ""; } }
+                catch (WebException) { continue; }
+                if (b.Contains("DENIED")) { Say("The phone said no."); return false; }
+                if (b.Contains("EXPIRED")) { Say("Nobody answered on the phone."); return false; }
+                if (!b.Contains("APPROVED")) continue;
+                Match m = Regex.Match(set, "xoosh_session=([^;,\\s]+)");
+                if (!m.Success) throw new Exception("the phone approved but sent no session");
+                string cookie = "xoosh_session=" + m.Groups[1].Value;
+                HttpWebRequest t = (HttpWebRequest)WebRequest.Create(bas + "/api/tunnel");
+                t.UserAgent = Ua;
+                t.Timeout = 15000;
+                t.Headers["Cookie"] = cookie;
+                string conf;
+                using (HttpWebResponse resp = (HttpWebResponse)t.GetResponse()) conf = Body(resp);
+                SiteKeep(name, cookie, conf);
+                Say("Allowed through " + name + ". This laptop finds the phone by itself from now on.");
+                return true;
+            }
+            Say("Nobody answered on the phone.");
+            return false;
         }
         catch (Exception e)
         {
-            Say("Could not sign in at " + bas + " (" + e.Message + "). The website needs IPv6 on this network; " +
+            Say("Could not reach the phone at " + bas + " (" + e.Message + "). The website needs IPv6 on this network; " +
                 "or pair once on the same network instead.");
             return false;
         }

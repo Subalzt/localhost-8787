@@ -49,12 +49,12 @@ import javax.net.ssl.SSLServerSocket
 import javax.net.ssl.SSLSocket
 
 /**
- * The phone as a website (docs/website.md): https://NAME.dynv6.net:8443, from any browser, with a
- * PIN. The name is kept pointing at the phone's current IPv6 through dynv6's API; the certificate
+ * The phone as a website (docs/website.md): https://NAME.dynv6.net:8443, from any browser, let in
+ * with a tap on the phone. The name is kept pointing at the phone's current IPv6 through dynv6's API; the certificate
  * comes from Let's Encrypt (a DNS check, also through dynv6, so nothing has to reach the phone for
  * it) and renews itself; a TLS door on port 8443 passes each connection to the page, arriving from
- * [LOCAL_HOST] so the page knows it came this way and asks for the PIN instead of offering to pair.
- * Only the token typed on the phone, the PIN's hash and the keys are kept, in the app's own files.
+ * [LOCAL_HOST] so the page knows it came this way. Only the token typed on the phone and the keys
+ * are kept, in the app's own files.
  */
 class Site(private val ctx: Context, private val pagePort: () -> Int) {
 
@@ -62,8 +62,6 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
     data class Conf(
         val name: String = "",
         val token: String = "",
-        val pinSalt: String = "",
-        val pinHash: String = "",
         /** The person tapped "I agree" to Let's Encrypt's Subscriber Agreement, on the phone. */
         val agreed: Boolean = false,
         val on: Boolean = false,
@@ -75,7 +73,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         val certUntil: Long = 0,
         val published: String = "",
     ) {
-        val ready: Boolean get() = name.isNotBlank() && token.isNotBlank() && pinHash.isNotBlank() && agreed
+        val ready: Boolean get() = name.isNotBlank() && token.isNotBlank() && agreed
     }
 
     /** What Settings shows. */
@@ -83,7 +81,6 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         val on: Boolean = false,
         val name: String = "",
         val hasToken: Boolean = false,
-        val hasPin: Boolean = false,
         val agreed: Boolean = false,
         val address: String = "",
         val certUntil: Long = 0,
@@ -112,19 +109,15 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
 
     val url: String get() = if (conf.name.isBlank()) "" else "https://${conf.name}:$PORT"
 
-    /** Saves what Settings has; blank token or PIN leaves the old one. */
+    /** Saves what Settings has; a blank token leaves the old one. */
     @Synchronized
-    fun configure(name: String?, token: String?, pin: String?, agreed: Boolean?) {
+    fun configure(name: String?, token: String?, agreed: Boolean?) {
         var c = conf
         if (name != null) {
             val n = name.trim().lowercase().removePrefix("https://").removeSuffix("/")
             if (n != c.name) c = c.copy(name = n, certChain = "", certKey = "", certUntil = 0, published = "")
         }
         if (!token.isNullOrBlank()) c = c.copy(token = token.trim())
-        if (!pin.isNullOrBlank()) {
-            val salt = ByteArray(16).also(rng::nextBytes)
-            c = c.copy(pinSalt = b64(salt), pinHash = b64(pinHash(pin.trim(), salt)))
-        }
         if (agreed != null) c = c.copy(agreed = agreed)
         save(c)
         if (c.on) restart()
@@ -182,7 +175,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
     private fun publish() {
         val c = conf
         _state.value = State(
-            on = c.on, name = c.name, hasToken = c.token.isNotBlank(), hasPin = c.pinHash.isNotBlank(), agreed = c.agreed,
+            on = c.on, name = c.name, hasToken = c.token.isNotBlank(), agreed = c.agreed,
             address = c.published, certUntil = c.certUntil, serving = door != null, status = status, problem = problem,
         )
     }
@@ -218,7 +211,6 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
     private fun missing(c: Conf) = when {
         c.name.isBlank() -> "Needs your name at dynv6 (yourname.dynv6.net)"
         c.token.isBlank() -> "Needs the dynv6 token"
-        c.pinHash.isBlank() -> "Needs a PIN"
         else -> "Needs your agreement to Let's Encrypt's terms"
     }
 
@@ -420,40 +412,34 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         return until >= System.currentTimeMillis()
     }
 
-    // ------------------------------------------------------------------ the PIN
+    // ------------------------------------------------------------------ asking the phone
 
-    private val tries = ConcurrentHashMap<String, ArrayDeque<Long>>()
-    private val allFails = ArrayDeque<Long>()
+    private val asks = ConcurrentHashMap<String, ArrayDeque<Long>>()
+    private val allAsks = ArrayDeque<Long>()
 
     /**
-     * Checks a PIN typed on the website. No more than 5 wrong ones per 15 minutes from one address
-     * (one /64), and 30 an hour from everywhere, after which the PIN is refused for that hour.
-     * Returns null when right, else why not.
+     * A browser through the website asks the phone to let it in (the person taps Allow, as on the
+     * local network). Anyone who finds the name could make the phone ask, so: no more than 10 asks
+     * per 10 minutes from one address (one /64), and 60 an hour from everywhere. Null when it may
+     * ask, else why not.
      */
-    fun checkPin(pin: String, client: String): String? {
+    fun mayAsk(client: String): String? {
         val now = System.currentTimeMillis()
         val key = client.split(':').take(4).joinToString(":")
-        val q = tries.getOrPut(key) { ArrayDeque() }
-        synchronized(allFails) {
-            while (allFails.isNotEmpty() && now - allFails.first > 3_600_000L) allFails.poll()
-            if (allFails.size >= 30) return "Too many wrong PINs from the internet. Try again in an hour."
+        synchronized(allAsks) {
+            while (allAsks.isNotEmpty() && now - allAsks.first > 3_600_000L) allAsks.poll()
+            if (allAsks.size >= 60) return "The phone has had too many requests from the internet. Try again in an hour."
         }
+        val q = asks.getOrPut(key) { ArrayDeque() }
         synchronized(q) {
-            while (q.isNotEmpty() && now - q.first > 900_000L) q.poll()
-            if (q.size >= 5) return "Too many wrong PINs. Try again in 15 minutes."
+            while (q.isNotEmpty() && now - q.first > 600_000L) q.poll()
+            if (q.size >= 10) return "Asked too often. Try again in 10 minutes."
+            q.add(now)
         }
-        val c = conf
-        val good = c.pinHash.isNotBlank() &&
-            MessageDigest.isEqual(pinHash(pin.trim(), unb64(c.pinSalt)), unb64(c.pinHash))
-        if (good) { synchronized(q) { q.clear() }; return null }
-        synchronized(q) { q.add(now) }
-        synchronized(allFails) { allFails.add(now) }
-        Log.w(TAG, "A wrong PIN from $client")
-        return "That PIN is not right."
+        synchronized(allAsks) { allAsks.add(now) }
+        if (asks.size > 1000) asks.clear()
+        return null
     }
-
-    private fun pinHash(pin: String, salt: ByteArray): ByteArray =
-        SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(PBEKeySpec(pin.toCharArray(), salt, 120_000, 256)).encoded
 
     // ------------------------------------------------------------------ plumbing
 
