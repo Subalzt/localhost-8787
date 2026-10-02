@@ -471,6 +471,37 @@ def move_to(addr):
                                            "USB 3 port gives about 250 MB/s. Charging cables are usually USB 2.")
 
 
+_asking = None
+_typed = []
+_typed_cv = threading.Condition()
+
+
+def ask_once(question):
+    """Asks once and reads the answer on its own thread; not asked again while it waits."""
+    global _asking
+    with _typed_cv:
+        if _asking and _asking.is_alive():
+            return
+
+        def read():
+            try:
+                line = input(question)
+            except EOFError:
+                line = ""
+            with _typed_cv:
+                _typed.append(line.strip())
+                _typed_cv.notify_all()
+
+        _asking = threading.Thread(target=read, daemon=True)
+        _asking.start()
+
+
+def take_typed():
+    """What was typed since the last look, or None."""
+    with _typed_cv:
+        return _typed.pop(0) if _typed else None
+
+
 def find_phone(first_time, typed=None):
     told = False
     while True:
@@ -514,12 +545,15 @@ def find_phone(first_time, typed=None):
                 say("Found the phone %s." % link_name(addr))
             return
         if first_time and sys.stdin.isatty():
-            try:
-                t = input("Could not find the phone. Is Localhost 8787 switched on? Type the address it shows, or its "
-                          "website (yourname.dynv6.net) to sign in with the PIN from anywhere (or press Enter to "
-                          "search again): ").strip()
-            except EOFError:
-                t = ""
+            # The question waits for an answer on its own thread: the search goes on meanwhile, and a
+            # phone that turns up (plugged in, switched on) is found without anyone pressing a key.
+            known = read_file(os.path.join(CONF, "site.txt")).strip()
+            ask_once("Could not find the phone; still looking. Type the address it shows, or its website (%s) to "
+                     "sign in with the PIN from anywhere: " % (known or "yourname.dynv6.net"))
+            t = take_typed()
+            if t is None:
+                time.sleep(2)
+                continue
             # The phone's website: sign in with its PIN, and get the tunnel's keys that way.
             site = re.sub(r"^https?://|[:/].*$", "", t.lower())
             if re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", site) and re.search(r"[a-z]", site):

@@ -485,12 +485,18 @@ public static class BlazeItPc
                 Thread.Sleep(4000);
                 continue;
             }
-            if (firstTime)
+            // The question waits for an answer on its own thread: the search goes on meanwhile, and a
+            // phone that turns up (plugged in, switched on) is found without anyone pressing a key.
+            string typed = firstTime ? TakeTyped() : null;
+            if (firstTime && typed == null)
             {
                 string known = File.Exists(SiteFile) ? File.ReadAllText(SiteFile).Trim() : "";
-                Console.Write("Could not find the phone. Is Localhost 8787 started? Type the address it shows, or its website (" +
-                    (known.Length > 0 ? known : "yourname.dynv6.net") + ") to sign in with the PIN from anywhere (or press Enter to search again): ");
-                string typed = (Console.ReadLine() ?? "").Trim();
+                AskOnce("Could not find the phone; still looking. Type the address it shows, or its website (" +
+                    (known.Length > 0 ? known : "yourname.dynv6.net") + ") to sign in with the PIN from anywhere: ");
+                told = true;
+            }
+            if (typed != null)
+            {
                 // The phone's website: sign in with its PIN, and get the tunnel's keys that way.
                 string site = Regex.Replace(typed.ToLowerInvariant(), "^https?://|[:/].*$", "");
                 if (Regex.IsMatch(site, @"^[a-z0-9-]+(\.[a-z0-9-]+)+$") && Regex.IsMatch(site, "[a-z]"))
@@ -525,6 +531,49 @@ public static class BlazeItPc
             }
             Thread.Sleep(2000);
         }
+    }
+
+    // ------------------------------------------------------------------ typed answers
+
+    static Thread asking;
+    static string typedLine;
+    static readonly object typedLock = new object();
+
+    /** Asks once, and reads the answer on its own thread; the question is not asked again while it waits. */
+    static void AskOnce(string question)
+    {
+        lock (typedLock)
+        {
+            if (asking != null && asking.IsAlive) return;
+            Console.Write(question);
+            asking = new Thread(delegate ()
+            {
+                string line = Console.ReadLine();
+                lock (typedLock) { typedLine = (line ?? "").Trim(); Monitor.PulseAll(typedLock); }
+            });
+            asking.IsBackground = true;
+            asking.Start();
+        }
+    }
+
+    /** What was typed since the last look, or null. */
+    static string TakeTyped()
+    {
+        lock (typedLock) { string t = typedLine; typedLine = null; return t; }
+    }
+
+    /** A line from the console: the one the waiting question gets, if one is waiting. */
+    static string ReadLineShared()
+    {
+        lock (typedLock)
+        {
+            if (asking != null && asking.IsAlive)
+            {
+                while (typedLine == null) Monitor.Wait(typedLock);
+                string t = typedLine; typedLine = null; return t;
+            }
+        }
+        return (Console.ReadLine() ?? "").Trim();
     }
 
     // ------------------------------------------------------------------ pairing
@@ -698,7 +747,7 @@ public static class BlazeItPc
                     if (b.Contains("DENIED"))
                     {
                         Say("The phone said no. Press Enter to ask again.");
-                        Console.ReadLine();
+                        ReadLineShared();
                         break;
                     }
                     if (b.Contains("EXPIRED")) break;
