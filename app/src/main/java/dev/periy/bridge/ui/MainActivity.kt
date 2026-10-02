@@ -773,20 +773,25 @@ private fun RequestCard(req: PairRequest, vm: MainViewModel) {
     }
 }
 
-/** What the hero says in words: the state, and the address of the connection picked. */
+/**
+ * What the hero says in words: the state, and the address it shows: the phone's website when it
+ * is on (it works from anywhere), else the address of the connection picked. Never the mobile
+ * network's own 192.0.0.x, which nothing outside the phone can reach.
+ */
 private class HeroText(state: UiState, running: Boolean, val url: String?) {
-    val address = url?.removePrefix("http://")?.removeSuffix("/")
+    val address = url?.removePrefix("http://")?.removePrefix("https://")?.removeSuffix("/")
     val headline = when {
         !running -> "Localhost 8787 is off"
         state.storageMode == Storage.Mode.NO_DESTINATION -> "Choose a folder"
+        url == null && state.onlyCellular -> "On mobile data"
         url == null -> "No network"
         else -> "Open on your computer"
     }
     val note: String? = when {
         !running -> "Turn on to connect a computer or phone."
         state.storageMode == Storage.Mode.NO_DESTINATION -> "Set it in Settings, Receiving."
+        url == null && state.onlyCellular -> "Turn on Website in Settings to open it from any browser, or connect USB, Wi-Fi or the hotspot."
         url == null -> "Connect USB, Wi-Fi or the hotspot."
-        state.onlyCellular -> "Mobile data can't be reached. Use USB or the hotspot."
         else -> null
     }
     val showAddress = running && address != null
@@ -931,14 +936,18 @@ private fun Hero(
     val options = linkOptions(state, running, linkMode, direct, openTether, openWifi, toggleDirect)
     // The one picked while it is up, else the fastest that is.
     val chosen = options.firstOrNull { it.kind.name == picked && it.url != null } ?: options.firstOrNull { it.url != null }
-    val h = HeroText(state, running, chosen?.url ?: state.primaryUrl)
+    // The website, when it is up, is the address to give anyone: it works from anywhere.
+    val site by (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.site.state.collectAsStateWithLifecycle()
+    val siteUrl = if (site.on && site.serving && site.name.isNotEmpty()) "https://${site.name}:${dev.periy.bridge.net.Site.PORT}" else null
+    val localUrl = chosen?.url ?: state.primaryUrl?.takeUnless { state.onlyCellular }
+    val h = HeroText(state, running, siteUrl ?: localUrl)
     val copy = {
         if (h.url != null) {
             SystemClipboard.write(ctx, h.url)
             Toast.makeText(ctx, "Address copied", Toast.LENGTH_SHORT).show()
         }
     }
-    val kicker = if (!running) "OFF" else "LIVE" + (chosen?.let { " · " + HeroNames[it.kind].orEmpty() } ?: "")
+    val kicker = if (!running) "OFF" else "LIVE" + (if (siteUrl != null) " · WEBSITE" else chosen?.let { " · " + HeroNames[it.kind].orEmpty() } ?: "")
     // Why the laptop link is not up, when that is known.
     val linkNote = when {
         !running -> null
@@ -981,7 +990,7 @@ private fun Hero(
                 ) { LinkPicker(options, chosen, linkNote, pick) }
             }
         }
-        HeroExtras(state, running, h, showQr, openTether, Modifier.padding(horizontal = 20.dp))
+        HeroExtras(state, running, h, showQr, openTether, siteUrl, localUrl, Modifier.padding(horizontal = 20.dp))
     }
 }
 
@@ -1112,29 +1121,55 @@ private fun FitText(text: androidx.compose.ui.text.AnnotatedString, style: TextS
     }
 }
 
+/** One way in: what it is, the address (a tap copies it), and when it works. */
+@Composable
+private fun WayIn(label: String, value: String, note: String) {
+    val ctx = LocalContext.current
+    Row(
+        Modifier.fillMaxWidth().clickable(onClickLabel = "Copy") {
+            SystemClipboard.write(ctx, value)
+            Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
+        }.padding(vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(label, style = CaptionStyle.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text)
+                Spacer(Modifier.width(8.dp))
+                Text(note, style = CaptionStyle.copy(fontSize = 12.sp), color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(value, style = MonoStyle.copy(fontSize = 13.sp), color = Bridge.Text, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+        }
+        Icon(BlazeIcons.Copy, null, tint = Bridge.Faint, modifier = Modifier.size(16.dp))
+    }
+}
+
 /** The kicker's name for each connection. */
 private val HeroNames = mapOf(
     LinkKind.USB to "USB CABLE", LinkKind.WIFI to "WI-FI", LinkKind.HOTSPOT to "HOTSPOT", LinkKind.DIRECT to "DIRECT LINK",
 )
 
-/** Under the hero: what needs doing, the faster cable, and the QR code with the other addresses. */
+/**
+ * Under the hero: every way in, each a tap to copy (the website, the helper's localhost, the same
+ * network, the IPv6 the helpers' tunnel uses); then what needs doing, and the QR code.
+ */
 @Composable
-private fun HeroExtras(state: UiState, running: Boolean, h: HeroText, showQr: Boolean, openTether: () -> Unit, modifier: Modifier) {
+private fun HeroExtras(
+    state: UiState, running: Boolean, h: HeroText, showQr: Boolean, openTether: () -> Unit,
+    siteUrl: String?, localUrl: String?, modifier: Modifier,
+) {
     if (!running) return
-    Column(modifier.fillMaxWidth()) {
-        if (h.showAddress && state.onlyCellular) RowNote(h.note ?: "")
-        // Where paired devices find the phone from other networks (docs/tunnel-protocol.md). They
-        // learn it by themselves; a tap copies it for when it changed while they were away.
-        state.ipv6?.takeIf { state.remote }?.let { v6 ->
-            val ctx = LocalContext.current
-            Text(
-                "IPv6  $v6", style = MonoStyle.copy(fontSize = 12.sp), color = Bridge.Muted,
-                maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 10.dp).clickable(onClickLabel = "Copy the IPv6 address") {
-                    SystemClipboard.write(ctx, v6)
-                    Toast.makeText(ctx, "IPv6 address copied", Toast.LENGTH_SHORT).show()
-                },
-            )
+    Column(modifier.fillMaxWidth().padding(top = 6.dp)) {
+        if (siteUrl != null) WayIn("Any browser", siteUrl.removePrefix("https://"), "with the PIN, from anywhere with IPv6")
+        WayIn("With the helper", "localhost:8787", "the fastest way, by itself")
+        // Each link the phone is on, for a browser on the same one: the hotspot, Wi-Fi, the cable.
+        state.addresses.filter { !it.isIpv6 && !it.host.startsWith("192.0.0.") }.distinctBy { it.host }.forEach { a ->
+            WayIn(a.kind.label, a.url(state.port).removePrefix("http://").removeSuffix("/"), "a browser on the same " + when (a.kind) {
+                dev.periy.bridge.net.LinkKind.USB -> "cable"
+                dev.periy.bridge.net.LinkKind.HOTSPOT -> "hotspot"
+                dev.periy.bridge.net.LinkKind.DIRECT -> "direct link"
+                else -> "Wi-Fi"
+            })
         }
         // The cable is in, but it carries nothing until USB tethering is on; Android lets only
         // the phone's own settings switch that.
@@ -1159,18 +1194,9 @@ private fun HeroExtras(state: UiState, running: Boolean, h: HeroText, showQr: Bo
                     )
                 }
             }
-            state.addresses.drop(1).filter { it.kind != dev.periy.bridge.net.LinkKind.DIRECT }.forEach { a ->
-                Spacer(Modifier.height(10.dp))
-                Text(a.kind.label + "  " + a.url(state.port), style = MonoStyle.copy(fontSize = 13.sp), color = Bridge.Text)
-                Text(
-                    when (a.reach) {
-                        Reach.LAN_ONLY -> "same Wi-Fi or cable only"
-                        Reach.CARRIER_NAT -> "unreachable: carrier NAT"
-                        Reach.PUBLIC -> "public address"
-                    },
-                    style = BodyStyle.copy(fontSize = 12.sp), color = Bridge.Muted,
-                )
-            }
+            // Where the helpers' tunnel finds the phone from other networks (docs/tunnel-protocol.md);
+            // they learn it by themselves, so it lives here rather than on the page.
+            state.ipv6?.takeIf { state.remote }?.let { WayIn("IPv6", it, "the helpers' tunnel, from other networks") }
         }
     }
 }
