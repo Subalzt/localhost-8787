@@ -250,11 +250,27 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
     }
 
     /**
+     * While the hotspot or USB tethering is on, the phone's own address on that side. Sharing
+     * mobile data hands the laptops there addresses from mobile data's own /64, so they take the
+     * mobile-data address for a neighbour on the hotspot or cable, ask for it there, and nobody
+     * answers: the website times out. The phone's address on the tethering side is in the same
+     * /64, answers there, and is reached from the internet just the same (tested both ways). The
+     * hotspot first (it is how the phone is used most), then the cable.
+     */
+    private fun tetherV6(): String? = runCatching {
+        NetInfo.addresses()
+            .filter { it.isIpv6 && (it.kind == LinkKind.HOTSPOT || it.kind == LinkKind.USB) }
+            .filter { a -> runCatching { (java.net.InetAddress.getByName(a.host).address[0].toInt() and 0xe0) == 0x20 }.getOrDefault(false) }
+            .sortedBy { if (it.kind == LinkKind.HOTSPOT) 0 else 1 }
+            .firstOrNull()?.host
+    }.getOrNull()
+
+    /**
      * The address to give the name: mobile data's own IPv6 when there is one, even while Wi-Fi is
      * up (the carrier lets connections in; a home router usually does not), a stable one rather
      * than a temporary one; else whatever global IPv6 the phone has.
      */
-    private fun bestV6(): String? = runCatching {
+    private fun bestV6(): String? = tetherV6() ?: runCatching {
         val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java)
         @Suppress("DEPRECATION")
         val nets = cm.allNetworks.mapNotNull { n -> cm.getNetworkCapabilities(n)?.let { n to it } }
