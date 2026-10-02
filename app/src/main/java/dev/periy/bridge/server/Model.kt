@@ -168,6 +168,8 @@ data class RouteDto(
     val ip: String = "IPv4",
     /** Through the tunnel over a path punched through two NATs (IPv4, UDP), not straight to the phone's IPv6. */
     val punched: Boolean = false,
+    /** Through the website: where the browser is, hotspot, wifi, usb, tether (hotspot or cable) or internet. */
+    val over: String = "",
 )
 
 /** Whether the page came through the website (and so signs in with a PIN), and its name. */

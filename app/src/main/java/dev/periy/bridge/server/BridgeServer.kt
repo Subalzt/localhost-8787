@@ -269,6 +269,9 @@ class BridgeServer(
             val device = call.device()
             if (device != null) {
                 devices.touch(device.id, call.clientIp())
+                // How it came, for Home's "Connected now": looked at again after 5 s at most.
+                val last = Ways.last(device.id)
+                if (last == null || System.currentTimeMillis() - last.at > 5_000) runCatching { Ways.seen(device.id, call.way(device.id)) }
                 return@intercept
             }
             call.response.header("Tus-Resumable", TUS_VERSION)
@@ -459,7 +462,8 @@ class BridgeServer(
                 // send to each other directly (WebRTC) before going through the phone.
                 val stun = dev.periy.bridge.net.NetInfo.publicAddresses(ctx)
                     .map { if (':' in it) "[$it]:${dev.periy.bridge.net.StunServer.PORT}" else "$it:${dev.periy.bridge.net.StunServer.PORT}" }
-                call.respond(RouteDto(via = "website", host = site?.state?.value?.name.orEmpty(), stun = stun, ip = if (':' in who) "IPv6" else "IPv4"))
+                val over = localOver(who, dev.periy.bridge.net.NetInfo.addresses())
+                call.respond(RouteDto(via = "website", host = site?.state?.value?.name.orEmpty(), stun = stun, ip = if (':' in who) "IPv6" else "IPv4", over = over))
                 return@get
             }
             val all = dev.periy.bridge.net.NetInfo.addresses()
@@ -1087,6 +1091,62 @@ class BridgeServer(
         return dev.periy.bridge.net.NetInfo.addresses().any { a ->
             a.isIpv6 && a.kind != dev.periy.bridge.net.LinkKind.CELLULAR &&
                 runCatching { java.net.InetAddress.getByName(a.host).address.copyOf(8).contentEquals(prefix) }.getOrDefault(false)
+        }
+    }
+
+    /** How this request reached the phone: the link, what the website or tunnel ran over, IPv4 or IPv6. */
+    private fun ApplicationCall.way(deviceId: String?): Way {
+        val all = dev.periy.bridge.net.NetInfo.addresses()
+        if (viaSite()) {
+            val who = clientIp()
+            return Way("website", over = localOver(who, all), ip = if (':' in who) "IPv6" else "IPv4")
+        }
+        val here = request.local.localAddress.removePrefix("::ffff:").substringBefore('%')
+        if (here == dev.periy.bridge.net.TunnelProto.LOCAL_HOST) {
+            val far = deviceId?.let { id -> remote?.tunnel?.peers?.value?.firstOrNull { it.deviceId == id }?.remote }
+            val udp = far?.endsWith("(UDP)") == true
+            return Way("tunnel", over = if (udp) "udp" else "tcp", ip = if (udp || far == null || ':' !in far) "IPv4" else "IPv6")
+        }
+        // adb's port forward arrives from the phone's own loopback.
+        val from = remoteIp()
+        if (from == "127.0.0.1" || from == "::1") return Way("adb")
+        val via = when (all.firstOrNull { it.host == here }?.kind) {
+            dev.periy.bridge.net.LinkKind.USB -> "usb"
+            dev.periy.bridge.net.LinkKind.HOTSPOT -> "hotspot"
+            dev.periy.bridge.net.LinkKind.WIFI -> "wifi"
+            dev.periy.bridge.net.LinkKind.DIRECT -> "direct"
+            else -> "other"
+        }
+        return Way(via, ip = if (':' in here) "IPv6" else "IPv4")
+    }
+
+    /**
+     * Where a browser that came through the website is: on one of the phone's own links (its
+     * address in the same network: the same /64 for IPv6, the same /24 for IPv4), or out on the
+     * internet. The hotspot and USB tethering hand out addresses from mobile data's /64, so a
+     * browser there matches that one: the hotspot or the cable, whichever is on.
+     */
+    private fun localOver(client: String, all: List<dev.periy.bridge.net.Address>): String {
+        val c = runCatching { java.net.InetAddress.getByName(client).address }.getOrNull() ?: return "internet"
+        val n = if (c.size == 16) 8 else 3
+        val match = all.firstOrNull { a ->
+            runCatching { java.net.InetAddress.getByName(a.host).address }.getOrNull()?.let { it.size == c.size && it.copyOf(n).contentEquals(c.copyOf(n)) } == true
+        } ?: return "internet"
+        return when (match.kind) {
+            dev.periy.bridge.net.LinkKind.USB -> "usb"
+            dev.periy.bridge.net.LinkKind.HOTSPOT -> "hotspot"
+            dev.periy.bridge.net.LinkKind.WIFI -> "wifi"
+            dev.periy.bridge.net.LinkKind.DIRECT -> "hotspot"
+            else -> {
+                val hotspot = all.any { it.kind == dev.periy.bridge.net.LinkKind.HOTSPOT }
+                val usb = all.any { it.kind == dev.periy.bridge.net.LinkKind.USB }
+                when {
+                    hotspot && !usb -> "hotspot"
+                    usb && !hotspot -> "usb"
+                    hotspot -> "tether"
+                    else -> "internet"
+                }
+            }
         }
     }
 

@@ -1121,6 +1121,46 @@ private fun FitText(text: androidx.compose.ui.text.AnnotatedString, style: TextS
     }
 }
 
+/**
+ * Who is using the phone right now and how each came in: the cable, the hotspot, Wi-Fi, USB
+ * debugging, the tunnel or the website (on a local link or over the internet), IPv4 or IPv6.
+ * Anyone heard from in the last two minutes.
+ */
+@Composable
+private fun ConnectedNow() {
+    val c = (LocalContext.current.applicationContext as dev.periy.bridge.BridgeApp).container
+    val ways by dev.periy.bridge.server.Ways.now.collectAsStateWithLifecycle()
+    val devices by c.devices.devices.collectAsStateWithLifecycle()
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) { kotlinx.coroutines.delay(10_000); now = System.currentTimeMillis() }
+    }
+    val live = ways.entries.filter { now - it.value.at < 120_000 }
+        .mapNotNull { (id, w) -> devices.firstOrNull { it.id == id }?.let { it to w } }
+        .sortedByDescending { it.second.at }
+    if (live.isEmpty()) return
+    Text("Connected now", style = CaptionStyle.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text,
+        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
+    live.forEach { (d, w) ->
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(if (now - w.at < 30_000) Bridge.Good else Bridge.Faint))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                // The same machine can be here twice: its helper, and a browser on it.
+                val role = when {
+                    d.name.startsWith(dev.periy.bridge.server.HELPER_PREFIX) -> "helper"
+                    d.name.startsWith(dev.periy.bridge.server.PHONE_PREFIX) -> "phone"
+                    else -> "browser"
+                }
+                Text(dev.periy.bridge.server.shownName(d, devices) + " · " + role, style = CaptionStyle.copy(fontSize = 14.sp), color = Bridge.Text,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(w.words, style = CaptionStyle.copy(fontSize = 12.sp), color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+    Spacer(Modifier.height(6.dp))
+}
+
 /** One way in: what it is, the address (a tap copies it), and when it works. */
 @Composable
 private fun WayIn(label: String, value: String, note: String) {
@@ -1160,6 +1200,7 @@ private fun HeroExtras(
 ) {
     if (!running) return
     Column(modifier.fillMaxWidth().padding(top = 6.dp)) {
+        ConnectedNow()
         if (siteUrl != null) WayIn("Any browser", siteUrl.removePrefix("https://"), "with the PIN, from anywhere with IPv6")
         WayIn("With the helper", "localhost:8787", "the fastest way, by itself")
         // Each link the phone is on, for a browser on the same one: the hotspot, Wi-Fi, the cable.

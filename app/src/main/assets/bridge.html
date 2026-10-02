@@ -5399,7 +5399,7 @@ function renderRouteBadge(r) {
   el.lastChild.textContent = b.name + " · ";
   var em = document.createElement("em");
   em.textContent = usb2 ? "USB 2, about 40 MB/s" : r.via === "internet" ? (r.punched ? "IPv4, punched through" : "IPv6 tunnel")
-    : r.via === "website" ? "HTTPS, " + (r.ip || "IPv6")
+    : r.via === "website" ? ({ hotspot: "on its hotspot", wifi: "same Wi-Fi", usb: "over the cable", tether: "hotspot or cable" }[r.over] || "over the internet") + ", " + (r.ip || "IPv6")
     : usb ? b.speed : b.speed + ", USB is faster";
   el.appendChild(em);
 }
@@ -5424,7 +5424,11 @@ function renderLinkRow(r) {
     direct: "On the phone's own private network, " + at,
     internet: r.punched ? "Across the internet, punched through both networks over UDP"
       : "Across the internet, straight to the phone's IPv6 over TCP",
-    website: "Straight to the phone at " + r.host + ", over HTTPS with its own certificate",
+    website: ({ hotspot: "On the phone's hotspot, straight to it: no internet used",
+      wifi: "On the same Wi-Fi as the phone, straight to it: no internet used",
+      usb: "Over the cable, straight to the phone: no internet used",
+      tether: "On the phone's hotspot or cable, straight to it: no internet used" }[r.over]
+      || "Across the internet to the phone at " + r.host) + ", over HTTPS",
   }[r.via] || ("Over your network, " + at);
   $("link-icon").innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + (b ? b.icon : ROUTE_BADGES.wifi.icon) + "</svg>";
   $("link-name").textContent = r.via === "internet" ? "Through the tunnel" : r.via === "website" ? "Through the phone's website" : b ? b.name : "Connected";
