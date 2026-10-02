@@ -321,8 +321,12 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
     private fun wifiAddresses(): Pair<String?, String?> = runCatching {
         val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java)
         @Suppress("DEPRECATION")
-        val n = cm.allNetworks.firstOrNull { cm.getNetworkCapabilities(it)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true }
-            ?: return@runCatching null to null
+        // Android 15+ lists the phone's own hotspot as a Wi-Fi network too (no internet): use it
+        // only when the phone is not on a Wi-Fi itself, since the main name already covers it.
+        val n = cm.allNetworks.mapNotNull { n -> cm.getNetworkCapabilities(n)?.let { n to it } }
+            .filter { it.second.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) }
+            .sortedBy { if (it.second.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)) 0 else 1 }
+            .firstOrNull()?.first ?: return@runCatching null to null
         val addrs = cm.getLinkProperties(n)?.linkAddresses.orEmpty().sortedBy { it.flags and 0x01 }.map { it.address }
         val v6 = addrs.firstOrNull { it is java.net.Inet6Address && (it.address[0].toInt() and 0xe0) == 0x20 }?.hostAddress?.substringBefore('%')
         val v4 = addrs.firstOrNull { it is java.net.Inet4Address && it.isSiteLocalAddress }?.hostAddress
@@ -355,7 +359,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
             val (c2, t2) = http("POST", "$DYNV6/zones/$zone/records", body, mapOf("Authorization" to "Bearer ${conf.token}"))
             if (c2 !in 200..299) throw dynv6Error(c2, t2)
         }
-        say("Pointing lan.${conf.name} at the Wi-Fi: " + listOfNotNull(v6, v4).joinToString(", "))
+        say("Pointing lan.${conf.name} at the local network: " + listOfNotNull(v6, v4).joinToString(", "))
         save(conf.copy(lanPublished = key))
     }
 
