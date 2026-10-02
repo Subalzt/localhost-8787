@@ -6649,13 +6649,31 @@ function playCurrent() {
   player.prefetchTimer = setTimeout(prefetchAhead, 1500);
 }
 
+/** Over the internet (the website, a tunnel): a thin link that every byte of the song playing needs. */
+function slowLink() { return !!route && (route.via === "internet" || route.via === "website"); }
+
+/** The song playing has all arrived (from memory, or the stream read to its end). */
+function playingAllHere() {
+  var a = $("audio");
+  if (!a.src || a.src.indexOf("blob:") === 0) return true;
+  var d = a.duration, b = a.buffered;
+  return isFinite(d) && b.length > 0 && b.end(b.length - 1) >= d - 0.5;
+}
+
 async function prefetchAhead() {
+  // On a thin link the next songs would take bandwidth the playing one needs to keep up: wait
+  // until it has all arrived, then fetch only the very next one.
+  if (slowLink() && !playingAllHere()) {
+    clearTimeout(player.prefetchTimer);
+    player.prefetchTimer = setTimeout(prefetchAhead, 3000);
+    return;
+  }
   if (player.prefetchCtl) player.prefetchCtl.abort();
   var ctl = new AbortController();
   player.prefetchCtl = ctl;
 
   var wanted = [];
-  for (var k = 1; k <= PREFETCH_AHEAD; k++) { var t = trackAhead(k); if (t) wanted.push(t); }
+  for (var k = 1; k <= (slowLink() ? 1 : PREFETCH_AHEAD); k++) { var t = trackAhead(k); if (t) wanted.push(t); }
   var keep = {};
   var cur = currentTrack();
   if (cur) keep[cur.id] = true;
