@@ -15,8 +15,8 @@ android {
         // that the storage layer would need a second implementation.
         minSdk = 29
         targetSdk = 36
-        versionCode = 14
-        versionName = "2.0.1"
+        versionCode = 15
+        versionName = "2.0.2"
 
         // Default listen port.
         buildConfigField("int", "DEFAULT_PORT", "8787")
