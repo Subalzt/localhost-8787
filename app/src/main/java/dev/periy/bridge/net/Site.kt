@@ -357,6 +357,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
                 connect(InetSocketAddress("127.0.0.1", pagePort()), 5_000)
             }
             clients[page.localPort] = who
+            dests[page.localPort] = (s.localAddress?.hostAddress ?: "").substringBefore('%').removePrefix("::ffff:")
             val p = page
             val up = Thread({ copy(s, p) }, "site-up").apply { isDaemon = true; start() }
             copy(p, s)
@@ -364,7 +365,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         } catch (e: Exception) {
             // A bad handshake (a scanner, an old client) or the page going away: nothing to say.
         } finally {
-            page?.let { clients.remove(it.localPort); runCatching { it.close() } }
+            page?.let { clients.remove(it.localPort); dests.remove(it.localPort); runCatching { it.close() } }
             runCatching { s.close() }
             KeepAwake.end()
         }
@@ -392,6 +393,11 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
     private val clients = ConcurrentHashMap<Int, String>()
 
     fun clientFor(localPort: Int): String = clients[localPort] ?: "?"
+
+    /** Which of the phone's own addresses that browser connected to. */
+    private val dests = ConcurrentHashMap<Int, String>()
+
+    fun destFor(localPort: Int): String = dests[localPort] ?: ""
 
     // ------------------------------------------------------------------ helpers' sign-in codes
 

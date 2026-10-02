@@ -457,7 +457,7 @@ class BridgeServer(
                 // send to each other directly (WebRTC) before going through the phone.
                 val stun = dev.periy.bridge.net.NetInfo.publicAddresses(ctx)
                     .map { if (':' in it) "[$it]:${dev.periy.bridge.net.StunServer.PORT}" else "$it:${dev.periy.bridge.net.StunServer.PORT}" }
-                val over = localOver(who, dev.periy.bridge.net.NetInfo.addresses())
+                val over = localOver(who, dev.periy.bridge.net.NetInfo.addresses(), site?.destFor(call.request.origin.remotePort).orEmpty())
                 call.respond(RouteDto(via = "website", host = site?.state?.value?.name.orEmpty(), stun = stun, ip = if (':' in who) "IPv6" else "IPv4", over = over))
                 return@get
             }
@@ -1099,7 +1099,7 @@ class BridgeServer(
         val all = dev.periy.bridge.net.NetInfo.addresses()
         if (viaSite()) {
             val who = clientIp()
-            return Way("website", over = localOver(who, all), ip = if (':' in who) "IPv6" else "IPv4")
+            return Way("website", over = localOver(who, all, site?.destFor(request.origin.remotePort).orEmpty()), ip = if (':' in who) "IPv6" else "IPv4")
         }
         val here = request.local.localAddress.removePrefix("::ffff:").substringBefore('%')
         if (here == dev.periy.bridge.net.TunnelProto.LOCAL_HOST) {
@@ -1121,16 +1121,20 @@ class BridgeServer(
     }
 
     /**
-     * Where a browser that came through the website is: on one of the phone's own links (its
-     * address in the same network: the same /64 for IPv6, the same /24 for IPv4), or out on the
-     * internet. The hotspot and USB tethering hand out addresses from mobile data's /64, so a
-     * browser there matches that one: the hotspot or the cable, whichever is on.
+     * Where a browser that came through the website is, judged by the phone's address it
+     * connected to [dest]: in that address's own network (the same /64 for IPv6, the same /24 for
+     * IPv4), it is on that link and nothing crossed the internet; otherwise it came over the
+     * internet, even from a network the phone is also on (home Wi-Fi reaching the mobile-data
+     * address goes out and back in). The hotspot and USB tethering hand out addresses from mobile
+     * data's /64: a browser there is on the hotspot or the cable, whichever is on.
      */
-    private fun localOver(client: String, all: List<dev.periy.bridge.net.Address>): String {
+    private fun localOver(client: String, all: List<dev.periy.bridge.net.Address>, dest: String): String {
         val c = runCatching { java.net.InetAddress.getByName(client).address }.getOrNull() ?: return "internet"
+        val d = runCatching { java.net.InetAddress.getByName(dest).address }.getOrNull() ?: return "internet"
         val n = if (c.size == 16) 8 else 3
+        if (d.size != c.size || !d.copyOf(n).contentEquals(c.copyOf(n))) return "internet"
         val match = all.firstOrNull { a ->
-            runCatching { java.net.InetAddress.getByName(a.host).address }.getOrNull()?.let { it.size == c.size && it.copyOf(n).contentEquals(c.copyOf(n)) } == true
+            runCatching { java.net.InetAddress.getByName(a.host).address }.getOrNull()?.contentEquals(d) == true
         } ?: return "internet"
         return when (match.kind) {
             dev.periy.bridge.net.LinkKind.USB -> "usb"
