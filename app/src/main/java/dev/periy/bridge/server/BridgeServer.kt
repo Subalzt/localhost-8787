@@ -461,6 +461,11 @@ class BridgeServer(
                 call.respond(RouteDto(via = "website", host = site?.state?.value?.name.orEmpty(), stun = stun, ip = if (':' in who) "IPv6" else "IPv4", over = over))
                 return@get
             }
+            // Through the helper's adb forward (the cable, tethering off): from the phone's own loopback.
+            if (call.remoteIp().let { it == "127.0.0.1" || it == "::1" }) {
+                call.respond(RouteDto(via = "adb", host = "127.0.0.1"))
+                return@get
+            }
             val all = dev.periy.bridge.net.NetInfo.addresses()
             val (here, via) = call.arrivedOn(all)
             val usb = all.firstOrNull { it.kind == dev.periy.bridge.net.LinkKind.USB && !it.isIpv6 }

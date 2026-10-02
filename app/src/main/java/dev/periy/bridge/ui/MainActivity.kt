@@ -986,6 +986,10 @@ private fun Hero(
                 Spacer(Modifier.height(gap + 10.dp))
                 HeroBody(
                     h, kicker, running, onToggle, copy, showQr, { showQr = !showQr },
+                    // Under the website, the address on the link the phone is on now, for a browser there.
+                    localUrl?.takeIf { siteUrl != null }?.let { u ->
+                        u.removePrefix("http://").removeSuffix("/") + (chosen?.let { "  ·  " + it.name } ?: "")
+                    },
                     TextStyle(fontSize = 29.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.8).sp, fontFeatureSettings = "tnum", shadow = OnArt),
                 ) { LinkPicker(options, chosen, linkNote, pick) }
             }
@@ -1058,7 +1062,7 @@ private fun SendChoice(icon: ImageVector, label: String, primary: Boolean, modif
 @Composable
 private fun HeroBody(
     h: HeroText, kicker: String, running: Boolean, onToggle: () -> Unit, copy: () -> Unit,
-    showQr: Boolean, toggleQr: () -> Unit, big: TextStyle, picker: @Composable () -> Unit,
+    showQr: Boolean, toggleQr: () -> Unit, sub: String?, big: TextStyle, picker: @Composable () -> Unit,
 ) {
     if (h.showAddress) {
         val host = h.address!!.substringBeforeLast(':')
@@ -1071,6 +1075,17 @@ private fun HeroBody(
             big.copy(color = Color.White), max = 40.sp, min = 20.sp,
             Modifier.fillMaxWidth().clickable(onClickLabel = "Copy the address", onClick = copy),
         )
+        if (sub != null) {
+            val ctx = LocalContext.current
+            Text(
+                sub, style = MonoStyle.copy(fontSize = 15.sp, shadow = OnArt), color = Color.White.copy(alpha = 0.78f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp).clickable(onClickLabel = "Copy the address") {
+                    SystemClipboard.write(ctx, sub.substringBefore("  ·"))
+                    Toast.makeText(ctx, "Address copied", Toast.LENGTH_SHORT).show()
+                },
+            )
+        }
     } else {
         Text(h.headline, style = big, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
         h.note?.let { Text(it, style = BodyStyle.copy(fontSize = 14.sp, shadow = OnArt), color = Color.White.copy(alpha = 0.8f), maxLines = 3) }
@@ -1142,9 +1157,22 @@ private fun ConnectedNow() {
     Text("Connected now", style = CaptionStyle.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text,
         modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
     live.forEach { (d, w) ->
-        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (now - w.at < 30_000) Bridge.Good else Bridge.Faint))
-            Spacer(Modifier.width(10.dp))
+        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            val icon = when (w.via) {
+                "usb", "adb" -> BlazeIcons.Usb
+                "hotspot" -> BlazeIcons.Hotspot
+                "wifi" -> BlazeIcons.Wifi
+                "direct" -> BlazeIcons.Bolt
+                "website" -> BlazeIcons.Lock
+                else -> BlazeIcons.Link
+            }
+            Box {
+                Icon(icon, null, tint = Bridge.Text, modifier = Modifier.size(20.dp))
+                // Green while it is talking to the phone, grey once it has gone quiet.
+                Box(Modifier.align(Alignment.BottomEnd).size(8.dp).clip(CircleShape).background(Bridge.Bg).padding(1.5.dp)
+                    .clip(CircleShape).background(if (now - w.at < 30_000) Bridge.Good else Bridge.Faint))
+            }
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 // The same machine can be here twice: its helper, and a browser on it.
                 val role = when {
@@ -1154,7 +1182,8 @@ private fun ConnectedNow() {
                 }
                 Text(dev.periy.bridge.server.shownName(d, devices) + " · " + role, style = CaptionStyle.copy(fontSize = 14.sp), color = Bridge.Text,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(w.words, style = CaptionStyle.copy(fontSize = 12.sp), color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(w.name, style = CaptionStyle.copy(fontSize = 13.sp), color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(w.detail, style = CaptionStyle.copy(fontSize = 12.sp), color = Bridge.Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -1201,8 +1230,8 @@ private fun HeroExtras(
     if (!running) return
     Column(modifier.fillMaxWidth().padding(top = 6.dp)) {
         ConnectedNow()
-        if (siteUrl != null) WayIn("Any browser", siteUrl.removePrefix("https://"), "from anywhere with IPv6; you allow it here")
-        WayIn("With the helper", "localhost:8787", "the fastest way, by itself")
+        if (siteUrl != null) WayIn("Any browser", siteUrl.removePrefix("https://"), "anywhere with IPv6")
+        WayIn("With the helper", "localhost:8787", "the fastest way")
         // Each link the phone is on, for a browser on the same one: the hotspot, Wi-Fi, the cable.
         state.addresses.filter { !it.isIpv6 && !it.host.startsWith("192.0.0.") }.distinctBy { it.host }.forEach { a ->
             WayIn(a.kind.label, a.url(state.port).removePrefix("http://").removeSuffix("/"), "a browser on the same " + when (a.kind) {

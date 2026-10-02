@@ -5357,7 +5357,7 @@ var viaHelper = location.hostname === "localhost" || location.hostname === "127.
 // helper the page only sees localhost, so it asks the phone; that is also how it notices a
 // USB cable sitting unused (an old helper that never learned about cables, say).
 var route = null, usbMissed = 0;
-var ROUTE_NAMES = { usb: "Over the USB cable", direct: "On the direct link", hotspot: "On the phone's hotspot", wifi: "Over your Wi-Fi", internet: "Over the internet", website: "Through the phone's website" };
+var ROUTE_NAMES = { usb: "Over the USB cable", adb: "Over the cable, USB debugging", direct: "On the direct link", hotspot: "On the phone's hotspot", wifi: "Over your Wi-Fi", internet: "Over the internet", website: "Through the phone's website" };
 
 async function refreshRoute() {
   try {
@@ -5377,6 +5377,7 @@ var ROUTE_BADGES = {
   hotspot: { name: "Phone's hotspot", speed: "about 65 MB/s", icon: '<path d="M8.2 11.6a5.4 5.4 0 0 1 7.6 0"/><path d="M5.2 8.6a9.6 9.6 0 0 1 13.6 0"/><path d="M12 13.5v7"/>' },
   wifi: { name: "Wi-Fi", speed: "router speed", icon: '<path d="M8.3 14.6a5.2 5.2 0 0 1 7.4 0"/><path d="M5.2 11.5a9.6 9.6 0 0 1 13.6 0"/><path d="M2.3 8.4a13.8 13.8 0 0 1 19.4 0"/><path d="M12 18.5h.01"/>' },
   internet: { name: "Internet", speed: "through the tunnel", icon: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18Z"/>' },
+  adb: { name: "USB debugging", speed: "about 30 MB/s; USB tethering is faster", icon: '<path d="M9.5 2.5h5v4h-5Z"/><path d="M7.5 6.5h9v6a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2Z"/><path d="M12 14.5v7"/>' },
   website: { name: "Website", speed: "HTTPS", icon: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/>' },
 };
 
@@ -5390,7 +5391,7 @@ function renderRouteBadge(r) {
   el.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + b.icon + "</svg><span></span>";
   el.lastChild.textContent = b.name + " · ";
   var em = document.createElement("em");
-  em.textContent = usb2 ? "USB 2, about 40 MB/s" : r.via === "internet" ? (r.punched ? "IPv4, punched through" : "IPv6 tunnel")
+  em.textContent = usb2 ? "USB 2, about 40 MB/s" : r.via === "adb" ? b.speed : r.via === "internet" ? (r.punched ? "IPv4, punched through" : "IPv6 tunnel")
     : r.via === "website" ? ({ hotspot: "on its hotspot", wifi: "same Wi-Fi", usb: "over the cable", tether: "hotspot or cable" }[r.over] || "over the internet") + ", " + (r.ip || "IPv6")
     : usb ? b.speed : b.speed + ", USB is faster";
   el.appendChild(em);
@@ -5411,6 +5412,7 @@ function renderLinkRow(r) {
   var at = "phone at " + r.host;
   var detail = {
     usb: "Over the cable, " + at + (r.usbMbps > 0 && r.usbMbps < 600 ? " (a USB 2 cable, about 40 MB/s)" : ""),
+    adb: "Over the cable through USB debugging, with USB tethering off. Turn tethering on in the phone for several times the speed",
     hotspot: "This laptop is on the phone's hotspot, " + at,
     wifi: "Both on the same Wi-Fi, " + at,
     direct: "On the phone's own private network, " + at,
