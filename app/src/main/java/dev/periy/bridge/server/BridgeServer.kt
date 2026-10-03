@@ -687,6 +687,29 @@ class BridgeServer(
             call.respond(ApiResult(true))
         }
         // A copy on a linked phone. Taken only when newer than what is here (see PeerManager.takeClip).
+        // A message from a linked phone, sealed with the key this phone made for it (server/Messages.kt).
+        post("/api/peers/msg") {
+            val me = call.device() ?: return@post
+            val from = peers.byDevice(me.id)?.name
+            val w = runCatching { call.receive<MsgWire>() }.getOrNull()
+            if (from == null || w == null || w.c.length > 64_000) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad message"))
+                return@post
+            }
+            if ((ctx.applicationContext as dev.periy.bridge.BridgeApp).container.messages.receive(from, me.id, w)) call.respond(ApiResult(true))
+            else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That message does not open here"))
+        }
+        post("/api/peers/msg/read") {
+            val me = call.device() ?: return@post
+            val from = peers.byDevice(me.id)?.name
+            val r = runCatching { call.receive<MsgRead>() }.getOrNull()
+            if (from == null || r == null) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad receipt"))
+                return@post
+            }
+            (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.messages.readBy(from, r.upTo)
+            call.respond(ApiResult(true))
+        }
         post("/api/peers/clip") {
             val me = call.device() ?: return@post
             val c = runCatching { call.receive<PeerClip>() }.getOrNull()

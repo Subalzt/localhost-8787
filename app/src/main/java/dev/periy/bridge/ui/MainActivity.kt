@@ -126,6 +126,11 @@ import dev.periy.bridge.service.formatRate
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        /** A message notification was tapped: the conversation with this phone opens. */
+        const val EXTRA_CHAT = "chat"
+    }
+
     private val vm: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -172,6 +177,8 @@ class MainActivity : ComponentActivity() {
         if (intent == null) return
         // Tapping the music notification opens the player.
         if (intent.action == dev.periy.bridge.music.MusicService.ACTION_OPEN_PLAYER) { openPlayer.value = true; intent.action = null; return }
+        // Tapping a message opens its conversation.
+        intent.getStringExtra(EXTRA_CHAT)?.let { openChat.value = it; intent.removeExtra(EXTRA_CHAT) }
         // Debug builds: `adb shell am start ... --ez serve true` starts the server for testing.
         if (dev.periy.bridge.BuildConfig.DEBUG && intent.getBooleanExtra("serve", false)) BridgeService.start(this)
         // Debug builds: `--es style theatre` and `--es accent blue` switch the look, for screenshots.
@@ -197,6 +204,16 @@ class MainActivity : ComponentActivity() {
             }
             if (intent.getBooleanExtra("approvepairs", false)) c.pairing.pending.value.forEach { c.pairing.approve(it.id) }
             intent.getStringExtra("peerbrowse")?.let { debugBrowse.value = it }
+            // Messages and link codes without touching the screen: `--es msgto <name> --es msg <text>`
+            // sends, `--ez linkcode true` opens a code (logged), `--es linkwith <code>` links with one.
+            intent.getStringExtra("msgto")?.let { to -> c.messages.send(to, intent.getStringExtra("msg").orEmpty()) }
+            if (intent.getBooleanExtra("linkcode", false)) android.util.Log.i("LinkCode", "Open: " + c.openLinkCode())
+            intent.getStringExtra("linkwith")?.let { c.peers.linkByCode(it) }
+            // `--es forgetpeer <name>` unlinks just that phone (and a test link to itself, its own way in).
+            intent.getStringExtra("forgetpeer")?.let { n ->
+                c.peers.find(n)?.let(c.peers::forget)
+                if (n == c.deviceName()) c.devices.devices.value.filter { it.name == "Phone: $n" }.forEach { c.devices.remove(it.id) }
+            }
             if (intent.getBooleanExtra("forgetpeers", false)) {
                 c.peers.forgetAll()
                 // A test link to itself leaves its own way in behind; other phones' are left alone.
@@ -229,12 +246,13 @@ class MainActivity : ComponentActivity() {
 /** The tabs along the bottom. Music is not a page beside the others: it opens full screen (MusicScreen.kt). */
 private val TABS = listOf(
     "Home" to BlazeIcons.Home,
+    "Messages" to BlazeIcons.Message,
     "Devices" to BlazeIcons.Phones,
     "Music" to BlazeIcons.Music,
     "Control" to BlazeIcons.Trackpad,
     "Settings" to BlazeIcons.Sliders,
 )
-private const val PILL_MUSIC = 2
+private const val PILL_MUSIC = 3
 
 /** The pages a swipe moves between: every tab but Music. */
 private val PAGES = TABS.filterIndexed { i, _ -> i != PILL_MUSIC }
@@ -248,10 +266,14 @@ private val debugTab = kotlinx.coroutines.flow.MutableStateFlow(-1)
 /** The music notification was tapped: the player opens. */
 private val openPlayer = kotlinx.coroutines.flow.MutableStateFlow(false)
 
+/** A message notification was tapped: that phone's conversation opens. */
+private val openChat = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
 /** Debug builds: a linked phone whose files to open (`--es peerbrowse <name>`). */
 private val debugBrowse = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
-private const val TAB_DEVICES = 1
-private const val TAB_CONTROL = 2
+private const val TAB_MESSAGES = 1
+private const val TAB_DEVICES = 2
+private const val TAB_CONTROL = 3
 
 /** The header at the top of every screen: its large title and the monitor switch, over the content. */
 private val HeaderHeight = 60.dp
@@ -318,6 +340,9 @@ private fun BlazeItUi(vm: MainViewModel) {
     var sendTarget by remember { mutableStateOf<Peer?>(null) }
     // A linked phone whose files are open, over everything else.
     var browsePeer by remember { mutableStateOf<Peer?>(null) }
+    // The conversation open over the app, by the linked phone's name.
+    var chatWith by remember { mutableStateOf<String?>(null) }
+    val threads by ctx.container.messages.threads.collectAsStateWithLifecycle()
     var showMonitor by remember { mutableStateOf(ctx.container.prefs.showMonitor) }
     val setMonitor = { on: Boolean -> showMonitor = on; ctx.container.prefs.showMonitor = on }
 
@@ -331,7 +356,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     // lyrics do the same in their own screens.)
     val oemSwipe = rememberBackSwipe(enabled = showOem) { showOem = false }
     // A tab goes back to Home: the pages slide towards it with the swipe, a little under half way.
-    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && tab != TAB_HOME && !shelf.showing) { events ->
+    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && chatWith == null && tab != TAB_HOME && !shelf.showing) { events ->
         val from = pager.currentPage
         val toward = if (from > TAB_HOME) -1 else 1
         try {
@@ -343,17 +368,18 @@ private fun BlazeItUi(vm: MainViewModel) {
     }
     // At Home, from Android 12 on the system takes back itself (and, from 14, shows it coming):
     // the app goes to the background, as it does below 12 here.
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
         (ctx as? android.app.Activity)?.moveTaskToBack(true)
     }
     // Music, open: a search closes, then an album (in Music's own screen), then Music itself, back
     // to the app, following the finger. The player, open over it, goes back down a step first.
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && shelf.showing) { shelf.back() }
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && shelf.showing) { shelf.back() }
     val musicSwipe = rememberBackSwipe(
-        enabled = !showOem && browsePeer == null && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
+        enabled = !showOem && browsePeer == null && chatWith == null && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
     ) { shelf.showing = false }
     // A linked phone's files, at their top folder (a folder inside goes up a folder first, in its screen).
     val peerSwipe = rememberBackSwipe(enabled = browsePeer != null) { browsePeer = null }
+    val chatSwipe = rememberBackSwipe(enabled = chatWith != null) { chatWith = null }
     // The player: down to the mini player (or from the queue back to the player) with the finger.
     androidx.activity.compose.PredictiveBackHandler(enabled = now.current != null && playerOpen) { events ->
         val from = motion.p
@@ -408,6 +434,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     LaunchedEffect(Unit) { debugTab.collect { if (it >= 0) { onPill(it); debugTab.value = -1 } } }
     LaunchedEffect(Unit) { debugBrowse.collect { n -> if (n != null) { browsePeer = peers.find(n); debugBrowse.value = null } } }
     LaunchedEffect(Unit) { openPlayer.collect { if (it) { showOem = false; browsePeer = null; motion.expand(); openPlayer.value = false } } }
+    LaunchedEffect(Unit) { openChat.collect { n -> if (n != null) { showOem = false; browsePeer = null; shelf.showing = false; goTo(TAB_MESSAGES); chatWith = n; openChat.value = null } } }
     // The library loads once it can be read (the queue from last time comes back with it), and
     // covers the catalogue finds later are drawn when they arrive.
     LoadMusicOnce(shelf, ctx.container.music, open = shelf.showing, granted = state.musicGranted) { player.restore(it) }
@@ -480,7 +507,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     val contentTop = if (!heroUnderBar) headerTop else 0.dp
 
     Box(Modifier.fillMaxSize().background(Bridge.Bg)) {
-        Box(Modifier.fillMaxSize().then(if (shelf.showing) SharedAxisBack.under(musicSwipe) else Modifier).then(if (browsePeer != null) SharedAxisBack.under(peerSwipe) else Modifier)) {
+        Box(Modifier.fillMaxSize().then(if (shelf.showing) SharedAxisBack.under(musicSwipe) else Modifier).then(if (browsePeer != null) SharedAxisBack.under(peerSwipe) else Modifier).then(if (chatWith != null) SharedAxisBack.under(chatSwipe) else Modifier)) {
             StyleBackground()
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).imePadding()) {
@@ -521,6 +548,11 @@ private fun BlazeItUi(vm: MainViewModel) {
                                     pickSendFolder = { pickSendFolder.launch(null) },
                                     openTether = openHotspot,
                                     onToggle = toggleServer,
+                                )
+                                TAB_MESSAGES -> messagesTab(
+                                    paired, threads,
+                                    open = { chatWith = it },
+                                    toDevices = { goTo(TAB_DEVICES) },
                                 )
                                 TAB_DEVICES -> devicesTab(
                                     running, transfers, nearby, paired, peerStatus, routes, devices, live, vm,
@@ -620,6 +652,16 @@ private fun BlazeItUi(vm: MainViewModel) {
             // Kept while it slides out, after browsePeer has gone.
             val shownPeer = remember { browsePeer }
             (browsePeer ?: shownPeer)?.let { Box(SharedAxisBack.over(peerSwipe)) { PeerFilesScreen(it) { browsePeer = null } } }
+        }
+
+        // A conversation slides in over the app, as a linked phone's files do.
+        androidx.compose.animation.AnimatedVisibility(
+            chatWith != null,
+            enter = androidx.compose.animation.slideInHorizontally(tween(300)) { it } + androidx.compose.animation.fadeIn(tween(200)),
+            exit = androidx.compose.animation.slideOutHorizontally(tween(260)) { it } + androidx.compose.animation.fadeOut(tween(200)),
+        ) {
+            val shownChat = remember { chatWith }
+            (chatWith ?: shownChat)?.let { Box(SharedAxisBack.over(chatSwipe)) { ChatScreen(it) { chatWith = null } } }
         }
 
         if (showMonitor) MonitorOverlay(monitor, running) { setMonitor(false) }

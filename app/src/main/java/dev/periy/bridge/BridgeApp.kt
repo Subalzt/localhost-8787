@@ -85,6 +85,9 @@ class Container(ctx: Context) {
         storage = storage, index = index, clipboard = clipboard, clipSync = { prefs.clipSync },
     )
 
+    /** Messages with linked phones, each phone the other's server (server/Messages.kt). */
+    val messages by lazy { dev.periy.bridge.server.Messages(app, peers) { tunnelKeys.psk(it) } }
+
     /** The phone as a website, NAME.dedyn.io:8443 with a PIN (docs/website.md). */
     val site = dev.periy.bridge.net.Site(app) { prefs.port }
 

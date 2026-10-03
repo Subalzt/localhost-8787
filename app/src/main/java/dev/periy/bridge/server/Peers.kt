@@ -847,6 +847,25 @@ class PeerManager(
     private val localAt = ConcurrentHashMap<String, Long>()
     private val tunnelAt = ConcurrentHashMap<String, Long>()
 
+    // ------------------------------------------------------------------ messages
+
+    /**
+     * The key this phone seals messages to [peer] with: the tunnel key that phone made for this
+     * one (asked for first when it is not known yet). Null when it cannot be had.
+     */
+    fun messageKey(peer: Peer): ByteArray? {
+        if (peer.tunnel.isEmpty()) { tunnelAt.remove(peer.name); fetchTunnel(peer) }
+        val t = find(peer.name)?.tunnel?.takeIf { it.isNotEmpty() } ?: return null
+        return runCatching {
+            json.parseToJsonElement(t).jsonObject["key"]?.jsonPrimitive?.content?.let { Base64.getDecoder().decode(it) }
+        }.getOrNull()
+    }
+
+    /** Posts [body] to [path] on [peer], whichever way it can be reached now; true when it took it. */
+    fun deliver(peer: Peer, path: String, body: ByteArray): Boolean = runCatching {
+        request("POST", peer.asTarget(), path, peer.cookie, body, "application/json").code in 200..299
+    }.getOrDefault(false)
+
     /** Keeps the other phone's tunnel details for this one, at most every ten minutes. */
     private fun fetchTunnel(peer: Peer) {
         val now = System.currentTimeMillis()
