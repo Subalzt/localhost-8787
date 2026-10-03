@@ -157,7 +157,7 @@ internal fun WaveSeek(
     val raw = remember(env, count) { Loudness.bars(env, count, average = true) }
     val bars = remember(raw) { spreadBars(raw) }
     // For the shape: the bars evened out over their neighbours, so its outline is smooth.
-    val smooth = remember(bars) { smoothBars(bars, 3) }
+    val smooth = remember(bars) { smoothBars(smoothBars(bars, 4), 4) }
     val scrub = remember { mutableStateOf<Long?>(null) }
     val shape = animateFloatAsState(
         if (state.playing && scrub.value == null) 1f else 0f, tween(320, easing = FastOutSlowInEasing), label = "shape",
@@ -264,16 +264,20 @@ internal fun WaveSeek(
                         val j = (i + 1).coerceAtMost(n - 1)
                         return smooth[i] + (smooth[j] - smooth[i]) * (fi - i)
                     }
-                    val p = 3.dp.toPx()
-                    val reach = 16.dp.toPx()
+                    val p = 4.dp.toPx()
+                    val reach = 14.dp.toPx()
                     val xs = ArrayList<Float>()
                     val hs = ArrayList<Float>()
                     var px = 0f
                     while (true) {
                         val last = px >= playedX
                         if (last) px = playedX
-                        val w = k * (1f - (playedX - px) / reach).coerceAtLeast(0f).pow(2)
-                        val v = at(px) * (1f - w) + edge[0] * w
+                        // Near the front the outline leans a little towards how loud the song
+                        // is now: enough to move with it, never a spike.
+                        val e = (1f - (playedX - px) / reach).coerceAtLeast(0f)
+                        val w = k * e * e * (3f - 2f * e)
+                        val base = at(px)
+                        val v = (base + w * 0.3f * (edge[0] - base)).coerceIn(0f, 1f)
                         xs.add(px); hs.add((minH + (size.height - minH) * v * grow) / 2)
                         if (last) break
                         px += p

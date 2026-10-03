@@ -8196,13 +8196,13 @@ function npDrawWave() {
 }
 
 /**
- * What has played as one filled shape: the bars evened out over their neighbours, joined by a
+ * What has played as one filled shape: the bars evened out twice over their neighbours, joined by a
  * smooth line and mirrored below. Its points sit at fixed places, so the history holds still;
  * only the front edge moves, towards how loud the song is now (eased, in np.edge).
  */
 function npDrawShape(x, bars, n, step, bw, minH, h, cy, grow, played, live, style) {
-  if (np.smoothFor !== bars) { np.smooth = npSmooth(bars, 3); np.smoothFor = bars; }
-  var sm = np.smooth, P = 4, EDGE = 44, pts = [];
+  if (np.smoothFor !== bars) { np.smooth = npSmooth(npSmooth(bars, 4), 4); np.smoothFor = bars; }
+  var sm = np.smooth, P = 6, EDGE = 40, pts = [];
   function at(px) {
     var f = npClamp((px - bw / 2) / Math.max(0.001, step), 0, n - 1), i = Math.floor(f), j = Math.min(i + 1, n - 1);
     return sm[i] + (sm[j] - sm[i]) * (f - i);
@@ -8210,7 +8210,10 @@ function npDrawShape(x, bars, n, step, bw, minH, h, cy, grow, played, live, styl
   for (var px = 0; ; px += P) {
     var last = px >= played;
     if (last) px = played;
-    var k = live * Math.pow(Math.max(0, 1 - (played - px) / EDGE), 2), v = at(px) * (1 - k) + np.edge * k;
+    // Near the front the outline leans a little towards how loud the song is now: enough to move
+    // with it, never a spike.
+    var e = Math.max(0, 1 - (played - px) / EDGE), k = live * e * e * (3 - 2 * e), v = at(px);
+    v = npClamp(v + k * 0.3 * (np.edge - v), 0, 1);
     pts.push([px, (minH + (h - minH) * v * grow) / 2]);
     if (last) break;
   }
