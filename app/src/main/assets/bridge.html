@@ -5494,7 +5494,74 @@ function fmtTime(sec) {
   var m = Math.floor(sec / 60), s = Math.floor(sec % 60);
   return m + ":" + (s < 10 ? "0" : "") + s;
 }
-function streamUrl(id) { return "/api/music/stream/" + id; }
+/** The song's stream: over the internet, the smaller copy the phone said it would send (see planFor). */
+function streamUrl(id) {
+  var i = typeof np !== "undefined" && np.info ? np.info[id] : null;
+  return "/api/music/stream/" + id + (slowLink() && i && i.smaller ? "?q=" + i.smaller : "");
+}
+
+// ---- over the internet: how fast the link is, and what the phone sends over it. As music apps
+// step down on a slow connection: the song's own file when it fits, CD-quality FLAC (16-bit,
+// still lossless at that depth) when that does, else AAC at 256 kbps. On the phone's own links
+// nothing changes.
+
+var link = { kbps: 0, at: 0, busy: null };
+
+function linkFresh() { return link.kbps > 0 && Date.now() - link.at < 300000; }
+
+/** A download of [bytes] that took [ms]: how fast the link is, blended with what was known. */
+function linkHeard(bytes, ms) {
+  if (bytes < 65536 || ms <= 0) return;
+  var k = Math.round(bytes * 8 / ms);
+  link.kbps = link.kbps ? Math.round((link.kbps + k) / 2) : k;
+  link.at = Date.now();
+}
+
+/** A quarter of a megabyte from the phone, timed from its first byte (so the round trip is left out). */
+function measureLink() {
+  if (link.busy) return link.busy;
+  link.busy = (async function () {
+    try {
+      var r = await fetch("/api/bench/download?bytes=262144", { credentials: "same-origin", cache: "no-store" });
+      var reader = r.body.getReader(), got = 0, t0 = 0;
+      for (;;) {
+        var c = await reader.read();
+        if (c.done) break;
+        if (!t0) t0 = performance.now(); else got += c.value.byteLength;
+      }
+      linkHeard(got, performance.now() - t0);
+    } catch (e) {} finally { link.busy = null; }
+  })();
+  return link.busy;
+}
+
+/**
+ * Over the internet, the next song's smaller copy is made on the phone while this one plays (it
+ * takes the phone some seconds and costs the link nothing), so it starts at once when its turn comes.
+ */
+async function warmNext() {
+  var n = trackAhead(1);
+  if (!n || !slowLink()) return;
+  await planFor(n.id);
+  var i = np.info[n.id];
+  if (i && i.smaller) api("/api/music/prepare/" + n.id + "?q=" + i.smaller, { method: "POST" }).catch(function () {});
+}
+
+/** Over the internet: asks the phone what it will send for this song over a link this fast. */
+async function planFor(id) {
+  if (!slowLink()) return;
+  if (!linkFresh()) await measureLink();
+  if (!link.kbps) return;
+  var i = np.info[id];
+  if (i && i.linkKbps === link.kbps) return;
+  try {
+    var r = await api("/api/music/info/" + id + "?link=" + link.kbps);
+    if (!r.ok) return;
+    var j = await r.json();
+    j.linkKbps = link.kbps;
+    np.info[id] = j;
+  } catch (e) {}
+}
 function artUrl(albumId) { return "/api/music/art/" + albumId; }
 function formatBadge(mime) {
   mime = (mime || "").toLowerCase();
@@ -6631,6 +6698,15 @@ function playCurrent() {
   var t = currentTrack();
   if (!t) return;
   vizEnsure();
+  // Over the internet, first what the phone will send for it (a moment, the first time).
+  if (slowLink() && !player.blobs[t.id] && !playCurrent.planned) {
+    planFor(t.id).then(function () {
+      if (currentTrack() !== t) return;
+      playCurrent.planned = true;
+      try { playCurrent(); } finally { playCurrent.planned = false; }
+    });
+    return;
+  }
   var audio = $("audio");
   // From memory if it was prefetched; otherwise stream it with ranges.
   audio.src = player.blobs[t.id] || streamUrl(t.id);
@@ -6642,6 +6718,7 @@ function playCurrent() {
   // never competes with the first seconds of what you are actually listening to.
   clearTimeout(player.prefetchTimer);
   player.prefetchTimer = setTimeout(prefetchAhead, 1500);
+  if (slowLink()) setTimeout(warmNext, 3000);
 }
 
 /** Over the internet (the website, a tunnel): a thin link that every byte of the song playing needs. */
@@ -6688,21 +6765,26 @@ async function prefetchAhead() {
     if (player.blobs[tr.id] || tr.size > PREFETCH_MAX_BYTES) continue;
     try {
       // Read as it comes, so the queue can show how far along it is.
+      if (slowLink()) await planFor(tr.id);
+      if (ctl.signal.aborted) return;
       player.loading = { id: tr.id, got: 0, of: tr.size || 0 };
       npReadyMarks();
       var r = await fetch(streamUrl(tr.id), { credentials: "same-origin", signal: ctl.signal });
       if (!r.ok) continue;
-      var parts = [], reader = r.body && r.body.getReader(), shown = 0;
+      var parts = [], reader = r.body && r.body.getReader(), shown = 0, t0 = 0, timed = 0;
       if (reader) {
         for (;;) {
           var c = await reader.read();
           if (c.done) break;
+          // Timed from the first byte: a real song is the best measure of the link there is.
+          if (!t0) t0 = performance.now(); else timed += c.value.byteLength;
           parts.push(c.value);
           player.loading.got += c.value.byteLength;
           if (player.loading.got - shown > 1 << 20) { shown = player.loading.got; npReadyMarks(); }
         }
       } else parts.push(await r.arrayBuffer());
       if (ctl.signal.aborted) return;
+      if (slowLink() && t0) linkHeard(timed, performance.now() - t0);
       var blob = new Blob(parts, { type: r.headers.get("Content-Type") || tr.mime || "audio/flac" });
       player.blobs[tr.id] = URL.createObjectURL(blob);
       player.blobBytes[tr.id] = blob.size;
@@ -8204,11 +8286,15 @@ function npFileDetails(info) {
  * (from its file), what the phone measured fills in the rest; [rate] false leaves the bitrate out.
  */
 function mxFormat(t, info, rate) {
-  var out = [formatBadge(t && t.mime) || (info && info.format) || ""];
+  // A smaller copy sent over the internet is named for what it is, and says why; the album's
+  // line (no bitrate) keeps to the files themselves.
+  if (info && info.smaller && rate === false) info = null;
+  var out =[(info && info.smaller ? info.format : formatBadge(t && t.mime)) || (info && info.format) || ""];
   if (info) {
     if (info.bits > 0) out.push(info.bits + "-bit");
     if (info.sampleRate > 0) out.push((info.sampleRate % 1000 === 0 ? info.sampleRate / 1000 : (info.sampleRate / 1000).toFixed(1)) + " kHz");
     if (rate !== false && info.kbps > 0) out.push(info.kbps + " kbps");
+    if (rate !== false && info.smaller) out.push("for the internet");
   }
   return out.filter(Boolean).join(" · ");
 }
@@ -8241,10 +8327,16 @@ function npSpeedText(v) { return (Math.round(v * 100) / 100).toString() + "\u00d
 
 /** What the song's file is, asked of the phone once a song (for the chip). */
 function npInfo(id) {
+  // Over the internet: what is actually sent, which may be a smaller copy.
+  if (slowLink() && !(np.info[id] && np.info[id].linkKbps)) {
+    planFor(id).then(function () { var t = npTrack(); if (t && t.id === id) npText(); mxAlbumMeta(); });
+    return;
+  }
   if (np.info[id] !== undefined) return;
   np.info[id] = null;
   api("/api/music/info/" + id).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
     if (!j) { delete np.info[id]; return; }
+    if (np.info[id] && np.info[id].linkKbps) return;
     np.info[id] = j;
     var t = npTrack();
     if (t && t.id === id) npText();

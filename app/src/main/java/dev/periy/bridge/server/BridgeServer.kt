@@ -159,6 +159,9 @@ class BridgeServer(
         return devices.get(id)
     }
 
+    /** Songs made smaller for the internet (CD-quality FLAC or AAC), kept in the cache. */
+    private val transcoder by lazy { dev.periy.bridge.music.Transcoder(ctx, music) }
+
     /** The page, gzipped once (it only changes with the app). */
     private val pageGzip: ByteArray by lazy {
         val out = java.io.ByteArrayOutputStream()
@@ -343,6 +346,14 @@ class BridgeServer(
             // The file will not change under this id, so the browser may keep what it has
             // fetched -- replaying a song then costs nothing at all.
             call.response.header(HttpHeaders.CacheControl, "private, max-age=86400")
+            // Over a thin link the page asks for the smaller copy its info said (?q=cd or aac),
+            // made here once and served as a file, byte ranges and all.
+            val mode = dev.periy.bridge.music.Transcoder.Mode.of(call.request.queryParameters["q"])
+            val smaller = mode?.let { m -> runCatching { transcoder.get(track.id, m) }.getOrNull() }
+            if (mode != null && smaller != null) {
+                call.respond(io.ktor.server.http.content.LocalFileContent(smaller, ContentType.parse(mode.mime)))
+                return@get
+            }
             call.respond(
                 UriRangeContent(
                     scope = call,
@@ -352,6 +363,15 @@ class BridgeServer(
                     type = runCatching { ContentType.parse(track.mime) }.getOrDefault(ContentType.Audio.Any),
                 )
             )
+        }
+
+        // The next song's smaller copy, made now in the background (it takes the phone a few
+        // seconds), so it is ready the moment the page asks for it.
+        post("/api/music/prepare/{id}") {
+            val id = call.parameters["id"]?.toLongOrNull()
+            val mode = dev.periy.bridge.music.Transcoder.Mode.of(call.request.queryParameters["q"])
+            if (id != null && mode != null) call.application.launch { runCatching { transcoder.get(id, mode) } }
+            call.respond(HttpStatusCode.Accepted, ApiResult(true))
         }
 
         // A song's lyrics, as a page (or the phone itself) found them online and left here; see LyricsStore.
@@ -402,9 +422,19 @@ class BridgeServer(
 
         // What a song's file is (FLAC, 1,411 kbps, 44.1 kHz), for the player's chip.
         get("/api/music/info/{id}") {
-            val info = call.parameters["id"]?.toLongOrNull()?.let { withContext(Dispatchers.IO) { music.info(it) } }
-            if (info == null) {
+            val id = call.parameters["id"]?.toLongOrNull()
+            val info = id?.let { withContext(Dispatchers.IO) { music.info(it) } }
+            if (id == null || info == null) {
                 call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+            // ?link=kbps (the page, over the internet): what will be sent over a link that fast,
+            // the song's own file, or a smaller copy (and what that copy is).
+            val link = call.request.queryParameters["link"]?.toIntOrNull()
+            if (link != null) {
+                call.response.header(HttpHeaders.CacheControl, "no-store")
+                val mode = transcoder.plan(info, link)
+                call.respond(if (mode == null) info else transcoder.infoOf(id, info, mode).copy(smaller = mode.name.lowercase()))
                 return@get
             }
             call.response.header(HttpHeaders.CacheControl, "private, max-age=86400")

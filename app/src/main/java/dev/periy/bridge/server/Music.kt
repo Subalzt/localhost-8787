@@ -60,7 +60,11 @@ data class MusicDto(val granted: Boolean, val tracks: List<TrackDto>)
  * does not say.
  */
 @Serializable
-data class TrackInfoDto(val format: String, val kbps: Int, val sampleRate: Int, val channels: Int = 0, val bits: Int = 0)
+data class TrackInfoDto(
+    val format: String, val kbps: Int, val sampleRate: Int, val channels: Int = 0, val bits: Int = 0,
+    /** Sent smaller for a thin link: "cd" (16-bit FLAC) or "aac"; "" for the song's own file. */
+    val smaller: String = "",
+)
 
 /** The kind of file, from its type as Android reads it: FLAC, MP3, OPUS, OGG, AAC... */
 fun formatName(mime: String): String {
