@@ -1610,9 +1610,10 @@ private fun LazyListScope.devicesTab(
 ) {
     val pairedNames = paired.map { it.name }.toSet()
     val unpaired = nearby.filter { it.name !in pairedNames }
-    // Linked phones have their own list below; their way in here is not shown twice.
+    // Linked phones have their own list below: their ways in here (the one each was let in by,
+    // and the one it asked with) are not shown as computers.
     val linkedIds = paired.map { it.deviceId }.filter { it.isNotEmpty() }.toSet()
-    val computers = devices.filter { it.id !in linkedIds }
+    val computers = devices.filter { it.id !in linkedIds && !it.name.startsWith(dev.periy.bridge.server.PHONE_PREFIX) }
 
     item {
         SectionBar("Computers", Modifier.padding(top = 4.dp)) {
@@ -1628,7 +1629,7 @@ private fun LazyListScope.devicesTab(
     item { PhonesCard(paired, nearby, threads, routes, chat, browse, sendFilesTo) }
     if (paired.isNotEmpty()) item {
         Text(
-            "A tap opens the conversation. Messages are sealed with a key only the two phones hold, and wait on this phone until the other can be reached.",
+            "Tap a phone to message it. Only the two phones can read it.",
             style = CaptionStyle, color = Bridge.Muted,
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp),
         )
@@ -1762,7 +1763,7 @@ private fun ControlRow(running: Boolean, open: () -> Unit) {
             "Control",
             detail = when {
                 !running -> "Turn Localhost 8787 on from Home first"
-                laptops.isEmpty() -> "Trackpad and keys for a computer · needs the helper running there"
+                laptops.isEmpty() -> "Needs the helper on the computer"
                 else -> "Trackpad and keys for " + dev.periy.bridge.server.helperMachine(laptops.first())
             },
             first = true, icon = BlazeIcons.Trackpad, iconColor = Color(0xFF5E5CE6), onClick = open,
