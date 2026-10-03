@@ -7754,7 +7754,7 @@ var np = {
   hover: null,
   p: 0, s: 0, bounceUp: false, frozen: null, g: null, shown: false, layered: false, dragged: 0,
   vStop: null, sStop: null, startP: 0, sStart: 0, sOffset: 0, busy: 0,
-  track: null, env: {}, envOrder: [], grow: 0, loud: 0, live: 0, edge: 0, raf: 0, last: 0,
+  track: null, env: {}, envOrder: [], grow: 0, loud: 0, live: 0, meter: new Float32Array(8), raf: 0, last: 0,
   seek: null, specks: [], slotIds: {}, tintRgb: [156, 153, 193], txtRgb: [255, 255, 255], qShownFor: "", info: {}, speed: 1,
   // Frozen only for still pictures of it (a test sets this); it moves whatever the system's
   // reduce-motion setting says, as the phone's does.
@@ -8138,9 +8138,9 @@ function npDrawWave() {
   var x = npCanvas(c, w, h), t = npTrack(), env = t ? np.env[t.id] : null;
   // Namida's waveform, as a voice recorder draws one: many fine bars close together, growing in
   // as the song's loudness arrives; what has played in the text colour, the rest faint. While the
-  // song plays, what has played melts into one solid shape whose front edge moves with the music
-  // like a level meter, the shape behind it its history, and the rest settles into a plain bar;
-  // paused, or under a mouse or a finger, it goes back to bars to choose a place in.
+  // song plays the rest settles into a plain bar, and the last few bars played move with the
+  // music like a level meter, the bars behind them its history; paused, or under a mouse or a
+  // finger, the whole song is bars again to choose a place in.
   var pitch = 3, bw = 1.7, n = Math.max(8, Math.floor(w / pitch));
   if (np.barsFor !== (t && t.id) + ":" + n + ":" + !!env) { np.bars = npBarsSpread(env, n); np.barsFor = (t && t.id) + ":" + n + ":" + !!env; }
   var bars = np.bars, step = n > 1 ? (w - bw) / (n - 1) : 0, minH = 3, cy = h / 2, grow = np.grow;
@@ -8178,9 +8178,21 @@ function npDrawWave() {
   }
   if (hx >= 0 && hx > played) { band(0, played, ".9"); band(played, hx, ".5"); }
   else if (hx >= 0) { band(0, hx, ".9"); band(hx, played, ".55"); }
-  else {
-    if (live < 0.99) band(0, played, (0.9 * (1 - live)).toFixed(3));
-    if (live > 0.01 && played > 0) npDrawShape(x, bars, n, step, bw, minH, h, cy, grow, played, live, "rgba(" + rgb + "," + (0.9 * live).toFixed(3) + ")");
+  else if (played > 0) {
+    // The bars played, the last few leaning towards the song's latest moments (np.meter).
+    var last = step > 0 ? Math.min(n - 1, Math.floor(played / step)) : 0, m = np.meter, F = m.length;
+    x.save();
+    x.beginPath(); x.rect(0, 0, played, h); x.clip();
+    x.fillStyle = "rgba(" + rgb + ",.9)";
+    x.beginPath();
+    for (var i = 0; i <= last; i++) {
+      var d = last - i, v = bars[i];
+      if (d < F && live > 0) v = npClamp(v + live * (1 - d / F) * 0.75 * (m[d] - v), 0, 1);
+      var bh = minH + (h - minH) * v * grow, bx = i * step;
+      if (x.roundRect) x.roundRect(bx, cy - bh / 2, bw, bh, bw / 2); else x.rect(bx, cy - bh / 2, bw, bh);
+    }
+    x.fill();
+    x.restore();
   }
   if (hx >= 0) {
     var label = fmtTime(np.hover);
@@ -8193,56 +8205,6 @@ function npDrawWave() {
     x.textBaseline = "middle";
     x.fillText(label, px + 6, cy + 0.5);
   }
-}
-
-/**
- * What has played as one filled shape: the bars evened out twice over their neighbours, joined by a
- * smooth line and mirrored below. Its points sit at fixed places, so the history holds still;
- * only the front edge moves, towards how loud the song is now (eased, in np.edge).
- */
-function npDrawShape(x, bars, n, step, bw, minH, h, cy, grow, played, live, style) {
-  if (np.smoothFor !== bars) { np.smooth = npSmooth(npSmooth(bars, 4), 4); np.smoothFor = bars; }
-  var sm = np.smooth, P = 6, EDGE = 40, pts = [];
-  function at(px) {
-    var f = npClamp((px - bw / 2) / Math.max(0.001, step), 0, n - 1), i = Math.floor(f), j = Math.min(i + 1, n - 1);
-    return sm[i] + (sm[j] - sm[i]) * (f - i);
-  }
-  for (var px = 0; ; px += P) {
-    var last = px >= played;
-    if (last) px = played;
-    // Near the front the outline leans a little towards how loud the song is now: enough to move
-    // with it, never a spike.
-    var e = Math.max(0, 1 - (played - px) / EDGE), k = live * e * e * (3 - 2 * e), v = at(px);
-    v = npClamp(v + k * 0.3 * (np.edge - v), 0, 1);
-    pts.push([px, (minH + (h - minH) * v * grow) / 2]);
-    if (last) break;
-  }
-  x.fillStyle = style;
-  x.beginPath();
-  x.moveTo(0, cy);
-  function edge(sign, list) {
-    for (var j = 0; j < list.length; j++) {
-      var p = list[j], q = list[j + 1];
-      if (!q) { x.lineTo(p[0], cy + sign * p[1]); break; }
-      x.quadraticCurveTo(p[0], cy + sign * p[1], (p[0] + q[0]) / 2, cy + sign * (p[1] + q[1]) / 2);
-    }
-  }
-  edge(-1, pts);
-  x.lineTo(played, cy);
-  edge(1, pts.slice().reverse());
-  x.lineTo(0, cy);
-  x.fill();
-}
-
-/** Each bar the mean of itself and [r] either side, for the shape above. */
-function npSmooth(bars, r) {
-  var n = bars.length, out = new Float32Array(n);
-  for (var i = 0; i < n; i++) {
-    var m = 0, c = 0;
-    for (var k = Math.max(0, i - r); k <= Math.min(n - 1, i + r); k++) { m += bars[k]; c++; }
-    out[i] = c ? m / c : 0;
-  }
-  return out;
 }
 
 /** A mouse over the waveform: where it points, for the drawing above (not on touch, which seeks). */
@@ -8423,11 +8385,14 @@ function npTick(now) {
   var v = playing && env && !np.still ? npLoudAt(env, npPos() * 1000) : 0, k = 1 - Math.exp(-dt / 70);
   np.loud += (v - np.loud) * k;
   if (env && np.grow < 1) np.grow = Math.min(1, np.grow + dt / 700);
-  // The shape's front edge: how loud the song is now, on the bars' scale, eased so it rises and
-  // falls with the music without flickering.
-  var b = np.bars, raw = env ? npLoudAt(env, npPos() * 1000) : 0;
-  var lvl = b && b.hi ? Math.pow(npClamp((raw - b.lo) / Math.max(0.01, b.hi - b.lo), 0, 1), 1.6) : 0;
-  np.edge += (lvl - np.edge) * (1 - Math.exp(-dt / 110));
+  // The meter at the front of the waveform: the last few bars played, each how loud the song was
+  // a moment further back, on the bars' scale, eased so they rise and fall without flickering.
+  var b = np.bars, ms = npPos() * 1000, ke = 1 - Math.exp(-dt / 90);
+  for (var d = 0; d < np.meter.length; d++) {
+    var raw = env ? npLoudAt(env, ms - d * 60) : 0;
+    var lvl = b && b.hi ? Math.pow(npClamp((raw - b.lo) / Math.max(0.01, b.hi - b.lo), 0, 1), 1.6) : 0;
+    np.meter[d] += (lvl - np.meter[d]) * ke;
+  }
   // What has played: one shape while the song plays, bars when paused or pointed at.
   var live = playing && np.hover === null && np.seek === null ? 1 : 0;
   np.live += (live - np.live) * (1 - Math.exp(-dt / 160));
