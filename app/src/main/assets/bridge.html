@@ -7754,7 +7754,7 @@ var np = {
   hover: null,
   p: 0, s: 0, bounceUp: false, frozen: null, g: null, shown: false, layered: false, dragged: 0,
   vStop: null, sStop: null, startP: 0, sStart: 0, sOffset: 0, busy: 0,
-  track: null, env: {}, envOrder: [], grow: 0, loud: 0, live: 0, meter: new Float32Array(8), raf: 0, last: 0,
+  track: null, env: {}, envOrder: [], grow: 0, loud: 0, live: 0, meter: new Float32Array(12), raf: 0, last: 0,
   seek: null, specks: [], slotIds: {}, tintRgb: [156, 153, 193], txtRgb: [255, 255, 255], qShownFor: "", info: {}, speed: 1,
   // Frozen only for still pictures of it (a test sets this); it moves whatever the system's
   // reduce-motion setting says, as the phone's does.
@@ -7812,6 +7812,16 @@ function npTrack() { return np.track || currentTrack(); }
 
 /** Where the song is, in seconds, and how long it is. */
 function npPos() { return $("audio").currentTime || 0; }
+/**
+ * Where the song is, for drawing: the audio's clock moves on in steps in some browsers, so
+ * between them it is carried on from when it last moved, and the waveform glides.
+ */
+function npPosSmooth() {
+  var a = $("audio"), ct = a.currentTime || 0, now = performance.now();
+  if (ct !== np.ct) { np.ct = ct; np.ctAt = now; }
+  if (a.paused || a.seeking) return ct;
+  return ct + Math.min(0.5, (now - np.ctAt) / 1000 * (a.playbackRate || 1));
+}
 function npDur() {
   var a = $("audio"), t = npTrack();
   return a.duration && isFinite(a.duration) ? a.duration : (t ? t.durationMs / 1000 : 0);
@@ -8144,7 +8154,7 @@ function npDrawWave() {
   var pitch = 3, bw = 1.7, n = Math.max(8, Math.floor(w / pitch));
   if (np.barsFor !== (t && t.id) + ":" + n + ":" + !!env) { np.bars = npBarsSpread(env, n); np.barsFor = (t && t.id) + ":" + n + ":" + !!env; }
   var bars = np.bars, step = n > 1 ? (w - bw) / (n - 1) : 0, minH = 3, cy = h / 2, grow = np.grow;
-  var dur = npDur(), at = np.seek !== null ? np.seek : npPos(), played = dur > 0 ? npClamp(at / dur, 0, 1) * w : 0;
+  var dur = npDur(), at = np.seek !== null ? np.seek : npPosSmooth(), played = dur > 0 ? npClamp(at / dur, 0, 1) * w : 0;
   function draw(style, flat) {
     x.fillStyle = style;
     x.beginPath();
@@ -8187,7 +8197,7 @@ function npDrawWave() {
     x.beginPath();
     for (var i = 0; i <= last; i++) {
       var d = last - i, v = bars[i];
-      if (d < F && live > 0) v = npClamp(v + live * (1 - d / F) * 0.75 * (m[d] - v), 0, 1);
+      if (d < F && live > 0) { var e = 1 - d / F; v = npClamp(v + live * e * e * (3 - 2 * e) * 0.7 * (m[d] - v), 0, 1); }
       var bh = minH + (h - minH) * v * grow, bx = i * step;
       if (x.roundRect) x.roundRect(bx, cy - bh / 2, bw, bh, bw / 2); else x.rect(bx, cy - bh / 2, bw, bh);
     }
@@ -8386,12 +8396,13 @@ function npTick(now) {
   np.loud += (v - np.loud) * k;
   if (env && np.grow < 1) np.grow = Math.min(1, np.grow + dt / 700);
   // The meter at the front of the waveform: the last few bars played, each how loud the song was
-  // a moment further back, on the bars' scale, eased so they rise and fall without flickering.
-  var b = np.bars, ms = npPos() * 1000, ke = 1 - Math.exp(-dt / 90);
+  // a moment further back, on the bars' scale, eased so they rise and fall without flickering:
+  // up gently, down slower, as a meter's needle settles.
+  var b = np.bars, ms = npPosSmooth() * 1000, up = 1 - Math.exp(-dt / 120), down = 1 - Math.exp(-dt / 300);
   for (var d = 0; d < np.meter.length; d++) {
-    var raw = env ? npLoudAt(env, ms - d * 60) : 0;
+    var raw = env ? (npLoudAt(env, ms - d * 70 - 35) + npLoudAt(env, ms - d * 70) + npLoudAt(env, ms - d * 70 + 35)) / 3 : 0;
     var lvl = b && b.hi ? Math.pow(npClamp((raw - b.lo) / Math.max(0.01, b.hi - b.lo), 0, 1), 1.6) : 0;
-    np.meter[d] += (lvl - np.meter[d]) * ke;
+    np.meter[d] += (lvl - np.meter[d]) * (lvl > np.meter[d] ? up : down);
   }
   // What has played: one shape while the song plays, bars when paused or pointed at.
   var live = playing && np.hover === null && np.seek === null ? 1 : 0;

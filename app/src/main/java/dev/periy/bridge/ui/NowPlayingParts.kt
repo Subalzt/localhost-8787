@@ -232,13 +232,17 @@ internal fun WaveSeek(
                 val playedX = size.width * f
                 val k = liveAnim.value
                 // Each meter bar how loud the song was a moment further back, on the bars' scale,
-                // eased so they rise and fall without flickering.
+                // eased so they rise and fall without flickering: up gently, down slower, as a
+                // meter's needle settles.
                 val now = tick.value.toFloat()
                 val dt = if (meter[METER] == 0f) 16f else (now - meter[METER]).coerceIn(0f, 64f)
-                val ke = 1f - kotlin.math.exp(-dt / 90f)
+                val up = 1f - kotlin.math.exp(-dt / 120f)
+                val down = 1f - kotlin.math.exp(-dt / 300f)
                 for (d in 0 until METER) {
-                    val loud = Loudness.at(env, pos - d * 60L)
-                    meter[d] += (spreadOne(loud, range) - meter[d]) * ke
+                    val t0 = pos - d * 70L
+                    val loud = (Loudness.at(env, t0 - 35) + Loudness.at(env, t0) + Loudness.at(env, t0 + 35)) / 3f
+                    val lvl = spreadOne(loud, range)
+                    meter[d] += (lvl - meter[d]) * (if (lvl > meter[d]) up else down)
                 }
                 meter[METER] = now
 
@@ -258,7 +262,10 @@ internal fun WaveSeek(
                     for (i in 0..last) {
                         val d = last - i
                         var v = bars[i]
-                        if (d < METER && k > 0f) v = (v + k * (1f - d.toFloat() / METER) * 0.75f * (meter[d] - v)).coerceIn(0f, 1f)
+                        if (d < METER && k > 0f) {
+                            val e = 1f - d.toFloat() / METER
+                            v = (v + k * e * e * (3f - 2f * e) * 0.7f * (meter[d] - v)).coerceIn(0f, 1f)
+                        }
                         val h = minH + (size.height - minH) * v * grow
                         drawRoundRect(playedA, Offset(gap + i * step, cy - h / 2), Size(barW, h), CornerRadius(barW / 2))
                     }
@@ -268,7 +275,7 @@ internal fun WaveSeek(
 }
 
 /** How many bars at the front of the waveform move with the music while it plays. */
-private const val METER = 8
+private const val METER = 12
 
 /**
  * The quiet and loud ends the bars are spread between: the 4th and 98th of every hundred, as the
