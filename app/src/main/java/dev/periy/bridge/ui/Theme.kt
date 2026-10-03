@@ -283,14 +283,14 @@ fun SectionBar(
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
-        modifier.fillMaxWidth().heightIn(min = 34.dp + 26.dp).padding(start = 20.dp, end = 16.dp, top = 22.dp, bottom = 6.dp),
+        modifier.fillMaxWidth().heightIn(min = 34.dp + 20.dp).padding(start = 20.dp, end = 16.dp, top = 20.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             Modifier.weight(1f).then(if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(title, style = HeadlineStyle.copy(fontSize = 20.sp), color = Bridge.Text)
+            Text(title, style = CaptionStyle.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Muted)
             if (onOpen != null) {
                 Spacer(Modifier.width(4.dp))
                 Icon(BlazeIcons.Chevron, null, tint = Bridge.Muted, modifier = Modifier.size(20.dp))
@@ -300,15 +300,14 @@ fun SectionBar(
     }
 }
 
-/** An icon that says what a row or a tile is about: a rounded square of colour, like Settings. */
+/** An icon that says what a row or a tile is about: the glyph in the text colour on a quiet grey square. */
 @Composable
 fun AppIcon(icon: ImageVector, color: Color, modifier: Modifier = Modifier, size: Dp = 38.dp) {
     val shape = RoundedCornerShape(size * 0.26f)
     Box(
-        modifier.size(size).depth(color, shape, 4.dp).clip(shape)
-            .background(Brush.verticalGradient(listOf(lerp(color, Color.White, 0.14f), color))),
+        modifier.size(size).clip(shape).background(Bridge.Chip),
         contentAlignment = Alignment.Center,
-    ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(size * 0.58f)) }
+    ) { Icon(icon, null, tint = Bridge.Text, modifier = Modifier.size(size * 0.56f)) }
 }
 
 /**
@@ -326,15 +325,13 @@ fun Artwork(
     center: Boolean = false,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
-    val deep = lerp(color, Color.Black, 0.48f)
-    val light = lerp(color, Color.White, 0.22f)
+    // A soft wash of the colour with the glyph in it, as the page's file tiles are.
+    val ink = if (Bridge.Dark) lerp(color, Color.White, 0.25f) else lerp(color, Color.Black, 0.28f)
     Box(
-        modifier.clip(RoundedCornerShape(radius)).background(Brush.linearGradient(listOf(light, color, deep))),
+        modifier.clip(RoundedCornerShape(radius)).background(color.copy(alpha = if (Bridge.Dark) 0.22f else 0.15f)),
     ) {
-        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.24f), Color.Transparent), Offset.Zero, 560f)))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.10f), 0.04f to Color.Transparent)))
         if (glyph > 0.dp) Icon(
-            icon, null, tint = Color.White.copy(alpha = 0.94f),
+            icon, null, tint = ink,
             modifier = if (center) Modifier.align(Alignment.Center).size(glyph)
             else Modifier.align(Alignment.BottomStart).padding(14.dp).size(glyph),
         )
@@ -628,6 +625,38 @@ fun PillTabs(
 }
 
 /**
+ * The tabs as a phone's own tab bar: an icon over each word across the whole width, the one you
+ * are on in the text colour and the rest quiet; the colour follows a swipe between pages.
+ */
+@Composable
+fun BarTabs(
+    items: List<Pair<String, ImageVector>>,
+    selected: Int,
+    modifier: Modifier = Modifier,
+    /** Where the pages are, in tabs (1.5 is halfway from the second to the third). */
+    position: Float = selected.toFloat(),
+    onSelect: (Int) -> Unit,
+) {
+    val at = position.coerceIn(0f, items.lastIndex.toFloat())
+    Row(modifier.fillMaxWidth().height(56.dp)) {
+        items.forEachIndexed { i, (label, icon) ->
+            val over = (1f - kotlin.math.abs(at - i)).coerceIn(0f, 1f)
+            val c = androidx.compose.ui.graphics.lerp(Bridge.Faint, Bridge.Text, over)
+            Column(
+                Modifier.weight(1f).fillMaxHeight()
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(icon, null, tint = c, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.height(3.dp))
+                Text(label, style = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.Medium), color = c, maxLines = 1)
+            }
+        }
+    }
+}
+
+/**
  * A row with a thumbnail, as a song in a list: a small square of artwork, the title, a line
  * under it, and anything on the right. Used for files, transfers and devices.
  */
@@ -652,7 +681,7 @@ fun MediaRow(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Artwork(icon, tint, Modifier.size(thumb).depth(tint, RoundedCornerShape(8.dp), if (dim) 0.dp else 6.dp), radius = 8.dp, glyph = 22.dp, center = true)
+        Artwork(icon, tint, Modifier.size(thumb), radius = 10.dp, glyph = 22.dp, center = true)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = TextStyle(fontSize = 16.sp, letterSpacing = (-0.2).sp), color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)

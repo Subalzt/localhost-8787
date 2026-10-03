@@ -77,6 +77,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -396,7 +397,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     SideEffect {
         val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
         WindowCompat.getInsetsController(window, view).apply {
-            isAppearanceLightStatusBars = !dark && !overHero
+            isAppearanceLightStatusBars = !dark
             isAppearanceLightNavigationBars = !dark
         }
     }
@@ -559,11 +560,12 @@ private fun BlazeItUi(vm: MainViewModel) {
                         enter = androidx.compose.animation.fadeIn(tween(160)),
                         exit = androidx.compose.animation.fadeOut(tween(120)),
                     ) {
-                        AppHeader(if (shown == TAB_HOME) "Localhost 8787" else PAGES[shown].first, false, showMonitor) { setMonitor(!showMonitor) }
+                        AppHeader(PAGES[shown].first, false, showMonitor) { setMonitor(!showMonitor) }
                     }
 
-                    // The tabs, floating along the bottom over a fade of the page, in reach of a thumb.
-                    // As the player opens they sink away under it, and come back as it closes.
+                    // The tabs, a phone's own tab bar along the bottom, a hairline along its top. As the
+                    // player opens they sink away under it, and come back as it closes.
+                    val lineColor = Bridge.Outline
                     if (!imeUp && !showOem) androidx.compose.foundation.layout.BoxWithConstraints(
                         Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                             .graphicsLayer {
@@ -572,12 +574,12 @@ private fun BlazeItUi(vm: MainViewModel) {
                                 translationY = cp * size.height
                                 alpha = 1f - cp
                             }
-                            .background(Brush.verticalGradient(0f to Bridge.Bg.copy(alpha = 0f), 0.55f to Bridge.Bg.copy(alpha = 0.92f)))
-                            .padding(top = 16.dp, bottom = bottomInset + 12.dp),
+                            .background(Bridge.Bg.copy(alpha = 0.94f))
+                            .then(Modifier.drawBehind { drawLine(lineColor, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(size.width, 0f), 1f) })
+                            .padding(bottom = bottomInset),
                         contentAlignment = Alignment.Center,
                     ) {
-                        // Five tabs fit a narrow phone with a little less room around each word.
-                        PillTabs(TABS, pillOfPage(shown.toFloat()).toInt(), position = pillOfPage(pagePos), itemPadding = if (maxWidth < 400.dp) 10.dp else 13.dp) { onPill(it); showOem = false }
+                        BarTabs(TABS, pillOfPage(shown.toFloat()).toInt(), position = pillOfPage(pagePos)) { onPill(it); showOem = false }
                     }
                 }
 
@@ -845,10 +847,9 @@ private fun PowerSwitch(on: Boolean, onToggle: () -> Unit) {
         if (on) 30.dp else 0.dp, androidx.compose.animation.core.spring(dampingRatio = 0.62f, stiffness = 600f), label = "power",
     )
     val track by androidx.compose.animation.animateColorAsState(if (on) activeColor
-        else Color.Black.copy(alpha = 0.3f), tween(180), label = "track")
+        else Bridge.Chip, tween(180), label = "track")
     Box(
         Modifier.width(72.dp).height(42.dp)
-            .shadow(8.dp, switchShape, ambientColor = Color.Black, spotColor = Color.Black)
             .pressable(switchShape, scaleTo = 0.94f, onClick = onToggle)
             .background(track)
             .padding(3.dp)
@@ -876,17 +877,17 @@ private fun LinkPicker(options: List<LinkOption>, chosen: LinkOption?, note: Str
     Column(Modifier.padding(top = 14.dp)) {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                .background(Color.White.copy(alpha = 0.12f))
-                .padding(4.dp),
+                .background(Bridge.Chip)
+                .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             options.forEach { o ->
                 val on = o === chosen
                 val up = o.url != null
-                val bg by androidx.compose.animation.animateColorAsState(if (on) Color.White
+                val bg by androidx.compose.animation.animateColorAsState(if (on) Bridge.Surface
                     else Color.Transparent, tween(160), label = "seg")
-                val fg = if (on) Color(0xFF111114)
-                    else Color.White.copy(alpha = if (up) 1f else 0.5f)
+                val fg = if (on) Bridge.Text
+                    else Bridge.Text.copy(alpha = if (up) 0.75f else 0.4f)
                 Column(
                     Modifier.weight(1f)
                         .pressable(RoundedCornerShape(12.dp), scaleTo = 0.96f) { if (up) onPick(o) else o.setUp() }
@@ -902,14 +903,14 @@ private fun LinkPicker(options: List<LinkOption>, chosen: LinkOption?, note: Str
                     Text(
                         if (up) o.speed else "Off",
                         style = TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"),
-                        color = if (on) fg.copy(alpha = 0.66f) else Color.White.copy(alpha = if (up) 0.7f else 0.4f),
+                        color = if (on) Bridge.Muted else Bridge.Muted.copy(alpha = if (up) 0.85f else 0.5f),
                         maxLines = 1,
                     )
                 }
             }
         }
         if (note != null) Text(
-            note, style = BodyStyle.copy(fontSize = 13.sp, shadow = OnArt), color = Color.White.copy(alpha = 0.85f),
+            note, style = BodyStyle.copy(fontSize = 13.sp), color = Bridge.Muted,
             modifier = Modifier.padding(top = 8.dp, start = 4.dp),
         )
     }
@@ -958,39 +959,26 @@ private fun Hero(
     }
     val pick = { o: LinkOption -> picked = o.kind.name }
     Column(Modifier.fillMaxWidth().animateContentSize(tween(220))) {
-        // Blue of its own; with a colour chosen in Settings, that colour instead.
-        val a = Bridge.Accent
-        val chosenColour = a != TheatreDark.accent && a != TheatreLight.accent
-        val art = if (running && chosenColour) listOf(lerp(a, Color.White, 0.08f), lerp(a, Color.Black, 0.6f), Color(0xFF05070D))
-        else if (running) listOf(Color(0xFF1E6BD6), Color(0xFF0B2F66), Color(0xFF05070D))
-        else listOf(Color(0xFF3A3A40), Color(0xFF1B1B1F), Color(0xFF060607))
-        Box(
-            Modifier.fillMaxWidth()
-                .background(Brush.linearGradient(art, start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(900f, 1200f)))
-        ) {
-            Icon(
-                BlazeIcons.Bolt, null, tint = Color.White.copy(alpha = 0.10f),
-                modifier = Modifier.align(Alignment.CenterEnd).offset(x = 44.dp, y = 26.dp).size(240.dp),
-            )
-            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.8f))))
-            Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = top, bottom = 18.dp)) {
-                // The title and the monitor switch, as in the header of the other tabs, but part of
-                // the hero: they scroll away with it rather than float over it.
-                CompositionLocalProvider(LocalPalette provides TheatreDark) {
-                    Row(Modifier.fillMaxWidth().height(HeaderHeight), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Localhost 8787", style = LargeTitleStyle.copy(shadow = OnArt), color = Color.White,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        MonitorButton(monitorOn, onMonitor)
-                    }
-                }
-                Spacer(Modifier.height(gap + 10.dp))
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = top, bottom = 4.dp)) {
+            // The title and the monitor switch, as in the header of the other tabs; they scroll
+            // away with the card rather than float over it.
+            Row(Modifier.fillMaxWidth().height(HeaderHeight).padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Home", style = LargeTitleStyle, color = Bridge.Text,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                MonitorButton(monitorOn, onMonitor)
+            }
+            Spacer(Modifier.height(gap))
+            // The phone's own card: its address, the switch, and the way the laptop is linked.
+            Column(Modifier.fillMaxWidth().card().padding(16.dp)) {
+                Text(kicker, style = KickerStyle.copy(fontSize = 11.sp), color = Bridge.Muted)
+                Spacer(Modifier.height(6.dp))
                 HeroBody(
                     h, kicker, running, onToggle, copy, showQr, { showQr = !showQr },
                     // Under the website, the address on the link the phone is on now, for a browser there.
                     localUrl?.takeIf { siteUrl != null }?.let { u ->
                         u.removePrefix("http://").removeSuffix("/") + (chosen?.let { "  ·  " + it.name } ?: "")
                     },
-                    TextStyle(fontSize = 29.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.8).sp, fontFeatureSettings = "tnum", shadow = OnArt),
+                    TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp, fontFeatureSettings = "tnum"),
                 ) { LinkPicker(options, chosen, linkNote, pick) }
             }
         }
@@ -1005,29 +993,12 @@ private fun Hero(
  */
 @Composable
 private fun SendCard(status: String, onFiles: () -> Unit, onFolder: () -> Unit) {
-    val shape = RoundedCornerShape(22.dp)
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 22.dp, top = 20.dp, bottom = 8.dp)) {
-        // The hard shadow, down and to the right.
-        Box(Modifier.matchParentSize().offset(6.dp, 7.dp).clip(shape).background(Color.Black.copy(alpha = if (Bridge.Dark) 0.6f else 0.2f)))
-        Column(
-            Modifier.fillMaxWidth().clip(shape)
-                .background(Brush.linearGradient(
-                    listOf(Color(0xFF3DDC6A), Color(0xFF178A3A), Color(0xFF07361A)),
-                    start = androidx.compose.ui.geometry.Offset.Zero, end = androidx.compose.ui.geometry.Offset(1000f, 800f),
-                ))
-                .padding(18.dp),
-        ) {
-            val hard = with(density) { androidx.compose.ui.geometry.Offset(1.2.dp.toPx(), 1.7.dp.toPx()) }
-            Text(
-                "Send files",
-                style = TextStyle(fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp,
-                    shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.35f), hard, 0f)),
-                color = Color.White,
-            )
-            if (status.isNotEmpty()) Text(status, style = CaptionStyle.copy(fontSize = 14.sp), color = Color.White.copy(alpha = 0.85f),
+    Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)) {
+        Column(Modifier.fillMaxWidth().card().padding(16.dp)) {
+            Text("Send files", style = TitleStyle, color = Bridge.Text)
+            if (status.isNotEmpty()) Text(status, style = CaptionStyle.copy(fontSize = 13.sp), color = Bridge.Muted,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SendChoice(BlazeIcons.Upload, "Files", primary = true, Modifier.weight(1f), onFiles)
                 SendChoice(BlazeIcons.Folder, "Folder", primary = false, Modifier.weight(1f), onFolder)
@@ -1039,19 +1010,18 @@ private fun SendCard(status: String, onFiles: () -> Unit, onFolder: () -> Unit) 
 /** One of the send card's two buttons: white (files) or clear with a white edge (a folder). */
 @Composable
 private fun SendChoice(icon: ImageVector, label: String, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val ink = if (primary) Color(0xFF0B3D1C) else Color.White
+    val ink = if (primary) Bridge.Bg else Bridge.Text
     Row(
-        modifier.height(48.dp)
-            .pressable(ButtonShape, scaleTo = 0.95f, onClick = onClick)
-            .background(if (primary) Color.White else Color.Black.copy(alpha = 0.22f))
-            .then(if (primary) Modifier else Modifier.border(1.5.dp, Color.White.copy(alpha = 0.4f), ButtonShape))
+        modifier.height(44.dp)
+            .pressable(RoundedCornerShape(12.dp), scaleTo = 0.96f, onClick = onClick)
+            .background(if (primary) Bridge.Text else Bridge.Chip)
             .padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = ink, modifier = Modifier.size(19.dp))
         Spacer(Modifier.width(8.dp))
-        Text(label, style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold), color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold), color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -1070,15 +1040,15 @@ private fun HeroBody(
         FitText(
             androidx.compose.ui.text.buildAnnotatedString {
                 append(host)
-                if (port.isNotEmpty()) { pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White.copy(alpha = 0.72f))); append(":$port"); pop() }
+                if (port.isNotEmpty()) { pushStyle(androidx.compose.ui.text.SpanStyle(color = Bridge.Muted)); append(":$port"); pop() }
             },
-            big.copy(color = Color.White), max = 40.sp, min = 20.sp,
+            big.copy(color = Bridge.Text), max = 34.sp, min = 18.sp,
             Modifier.fillMaxWidth().clickable(onClickLabel = "Copy the address", onClick = copy),
         )
         if (sub != null) {
             val ctx = LocalContext.current
             Text(
-                sub, style = MonoStyle.copy(fontSize = 15.sp, shadow = OnArt), color = Color.White.copy(alpha = 0.78f),
+                sub, style = MonoStyle.copy(fontSize = 14.sp), color = Bridge.Muted,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 2.dp).clickable(onClickLabel = "Copy the address") {
                     SystemClipboard.write(ctx, sub.substringBefore("  ·"))
@@ -1087,17 +1057,16 @@ private fun HeroBody(
             )
         }
     } else {
-        Text(h.headline, style = big, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        h.note?.let { Text(it, style = BodyStyle.copy(fontSize = 14.sp, shadow = OnArt), color = Color.White.copy(alpha = 0.8f), maxLines = 3) }
+        Text(h.headline, style = big, color = Bridge.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        h.note?.let { Text(it, style = BodyStyle.copy(fontSize = 14.sp), color = Bridge.Muted, maxLines = 3) }
     }
     Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (h.showAddress) {
-            val chip = Color.White.copy(alpha = 0.16f)
-            IconChip(BlazeIcons.Copy, "Copy the address", tint = Color.White, bg = chip, size = 42.dp, onClick = copy)
+            IconChip(BlazeIcons.Copy, "Copy the address", tint = Bridge.Text, bg = Bridge.Chip, size = 40.dp, onClick = copy)
             Spacer(Modifier.width(10.dp))
             IconChip(
-                BlazeIcons.Qr, if (showQr) "Hide code" else "QR code", tint = Color.White,
-                bg = if (showQr) Color.White.copy(alpha = 0.35f) else chip, size = 42.dp, onClick = toggleQr,
+                BlazeIcons.Qr, if (showQr) "Hide code" else "QR code", tint = if (showQr) Bridge.Bg else Bridge.Text,
+                bg = if (showQr) Bridge.Text else Bridge.Chip, size = 40.dp, onClick = toggleQr,
             )
         }
         Spacer(Modifier.weight(1f))
@@ -1126,11 +1095,7 @@ private fun FitText(text: androidx.compose.ui.text.AnnotatedString, style: TextS
         val px = with(density) { size.sp.toPx() }
         Text(
             text,
-            style = style.copy(
-                fontSize = size.sp,
-                shadow = androidx.compose.ui.graphics.Shadow(
-                    Color.Black.copy(alpha = 0.42f), androidx.compose.ui.geometry.Offset(px * 0.055f, px * 0.075f), 0f),
-            ),
+            style = style.copy(fontSize = size.sp, shadow = null),
             maxLines = 1, softWrap = false,
         )
     }
