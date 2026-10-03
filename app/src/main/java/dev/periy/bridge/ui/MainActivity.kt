@@ -209,6 +209,7 @@ class MainActivity : ComponentActivity() {
             intent.getStringExtra("msgto")?.let { to -> c.messages.send(to, intent.getStringExtra("msg").orEmpty()) }
             if (intent.getBooleanExtra("linkcode", false)) android.util.Log.i("LinkCode", "Open: " + c.openLinkCode())
             intent.getStringExtra("linkwith")?.let { c.peers.linkByCode(it) }
+            if (intent.getBooleanExtra("opencontrol", false)) debugControl.value = true
             // `--es forgetpeer <name>` unlinks just that phone (and a test link to itself, its own way in).
             intent.getStringExtra("forgetpeer")?.let { n ->
                 c.peers.find(n)?.let(c.peers::forget)
@@ -254,6 +255,7 @@ private val TABS = listOf(
     "Settings" to BlazeIcons.Sliders,
 )
 private const val PILL_MUSIC = 2
+private const val PILL_DEVICES = 1
 
 /** The pages a swipe moves between: every tab but Music. */
 private val PAGES = TABS.filterIndexed { i, _ -> i != PILL_MUSIC }
@@ -266,6 +268,9 @@ private val debugTab = kotlinx.coroutines.flow.MutableStateFlow(-1)
 
 /** The music notification was tapped: the player opens. */
 private val openPlayer = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+/** Debug builds: Control opens (`--ez opencontrol true`). */
+private val debugControl = kotlinx.coroutines.flow.MutableStateFlow(false)
 
 /** A message notification was tapped: that phone's conversation opens. */
 private val openChat = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
@@ -436,6 +441,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     LaunchedEffect(Unit) { debugTab.collect { if (it >= 0) { onPill(it); debugTab.value = -1 } } }
     LaunchedEffect(Unit) { debugBrowse.collect { n -> if (n != null) { browsePeer = peers.find(n); debugBrowse.value = null } } }
     LaunchedEffect(Unit) { openPlayer.collect { if (it) { showOem = false; browsePeer = null; motion.expand(); openPlayer.value = false } } }
+    LaunchedEffect(Unit) { debugControl.collect { if (it) { chatWith = null; controlOpen = true; debugControl.value = false } } }
     LaunchedEffect(Unit) { openChat.collect { n -> if (n != null) { showOem = false; browsePeer = null; shelf.showing = false; goTo(TAB_DEVICES); controlOpen = false; chatWith = n; openChat.value = null } } }
     // The library loads once it can be read (the queue from last time comes back with it), and
     // covers the catalogue finds later are drawn when they arrive.
@@ -603,7 +609,11 @@ private fun BlazeItUi(vm: MainViewModel) {
                             .padding(bottom = bottomInset),
                         contentAlignment = Alignment.Center,
                     ) {
-                        BarTabs(TABS, pillOfPage(shown.toFloat()).toInt(), position = pillOfPage(pagePos)) { onPill(it); showOem = false }
+                        BarTabs(
+                            TABS, pillOfPage(shown.toFloat()).toInt(), position = pillOfPage(pagePos),
+                            // Messages not yet read, on Devices, where the conversations are.
+                            badges = mapOf(PILL_DEVICES to threads.values.sumOf { l -> l.count { !it.mine && it.state == "new" } }),
+                        ) { onPill(it); showOem = false }
                     }
                 }
 

@@ -210,6 +210,51 @@ has come back for it in `srtt + max(4 rttvar, 200 ms)`. The window is Linux's: d
 trip until the first loss, then CUBIC (back off to 0.7, back to the old size in a few seconds,
 never slower than Reno), at most 2 048 packets. New packets leave strictly in order.
 
+## Phone to phone
+
+A linked phone is a device like any other on the phone it links with, so each holds the other's
+tunnel details (`id`, `key`, `addrs`, `port`), taken over `GET /api/tunnel` and also handed over in
+the link's greeting (`PeerHello.tunnel`), so a phone linked from afar has them without ever being
+local. To reach a linked phone that does not answer on its local address, a phone dials the same
+way the helper does (`TunnelClient.dialAny`): its known IPv6 addresses over TCP, then the addresses
+it gives now through the board (`where`), then a path punched across IPv4 (`Punch.dial`, the
+device's side, role 0). The tunnel is then served on a loopback port of the dialling phone, and
+every request to the other phone goes there unchanged.
+
+### Link codes
+
+Two phones that have never shared a network link with a code one of them shows (`net/LinkCode.kt`):
+
+- Ten characters from `23456789ABCDEFGHJKLMNPQRSTUVWXYZ` (50 bits), shown as `XXXXX-XXXXX`, open
+  for ten minutes or until a phone links.
+- While it is open the showing phone's tunnel also answers for a stand-in device, `link-code`,
+  whose keys come from the code instead of the phone's secret:
+  `psk = HMAC-SHA256("L87L/1 psk", code)`, `tid = HMAC-SHA256(psk, "L87L/1 id")[0:16]`. Its board
+  topics follow from that psk as for any device, so the typing phone finds it by `where` and
+  punches to it the same way.
+- The typing phone dials with those keys, learns the page's port from the tunnel's HELLO
+  (`page`), and asks to be let in through it exactly as on a shared Wi-Fi: `POST /api/pair`, a
+  4-digit code to compare, and **Allow** on the showing phone. A code reaches the phone; only its
+  owner lets anyone in.
+- Once allowed, the typing phone takes the other phone's own tunnel details for itself
+  (`/api/tunnel`) and sends its greeting with its own, so from then on each reaches the other with
+  its permanent keys. The code closes half a minute after the link, and its tunnel with it. Both
+  phones turn on *From other networks*.
+
+### Messages
+
+Messages between linked phones (`server/Messages.kt`) are posted straight to the other phone,
+`POST /api/peers/msg`, whichever way it can be reached: the same Wi-Fi, or the tunnel. Each is
+sealed on its own, so it is unreadable on a plain local link too:
+
+- Key: `HMAC-SHA256(psk, "L87M/1 msg")`, where `psk` is the tunnel key the receiving phone made
+  for the sending one (the sender has it from the receiver's `/api/tunnel`; the receiver derives
+  it from the device the message came in on).
+- AES-256-GCM, a fresh 12-byte nonce each time, `id/at` as associated data:
+  `{"id", "at", "n": nonce, "c": ciphertext and tag}`, base64.
+- A message waits on the sending phone until the other takes it, retried every 20 s. Read marks
+  go back as `POST /api/peers/msg/read {"upTo": at}`, in the sender's own clock.
+
 ## Laptop to laptop
 
 Two laptops reaching the same phone, one through the tunnel and one on the phone's network (or

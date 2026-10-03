@@ -635,6 +635,8 @@ fun BarTabs(
     modifier: Modifier = Modifier,
     /** Where the pages are, in tabs (1.5 is halfway from the second to the third). */
     position: Float = selected.toFloat(),
+    /** A count on a tab's icon, by tab (unread messages on Devices). */
+    badges: Map<Int, Int> = emptyMap(),
     onSelect: (Int) -> Unit,
 ) {
     val at = position.coerceIn(0f, items.lastIndex.toFloat())
@@ -648,7 +650,17 @@ fun BarTabs(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Icon(icon, null, tint = c, modifier = Modifier.size(24.dp))
+                Box {
+                    Icon(icon, null, tint = c, modifier = Modifier.size(24.dp))
+                    val n = badges[i] ?: 0
+                    if (n > 0) Box(
+                        Modifier.align(Alignment.TopEnd).offset(x = 10.dp, y = (-4).dp)
+                            .border(2.dp, Bridge.Bg, CircleShape).padding(2.dp)
+                            .clip(CircleShape).background(Bridge.Danger)
+                            .padding(horizontal = 5.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(if (n > 99) "99+" else "$n", style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold), color = Color.White) }
+                }
                 Spacer(Modifier.height(3.dp))
                 Text(label, style = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.Medium), color = c, maxLines = 1)
             }
