@@ -1,49 +1,12 @@
-<!-- Localhost 8787: a "b" whose stem is cut by an arrow pointing out through the bowl, made of
-     liquid glass - a warm gradient body, a soft drop shadow, a gloss across the top and a
-     rim that catches the light on its upper-left edge. -->
+<!-- Localhost 8787: the port's "87" as one mark - an 8 of two open rings, a 7 beside it, the 7 in the app's yellow. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <group android:translateX="54" android:translateY="54" android:scaleX="0.152" android:scaleY="0.152">
-        <group android:translateX="-438.5" android:translateY="-429">
-            <!-- shadow -->
-            <group android:translateX="6" android:translateY="22">
-                <path android:fillColor="#000000" android:fillAlpha="0.32" android:pathData="M295,272 H371 V358 A127.5,127.5 0 1 1 371,551 V586 H295 V484 H433 V527 L527,458 L433,386 V430 H295 Z" />
-            </group>
-            <!-- body -->
-            <path android:pathData="M295,272 H371 V358 A127.5,127.5 0 1 1 371,551 V586 H295 V484 H433 V527 L527,458 L433,386 V430 H295 Z">
-                <aapt:attr name="android:fillColor">
-                    <gradient android:type="linear" android:startX="330" android:startY="272" android:endX="520" android:endY="586">
-                        <item android:offset="0" android:color="#FFFFF4A8" />
-                        <item android:offset="0.42" android:color="#FFFFD60A" />
-                        <item android:offset="1" android:color="#FFFF9F0A" />
-                    </gradient>
-                </aapt:attr>
-            </path>
-            <!-- gloss across the top, clipped to the glyph -->
-            <group>
-                <clip-path android:pathData="M295,272 H371 V358 A127.5,127.5 0 1 1 371,551 V586 H295 V484 H433 V527 L527,458 L433,386 V430 H295 Z" />
-                <path android:pathData="M270,250 H600 V420 Q440,380 270,440 Z">
-                    <aapt:attr name="android:fillColor">
-                        <gradient android:type="linear" android:startX="0" android:startY="260" android:endX="0" android:endY="440">
-                            <item android:offset="0" android:color="#80FFFFFF" />
-                            <item android:offset="1" android:color="#00FFFFFF" />
-                        </gradient>
-                    </aapt:attr>
-                </path>
-            </group>
-            <!-- rim -->
-            <path android:pathData="M295,272 H371 V358 A127.5,127.5 0 1 1 371,551 V586 H295 V484 H433 V527 L527,458 L433,386 V430 H295 Z" android:strokeWidth="7" android:strokeLineJoin="round">
-                <aapt:attr name="android:strokeColor">
-                    <gradient android:type="linear" android:startX="295" android:startY="272" android:endX="580" android:endY="586">
-                        <item android:offset="0" android:color="#F2FFFFFF" />
-                        <item android:offset="0.45" android:color="#00FFFFFF" />
-                        <item android:offset="0.8" android:color="#00FFFFFF" />
-                        <item android:offset="1" android:color="#99FFFFFF" />
-                    </gradient>
-                </aapt:attr>
-            </path>
+    <group android:translateX="54" android:translateY="54" android:scaleX="0.78" android:scaleY="0.78">
+        <group android:translateX="-51" android:translateY="-50.75">
+            <path android:pathData="M26,37 A10,10 0 1,1 46,37 A10,10 0 1,1 26,37 Z" android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" />
+            <path android:pathData="M23.5,62 A12.5,12.5 0 1,1 48.5,62 A12.5,12.5 0 1,1 23.5,62 Z" android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" />
+            <path android:pathData="M55,27 H76 L61,74" android:strokeColor="#FFD60A" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" />
         </group>
     </group>
 </vector>

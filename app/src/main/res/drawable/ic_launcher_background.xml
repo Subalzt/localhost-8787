@@ -1,39 +1,6 @@
-<!-- Deep night glass with pools of colour, the same wallpaper the app sits on. -->
+<!-- OLED black, the colour the app sits on. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:pathData="M0,0 H108 V108 H0 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="108" android:endY="108">
-                <item android:offset="0" android:color="#FF2A2270" />
-                <item android:offset="0.55" android:color="#FF0C0C18" />
-                <item android:offset="1" android:color="#FF08080E" />
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path android:pathData="M0,0 H108 V108 H0 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="98" android:centerY="18" android:gradientRadius="48">
-                <item android:offset="0" android:color="#7064D2FF" />
-                <item android:offset="1" android:color="#0064D2FF" />
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path android:pathData="M0,0 H108 V108 H0 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="30" android:centerY="100" android:gradientRadius="56">
-                <item android:offset="0" android:color="#66FFB000" />
-                <item android:offset="1" android:color="#00FFB000" />
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path android:pathData="M0,0 H108 V108 H0 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="104" android:centerY="104" android:gradientRadius="50">
-                <item android:offset="0" android:color="#66BF5AF2" />
-                <item android:offset="1" android:color="#00BF5AF2" />
-            </gradient>
-        </aapt:attr>
-    </path>
+    <path android:fillColor="#FF0B0B0B" android:pathData="M0,0 H108 V108 H0 Z" />
 </vector>

@@ -1,10 +1,12 @@
-<!-- Localhost 8787: a "b" whose stem is cut by an arrow pointing out through the bowl. -->
+<!-- Localhost 8787: the port's "87" as one mark - an 8 of two open rings, a 7 beside it. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
-    android:viewportWidth="72" android:viewportHeight="72">
-    <group android:translateX="36" android:translateY="36" android:scaleX="0.21" android:scaleY="0.21">
-        <group android:translateX="-438.5" android:translateY="-429">
-            <path android:fillColor="#FFFFFF" android:pathData="M295,272 H371 V358 A127.5,127.5 0 1 1 371,551 V586 H295 V484 H433 V527 L527,458 L433,386 V430 H295 Z" />
+    android:viewportWidth="100" android:viewportHeight="100">
+    <group android:translateX="50" android:translateY="50" android:scaleX="1.45" android:scaleY="1.45">
+        <group android:translateX="-51" android:translateY="-50.75">
+            <path android:pathData="M26,37 A10,10 0 1,1 46,37 A10,10 0 1,1 26,37 Z" android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" />
+            <path android:pathData="M23.5,62 A12.5,12.5 0 1,1 48.5,62 A12.5,12.5 0 1,1 23.5,62 Z" android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" />
+            <path android:pathData="M55,27 H76 L61,74" android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" />
         </group>
     </group>
 </vector>
