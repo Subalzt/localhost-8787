@@ -192,7 +192,7 @@ private fun PadLock(modifier: Modifier, unlock: () -> Unit) {
         modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(shape)
-            .background(Bridge.Surface.copy(alpha = 0.94f))
+            .background(Bridge.Surface)
             .clickable(onClickLabel = "Unlock the trackpad", onClick = unlock),
         contentAlignment = Alignment.Center,
     ) {

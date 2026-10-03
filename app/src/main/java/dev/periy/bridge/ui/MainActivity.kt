@@ -1725,10 +1725,10 @@ private fun Searching(running: Boolean, found: Int) {
         0.35f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "dot",
     )
     Row(
-        Modifier.fillMaxWidth().panel().padding(18.dp),
+        Modifier.fillMaxWidth().panel().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Artwork(BlazeIcons.Phones, Color(0xFF30D158), Modifier.size(56.dp), radius = 12.dp, glyph = 28.dp, center = true)
+        Artwork(BlazeIcons.Phones, Color(0xFF30D158), Modifier.size(44.dp), radius = 10.dp, glyph = 22.dp, center = true)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -1738,7 +1738,7 @@ private fun Searching(running: Boolean, found: Int) {
                     found == 1 -> "1 phone"
                     else -> "$found phones"
                 },
-                style = HeadlineStyle.copy(fontSize = 20.sp), color = Bridge.Text,
+                style = TextStyle(fontSize = 16.sp, letterSpacing = (-0.2).sp), color = Bridge.Text,
             )
             Text(
                 if (!running) "Turn it on from Home" else "On this Wi-Fi",
