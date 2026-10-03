@@ -6,7 +6,8 @@ The phone is still the only server: a free dynamic-DNS name points at it, and Le
 vouches for it.
 
 Phone: `net/Site.kt`, the Website row in Settings (`ui/WebsiteRow.kt`). Page: `siteLogin` in
-`bridge.html`. Server: `/api/site`, `/api/pair` (limited through the website), `/api/site/enroll`.
+`bridge.html`. Server: `/api/site`, `/api/pair` (limited through the website), `/api/site/enroll`,
+`/api/site/handoff`.
 
 ## What the person sets up
 
@@ -21,16 +22,23 @@ The token stays in the app's own files (`site.json`).
 
 ## What the phone does
 
-- **The name.** Every 20 s it looks at its global IPv6, mobile data's own when there is one (the
-  carrier lets connections in; a home router usually does not), and when it changed calls
-  `https://dynv6.com/api/update?zone=NAME&token=…&ipv6=ADDR`. Each step (the name, the
-  certificate, the door) runs on its own: one failing never keeps the door shut.
+- **The name.** Every 20 s it looks at its global IPv6 and when it changed calls
+  `https://dynv6.com/api/update?zone=NAME&token=…&ipv6=ADDR`. While the hotspot or USB tethering
+  shares mobile data, its address on that link (the hotspot first): a laptop there gets an address
+  in mobile data's /64 and could not reach the mobile address itself, and the internet reaches the
+  link address just as well. Otherwise mobile data's own (the carrier lets connections in; a home
+  router usually does not). Each step (the name, `lan.NAME`, the certificate, the door) runs on its
+  own: one failing never keeps the door shut.
+- **`lan.NAME`.** Points at the phone's addresses on its Wi-Fi (records through dynv6's API), or on
+  its own hotspot when it is on no Wi-Fi (Android 15+ lists the hotspot as Wi-Fi too). A private
+  IPv4 in public DNS is fine: only a browser on that network can reach it.
 - **The certificate.** Let's Encrypt (ACME, RFC 8555), proved by DNS: the phone's own account key
-  (EC P-256, made once), an order for the name, a TXT record `_acme-challenge` with the challenge
-  digest created through dynv6's API (`POST /api/v2/zones/{id}/records`, the zone found by
-  `GET /api/v2/zones/by-name/NAME`, bearer token), 45 s for it to spread, the check, a CSR (an EC
-  P-256 key, the name as CN and SAN, written in DER by hand), the certificate chain, and the TXT
-  record removed again. Renewed when less than 30 days are left. One attempt at a time; a failed
+  (EC P-256, made once), one order for NAME and `lan.NAME`, a TXT record per name
+  (`_acme-challenge`, `_acme-challenge.lan`) with the challenge digest created through dynv6's API
+  (`POST /api/v2/zones/{id}/records`, the zone found by `GET /api/v2/zones/by-name/NAME`, bearer
+  token), dynv6's own nameservers asked until they all have it, the check, a CSR (an EC P-256
+  key, both names as SANs, written in DER by hand), the certificate chain, and the TXT records
+  removed again. Renewed when less than 30 days are left. One attempt at a time; a failed
   one waits 15 minutes (Let's Encrypt allows 5 failed checks an hour per name), and switching the
   website off and on tries again at once.
 - **The door.** TLS (Android's own, TLS 1.3) on port 8443 (a phone cannot listen below 1024), on
@@ -46,6 +54,27 @@ The token stays in the app's own files (`site.json`).
   "… (website)" and showing the browser's own address. Anyone who finds the name could make the
   phone ask, so at most 10 asks per 10 minutes from one address (/64) and 60 an hour from
   everywhere. On Allow, the browser gets a `Secure`, `HttpOnly`, `SameSite=Strict` session cookie.
+
+## Near the phone: the plain address
+
+On one of the phone's own links the website moves the browser to the phone's plain address
+there, the old `http://IP:8787`, so nothing goes through the door (measured on the hotspot, the
+door itself keeps up; the plain address saves the handshake on each new connection, about 20 ms).
+
+- `/api/site` says `plain`: the phone's IPv4 on the link the browser came in on (judged by the
+  phone address it connected to, and the browser being in that address's /64 or /24). Over the
+  internet, nothing.
+- From the phone's Wi-Fi over the internet (`near`), the page first sees that `lan.NAME` answers,
+  then moves to the Wi-Fi's plain address.
+- Signed in, the page takes a one-time code (`POST /api/site/handoff`, a minute, once) and opens
+  `http://IP:8787/#handoff=CODE`; the plain page trades it (`POST /api/site/handoff/use`, only
+  from the local network) for its own session cookie, so the phone does not ask again. The code is
+  in the `#`, which the browser never sends anywhere.
+- If the plain address does not open, Back comes to the website, which stays for two minutes
+  instead of moving again.
+
+The plain address is unencrypted, as it always was on the local network; over the internet
+everything stays HTTPS.
 
 ## The helper, from anywhere
 

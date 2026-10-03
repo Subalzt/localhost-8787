@@ -9282,17 +9282,58 @@ async function siteLogin() {
  */
 async function siteHop() {
   var d; try { d = await (await fetch("/api/site", { credentials: "same-origin", cache: "no-store" })).json(); } catch (e) { return; }
-  if (!d || !d.near || !d.lan || location.hostname === d.lan) return;
-  var base = "https://" + d.lan + ":" + location.port, ctl = new AbortController();
-  var t = setTimeout(function () { ctl.abort(); }, 2500);
-  try { await fetch(base + "/api/ping", { mode: "no-cors", cache: "no-store", signal: ctl.signal }); }
-  catch (e) { return; }
-  finally { clearTimeout(t); }
-  location.replace(base + location.pathname + location.search + location.hash);
+  if (!d) return;
+  // Came over the internet from the phone's Wi-Fi: first see that the Wi-Fi way answers.
+  if (d.near && d.lan && location.hostname !== d.lan) {
+    var base = "https://" + d.lan + ":" + location.port, ctl = new AbortController();
+    var t = setTimeout(function () { ctl.abort(); }, 2500);
+    try { await fetch(base + "/api/ping", { mode: "no-cors", cache: "no-store", signal: ctl.signal }); }
+    catch (e) { return; }
+    finally { clearTimeout(t); }
+    if (!d.plain || plainHopFailed()) { location.replace(base + location.pathname + location.search + location.hash); return; }
+  }
+  if (d.plain && !plainHopFailed()) plainHop(d.plain);
+}
+
+/**
+ * On one of the phone's own links (its hotspot, the cable, its Wi-Fi), the website moves to the
+ * phone's plain address there, the old http://IP:8787: no certificate, no door, nothing to go
+ * through. Signed in already, a one-time code carries the sign-in over (in the #, which never
+ * leaves the browser), so the phone does not ask again.
+ */
+async function plainHop(url) {
+  var code = "";
+  try {
+    var r = await fetch("/api/site/handoff", { method: "POST", credentials: "same-origin" });
+    if (r.ok) code = (await r.json()).code || "";
+  } catch (e) {}
+  try { localStorage.setItem("blazeit.plainHop", String(Date.now())); } catch (e) {}
+  // assign, not replace: if the plain address does not open, Back comes here, and this stays.
+  location.assign(url + "/" + (code ? "#handoff=" + code : ""));
+}
+
+/** Moved to the plain address a moment ago and came back: it did not open, so stay. */
+function plainHopFailed() {
+  var at = 0; try { at = +localStorage.getItem("blazeit.plainHop") || 0; } catch (e) {}
+  return Date.now() - at < 120000;
+}
+
+/** Arrived from the website with a sign-in to take over. */
+async function takeHandoff() {
+  var m = /[#&]handoff=([\w-]+)/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  try {
+    await fetch("/api/site/handoff/use", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: m[1] }),
+    });
+  } catch (e) {}
 }
 
 (async function boot() {
   if (location.port === "8443") { siteMode = true; siteHop(); }
+  else await takeHandoff();
   // Paint the last-known theme immediately; the phone's real setting follows a moment later.
   var saved = "system";
   try { saved = localStorage.getItem("blazeit.theme") || "system"; } catch (e) {}

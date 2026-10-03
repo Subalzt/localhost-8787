@@ -181,10 +181,16 @@ data class SiteDto(
     val lan: String = "",
     /** This browser came over the internet but is on the phone's Wi-Fi: it can move to [lan]. */
     val near: Boolean = false,
+    /** The phone's plain address on the link this browser is on (http://IP:PORT), or "" over the internet. */
+    val plain: String = "",
 )
 
 @Serializable
 data class SiteEnrollDto(val code: String = "")
+
+/** A one-time code that carries a website sign-in over to the plain address. */
+@Serializable
+data class HandoffDto(val code: String = "")
 
 /** The phone's own offline network, for a laptop helper or another phone to join. */
 @Serializable

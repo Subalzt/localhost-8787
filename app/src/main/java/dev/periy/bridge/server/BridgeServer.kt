@@ -159,6 +159,9 @@ class BridgeServer(
         return devices.get(id)
     }
 
+    /** Website sign-ins on their way to the plain address: code to device id and when it runs out. */
+    private val handoffs = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
+
     @Volatile
     private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
 
@@ -260,7 +263,7 @@ class BridgeServer(
             // limited, see Site.mayAsk); nothing else until the phone says yes.
             if (call.viaSite()) {
                 if (path in PUBLIC_PATHS || path.startsWith("/api/pair") || path == "/api/site" || path == "/api/site/enroll") return@intercept
-            } else if (path in PUBLIC_PATHS || path.startsWith("/api/pair") || path == "/api/site") return@intercept
+            } else if (path in PUBLIC_PATHS || path.startsWith("/api/pair") || path == "/api/site" || path == "/api/site/handoff/use") return@intercept
             val device = call.device()
             if (device != null) {
                 devices.touch(device.id, call.clientIp())
@@ -1166,6 +1169,29 @@ class BridgeServer(
         }
     }
 
+    /**
+     * For a browser that came through the website on one of the phone's own links: the phone's
+     * plain address on that link, the old http://IP:PORT, which skips the certificate and the
+     * door. [over] is the link, as [localOver] says; "wifi" also for a browser that came over the
+     * internet from the phone's Wi-Fi (the page checks the Wi-Fi answers before it moves).
+     * Over the internet: "".
+     */
+    private fun ApplicationCall.plainUrl(over: String): String {
+        val all = dev.periy.bridge.net.NetInfo.addresses()
+        val dest = site?.destFor(request.origin.remotePort).orEmpty()
+        val kinds = when (over) {
+            "usb" -> listOf(dev.periy.bridge.net.LinkKind.USB)
+            "hotspot" -> listOf(dev.periy.bridge.net.LinkKind.HOTSPOT, dev.periy.bridge.net.LinkKind.DIRECT)
+            "tether" -> listOf(dev.periy.bridge.net.LinkKind.HOTSPOT, dev.periy.bridge.net.LinkKind.USB)
+            "wifi" -> listOf(dev.periy.bridge.net.LinkKind.WIFI)
+            else -> return ""
+        }
+        // Came in on an IPv4 (lan.NAME's A record): that same address.
+        val ip = if (dest.isNotEmpty() && ':' !in dest) dest
+        else kinds.firstNotNullOfOrNull { k -> all.firstOrNull { !it.isIpv6 && it.kind == k }?.host } ?: return ""
+        return "http://$ip:${config.port}"
+    }
+
     private fun ApplicationCall.arrivedOn(
         all: List<dev.periy.bridge.net.Address> = dev.periy.bridge.net.NetInfo.addresses(),
     ): Pair<String, dev.periy.bridge.net.LinkKind> {
@@ -1461,8 +1487,46 @@ class BridgeServer(
             // the same session again, for the whole name, so moving over keeps it signed in.
             val d = call.device()
             if (via && d != null && name.isNotEmpty()) call.response.cookies.append(siteCookie(d.id, name))
-            val near = via && door != null && call.request.headers[HttpHeaders.Host]?.substringBefore(':') != door.lanHost && door.nearby(call.clientIp())
-            call.respond(SiteDto(site = via, name = name, lan = door?.lanHost.orEmpty(), near = near))
+            val over = if (via) localOver(call.clientIp(), dev.periy.bridge.net.NetInfo.addresses(), door?.destFor(call.request.origin.remotePort).orEmpty()) else ""
+            // Already on one of the phone's links (the hotspot counts as Wi-Fi to Android): not near, there.
+            val near = via && door != null && over == "internet" && call.request.headers[HttpHeaders.Host]?.substringBefore(':') != door.lanHost && door.nearby(call.clientIp())
+            call.respond(SiteDto(site = via, name = name, lan = door?.lanHost.orEmpty(), near = near, plain = if (via) call.plainUrl(if (near) "wifi" else over) else ""))
+        }
+
+        // Signed in through the website and on one of the phone's own links: a code the plain
+        // address takes instead of asking the phone again. Once, within a minute.
+        post("/api/site/handoff") {
+            val d = call.device()
+            if (!call.viaSite() || d == null) {
+                call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Only through the website."))
+                return@post
+            }
+            val now = System.currentTimeMillis()
+            handoffs.entries.removeIf { it.value.second < now }
+            val code = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(18).also { java.security.SecureRandom().nextBytes(it) })
+            handoffs[code] = d.id to now + 60_000
+            call.respond(HandoffDto(code))
+        }
+
+        // The plain address, opened by the website with a handoff code: the same computer, signed in.
+        post("/api/site/handoff/use") {
+            val code = runCatching { call.receive<HandoffDto>().code }.getOrNull().orEmpty()
+            val (deviceId, until) = handoffs.remove(code) ?: (null to 0L)
+            if (call.viaSite() || deviceId == null || until < System.currentTimeMillis() || devices.get(deviceId) == null) {
+                call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That code is used up or too old."))
+                return@post
+            }
+            call.response.cookies.append(
+                Cookie(
+                    name = SESSION_COOKIE,
+                    value = Session.issue(config.sessionKey(), config.sessionTtlMs, deviceId),
+                    path = "/",
+                    httpOnly = true,
+                    maxAge = (config.sessionTtlMs / 1000).toInt(),
+                    extensions = mapOf("SameSite" to "Strict"),
+                )
+            )
+            call.respond(ApiResult(true))
         }
 
         // A helper downloaded through the website signs itself in with the one-time code baked into
