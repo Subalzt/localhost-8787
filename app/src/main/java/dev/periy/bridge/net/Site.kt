@@ -435,6 +435,8 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         var page: Socket? = null
         KeepAwake.start()
         try {
+            // Small answers (a ping, the song list) go out at once, not held back to fill a packet.
+            s.tcpNoDelay = true
             s.soTimeout = 15_000
             s.startHandshake()
             s.soTimeout = 0
