@@ -176,9 +176,24 @@ class BridgeServer(
     /** Came through the website's TLS door: the PIN, never a pairing prompt. */
     private fun ApplicationCall.viaSite(): Boolean = remoteIp() == dev.periy.bridge.net.Site.LOCAL_HOST
 
-    /** Who is really there: through the website, the browser's own address. */
-    private fun ApplicationCall.clientIp(): String =
-        if (viaSite()) site?.clientFor(request.origin.remotePort) ?: "?" else remoteIp()
+    /**
+     * Came through the tunnel: the phone's end connects to the page at its own loopback address,
+     * so this side of the socket says so. (The other side is 127.0.0.1, as adb's forward is too:
+     * look at this first.)
+     */
+    private fun ApplicationCall.viaTunnel(): Boolean =
+        request.local.localAddress.removePrefix("::ffff:").substringBefore('%') == dev.periy.bridge.net.TunnelProto.LOCAL_HOST
+
+    /** The far end of this device's tunnel: "2409:…" over TCP, or "152.59.187.3 (UDP)" punched through. */
+    private fun tunnelFar(deviceId: String?): String? =
+        deviceId?.let { id -> remote?.tunnel?.peers?.value?.firstOrNull { it.deviceId == id }?.remote }
+
+    /** Who is really there: through the website, the browser's own address; through the tunnel, the laptop's. */
+    private fun ApplicationCall.clientIp(): String = when {
+        viaSite() -> site?.clientFor(request.origin.remotePort) ?: "?"
+        viaTunnel() -> tunnelFar(device()?.id)?.removeSuffix(" (UDP)") ?: "the tunnel"
+        else -> remoteIp()
+    }
 
     fun start() {
         if (engine != null) return
@@ -465,7 +480,8 @@ class BridgeServer(
                 return@get
             }
             // Through the helper's adb forward (the cable, tethering off): from the phone's own loopback.
-            if (call.remoteIp().let { it == "127.0.0.1" || it == "::1" }) {
+            // The tunnel comes from loopback too, but to its own address: not adb.
+            if (!call.viaTunnel() && call.remoteIp().let { it == "127.0.0.1" || it == "::1" }) {
                 call.respond(RouteDto(via = "adb", host = "127.0.0.1"))
                 return@get
             }
@@ -478,7 +494,7 @@ class BridgeServer(
                 .distinct().map { if (':' in it) "[$it]:$stunPort" else "$it:$stunPort" }
             // Through the tunnel: this device's tunnel says how it came (IPv6 over TCP, or IPv4
             // punched through over UDP). Otherwise the phone's address that answered says it.
-            val far = if (tunnelled) call.device()?.let { d -> remote?.tunnel?.peers?.value?.firstOrNull { it.deviceId == d.id }?.remote } else null
+            val far = if (tunnelled) tunnelFar(call.device()?.id) else null
             val punched = far?.endsWith("(UDP)") == true
             val ip = when {
                 tunnelled -> if (punched || far == null || ':' !in far) "IPv4" else "IPv6"
@@ -1117,8 +1133,8 @@ class BridgeServer(
             return Way("website", over = localOver(who, all, site?.destFor(request.origin.remotePort).orEmpty()), ip = if (':' in who) "IPv6" else "IPv4")
         }
         val here = request.local.localAddress.removePrefix("::ffff:").substringBefore('%')
-        if (here == dev.periy.bridge.net.TunnelProto.LOCAL_HOST) {
-            val far = deviceId?.let { id -> remote?.tunnel?.peers?.value?.firstOrNull { it.deviceId == id }?.remote }
+        if (viaTunnel()) {
+            val far = tunnelFar(deviceId)
             val udp = far?.endsWith("(UDP)") == true
             return Way("tunnel", over = if (udp) "udp" else "tcp", ip = if (udp || far == null || ':' !in far) "IPv4" else "IPv6")
         }

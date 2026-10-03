@@ -3505,7 +3505,10 @@ function mirrorHint() {
   clearTimeout(mirrorHint.t);
   if (route && route.via === "usb") { el.hidden = true; return; }
   el.hidden = false;
-  el.textContent = "Showing the phone's screen over " + (route && route.via === "hotspot" ? "the hotspot" : route && route.via === "direct" ? "the direct link" : "Wi-Fi") +
+  var over = !route ? "your network" : slowLink() ? "the internet"
+    : { hotspot: "the hotspot", direct: "the direct link", wifi: "Wi-Fi", adb: "USB debugging" }[route.via]
+      || (route.via === "website" ? { hotspot: "the hotspot", usb: "the cable", tether: "the hotspot or cable" }[route.over] || "Wi-Fi" : "your network");
+  el.textContent = "Showing the phone's screen over " + over +
     ". A USB cable is faster: sharper, smoother and with less lag. Plug the phone in (USB debugging on) and it uses the cable by itself.";
   mirrorHint.t = setTimeout(function () { el.hidden = true; }, 20000);
 }
@@ -6648,7 +6651,10 @@ function playCurrent() {
 }
 
 /** Over the internet (the website, a tunnel): a thin link that every byte of the song playing needs. */
-function slowLink() { return !!route && (route.via === "internet" || route.via === "website"); }
+function slowLink() {
+  // The website on the phone's own hotspot, cable or Wi-Fi uses no internet: not slow.
+  return !!route && (route.via === "internet" || (route.via === "website" && (!route.over || route.over === "internet")));
+}
 
 /** The song playing has all arrived (from memory, or the stream read to its end). */
 function playingAllHere() {
