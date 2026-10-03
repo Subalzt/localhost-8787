@@ -326,10 +326,10 @@
   .dock .list .inner { padding: 4px 16px 8px; }
 
   /* ---------------------------------------------------------------- login */
-  /* The connect page: the app's night-blue hero, full screen, always dark whatever the theme. */
+  /* The connect page: full screen, black whatever the theme, the app's mark over one question. */
   #login { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; overflow: hidden auto; padding: 32px 20px;
-    color: #FFFFFF; background: var(--hero, linear-gradient(160deg, #2A7BE8 0%, #0B2F66 52%, #05070D 100%)); }
-  .lg-bg { position: fixed; inset: 0; pointer-events: none; }
+    color: #FFFFFF; background: #000000; }
+  .lg-bg { display: none; }
   .lg-glow { position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%; filter: blur(60px); opacity: .55; }
   .lg-glow.a { left: -20vmax; top: -30vmax; background: radial-gradient(circle, color-mix(in srgb, var(--hero-glow, #3D8BFF) 80%, #FFF), transparent 65%);
     animation: lg-drift 16s ease-in-out infinite alternate; }
@@ -342,34 +342,30 @@
   @keyframes lg-in { from { opacity: 0; transform: translateY(18px) scale(.98); } }
   .lg-radar { position: relative; width: 76px; height: 76px; margin: 0 auto 30px; display: grid; place-items: center; }
   /* The app's own icon, lit by its gold, as in the header. */
-  .lg-mark { position: relative; width: 76px; height: 76px; display: block; border-radius: 20px; overflow: hidden;
-    box-shadow: 0 0 0 1px rgba(255,255,255,.16), 7px 8px 0 rgba(0,0,0,.28), 0 18px 46px -10px rgba(255,176,0,.6); }
+  .lg-mark { position: relative; width: 76px; height: 76px; display: block; border-radius: 18px; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.16); }
   .lg-mark svg { width: 100%; height: 100%; display: block; }
   #login.waiting .lg-mark { animation: lg-beat 1.6s ease-in-out infinite; }
   @keyframes lg-beat { 50% { transform: scale(1.06); } }
-  .lg-brand { font-size: 13px; font-weight: 800; letter-spacing: 2.4px; text-transform: uppercase; opacity: .72; }
-  #login h1 { margin: 10px 0 0; font-size: clamp(38px, 9vw, 54px); font-weight: 900; line-height: 1.02; letter-spacing: -.045em;
-    text-shadow: .035em .05em 0 rgba(0,0,0,.35); }
+  .lg-brand { font-size: 13px; font-weight: 600; letter-spacing: .02em; color: rgba(255,255,255,.6); }
+  #login h1 { margin: 10px 0 0; font-size: clamp(36px, 8vw, 50px); font-weight: 700; line-height: 1.05; letter-spacing: -.03em; }
   #login p { margin: 14px auto 0; max-width: 34ch; font-size: 16px; color: rgba(255,255,255,.8); text-wrap: balance; }
   #login .pad { margin-top: 30px; }
   #login .actions { justify-content: center; margin: 0; }
   #login .btn.lg-go { height: 56px; padding: 0 30px; gap: 10px; border-radius: 28px; font-size: 17px; font-weight: 750; background: #FFFFFF; color: #0B1B33;
-    position: relative; overflow: hidden; box-shadow: 5px 6px 0 rgba(0,0,0,.28); transition: transform .18s cubic-bezier(.25,.8,.3,1), box-shadow .18s; }
+    position: relative; overflow: hidden; transition: background .18s, transform .18s; }
   #login .btn.lg-go svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
     transition: transform .2s; }
-  #login .btn.lg-go:hover { transform: translate(-1px, -2px); box-shadow: 7px 9px 0 rgba(0,0,0,.28); }
+  #login .btn.lg-go:hover { background: #E8E8ED; }
   #login .btn.lg-go:hover svg { transform: translateX(3px); }
-  #login .btn.lg-go:active { transform: translate(3px, 4px); box-shadow: 1px 1px 0 rgba(0,0,0,.28); }
-  #login .btn.lg-go::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(11,47,102,.12) 50%, transparent 70%);
-    transform: translateX(-100%); animation: lg-shine 3.4s ease-in-out 1s infinite; }
-  @keyframes lg-shine { 0%, 60% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+  #login .btn.lg-go:active { transform: scale(.97); }
   #login .btn.ghost { height: 44px; padding: 0 22px; border-radius: 22px; background: rgba(255,255,255,.14); color: #FFFFFF; }
   #login .btn.ghost:hover { background: rgba(255,255,255,.24); }
   #login .note.lg-ask { margin: 0 auto; max-width: none; color: rgba(255,255,255,.85); font-size: 15px; }
   #login .note.lg-ask b { color: #FFFFFF; }
   .code { display: flex; justify-content: center; gap: 10px; margin: 16px 0 12px; perspective: 600px; }
   .code span { width: 64px; height: 80px; display: grid; place-items: center; border-radius: 18px; font-family: var(--mono); font-size: 40px; font-weight: 800;
-    color: #0B1B33; background: #FFFFFF; box-shadow: 5px 6px 0 rgba(0,0,0,.28);
+    color: #000000; background: #FFFFFF;
     animation: lg-flip .5s cubic-bezier(.2,.9,.3,1.3) backwards; animation-delay: calc(var(--i, 0) * 90ms); }
   @keyframes lg-flip { from { opacity: 0; transform: rotateX(-90deg) translateY(10px); } }
   #login .meta { color: rgba(255,255,255,.7); font-size: 14px; margin-bottom: 18px; }
@@ -378,7 +374,7 @@
   .lg-chips span { font-size: 13px; font-weight: 500; color: rgba(255,255,255,.66); }
   .lg-chips span + span::before { content: "\00B7"; margin-right: 8px; color: rgba(255,255,255,.4); }
   @media (prefers-reduced-motion: reduce) {
-    .lg-glow, #login.waiting .lg-mark, #login .btn.lg-go::after, .code span, .lg-card { animation: none; }
+    #login.waiting .lg-mark, .code span, .lg-card { animation: none; }
   }
 
   /* ---------------------------------------------------------------- phone storage */
@@ -2355,7 +2351,7 @@
     <svg class="lg-bolt" viewBox="0 0 24 24"><path d="M13.5 2.5 5 13.5h6.5l-1 8 8.5-11h-6.5l1-8Z"/></svg>
   </div>
   <div class="lg-card">
-    <div class="lg-radar" aria-hidden="true"><span class="lg-mark"><svg aria-hidden="true" viewBox="0 0 108 108"><defs><linearGradient id="lga" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A2270"/><stop offset=".55" stop-color="#0C0C18"/><stop offset="1" stop-color="#08080E"/></linearGradient><radialGradient id="lgc" cx="98" cy="18" r="48" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#64D2FF" stop-opacity=".44"/><stop offset="1" stop-color="#64D2FF" stop-opacity="0"/></radialGradient><radialGradient id="lgd" cx="30" cy="100" r="56" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFB000" stop-opacity=".4"/><stop offset="1" stop-color="#FFB000" stop-opacity="0"/></radialGradient><radialGradient id="lge" cx="104" cy="104" r="50" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#BF5AF2" stop-opacity=".4"/><stop offset="1" stop-color="#BF5AF2" stop-opacity="0"/></radialGradient><linearGradient id="lgb" x1="330" y1="272" x2="520" y2="586" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFF4A8"/><stop offset=".42" stop-color="#FFD60A"/><stop offset="1" stop-color="#FF9F0A"/></linearGradient></defs><rect width="108" height="108" rx="0" fill="url(#lga)"/><rect width="108" height="108" rx="0" fill="url(#lgc)"/><rect width="108" height="108" rx="0" fill="url(#lgd)"/><rect width="108" height="108" rx="0" fill="url(#lge)"/><path transform="translate(54 54) scale(.2) translate(-438.5 -429)" d="M295,272 H371 V358 A127.5,127.5 0 1 1 371,551 V586 H295 V484 H433 V527 L527,458 L433,386 V430 H295 Z" fill="url(#lgb)"/></svg></span></div>
+    <div class="lg-radar" aria-hidden="true"><span class="lg-mark"><svg aria-hidden="true" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0b0b0b"/><g fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" transform="translate(50 50) scale(.86) translate(-51 -50.75)"><circle cx="36" cy="37" r="10" stroke="#fff"/><circle cx="36" cy="62" r="12.5" stroke="#fff"/><path d="M55 27 H76 L61 74" stroke="#FFD60A"/></g></svg></span></div>
     <div class="lg-brand">Localhost 8787</div>
     <h1>Connect this<br>computer</h1>
     <p id="login-device">The phone will ask you to allow it.</p>
@@ -9732,6 +9728,8 @@ function cmdkOpen() {
   box.hidden = false;
   $("cmdk-q").value = "";
   cmdkRender();
+  // Songs and albums are found too, so the library comes in now if Music has not been opened yet.
+  if (!music.loaded) musicOpen().then(function () { if (!box.hidden) cmdkRender(); });
   setTimeout(function () { $("cmdk-q").focus(); }, 0);
 }
 
