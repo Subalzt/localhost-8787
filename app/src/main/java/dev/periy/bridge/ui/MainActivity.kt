@@ -243,16 +243,17 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** The tabs along the bottom. Music is not a page beside the others: it opens full screen (MusicScreen.kt). */
+/**
+ * The tabs along the bottom. Music is not a page beside the others: it opens full screen
+ * (MusicScreen.kt). Control and the conversations with linked phones open from Devices.
+ */
 private val TABS = listOf(
     "Home" to BlazeIcons.Home,
-    "Messages" to BlazeIcons.Message,
     "Devices" to BlazeIcons.Phones,
     "Music" to BlazeIcons.Music,
-    "Control" to BlazeIcons.Trackpad,
     "Settings" to BlazeIcons.Sliders,
 )
-private const val PILL_MUSIC = 3
+private const val PILL_MUSIC = 2
 
 /** The pages a swipe moves between: every tab but Music. */
 private val PAGES = TABS.filterIndexed { i, _ -> i != PILL_MUSIC }
@@ -271,9 +272,7 @@ private val openChat = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
 /** Debug builds: a linked phone whose files to open (`--es peerbrowse <name>`). */
 private val debugBrowse = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
-private const val TAB_MESSAGES = 1
-private const val TAB_DEVICES = 2
-private const val TAB_CONTROL = 3
+private const val TAB_DEVICES = 1
 
 /** The header at the top of every screen: its large title and the monitor switch, over the content. */
 private val HeaderHeight = 60.dp
@@ -342,6 +341,8 @@ private fun BlazeItUi(vm: MainViewModel) {
     var browsePeer by remember { mutableStateOf<Peer?>(null) }
     // The conversation open over the app, by the linked phone's name.
     var chatWith by remember { mutableStateOf<String?>(null) }
+    // The trackpad and keys for a computer, open over the app.
+    var controlOpen by remember { mutableStateOf(false) }
     val threads by ctx.container.messages.threads.collectAsStateWithLifecycle()
     var showMonitor by remember { mutableStateOf(ctx.container.prefs.showMonitor) }
     val setMonitor = { on: Boolean -> showMonitor = on; ctx.container.prefs.showMonitor = on }
@@ -356,7 +357,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     // lyrics do the same in their own screens.)
     val oemSwipe = rememberBackSwipe(enabled = showOem) { showOem = false }
     // A tab goes back to Home: the pages slide towards it with the swipe, a little under half way.
-    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && chatWith == null && tab != TAB_HOME && !shelf.showing) { events ->
+    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && tab != TAB_HOME && !shelf.showing) { events ->
         val from = pager.currentPage
         val toward = if (from > TAB_HOME) -1 else 1
         try {
@@ -368,18 +369,19 @@ private fun BlazeItUi(vm: MainViewModel) {
     }
     // At Home, from Android 12 on the system takes back itself (and, from 14, shows it coming):
     // the app goes to the background, as it does below 12 here.
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
         (ctx as? android.app.Activity)?.moveTaskToBack(true)
     }
     // Music, open: a search closes, then an album (in Music's own screen), then Music itself, back
     // to the app, following the finger. The player, open over it, goes back down a step first.
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && shelf.showing) { shelf.back() }
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && shelf.showing) { shelf.back() }
     val musicSwipe = rememberBackSwipe(
-        enabled = !showOem && browsePeer == null && chatWith == null && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
+        enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
     ) { shelf.showing = false }
     // A linked phone's files, at their top folder (a folder inside goes up a folder first, in its screen).
     val peerSwipe = rememberBackSwipe(enabled = browsePeer != null) { browsePeer = null }
     val chatSwipe = rememberBackSwipe(enabled = chatWith != null) { chatWith = null }
+    val controlSwipe = rememberBackSwipe(enabled = controlOpen) { controlOpen = false }
     // The player: down to the mini player (or from the queue back to the player) with the finger.
     androidx.activity.compose.PredictiveBackHandler(enabled = now.current != null && playerOpen) { events ->
         val from = motion.p
@@ -434,7 +436,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     LaunchedEffect(Unit) { debugTab.collect { if (it >= 0) { onPill(it); debugTab.value = -1 } } }
     LaunchedEffect(Unit) { debugBrowse.collect { n -> if (n != null) { browsePeer = peers.find(n); debugBrowse.value = null } } }
     LaunchedEffect(Unit) { openPlayer.collect { if (it) { showOem = false; browsePeer = null; motion.expand(); openPlayer.value = false } } }
-    LaunchedEffect(Unit) { openChat.collect { n -> if (n != null) { showOem = false; browsePeer = null; shelf.showing = false; goTo(TAB_MESSAGES); chatWith = n; openChat.value = null } } }
+    LaunchedEffect(Unit) { openChat.collect { n -> if (n != null) { showOem = false; browsePeer = null; shelf.showing = false; goTo(TAB_DEVICES); controlOpen = false; chatWith = n; openChat.value = null } } }
     // The library loads once it can be read (the queue from last time comes back with it), and
     // covers the catalogue finds later are drawn when they arrive.
     LoadMusicOnce(shelf, ctx.container.music, open = shelf.showing, granted = state.musicGranted) { player.restore(it) }
@@ -507,7 +509,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     val contentTop = if (!heroUnderBar) headerTop else 0.dp
 
     Box(Modifier.fillMaxSize().background(Bridge.Bg)) {
-        Box(Modifier.fillMaxSize().then(if (shelf.showing) SharedAxisBack.under(musicSwipe) else Modifier).then(if (browsePeer != null) SharedAxisBack.under(peerSwipe) else Modifier).then(if (chatWith != null) SharedAxisBack.under(chatSwipe) else Modifier)) {
+        Box(Modifier.fillMaxSize().then(if (shelf.showing) SharedAxisBack.under(musicSwipe) else Modifier).then(if (browsePeer != null) SharedAxisBack.under(peerSwipe) else Modifier).then(if (chatWith != null) SharedAxisBack.under(chatSwipe) else Modifier).then(if (controlOpen) SharedAxisBack.under(controlSwipe) else Modifier)) {
             StyleBackground()
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).imePadding()) {
@@ -528,13 +530,7 @@ private fun BlazeItUi(vm: MainViewModel) {
                             scaleX = s; scaleY = s
                             alpha = 1f - 0.45f * off
                         }) {
-                        if (page == TAB_CONTROL) ControlPane(
-                            running = running,
-                            onStart = { BridgeService.start(ctx) },
-                            modifier = Modifier.fillMaxSize().padding(top = top, bottom = underBar),
-                            active = tab == TAB_CONTROL,
-                        )
-                        else LazyColumn(Modifier.fillMaxSize(), state = lists[page], contentPadding = PaddingValues(top = top, bottom = 28.dp + underBar)) {
+                        LazyColumn(Modifier.fillMaxSize(), state = lists[page], contentPadding = PaddingValues(top = top, bottom = 28.dp + underBar)) {
                             when (page) {
                                 TAB_HOME -> homeTab(
                                     state, running, direct, laptopLink.mode, shared, clipStatus, requests, vm, sharedWith,
@@ -549,17 +545,13 @@ private fun BlazeItUi(vm: MainViewModel) {
                                     openTether = openHotspot,
                                     onToggle = toggleServer,
                                 )
-                                TAB_MESSAGES -> messagesTab(
-                                    paired, threads,
-                                    open = { chatWith = it },
-                                    toDevices = { goTo(TAB_DEVICES) },
-                                )
                                 TAB_DEVICES -> devicesTab(
-                                    running, transfers, nearby, paired, peerStatus, routes, devices, live, vm,
+                                    running, transfers, nearby, paired, peerStatus, routes, devices, live, threads, vm,
                                     connect = peers::connect,
-                                    forget = peers::forget,
                                     sendFilesTo = { sendTarget = it; pickForPhone.launch(arrayOf("*/*")) },
                                     browse = { browsePeer = it },
+                                    chat = { chatWith = it },
+                                    openControl = { controlOpen = true },
                                 )
                                 else -> settingsTab(
                                     state, vm, theme, look, laptopLink, direct, toggleDirect,
@@ -652,6 +644,26 @@ private fun BlazeItUi(vm: MainViewModel) {
             // Kept while it slides out, after browsePeer has gone.
             val shownPeer = remember { browsePeer }
             (browsePeer ?: shownPeer)?.let { Box(SharedAxisBack.over(peerSwipe)) { PeerFilesScreen(it) { browsePeer = null } } }
+        }
+
+        // Control slides in over the app: the trackpad and keys for the computer with the helper.
+        androidx.compose.animation.AnimatedVisibility(
+            controlOpen,
+            enter = androidx.compose.animation.slideInHorizontally(tween(300)) { it } + androidx.compose.animation.fadeIn(tween(200)),
+            exit = androidx.compose.animation.slideOutHorizontally(tween(260)) { it } + androidx.compose.animation.fadeOut(tween(200)),
+        ) {
+            Box(SharedAxisBack.over(controlSwipe)) {
+                androidx.activity.compose.BackHandler { controlOpen = false }
+                Column(Modifier.fillMaxSize().background(Bridge.Bg).padding(top = statusTop)) {
+                    BackBar("Devices", "Control") { controlOpen = false }
+                    ControlPane(
+                        running = running,
+                        onStart = { BridgeService.start(ctx) },
+                        modifier = Modifier.weight(1f).fillMaxWidth().padding(bottom = bottomInset),
+                        active = true,
+                    )
+                }
+            }
         }
 
         // A conversation slides in over the app, as a linked phone's files do.
@@ -1143,60 +1155,6 @@ private fun FitText(text: androidx.compose.ui.text.AnnotatedString, style: TextS
     }
 }
 
-/**
- * Who is using the phone right now and how each came in: the cable, the hotspot, Wi-Fi, USB
- * debugging, the tunnel or the website (on a local link or over the internet), IPv4 or IPv6.
- * Anyone heard from in the last two minutes.
- */
-@Composable
-private fun ConnectedNow() {
-    val c = (LocalContext.current.applicationContext as dev.periy.bridge.BridgeApp).container
-    val ways by dev.periy.bridge.server.Ways.now.collectAsStateWithLifecycle()
-    val devices by c.devices.devices.collectAsStateWithLifecycle()
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        while (true) { kotlinx.coroutines.delay(10_000); now = System.currentTimeMillis() }
-    }
-    val live = ways.entries.filter { now - it.value.at < 120_000 }
-        .mapNotNull { (id, w) -> devices.firstOrNull { it.id == id }?.let { it to w } }
-        .sortedByDescending { it.second.at }
-    if (live.isEmpty()) return
-    Text("Connected now", style = CaptionStyle.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text,
-        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
-    live.forEach { (d, w) ->
-        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-            val icon = when (w.via) {
-                "usb", "adb" -> BlazeIcons.Usb
-                "hotspot" -> BlazeIcons.Hotspot
-                "wifi" -> BlazeIcons.Wifi
-                "direct" -> BlazeIcons.Bolt
-                "website" -> BlazeIcons.Lock
-                else -> BlazeIcons.Link
-            }
-            Box {
-                Icon(icon, null, tint = Bridge.Text, modifier = Modifier.size(20.dp))
-                // Green while it is talking to the phone, grey once it has gone quiet.
-                Box(Modifier.align(Alignment.BottomEnd).size(8.dp).clip(CircleShape).background(Bridge.Bg).padding(1.5.dp)
-                    .clip(CircleShape).background(if (now - w.at < 30_000) Bridge.Good else Bridge.Faint))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                // The same machine can be here twice: its helper, and a browser on it.
-                val role = when {
-                    d.name.startsWith(dev.periy.bridge.server.HELPER_PREFIX) -> "helper"
-                    d.name.startsWith(dev.periy.bridge.server.PHONE_PREFIX) -> "phone"
-                    else -> "browser"
-                }
-                Text(dev.periy.bridge.server.shownName(d, devices) + " · " + role, style = CaptionStyle.copy(fontSize = 14.sp), color = Bridge.Text,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(w.name, style = CaptionStyle.copy(fontSize = 13.sp), color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(w.detail, style = CaptionStyle.copy(fontSize = 12.sp), color = Bridge.Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
-    Spacer(Modifier.height(6.dp))
-}
-
 /** One way in: what it is, the address (a tap copies it), and when it works. */
 @Composable
 private fun WayIn(label: String, value: String, note: String) {
@@ -1236,7 +1194,6 @@ private fun HeroExtras(
 ) {
     if (!running) return
     Column(modifier.fillMaxWidth().padding(top = 6.dp)) {
-        ConnectedNow()
         if (siteUrl != null) WayIn("Any browser", siteUrl.removePrefix("https://"), "anywhere with IPv6")
         WayIn("With the helper", "localhost:8787", "the fastest way")
         // Each link the phone is on, for a browser on the same one: the hotspot, Wi-Fi, the cable.
@@ -1629,8 +1586,10 @@ private fun ago(at: Long): String {
 // ---------------------------------------------------------------------- tab: devices
 
 /**
- * Everything this phone talks to: the computers and phones allowed in (live ones first in
- * mind), other phones nearby to send to, and at the bottom, unpairing everything.
+ * Everything this phone talks to, and from here everything done with them: the computers, each
+ * with how it is connected now (the cable, the hotspot, Wi-Fi, the tunnel, the website), and
+ * Control for the one with the helper; the linked phones, each a conversation, its files and a
+ * send; then adding a phone (nearby, by address, or by a code from anywhere), and unpairing.
  */
 private fun LazyListScope.devicesTab(
     running: Boolean,
@@ -1641,11 +1600,13 @@ private fun LazyListScope.devicesTab(
     routes: Map<String, String>,
     devices: List<PairedDevice>,
     live: Map<String, Int>,
+    threads: Map<String, List<dev.periy.bridge.server.ChatMsg>>,
     vm: MainViewModel,
     connect: (NearbyPhone) -> Unit,
-    forget: (Peer) -> Unit,
     sendFilesTo: (Peer) -> Unit,
     browse: (Peer) -> Unit,
+    chat: (String) -> Unit,
+    openControl: () -> Unit,
 ) {
     val pairedNames = paired.map { it.name }.toSet()
     val unpaired = nearby.filter { it.name !in pairedNames }
@@ -1654,83 +1615,49 @@ private fun LazyListScope.devicesTab(
     val computers = devices.filter { it.id !in linkedIds }
 
     item {
-        SectionBar("Connected", Modifier.padding(top = 4.dp)) {
-            if (live.isNotEmpty()) Text("${live.size} live", style = LabelStyle.copy(fontWeight = FontWeight.SemiBold), color = Bridge.Lit)
+        SectionBar("Computers", Modifier.padding(top = 4.dp)) {
+            val n = computers.count { (live[it.id] ?: 0) > 0 }
+            if (n > 0) Text("$n live", style = LabelStyle.copy(fontWeight = FontWeight.SemiBold), color = Bridge.Lit)
         }
     }
-    item {
-        GroupCard {
-            if (computers.isEmpty()) SettingRow("None yet", first = true, titleColor = Bridge.Muted)
-            // Live ones first, then by when they were last here.
-            computers.sortedWith(compareByDescending<PairedDevice> { (live[it.id] ?: 0) > 0 }.thenByDescending { it.lastSeenAt })
-                .forEachIndexed { i, d ->
-                    val isLive = (live[d.id] ?: 0) > 0
-                    val phone = d.name.startsWith("BlazeItPhone") || d.name.contains("phone", ignoreCase = true)
-                    MediaRow(
-                        d.name, (if (isLive) "Live now · " else lastSeen(d.lastSeenAt) + " · ") + d.lastIp,
-                        icon = if (phone) BlazeIcons.Phones else BlazeIcons.Laptop,
-                        color = Color(0xFF5E5CE6),
-                        dim = !isLive,
-                        first = i == 0,
-                    ) {
-                        IconChip(BlazeIcons.Close, "Remove ${d.name}", tint = Bridge.Muted, size = 32.dp) { vm.removeDevice(d.id) }
-                    }
-                }
-        }
-    }
+    item { ComputersCard(computers, devices, live) { vm.removeDevice(it) } }
+    item { Spacer(Modifier.height(12.dp)) }
+    item { ControlRow(running, openControl) }
 
     item { SectionBar("Phones") }
-    item { Searching(running, found = paired.size + unpaired.size) }
-
-    if (paired.isNotEmpty()) {
-        item { SectionBar("My phones") }
-        item {
-            GroupCard {
-                paired.forEachIndexed { i, p ->
-                    val here = nearby.any { it.name == p.name }
-                    // Linked both ways, a phone is one more place: its files open with a tap, the
-                    // clipboard is shared with it, and so are the computers on it.
-                    MediaRow(
-                        p.name,
-                        routes[p.name] ?: when {
-                            !p.mutual -> "One way only · update Localhost 8787 on it"
-                            here -> "Nearby · files and clipboard shared"
-                            else -> "Files and clipboard shared"
-                        },
-                        BlazeIcons.Phones, Color(0xFF30D158), first = i == 0, dim = !here && !p.mutual,
-                        onClick = { browse(p) },
-                    ) {
-                        IconChip(BlazeIcons.Upload, "Send files to ${p.name}", tint = Bridge.OnAccent, bg = Bridge.Accent, size = 36.dp) { sendFilesTo(p) }
-                        Spacer(Modifier.width(8.dp))
-                        IconChip(BlazeIcons.Close, "Unlink ${p.name}", tint = Bridge.Muted, size = 36.dp) { forget(p) }
-                    }
-                }
-            }
-        }
+    item { PhonesCard(paired, nearby, threads, routes, chat, browse, sendFilesTo) }
+    if (paired.isNotEmpty()) item {
+        Text(
+            "A tap opens the conversation. Messages are sealed with a key only the two phones hold, and wait on this phone until the other can be reached.",
+            style = CaptionStyle, color = Bridge.Muted,
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp),
+        )
     }
+
+    item { SectionBar("Add a phone") }
+    item { Searching(running, found = unpaired.size) }
     if (unpaired.isNotEmpty()) {
-        item { SectionBar("Nearby") }
+        item { Spacer(Modifier.height(12.dp)) }
         item {
             GroupCard {
                 unpaired.forEachIndexed { i, n ->
-                    val s = peerStatus[n.host]
+                    val st = peerStatus[n.host]
                     MediaRow(
                         n.name,
-                        when (s) {
-                            is PeerStatus.Waiting -> "Allow it on ${n.name} · code ${s.code}"
-                            is PeerStatus.Failed -> s.message
-                            null -> n.host
+                        when (st) {
+                            is PeerStatus.Waiting -> "Allow it on ${n.name} · code ${st.code}"
+                            is PeerStatus.Failed -> st.message
+                            null -> "Nearby · same Wi-Fi"
                         },
-                        BlazeIcons.Phones, Color(0xFF30D158),
+                        BlazeIcons.Wifi, Color(0xFF30D158),
                         first = i == 0,
                     ) {
-                        if (s !is PeerStatus.Waiting) SoftButton("Connect") { connect(n) }
+                        if (st !is PeerStatus.Waiting) SoftButton("Link") { connect(n) }
                     }
                 }
             }
         }
     }
-
     // Attempts made by address are not in the discovered list, so their progress shows here.
     val listed = unpaired.map { it.host }.toSet() + dev.periy.bridge.server.PeerManager.LINK_KEY
     peerStatus.filterKeys { it !in listed }.forEach { (host, st) ->
@@ -1759,6 +1686,159 @@ private fun LazyListScope.devicesTab(
         GroupCard {
             SettingRow("Sign out all devices", first = true, titleColor = Bridge.Danger, onClick = { vm.unpairAll() })
         }
+    }
+}
+
+/** A way in, as an icon: the cable, the hotspot, Wi-Fi, the direct link, the website, the tunnel. */
+private fun wayIcon(via: String?): androidx.compose.ui.graphics.vector.ImageVector? = when (via) {
+    "usb", "adb" -> BlazeIcons.Usb
+    "hotspot" -> BlazeIcons.Hotspot
+    "wifi" -> BlazeIcons.Wifi
+    "direct" -> BlazeIcons.Bolt
+    "website" -> BlazeIcons.Lock
+    "tunnel" -> BlazeIcons.Link
+    null -> null
+    else -> BlazeIcons.Wifi
+}
+
+/** How long a way in still counts as how a device is connected now. */
+private const val WAY_FRESH_MS = 120_000L
+
+/** The minute, for lists that say "now": they look again every ten seconds. */
+@Composable
+private fun rememberNow(): Long {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(10_000); now = System.currentTimeMillis() } }
+    return now
+}
+
+/**
+ * The computers allowed in: each one's icon is how it is connected right now, and under its name
+ * that way in words (Same Wi-Fi, USB cable, Internet tunnel, Website over the internet), whether
+ * it is the helper or a browser, and then what that way runs over and how fast it is. Quiet ones
+ * say when they were last here.
+ */
+@Composable
+private fun ComputersCard(computers: List<PairedDevice>, all: List<PairedDevice>, live: Map<String, Int>, remove: (String) -> Unit) {
+    val ways by dev.periy.bridge.server.Ways.now.collectAsStateWithLifecycle()
+    val now = rememberNow()
+    GroupCard {
+        if (computers.isEmpty()) SettingRow("None yet", detail = "Open the address on Home in a browser, or run the helper", first = true, titleColor = Bridge.Muted)
+        computers.sortedWith(compareByDescending<PairedDevice> { (live[it.id] ?: 0) > 0 }.thenByDescending { it.lastSeenAt })
+            .forEachIndexed { i, d ->
+                val isLive = (live[d.id] ?: 0) > 0
+                val w = ways[d.id]?.takeIf { now - it.at < WAY_FRESH_MS }
+                val role = when {
+                    d.name.startsWith(dev.periy.bridge.server.HELPER_PREFIX) -> "Helper"
+                    d.name.startsWith(dev.periy.bridge.server.PHONE_PREFIX) -> "Phone"
+                    else -> "Browser"
+                }
+                MediaRow(
+                    dev.periy.bridge.server.shownName(d, all),
+                    if (w != null) "${w.name} · $role" else "$role · ${lastSeen(d.lastSeenAt)}",
+                    icon = wayIcon(w?.via) ?: BlazeIcons.Laptop,
+                    color = Color(0xFF5E5CE6),
+                    dim = !isLive && w == null,
+                    first = i == 0,
+                    below = {
+                        Text(
+                            w?.detail ?: d.lastIp,
+                            style = CaptionStyle.copy(fontSize = 12.sp), color = Bridge.Muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                ) {
+                    IconChip(BlazeIcons.Close, "Remove ${d.name}", tint = Bridge.Muted, size = 32.dp) { remove(d.id) }
+                }
+            }
+    }
+}
+
+/** Control: the trackpad and keys for the computer running the helper, on a screen of its own. */
+@Composable
+private fun ControlRow(running: Boolean, open: () -> Unit) {
+    val laptops by dev.periy.bridge.server.Control.connected.collectAsStateWithLifecycle()
+    GroupCard {
+        SettingRow(
+            "Control",
+            detail = when {
+                !running -> "Turn Localhost 8787 on from Home first"
+                laptops.isEmpty() -> "Trackpad and keys for a computer · needs the helper running there"
+                else -> "Trackpad and keys for " + dev.periy.bridge.server.helperMachine(laptops.first())
+            },
+            first = true, icon = BlazeIcons.Trackpad, iconColor = Color(0xFF5E5CE6), onClick = open,
+        ) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
+    }
+}
+
+/**
+ * The linked phones: each is a conversation (a tap opens it), with its last message, how many are
+ * unread, and how it is reached now (nearby on the same Wi-Fi, or through its tunnel from another
+ * network); its files and a send are on the row.
+ */
+@Composable
+private fun PhonesCard(
+    paired: List<Peer>, nearby: List<NearbyPhone>, threads: Map<String, List<dev.periy.bridge.server.ChatMsg>>,
+    routes: Map<String, String>, chat: (String) -> Unit, browse: (Peer) -> Unit, sendFilesTo: (Peer) -> Unit,
+) {
+    val ways by dev.periy.bridge.server.Ways.now.collectAsStateWithLifecycle()
+    val now = rememberNow()
+    GroupCard {
+        if (paired.isEmpty()) SettingRow("None linked yet", detail = "Link one below: nearby, by address, or with a code from anywhere", first = true, titleColor = Bridge.Muted)
+        paired.sortedByDescending { threads[it.name]?.lastOrNull()?.at ?: 0L }.forEachIndexed { i, p ->
+            val here = nearby.any { it.name == p.name }
+            val w = ways[p.deviceId]?.takeIf { now - it.at < WAY_FRESH_MS }
+            val l = threads[p.name].orEmpty()
+            val last = l.lastOrNull()
+            val unread = l.count { !it.mine && it.state == "new" }
+            val how = routes[p.name] ?: when {
+                !p.mutual -> "One way only · update Localhost 8787 on it"
+                here -> "Nearby · same Wi-Fi"
+                w != null -> w.name + if (w.via == "tunnel") " · " + (if (w.over == "udp") "punched over IPv4" else "IPv6") else ""
+                p.tunnel.isNotEmpty() -> "Anywhere · through its tunnel"
+                else -> "On the same Wi-Fi only"
+            }
+            MediaRow(
+                p.name,
+                when {
+                    last == null -> "No messages yet"
+                    last.mine && last.state == "waiting" -> "Waiting: " + last.text
+                    last.mine -> "You: " + last.text
+                    else -> last.text
+                },
+                icon = if (here) BlazeIcons.Wifi else BlazeIcons.Phones,
+                color = Color(0xFF30D158),
+                first = i == 0,
+                onClick = { chat(p.name) },
+                below = { Text(how, style = CaptionStyle.copy(fontSize = 12.sp), color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            ) {
+                if (unread > 0) {
+                    Box(
+                        Modifier.clip(CircleShape).background(Bridge.Text).padding(horizontal = 7.dp, vertical = 1.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { Text("$unread", style = LabelStyle.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Bg) }
+                    Spacer(Modifier.width(8.dp))
+                }
+                IconChip(BlazeIcons.Folder, "Files on ${p.name}", tint = Bridge.Text, size = 34.dp) { browse(p) }
+                Spacer(Modifier.width(6.dp))
+                IconChip(BlazeIcons.Upload, "Send files to ${p.name}", tint = Bridge.Text, size = 34.dp) { sendFilesTo(p) }
+            }
+        }
+    }
+}
+
+/** Over a screen opened from a tab: back to [back], and the screen's [title]. */
+@Composable
+private fun BackBar(back: String, title: String, onBack: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onBack).padding(horizontal = 6.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(BlazeIcons.Chevron, "Back", tint = Bridge.Text, modifier = Modifier.size(22.dp).graphicsLayer { rotationZ = 180f })
+            Text(back, style = TextStyle(fontSize = 17.sp), color = Bridge.Text)
+        }
+        Text(title, style = TitleStyle, color = Bridge.Text, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(72.dp))
     }
 }
 

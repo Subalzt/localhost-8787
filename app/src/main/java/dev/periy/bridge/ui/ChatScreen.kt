@@ -58,75 +58,9 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * The Messages tab: a conversation for every linked phone, the newest first, each with its last
- * message and how many are unread. Linking happens on Devices; until then this says so.
+ * One conversation with a linked phone: the messages, newest at the foot, and a line to write
+ * in. Unlinking the phone is here too, asked first.
  */
-fun LazyListScope.messagesTab(
-    paired: List<Peer>,
-    threads: Map<String, List<ChatMsg>>,
-    open: (String) -> Unit,
-    toDevices: () -> Unit,
-) {
-    item { SectionBar("Linked phones", Modifier.padding(top = 4.dp)) }
-    if (paired.isEmpty()) {
-        item {
-            GroupCard {
-                Column(Modifier.fillMaxWidth().padding(18.dp)) {
-                    Text("No linked phones yet", style = TitleStyle, color = Bridge.Text)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Link a phone on Devices, on the same Wi-Fi or with a link code from anywhere, and message it here. Nothing passes through anyone else.",
-                        style = BodyStyle, color = Bridge.Muted,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    SoftButton("Go to Devices", onClick = toDevices)
-                }
-            }
-        }
-        return
-    }
-    val rows = paired.map { it.name to threads[it.name].orEmpty() }
-        .sortedByDescending { (_, l) -> l.lastOrNull()?.at ?: 0L }
-    item {
-        GroupCard {
-            rows.forEachIndexed { i, (name, l) ->
-                val last = l.lastOrNull()
-                val unread = l.count { !it.mine && it.state == "new" }
-                MediaRow(
-                    name,
-                    when {
-                        last == null -> "No messages yet"
-                        last.mine && last.state == "waiting" -> "Waiting: " + last.text
-                        last.mine -> "You: " + last.text
-                        else -> last.text
-                    },
-                    BlazeIcons.Message, Color(0xFF30D158), first = i == 0,
-                    onClick = { open(name) },
-                ) {
-                    Column(horizontalAlignment = Alignment.End) {
-                        if (last != null) Text(shortTime(last.at), style = CaptionStyle, color = if (unread > 0) Bridge.Text else Bridge.Muted)
-                        if (unread > 0) {
-                            Spacer(Modifier.height(4.dp))
-                            Box(
-                                Modifier.clip(CircleShape).background(Bridge.Text).padding(horizontal = 7.dp, vertical = 1.dp),
-                                contentAlignment = Alignment.Center,
-                            ) { Text("$unread", style = LabelStyle.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Bg) }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    item {
-        Text(
-            "Each message is sealed with a key only the two phones hold, and waits on this phone until the other can be reached.",
-            style = CaptionStyle, color = Bridge.Muted,
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp),
-        )
-    }
-}
-
-/** One conversation: the messages, newest at the foot, and a line to write in. */
 @Composable
 fun ChatScreen(name: String, onClose: () -> Unit) {
     val c = LocalContext.current.container
@@ -134,6 +68,7 @@ fun ChatScreen(name: String, onClose: () -> Unit) {
     val threads by messages.threads.collectAsState()
     val list = threads[name].orEmpty()
     var text by remember { mutableStateOf("") }
+    var unlinking by remember { mutableStateOf(false) }
     val state = rememberLazyListState()
 
     // Read while it is open, and what arrives now is read as it comes.
@@ -154,7 +89,25 @@ fun ChatScreen(name: String, onClose: () -> Unit) {
                 Text(name, style = TitleStyle, color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("Phone to phone, sealed", style = CaptionStyle, color = Bridge.Muted, maxLines = 1)
             }
+            Text(
+                "Unlink", style = TextStyle(fontSize = 15.sp), color = Bridge.Danger,
+                modifier = Modifier.clip(RoundedCornerShape(50)).clickable { unlinking = true }.padding(horizontal = 10.dp, vertical = 8.dp),
+            )
         }
+        if (unlinking) androidx.compose.material3.AlertDialog(
+            onDismissRequest = { unlinking = false },
+            title = { Text("Unlink $name?") },
+            text = { Text("The two phones stop sharing files, the clipboard and messages, and each shuts the other out. This conversation stays on this phone.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    unlinking = false
+                    c.peers.find(name)?.let(c.peers::forget)
+                    onClose()
+                }) { Text("Unlink", color = Bridge.Danger) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { unlinking = false }) { Text("Keep", color = Bridge.Text) } },
+            containerColor = Bridge.Surface, titleContentColor = Bridge.Text, textContentColor = Bridge.Muted,
+        )
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(Bridge.Outline))
 
         // Newest at the foot: the list runs upwards from the line to write in.
