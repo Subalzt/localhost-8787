@@ -124,9 +124,10 @@ import kotlin.math.roundToInt
 // ---------------------------------------------------------------------------- the waveform
 
 /**
- * The seek bar, drawn as the song's own waveform: grey where it is still to come, the cover's
- * colour where it has played. It grows up out of a flat line the moment the song's loudness
- * is known. Touch and drag to choose a place ([onScrub] says where, to show it); let go to go
+ * The seek bar, drawn as the song's own waveform: faint where it is still to come, nearly solid
+ * where it has played. It grows up out of a flat line the moment the song's loudness is known.
+ * While the song plays, what has played melts into one smooth shape whose front edge rises and
+ * falls with the music, and the rest settles into a plain bar; paused or touched, it is bars again. Touch and drag to choose a place ([onScrub] says where, to show it); let go to go
  * there. Dragging up off it takes the seek back, with a tick to say so.
  */
 @Composable
@@ -153,13 +154,21 @@ internal fun WaveSeek(
     val barW = pitch * 0.54f
     // Spread over the whole height, as the page draws it: the quietest bar low, the loudest near
     // full, eased so the loud parts stand up out of the rest.
-    val bars = remember(env, count) { spreadBars(Loudness.bars(env, count, average = true)) }
+    val raw = remember(env, count) { Loudness.bars(env, count, average = true) }
+    val bars = remember(raw) { spreadBars(raw) }
+    // For the shape: the bars evened out over their neighbours, so its outline is smooth.
+    val smooth = remember(bars) { smoothBars(bars, 3) }
     val scrub = remember { mutableStateOf<Long?>(null) }
+    val shape = animateFloatAsState(
+        if (state.playing && scrub.value == null) 1f else 0f, tween(320, easing = FastOutSlowInEasing), label = "shape",
+    )
+    // The front edge's level, eased frame to frame: [level, frame time].
+    val edge = remember { floatArrayOf(0f, 0f) }
+    val path = remember { Path() }
     // In the type colour: faint still to come, nearly solid where it has played.
     val nc = Nm.c
     val track = nc.onSurface.copy(alpha = 0.22f)
     val playedA = nc.onSurface.copy(alpha = 0.9f)
-    val playedB = playedA
     val cancelAt = with(density) { 52.dp.toPx() }
 
     Box(
@@ -212,22 +221,87 @@ internal fun WaveSeek(
                 val minH = 2.dp.toPx()
                 val cy = size.height / 2
                 val grow = appear.value
-                fun drawBars(color: Color? = null, brush: Brush? = null) {
+                fun drawBars(color: Color? = null, brush: Brush? = null, flat: Float = 0f) {
                     for (i in 0 until n) {
-                        val h = minH + (size.height - minH) * bars[i] * grow
+                        val h = minH + (size.height - minH) * bars[i] * grow * (1f - flat)
                         val tl = Offset(gap + i * step, cy - h / 2)
                         val sz = Size(barW, h)
                         if (brush != null) drawRoundRect(brush, tl, sz, CornerRadius(barW / 2))
                         else drawRoundRect(color!!, tl, sz, CornerRadius(barW / 2))
                     }
                 }
-                drawBars(color = track)
                 val playedX = size.width * f
-                if (playedX > 0f) clipRect(right = playedX) {
-                    drawBars(brush = Brush.horizontalGradient(listOf(playedA, playedB), 0f, playedX.coerceAtLeast(1f)))
+                val k = shape.value
+                // How loud the song is now, on the bars' scale, eased so the edge never flickers.
+                val now = tick.value.toFloat()
+                val lo = raw.minOrNull() ?: 0f
+                val hi = raw.maxOrNull() ?: 1f
+                val loud = Loudness.at(env, pos)
+                val target = if (hi - lo < 1e-4f) loud else 0.04f + 0.94f * ((loud - lo) / (hi - lo)).coerceIn(0f, 1f).pow(1.6f)
+                val dt = if (edge[1] == 0f) 16f else (now - edge[1]).coerceIn(0f, 64f)
+                edge[0] += (target - edge[0]) * (1f - kotlin.math.exp(-dt / 110f))
+                edge[1] = now
+
+                // Still to come: faint bars, settling into a plain bar while the song plays.
+                if (k < 0.99f) clipRect(left = playedX) { drawBars(color = track, flat = k) }
+                if (k > 0.01f && playedX < size.width) {
+                    val th = 3.dp.toPx()
+                    drawRoundRect(
+                        nc.onSurface.copy(alpha = 0.24f * k), Offset(playedX, cy - th / 2),
+                        Size(size.width - playedX, th), CornerRadius(th / 2),
+                    )
+                }
+                if (playedX <= 0f) return@drawBehind
+                if (k < 0.99f) clipRect(right = playedX) {
+                    drawBars(color = playedA.copy(alpha = playedA.alpha * (1f - k)))
+                }
+                if (k > 0.01f) {
+                    // What has played as one shape: points at fixed places along it, so the
+                    // history holds still and only the front edge moves.
+                    fun at(px: Float): Float {
+                        val fi = ((px - gap - barW / 2) / step).coerceIn(0f, (n - 1).toFloat())
+                        val i = fi.toInt()
+                        val j = (i + 1).coerceAtMost(n - 1)
+                        return smooth[i] + (smooth[j] - smooth[i]) * (fi - i)
+                    }
+                    val p = 3.dp.toPx()
+                    val reach = 16.dp.toPx()
+                    val xs = ArrayList<Float>()
+                    val hs = ArrayList<Float>()
+                    var px = 0f
+                    while (true) {
+                        val last = px >= playedX
+                        if (last) px = playedX
+                        val w = k * (1f - (playedX - px) / reach).coerceAtLeast(0f).pow(2)
+                        val v = at(px) * (1f - w) + edge[0] * w
+                        xs.add(px); hs.add((minH + (size.height - minH) * v * grow) / 2)
+                        if (last) break
+                        px += p
+                    }
+                    path.reset()
+                    path.moveTo(0f, cy)
+                    for (j in xs.indices) {
+                        if (j == xs.lastIndex) { path.lineTo(xs[j], cy - hs[j]); break }
+                        path.quadraticTo(xs[j], cy - hs[j], (xs[j] + xs[j + 1]) / 2, cy - (hs[j] + hs[j + 1]) / 2)
+                    }
+                    path.lineTo(playedX, cy)
+                    for (j in xs.indices.reversed()) {
+                        if (j == 0) { path.lineTo(xs[j], cy + hs[j]); break }
+                        path.quadraticTo(xs[j], cy + hs[j], (xs[j] + xs[j - 1]) / 2, cy + (hs[j] + hs[j - 1]) / 2)
+                    }
+                    path.close()
+                    drawPath(path, playedA.copy(alpha = playedA.alpha * k))
                 }
             },
     )
+}
+
+/** Each bar the mean of itself and [r] either side (the page's npSmooth). */
+internal fun smoothBars(bars: FloatArray, r: Int): FloatArray = FloatArray(bars.size) { i ->
+    var m = 0f
+    var c = 0
+    for (k in maxOf(0, i - r)..minOf(bars.lastIndex, i + r)) { m += bars[k]; c++ }
+    if (c > 0) m / c else 0f
 }
 
 /** Bars from 4% to 98% of the height, from the quietest to the loudest, eased up by 1.6 (as the page's npBarsSpread). */
