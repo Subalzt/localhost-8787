@@ -74,6 +74,13 @@ class Container(ctx: Context) {
                 SESSION_COOKIE + "=" + Session.issue(prefs.sessionKey(), PeerManager.SESSION_TTL_MS, it.id)
             }
             override fun revoke(deviceId: String) = devices.remove(deviceId)
+            override fun tunnelFor(deviceId: String): String = if (prefs.remote) door.forDevice(deviceId) else ""
+            override fun ensureTunnel() = turnOnTunnel()
+            override fun linked() {
+                val code = tunnelKeys.openCode() ?: return
+                // A moment more, so the phone that just linked is done with the way the code opened.
+                main.postDelayed({ if (tunnelKeys.openCode() == code) closeLinkCode() }, 30_000)
+            }
         },
         storage = storage, index = index, clipboard = clipboard, clipSync = { prefs.clipSync },
     )
@@ -85,16 +92,48 @@ class Container(ctx: Context) {
     val tunnelKeys = dev.periy.bridge.net.TunnelKeys(app.filesDir)
     val tunnel = dev.periy.bridge.net.TunnelServer(
         tunnelKeys,
-        deviceIds = { devices.devices.value.map { it.id } },
+        // While a link code is open, the tunnel also answers for it (net/LinkCode.kt).
+        deviceIds = { devices.devices.value.map { it.id } + listOfNotNull(tunnelKeys.openCode()?.let { dev.periy.bridge.net.LinkCode.ID }) },
         pagePort = { prefs.port },
         info = ::tunnelInfo,
     )
+
+    /** The tunnel as the server sees it: whether it is on, and each device's details. */
+    val door by lazy { dev.periy.bridge.server.RemoteDoor(tunnel, tunnelKeys, { prefs.remote }, ::tunnelInfo) }
+
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** Turns on From other networks (a phone linked from afar comes back through it). */
+    fun turnOnTunnel() {
+        prefs.remote = true
+        if (server?.isRunning == true) door.set(true)
+    }
+
+    /**
+     * A code another phone can link with from any network, open for ten minutes or until a phone
+     * links (net/LinkCode.kt). From other networks goes on with it.
+     */
+    fun openLinkCode(): String {
+        val code = dev.periy.bridge.net.LinkCode.new()
+        tunnelKeys.openCode(code)
+        turnOnTunnel()
+        tunnel.prune()
+        main.postDelayed({ if (tunnelKeys.openCode() == null) tunnel.prune() }, dev.periy.bridge.net.LinkCode.TTL_MS + 1_000)
+        return code
+    }
+
+    fun closeLinkCode() {
+        tunnelKeys.closeCode()
+        tunnel.prune()
+    }
 
     /** What the tunnel tells a device about this phone: its name, and where to find it next time. */
     fun tunnelInfo(): String = kotlinx.serialization.json.buildJsonObject {
         put("name", kotlinx.serialization.json.JsonPrimitive(deviceName()))
         put("v", kotlinx.serialization.json.JsonPrimitive(1))
         put("port", kotlinx.serialization.json.JsonPrimitive(dev.periy.bridge.net.TunnelProto.PORT))
+        // The page's own port, for a phone that has only a link code to go on.
+        put("page", kotlinx.serialization.json.JsonPrimitive(prefs.port))
         put("addrs", kotlinx.serialization.json.JsonArray(dev.periy.bridge.net.NetInfo.publicAddresses(app).map { kotlinx.serialization.json.JsonPrimitive(it) }))
     }.toString()
 
@@ -158,7 +197,7 @@ class Container(ctx: Context) {
             deviceName = deviceName(),
         )
         return BridgeServer(app, config, storage, tus, index, clipboard, devices, pairing, music, direct, peers, loudness, favourites, lyrics)
-            .also { it.remote = dev.periy.bridge.server.RemoteDoor(tunnel, tunnelKeys, { prefs.remote }, ::tunnelInfo); it.site = site }
+            .also { it.remote = door; it.site = site }
             .also { server = it }
     }
 

@@ -61,9 +61,12 @@ data class Peer(
     val tunnel: String = "",
 )
 
-/** One phone's greeting to the other once they are linked: how to come back into it. */
+/**
+ * One phone's greeting to the other once they are linked: how to come back into it, and its
+ * tunnel details for the other phone ([tunnel]), for reaching it from another network.
+ */
 @Serializable
-data class PeerHello(val name: String, val port: Int, val cookie: String)
+data class PeerHello(val name: String, val port: Int, val cookie: String, val tunnel: String = "")
 
 /** Text copied on a linked phone. [at] is when it was first copied, wherever that was. */
 @Serializable
@@ -92,7 +95,9 @@ sealed interface PeerStatus {
  * - share one clipboard: a copy on either reaches the other, and every computer on both;
  * - pass a laptop's file on to a computer on the other phone without keeping it (see [Pipes]).
  *
- * Finding each other uses the network's own service discovery (mDNS, "_blazeit._tcp").
+ * Finding each other uses the network's own service discovery (mDNS, "_blazeit._tcp"). Phones that
+ * have never shared a network link with a code instead ([linkByCode], [dev.periy.bridge.net.LinkCode]),
+ * and linked phones on different networks reach each other through their tunnels.
  */
 class PeerManager(
     ctx: Context,
@@ -119,6 +124,12 @@ class PeerManager(
         /** A session for a phone already let in, or null when it has been removed since. */
         fun cookie(deviceId: String): String?
         fun revoke(deviceId: String)
+        /** This phone's tunnel details for a phone let in here, or "" when the tunnel is off. */
+        fun tunnelFor(deviceId: String): String
+        /** Turns on From other networks, so a phone linked from afar can reach this one. */
+        fun ensureTunnel()
+        /** A phone has just linked with this one: the link code, if one is open, has done its job. */
+        fun linked()
     }
 
     private val app = ctx.applicationContext
@@ -300,45 +311,94 @@ class PeerManager(
         scope.launch {
             val host = phone.host
             try {
-                // A phone added by address is known only by its address until it says its name.
-                val name = runCatching {
-                    json.parseToJsonElement(request("GET", phone, "/api/ping", null, null).body)
-                        .jsonObject["device"]!!.jsonPrimitive.content
-                }.getOrDefault(phone.name)
-                val start = request("POST", phone, "/api/pair", null, null)
-                if (start.code !in 200..299) {
-                    Log.w(TAG, "Pair request to $host answered ${start.code}: ${start.body.take(300)}")
-                    error(message(start.body) ?: "The other phone refused (${start.code})")
-                }
-                val body = json.parseToJsonElement(start.body).jsonObject
-                val id = body["id"]!!.jsonPrimitive.content
-                val code = body["code"]!!.jsonPrimitive.content
-                setStatus(host, PeerStatus.Waiting(code))
-                repeat(125) {
-                    delay(1000)
-                    val poll = request("GET", phone, "/api/pair/$id", null, null)
-                    val state = runCatching {
-                        json.parseToJsonElement(poll.body).jsonObject["state"]!!.jsonPrimitive.content
-                    }.getOrDefault("")
-                    when (state) {
-                        "APPROVED" -> {
-                            val cookie = poll.setCookie ?: error("Approved, but no session came back")
-                            val old = find(name)
-                            val peer = Peer(name, phone.host, phone.port, cookie, deviceId = old?.deviceId.orEmpty())
-                            setPeers(_peers.value.filterNot { it.name == peer.name } + peer)
-                            setStatus(host, null)
-                            // One approval is enough: the other phone is let in here too.
-                            linkBack(peer)
-                            return@launch
-                        }
-                        "DENIED" -> error("The other phone said no")
-                        "EXPIRED" -> error("Nobody answered on the other phone")
-                    }
-                }
-                error("Nobody answered on the other phone")
+                val (name, cookie) = pairWith(phone, host)
+                val old = find(name)
+                val peer = Peer(name, phone.host, phone.port, cookie, deviceId = old?.deviceId.orEmpty(), tunnel = old?.tunnel.orEmpty())
+                setPeers(_peers.value.filterNot { it.name == peer.name } + peer)
+                setStatus(host, null)
+                // One approval is enough: the other phone is let in here too.
+                linkBack(peer)
             } catch (t: Throwable) {
                 Log.w(TAG, "Connect to $host failed", t)
                 setStatus(host, PeerStatus.Failed(t.message ?: "Could not reach that phone"))
+            }
+        }
+    }
+
+    /**
+     * Asks [phone] to let this one in and waits for its owner to allow it, with the code to
+     * compare under [key] in [status]. Returns the other phone's name and this one's session there.
+     */
+    private suspend fun pairWith(phone: NearbyPhone, key: String): Pair<String, String> {
+        // A phone added by address is known only by its address until it says its name.
+        val name = runCatching {
+            json.parseToJsonElement(request("GET", phone, "/api/ping", null, null).body)
+                .jsonObject["device"]!!.jsonPrimitive.content
+        }.getOrDefault(phone.name)
+        val start = request("POST", phone, "/api/pair", null, null)
+        if (start.code !in 200..299) {
+            Log.w(TAG, "Pair request to ${phone.host} answered ${start.code}: ${start.body.take(300)}")
+            error(message(start.body) ?: "The other phone refused (${start.code})")
+        }
+        val body = json.parseToJsonElement(start.body).jsonObject
+        val id = body["id"]!!.jsonPrimitive.content
+        val code = body["code"]!!.jsonPrimitive.content
+        setStatus(key, PeerStatus.Waiting(code))
+        repeat(125) {
+            delay(1000)
+            val poll = request("GET", phone, "/api/pair/$id", null, null)
+            val state = runCatching {
+                json.parseToJsonElement(poll.body).jsonObject["state"]!!.jsonPrimitive.content
+            }.getOrDefault("")
+            when (state) {
+                "APPROVED" -> return name to (poll.setCookie ?: error("Approved, but no session came back"))
+                "DENIED" -> error("The other phone said no")
+                "EXPIRED" -> error("Nobody answered on the other phone")
+            }
+        }
+        error("Nobody answered on the other phone")
+    }
+
+    /**
+     * Links with a phone on any network by the code it shows ([dev.periy.bridge.net.LinkCode]):
+     * the code reaches it through its tunnel, over IPv6 or punched across IPv4; this phone asks to
+     * be let in there as on a shared Wi-Fi, takes the other phone's own tunnel details for later,
+     * and says how to come back here. Progress shows under [LINK_KEY] in [status].
+     */
+    fun linkByCode(typed: String) {
+        val code = dev.periy.bridge.net.LinkCode.normalize(typed)
+        scope.launch {
+            var conn: dev.periy.bridge.net.TunnelConnection? = null
+            try {
+                if (!dev.periy.bridge.net.LinkCode.valid(code)) error("A link code is ten letters and numbers")
+                setStatus(LINK_KEY, PeerStatus.Waiting(""))
+                // The other phone will come back to this one the same way.
+                access.ensureTunnel()
+                val page = kotlinx.coroutines.CompletableDeferred<Int>()
+                val c = runCatching {
+                    dev.periy.bridge.net.TunnelClient.dialAny(
+                        emptyList(), dev.periy.bridge.net.TunnelProto.PORT,
+                        dev.periy.bridge.net.LinkCode.tid(code), dev.periy.bridge.net.LinkCode.psk(code), deviceName(),
+                        onInfo = { info -> info["page"]?.jsonPrimitive?.content?.toIntOrNull()?.let { page.complete(it) } },
+                    )
+                }.getOrElse { error("Could not reach a phone with that code (${it.message})") }
+                conn = c
+                val pagePort = kotlinx.coroutines.withTimeoutOrNull(4_000) { page.await() } ?: DEFAULT_PORT
+                val there = NearbyPhone("", "127.0.0.1", dev.periy.bridge.net.TunnelClient.serve(c, pagePort))
+                val (name, cookie) = pairWith(there, LINK_KEY)
+                val details = runCatching { request("GET", there, "/api/tunnel", cookie, null) }.getOrNull()
+                    ?.takeIf { it.code == 200 && it.body.contains("\"key\"") }?.body.orEmpty()
+                val old = find(name)
+                val peer = Peer(name, old?.host.orEmpty(), pagePort, cookie, deviceId = old?.deviceId.orEmpty(), tunnel = details.ifEmpty { old?.tunnel.orEmpty() })
+                // This way while it lasts; after that, the other phone's own tunnel.
+                synchronized(far) { far[name] = Far(c, there.port) }
+                setPeers(_peers.value.filterNot { it.name == name } + peer)
+                setStatus(LINK_KEY, null)
+                linkBack(peer)
+            } catch (t: Throwable) {
+                Log.w(TAG, "Link by code failed", t)
+                conn?.bye("could not link")
+                setStatus(LINK_KEY, PeerStatus.Failed(t.message ?: "Could not link"))
             }
         }
     }
@@ -352,7 +412,7 @@ class PeerManager(
     private fun linkBack(peer: Peer): Boolean {
         val id = peer.deviceId.takeIf { it.isNotEmpty() && access.cookie(it) != null } ?: access.grant(peer.name, peer.host)
         val cookie = access.cookie(id) ?: return false
-        val body = json.encodeToString(PeerHello(deviceName(), access.port, cookie)).toByteArray()
+        val body = json.encodeToString(PeerHello(deviceName(), access.port, cookie, access.tunnelFor(id))).toByteArray()
         val ok = runCatching {
             request("POST", peer.asTarget(), "/api/peers/hello", peer.cookie, body, "application/json").code in 200..299
         }.getOrDefault(false)
@@ -368,10 +428,13 @@ class PeerManager(
     fun hello(h: PeerHello, ip: String, from: String) {
         val old = _peers.value.firstOrNull { it.deviceId == from || it.name == h.name }
         val kept = _peers.value.filterNot { it.deviceId == from || it.name == h.name }
-        // Through a tunnel the greeting comes from loopback: the phone's local address stays as it was.
-        val host = if (ip.startsWith("127.") && old != null) old.host else ip
-        val peer = Peer(h.name, host, h.port, h.cookie, from, mutual = true, linkedAt = System.currentTimeMillis(), tunnel = old?.tunnel.orEmpty())
+        // Through a tunnel the greeting comes from loopback: the phone's local address stays as it
+        // was, and a phone linked from afar has none (it is reached only through its tunnel).
+        val host = if (ip.startsWith("127.") || ip == "::1") old?.host.orEmpty() else ip
+        val tunnel = h.tunnel.ifEmpty { old?.tunnel.orEmpty() }
+        val peer = Peer(h.name, host, h.port, h.cookie, from, mutual = true, linkedAt = System.currentTimeMillis(), tunnel = tunnel)
         setPeers(kept + peer)
+        access.linked()
         scope.launch { fetchTunnel(peer) }
     }
 
@@ -798,15 +861,18 @@ class PeerManager(
     }.getOrDefault(false)
 
     private fun Peer.asTarget(): NearbyPhone {
-        val local = NearbyPhone(name, host, port)
-        if (tunnel.isEmpty()) return local
+        // A phone linked from afar has no local address: never this phone's own loopback.
+        val local = NearbyPhone(name, host.ifEmpty { NOWHERE }, port)
+        if (tunnel.isEmpty() && far[name]?.conn?.alive != true) return local
         val now = System.currentTimeMillis()
-        if (now - (localAt[name] ?: 0) < 15_000) return local
-        if (answersAt(host, port)) {
-            localAt[name] = now
-            far.remove(name)?.conn?.bye("close again")
-            if (now - (tunnelAt[name] ?: 0) > 600_000) scope.launch { fetchTunnel(this@asTarget) }
-            return local
+        if (host.isNotEmpty()) {
+            if (now - (localAt[name] ?: 0) < 15_000) return local
+            if (answersAt(host, port)) {
+                localAt[name] = now
+                far.remove(name)?.conn?.bye("close again")
+                if (now - (tunnelAt[name] ?: 0) > 600_000) scope.launch { fetchTunnel(this@asTarget) }
+                return local
+            }
         }
         return viaTunnel(this)?.let { NearbyPhone(name, "127.0.0.1", it) } ?: local
     }
@@ -819,19 +885,18 @@ class PeerManager(
         val psk = t["key"]?.jsonPrimitive?.content?.let { Base64.getDecoder().decode(it) } ?: return null
         val tport = t["port"]?.jsonPrimitive?.content?.toIntOrNull() ?: dev.periy.bridge.net.TunnelProto.PORT
         val addrs = (t["addrs"] as? kotlinx.serialization.json.JsonArray)?.map { it.jsonPrimitive.content }.orEmpty()
-        for (a in addrs) {
-            val conn = runCatching {
-                dev.periy.bridge.net.TunnelClient.dial(
-                    a, tport, tid, psk, deviceName(),
-                    onInfo = { info -> info["addrs"]?.let { na -> update(peer.name) { p -> p.copy(tunnel = mergeAddrs(p.tunnel, na)) } } },
-                )
-            }.onFailure { Log.i(TAG, "Tunnel to ${peer.name} at $a: ${it.message}") }.getOrNull() ?: continue
-            val port = dev.periy.bridge.net.TunnelClient.serve(conn, peer.port)
-            far[peer.name] = Far(conn, port)
-            Log.i(TAG, "Reaching ${peer.name} through its tunnel at $a")
-            return port
-        }
-        null
+        // Its known addresses, then the ones it gives through the board now, then across IPv4.
+        val conn = runCatching {
+            dev.periy.bridge.net.TunnelClient.dialAny(
+                addrs, tport, tid, psk, deviceName(),
+                onInfo = { info -> info["addrs"]?.let { na -> update(peer.name) { p -> p.copy(tunnel = mergeAddrs(p.tunnel, na)) } } },
+                onAddrs = { na -> update(peer.name) { p -> p.copy(tunnel = mergeAddrs(p.tunnel, kotlinx.serialization.json.JsonArray(na.map { kotlinx.serialization.json.JsonPrimitive(it) }))) } },
+            )
+        }.onFailure { Log.i(TAG, "Tunnel to ${peer.name}: ${it.message}") }.getOrNull() ?: return null
+        val port = dev.periy.bridge.net.TunnelClient.serve(conn, peer.port)
+        far[peer.name] = Far(conn, port)
+        Log.i(TAG, "Reaching ${peer.name} through its tunnel (${conn.remote})")
+        return port
     }
 
     private fun mergeAddrs(tunnel: String, addrs: kotlinx.serialization.json.JsonElement): String = runCatching {
@@ -908,6 +973,11 @@ class PeerManager(
         /** A link's way back is renewed once a week; its session lasts a year. */
         private const val RENEW_MS = 7L * 24 * 60 * 60 * 1000
         const val SESSION_TTL_MS = 365L * 24 * 60 * 60 * 1000
+        /** Where a link made with a code shows its progress in [status]. */
+        const val LINK_KEY = "link code"
+        /** A host that resolves nowhere: for a phone with no local address. */
+        private const val NOWHERE = "nowhere.invalid"
+        private const val DEFAULT_PORT = 8787
         /** How long a look around the network lasts when nobody has the Devices tab open. */
         private const val LOOK_MS = 20_000L
     }

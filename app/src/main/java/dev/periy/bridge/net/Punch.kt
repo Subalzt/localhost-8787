@@ -347,6 +347,87 @@ object Punch {
         private companion object { const val TAG = "Punch" }
     }
 
+    // ------------------------------------------------------------------ the asking side
+    //
+    // A phone reaching a linked phone from another network does what the computer helper does
+    // (Tunnel87.Ask, Where and DialPunched): a note on the board, the answer, then the punch.
+
+    /**
+     * Leaves [note] for the other phone on the board and returns its opened answer of the same
+     * [kind] and session [sHex], or null. Listens before posting, so the answer cannot be missed.
+     */
+    fun ask(psk: ByteArray, note: String, kind: String, sHex: String, waitMs: Int): String? {
+        val c = URL("$BOARD/${topicDown(psk)}/json").openConnection() as HttpURLConnection
+        c.connectTimeout = 10_000
+        c.readTimeout = waitMs + 1_000
+        try {
+            val lines = c.inputStream.bufferedReader()
+            lines.readLine()   // the board's "open"
+            if (!post(topicUp(psk), seal(psk, note))) return null
+            val end = System.currentTimeMillis() + waitMs
+            while (System.currentTimeMillis() < end) {
+                val line = try { lines.readLine() } catch (e: SocketTimeoutException) { null } ?: break
+                val o = runCatching { Json.parseToJsonElement(line).jsonObject }.getOrNull() ?: continue
+                if (o["event"]?.jsonPrimitive?.content != "message") continue
+                val text = open(psk, o["message"]?.jsonPrimitive?.content ?: continue) ?: continue
+                val a = runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull() ?: continue
+                if (a["t"]?.jsonPrimitive?.content == kind && a["s"]?.jsonPrimitive?.content == sHex) return text
+            }
+            return null
+        } finally {
+            runCatching { c.disconnect() }
+        }
+    }
+
+    private fun newSession(): String = hex(ByteArray(8).also(rng::nextBytes))
+
+    private fun now() = System.currentTimeMillis() / 1000
+
+    /** The other phone's current addresses, asked through the board (mobile IPv6 changes). Empty when it does not answer. */
+    fun where(psk: ByteArray): List<String> = runCatching {
+        val s = newSession()
+        val note = buildJsonObject { put("t", JsonPrimitive("where")); put("s", JsonPrimitive(s)); put("at", JsonPrimitive(now())) }.toString()
+        val a = ask(psk, note, "where", s, 6_000) ?: return emptyList()
+        (Json.parseToJsonElement(a).jsonObject["addrs"] as? kotlinx.serialization.json.JsonArray).orEmpty().map { it.jsonPrimitive.content }
+    }.getOrDefault(emptyList())
+
+    /**
+     * Across IPv4 to another phone: a punch note through the board, its answer, the punch, and a
+     * reliable stream on the path found ([UdpCarrier], as the device: role 0). Throws IOException
+     * with the reason when it cannot.
+     */
+    fun dial(psk: ByteArray): TunnelLink {
+        val sock = DatagramSocket(0)
+        try {
+            val me = mapped(sock) ?: throw IOException("this network gives no public IPv4 address to punch from")
+            val s = newSession()
+            val session = session(s)!!
+            val note = buildJsonObject {
+                put("t", JsonPrimitive("punch"))
+                put("s", JsonPrimitive(s))
+                put("at", JsonPrimitive(now()))
+                put("addr", JsonPrimitive(addr(me.first)))
+                put("hard", JsonPrimitive(me.second))
+                put("lan", kotlinx.serialization.json.JsonArray(lanAddresses().map { JsonPrimitive("${it.hostAddress}:${sock.localPort}") }))
+            }.toString()
+            val answer = ask(psk, note, "punch", s, 12_000)?.let { Json.parseToJsonElement(it).jsonObject }
+                ?: throw IOException("the other phone did not answer through the board")
+            val theirs = listOfNotNull(parseAddr(answer["addr"]?.jsonPrimitive?.content)) +
+                (answer["lan"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { parseAddr(it.jsonPrimitive.content) }
+            if (theirs.isEmpty()) throw IOException("the other phone could not see its own public address")
+            val hardThere = answer["hard"]?.jsonPrimitive?.booleanOrNull ?: false
+            val (toPhone, toDevice) = udpKeys(psk, session)
+            Log.i("Punch", "Punching to ${theirs.joinToString { addr(it) }} (here ${addr(me.first)}, hard here ${me.second}, there $hardThere)")
+            val path = knock(sock, me.second, theirs, hardThere, tx = toPhone, rx = toDevice, role = 0)
+                ?: throw IOException("no way through the two networks' NATs (${if (me.second) "hard" else "easy"} here, ${if (hardThere) "hard" else "easy"} there)")
+            Log.i("Punch", "Punched through to ${addr(path.second)}")
+            return UdpCarrier(path.first, path.second, tx = toPhone, rx = toDevice, role = 0)
+        } catch (e: Exception) {
+            runCatching { sock.close() }
+            throw if (e is IOException) e else IOException(e.message ?: "punching failed", e)
+        }
+    }
+
     /** Leaves [text] on the board under [topic], kept for nobody who is not listening right now. */
     fun post(topic: String, text: String): Boolean = runCatching {
         val c = URL("$BOARD/$topic").openConnection() as HttpURLConnection

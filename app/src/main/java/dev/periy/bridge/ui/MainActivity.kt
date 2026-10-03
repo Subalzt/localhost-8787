@@ -1690,7 +1690,7 @@ private fun LazyListScope.devicesTab(
     }
 
     // Attempts made by address are not in the discovered list, so their progress shows here.
-    val listed = unpaired.map { it.host }.toSet()
+    val listed = unpaired.map { it.host }.toSet() + dev.periy.bridge.server.PeerManager.LINK_KEY
     peerStatus.filterKeys { it !in listed }.forEach { (host, st) ->
         item {
             Text(
@@ -1706,6 +1706,8 @@ private fun LazyListScope.devicesTab(
     }
     item { Spacer(Modifier.height(12.dp)) }
     item { ConnectByAddress(connect) }
+    item { Spacer(Modifier.height(12.dp)) }
+    item { LinkFromAnywhere(peerStatus[dev.periy.bridge.server.PeerManager.LINK_KEY]) }
 
     transfersSection(transfers)
 
@@ -1747,6 +1749,81 @@ private fun Searching(running: Boolean, found: Int) {
         }
         if (running) Box(Modifier.size(10.dp).alpha(pulse).clip(CircleShape).background(Bridge.Lit))
     }
+}
+
+/**
+ * Two phones on different networks: one shows a code, the other types it in, and they link
+ * through their tunnels (net/LinkCode.kt). The phone showing the code still allows the other in.
+ */
+@Composable
+private fun LinkFromAnywhere(status: PeerStatus?) {
+    val c = androidx.compose.ui.platform.LocalContext.current.container
+    // "show": this phone's code is open; "enter": typing the other phone's.
+    var mode by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf("") }
+    var shownAt by remember { mutableStateOf(0L) }
+    var text by remember { mutableStateOf("") }
+    val busy = status is PeerStatus.Waiting
+    GroupCard {
+        when {
+            mode == "show" -> Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Link code", style = CaptionStyle, color = Bridge.Muted)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    dev.periy.bridge.net.LinkCode.shown(code),
+                    style = TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp),
+                    color = Bridge.Text,
+                )
+                Spacer(Modifier.height(8.dp))
+                // Ten minutes from when it was made, counted down.
+                var left by remember { mutableStateOf(dev.periy.bridge.net.LinkCode.TTL_MS) }
+                LaunchedEffect(shownAt) {
+                    while (true) {
+                        left = (shownAt + dev.periy.bridge.net.LinkCode.TTL_MS - System.currentTimeMillis()).coerceAtLeast(0)
+                        if (left == 0L) { mode = ""; break }
+                        kotlinx.coroutines.delay(1_000)
+                    }
+                }
+                Text(
+                    "On the other phone: Devices, Enter a link code. Any network, for the next ${(left + 59_999) / 60_000} min. You allow it here when it asks.",
+                    style = CaptionStyle, color = Bridge.Muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                Spacer(Modifier.height(12.dp))
+                SoftButton("Done") { c.closeLinkCode(); mode = "" }
+            }
+            mode == "enter" -> Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BridgeTextField(text, { text = it }, Modifier.weight(1f), placeholder = "K7Q2M-9XDHR", minHeight = 46.dp, mono = true)
+                    Spacer(Modifier.width(8.dp))
+                    BridgeButton(if (busy) "Linking" else "Link") { if (!busy) c.peers.linkByCode(text) }
+                }
+                val line = when (status) {
+                    is PeerStatus.Waiting -> if (status.code.isEmpty()) "Looking for the other phone…" else "Allow it on the other phone · code ${status.code}"
+                    is PeerStatus.Failed -> status.message
+                    null -> "The code the other phone shows under Show a link code."
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(line, style = CaptionStyle, color = if (status is PeerStatus.Failed) Bridge.Danger else Bridge.Muted)
+                if (!busy) {
+                    Spacer(Modifier.height(8.dp))
+                    SoftButton("Cancel") { mode = ""; text = "" }
+                }
+            }
+            else -> {
+                SettingRow("Show a link code", first = true, icon = BlazeIcons.Link, iconColor = Bridge.Orange, onClick = {
+                    code = c.openLinkCode(); shownAt = System.currentTimeMillis(); mode = "show"
+                }) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
+                SettingRow("Enter a link code", icon = BlazeIcons.Phones, iconColor = Bridge.Orange, onClick = { mode = "enter" }) {
+                    Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
+    Text(
+        "Link from anywhere: for a phone on another network. Both turn on From other networks.",
+        style = CaptionStyle, color = Bridge.Muted,
+        modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp),
+    )
 }
 
 /**

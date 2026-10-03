@@ -94,8 +94,20 @@ class TunnelKeys(filesDir: File) {
             runCatching { file.writeBytes(it) }
         }
 
-    fun psk(deviceId: String): ByteArray = TunnelCrypto.hmac(secret, TunnelProto.L_PSK, deviceId.toByteArray())
-    fun tid(deviceId: String): ByteArray = TunnelCrypto.hmac(secret, TunnelProto.L_ID, deviceId.toByteArray()).copyOf(16)
+    /** The link code open now ([LinkCode]), and until when. */
+    @Volatile private var code: Pair<String, Long>? = null
+
+    fun openCode(c: String) { code = c to System.currentTimeMillis() + LinkCode.TTL_MS }
+    fun closeCode() { code = null }
+    /** The open link code, or null when there is none or it has run out. */
+    fun openCode(): String? = code?.takeIf { it.second > System.currentTimeMillis() }?.first
+
+    fun psk(deviceId: String): ByteArray =
+        if (deviceId == LinkCode.ID) LinkCode.psk(openCode() ?: "")
+        else TunnelCrypto.hmac(secret, TunnelProto.L_PSK, deviceId.toByteArray())
+    fun tid(deviceId: String): ByteArray =
+        if (deviceId == LinkCode.ID) LinkCode.tid(openCode() ?: "")
+        else TunnelCrypto.hmac(secret, TunnelProto.L_ID, deviceId.toByteArray()).copyOf(16)
 }
 
 /**
@@ -551,14 +563,58 @@ object TunnelClient {
         val s = Socket()
         try {
             s.connect(InetSocketAddress(InetAddress.getByName(host), port), timeoutMs)
-            s.soTimeout = timeoutMs
             s.tcpNoDelay = true
+            s.keepAlive = true
+        } catch (e: IOException) {
+            runCatching { s.close() }
+            throw e
+        }
+        return handshake(SocketLink(s), host, tid, psk, name, onInfo, onClosed, timeoutMs)
+    }
+
+    /**
+     * Every way to the other phone in turn: its known addresses over TCP, then the ones it gives
+     * through the board now (mobile IPv6 changes; [onAddrs] hears them, to keep), then a path
+     * punched across IPv4. Throws IOException with the last reason when none works.
+     */
+    fun dialAny(
+        addrs: List<String>, port: Int, tid: ByteArray, psk: ByteArray, name: String,
+        onInfo: (JsonObject) -> Unit = {}, onAddrs: (List<String>) -> Unit = {},
+        onClosed: (TunnelConnection) -> Unit = {},
+    ): TunnelConnection {
+        var why: Exception? = null
+        for (a in addrs) {
+            try { return dial(a, port, tid, psk, name, onInfo, onClosed) } catch (e: Exception) { why = e }
+        }
+        val fresh = Punch.where(psk).filter { it !in addrs }
+        if (fresh.isNotEmpty()) {
+            onAddrs(fresh)
+            for (a in fresh) {
+                try { return dial(a, port, tid, psk, name, onInfo, onClosed) } catch (e: Exception) { why = e }
+            }
+        }
+        try {
+            val link = Punch.dial(psk)
+            return handshake(link, "UDP", tid, psk, name, onInfo, onClosed, 10_000)
+        } catch (e: Exception) {
+            throw IOException(e.message ?: why?.message ?: "could not reach the other phone", e)
+        }
+    }
+
+    /** The tunnel's handshake over [link] (a TCP socket, or a punched path), then its frames. */
+    fun handshake(
+        link: TunnelLink, label: String, tid: ByteArray, psk: ByteArray, name: String,
+        onInfo: (JsonObject) -> Unit = {}, onClosed: (TunnelConnection) -> Unit = {},
+        timeoutMs: Int = 8_000,
+    ): TunnelConnection {
+        try {
+            link.setReadTimeout(timeoutMs)
             val priv = ByteArray(32).also(SecureRandom()::nextBytes)
             var hello = TunnelProto.MAGIC + tid + TunnelCrypto.x25519(priv, TunnelCrypto.BASE)
             hello += TunnelCrypto.hmac16(psk, TunnelProto.L_HELLO, hello)
-            s.getOutputStream().apply { write(hello); flush() }
+            link.output.apply { write(hello); flush() }
             val resp = ByteArray(48)
-            DataInputStream(s.getInputStream()).readFully(resp)
+            DataInputStream(link.input).readFully(resp)
             val eS = resp.copyOf(32)
             val dh = TunnelCrypto.x25519(priv, eS)
             if (dh.all { it.toInt() == 0 }) throw IOException("a bad key from the other phone")
@@ -566,17 +622,16 @@ object TunnelClient {
             if (!TunnelCrypto.equal(resp.copyOfRange(32, 48), TunnelCrypto.hmac16(k[4], TunnelProto.L_ACCEPT, th))) {
                 throw IOException("the other phone did not prove it knows this one")
             }
-            s.soTimeout = 0
-            s.keepAlive = true
+            link.setReadTimeout(0)
             val conn = TunnelConnection(
-                SocketLink(s), tx = TunnelCipher(k[0], k[1]), rx = TunnelCipher(k[2], k[3]),
-                peer = host, remote = host, client = true, onInfo = onInfo, onClosed = onClosed,
+                link, tx = TunnelCipher(k[0], k[1]), rx = TunnelCipher(k[2], k[3]),
+                peer = label, remote = label, client = true, onInfo = onInfo, onClosed = onClosed,
             )
             TunnelConnection.thread("tunnel-read") { conn.run() }
             conn.send(TunnelProto.HELLO, 0, """{"name":${kotlinx.serialization.json.JsonPrimitive(name)},"v":1}""".toByteArray())
             return conn
         } catch (e: IOException) {
-            runCatching { s.close() }
+            runCatching { link.close() }
             throw e
         }
     }
