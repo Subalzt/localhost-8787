@@ -2227,7 +2227,7 @@
     :root[data-pro][data-style] .side-item .switch { display: block; }
     :root[data-pro][data-style] .mon-toggle.on { background: none; color: var(--txt); }
     :root[data-pro][data-style] body.mon-dock .mon-toggle { display: flex; }
-    :root[data-pro][data-style] .side .status { display: flex; padding: 10px 12px; border-radius: 10px; background: var(--surface); box-shadow: 0 0 0 1px var(--pro-edge); }
+    :root[data-pro][data-style] .side .status { display: none; }
 
     /* The devices this page can send to, under the tabs. */
     :root[data-pro][data-style] .pro-devs { display: flex; flex-direction: column; gap: 2px; margin-top: 18px; }
@@ -2256,10 +2256,10 @@
     :root[data-pro][data-style] .main, :root[data-pro][data-style] body.mon-dock .main { margin-left: 248px; padding: 0 32px calc(var(--player-h, 0px) + 40px); }
     :root[data-pro][data-style] body.mon-dock .main { margin-right: var(--panel); }
     :root[data-pro][data-style] body[data-tab="music"] .main { padding: 0; }
-    :root[data-pro][data-style] .main > * { max-width: 1180px; margin-left: 0; margin-right: 0; }
+    :root[data-pro][data-style] .main > * { max-width: 1400px; margin-left: 0; margin-right: 0; }
     :root[data-pro][data-style] .main > section:is([data-panel="home"], [data-panel="music"]) { max-width: none; }
-    :root[data-pro][data-style] section[data-panel="home"] > :not(.status-line) { max-width: 1180px; margin-left: 0; margin-right: 0; }
-    :root[data-pro][data-style] .page-head, :root[data-pro][data-style] body[data-tab="home"] .page-head { display: flex; align-items: center; height: 76px; margin: 0; max-width: 1180px; }
+    :root[data-pro][data-style] section[data-panel="home"] > * { max-width: 1400px; margin-left: 0; margin-right: 0; }
+    :root[data-pro][data-style] .page-head, :root[data-pro][data-style] body[data-tab="home"] .page-head { display: flex; align-items: center; height: 76px; margin: 0; max-width: 1400px; }
     :root[data-pro][data-style] body[data-tab="music"] .page-head { display: none; }
     :root[data-pro][data-style] .page-head h1 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
     :root[data-pro][data-style] .card { border-radius: 14px; box-shadow: 0 0 0 1px var(--pro-edge), 0 1px 2px rgba(0,0,0,.03); }
@@ -9578,22 +9578,15 @@ async function takeHandoff() {
 
 // ------------------------------------------------------------------ the redesign's sidebar and Ctrl K
 //
-// On a computer's width the tabs run down a sidebar (the styles at the end of the page): a search
-// at its top that opens the commands, Music's library under Music while it is open, and the
+// On a computer's width the tabs run down a sidebar (the styles at the end of the page); Ctrl K
+// opens the commands; Music's library sits under Music while it is open, and the
 // devices this page can send to under the tabs.
 
 var PRO_FIND = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>';
 
 function proSidebar() {
   var side = document.querySelector(".side"), tabs = $("tabs");
-  if (!side || $("pro-find")) return;
-  var find = document.createElement("button");
-  find.type = "button";
-  find.id = "pro-find";
-  find.className = "pro-find";
-  find.innerHTML = PRO_FIND + "<span>Search</span><kbd>" + (/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K") + "</kbd>";
-  find.addEventListener("click", function () { cmdkOpen(); });
-  side.insertBefore(find, tabs);
+  if (!side || $("pro-devs")) return;
   var devs = document.createElement("div");
   devs.id = "pro-devs";
   devs.className = "pro-devs";
