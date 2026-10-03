@@ -6,7 +6,8 @@
 
 <p align="center">
   Your Android phone becomes a small, private server. Your laptop opens it in a browser.<br>
-  Clipboard, files, music, notifications and control move between them, and nothing leaves the room.
+  Clipboard, files, music, notifications and control move between them: in the same room over a
+  cable or the air, and from anywhere through the phone's own tunnel and website.
 </p>
 
 <p align="center">
@@ -21,6 +22,31 @@
 | --- | --- | --- | --- |
 | <img src="docs/images/phone-home.png" width="190"> | <img src="docs/images/phone-devices.png" width="190"> | <img src="docs/images/phone-control.png" width="190"> | <img src="docs/images/phone-settings.png" width="190"> |
 
+**Contents:** [Speed](#-speed) ·
+1 [Connect a computer](#1-connect-a-computer) ·
+2 [Every way in the same room](#2-every-way-in-the-same-room) ·
+3 [Who is connected, and how](#3-who-is-connected-and-how) ·
+4 [From anywhere: the tunnel](#4-from-anywhere-the-tunnel) ·
+5 [From anywhere: the phone as a website](#5-from-anywhere-the-phone-as-a-website) ·
+6 [Clipboard](#6-one-clipboard-for-both) ·
+7 [Files](#7-send-files-and-whole-folders) ·
+8 [Browse the phone](#8-browse-the-phone-from-the-laptop) ·
+9 [Music on the laptop](#9-your-music-on-the-laptop) ·
+10 [Music on the phone](#10-music-on-the-phone-itself) ·
+11 [Lyrics](#11-lyrics-found-and-saved-by-themselves) ·
+12 [Notifications](#12-the-phones-notifications-on-the-laptop) ·
+13 [Trackpad](#13-the-phone-as-trackpad-and-keyboard) ·
+14 [Phone screen](#14-the-phones-screen-on-the-laptop) ·
+15 [Second screen](#15-the-phone-as-a-second-screen) ·
+16 [Monitor](#16-a-live-monitor) ·
+17 [Measure](#17-measure-the-connection) ·
+18 [Phone and phone](#18-phone-and-phone) ·
+19 [Laptop and laptop](#19-laptop-and-laptop) ·
+20 [Back](#20-back-works-as-in-an-app) ·
+21 [Any browser](#21-any-browser-any-computer) ·
+22 [The look](#22-the-look) ·
+[Getting started](#getting-started) · [Under the hood](#under-the-hood) · [Known limits](#known-limits)
+
 ---
 
 ## ⚡ Speed
@@ -28,42 +54,55 @@
 | How they are connected | Phone → laptop | Laptop → phone | Laptop keeps internet |
 | :--- | ---: | ---: | :--- |
 | **USB-C cable** (USB 3, USB tethering on) | **224–235 MB/s** | **257–271 MB/s** | Yes |
-| **The phone's hotspot** | 59–68 MB/s | 64–65 MB/s | Yes, through the phone |
+| **The phone's hotspot** | 59–83 MB/s | 64–65 MB/s | Yes, through the phone |
 | **Direct link** (the phone's own private network) | 55–101 MB/s | 54–115 MB/s | No |
-| Home Wi-Fi, through the router | 7.1–7.3 MB/s | 6.0–6.1 MB/s | Yes |
+| Home Wi-Fi, through the router | 7.1–9.2 MB/s | 6.0–6.1 MB/s | Yes |
+| USB 2 cable (most charging cables) | about 41 MB/s | about 40 MB/s | Yes |
+| Across the internet (Airtel home broadband ↔ phone on Jio data) | 0.13–0.15 MB/s | 0.13–0.22 MB/s | Yes |
 
-Measured between a Xiaomi 15 and a Wi-Fi 7 laptop (24–26 September 2026), with the data made
-and thrown away on the spot so only the connection counts. A USB 2 cable (most charging cables)
-tops out near 40 MB/s, and the app says so when that happens. The router here runs a narrow
-20 MHz channel, which is why it is the slowest; see [Faster over the air](#faster-over-the-air).
+Measured between a Xiaomi 15 and a Wi-Fi 7 laptop (24 September to 3 October 2026), with the
+data made and thrown away on the spot so only the connection counts. The router here runs a narrow
+20 MHz channel, which is why it is the slowest local way; see [Faster over the air](#faster-over-the-air).
 
-The app itself is not what limits these. Measured on 27 September against a bare TCP connection
-with no app at all, it matches the connection both ways, on the cable and on the hotspot, and a
-real 2 GB file, written to the phone's storage, moved at 238 MB/s to the phone and 230 MB/s back
-over the cable.
+The app itself is not what limits these. Against a bare TCP connection with no app at all it
+matches the connection both ways, on the cable and on the hotspot, and a real 2 GB file, written
+to the phone's storage, moved at 238 MB/s to the phone and 230 MB/s back over the cable. The
+website's encryption keeps up too: on the hotspot it measured 89 MB/s against 90 for plain HTTP.
+
+Across the internet the limit is the road between the two carriers, the same for every way
+across it (the website, the tunnel, one connection or four). That is enough for the page, the
+clipboard, files and lossy music, not for 24-bit lossless music, which needs 0.3–0.6 MB/s.
 
 ---
 
-## 🔗 Every way to connect
+## Features
 
-Laptops and phones can reach each other in the ways below, from the simplest up. Each line is
-the short version; **click it for the full explanation.** Nothing ever goes through a server on
-the internet: every byte travels between your own devices.
+### 1. Connect a computer
 
-### Laptop and phone
+Flip the switch at the top of the phone's Home. The phone shows its address in large type; tap it
+to copy, or show a QR code. Open that address on the laptop, click **Ask to connect**, and tap
+**Allow** on the phone (both show the same 4-digit code). No account, no password, no PIN. The
+phone lists every computer and phone allowed in, and can remove any.
+
+| On the same network | Through the phone's website |
+| --- | --- |
+| <img src="docs/images/web-login.png" width="420" alt="Connect this computer"> | <img src="docs/images/web-login-site.png" width="420" alt="Connect this computer, through the website"> |
+
+### 2. Every way in the same room
+
+From the simplest up. Each line is the short version; **click it for the full explanation.**
 
 <details>
-<summary><b>1. The same Wi-Fi.</b> Both on your router. Nothing to set up; the slowest way.</summary>
+<summary><b>The same Wi-Fi.</b> Both on your router. Nothing to set up; the slowest way.</summary>
 
 <br>
 
 **Path:** laptop → router → phone. Two hops through the air.
 
-Turn the switch on at the top of the phone's Home and open the address it shows (for example
-`10.117.25.178:8787`) in any browser on the laptop. It works on any Wi-Fi where devices can see
-each other: your home router, an office network. Every byte crosses the air twice, once to the
-router and once from it, and the slower of the two links decides the speed. Here that is about
-7 MB/s, because the router uses a narrow channel.
+Open the address the phone shows (for example `192.168.1.14:8787`) in any browser on the laptop.
+It works on any Wi-Fi where devices can see each other: your home router, an office network. Every
+byte crosses the air twice, once to the router and once from it, and the slower of the two links
+decides the speed. Here that is 7–9 MB/s, because the router uses a narrow channel.
 
 Some Wi-Fi networks (guest networks, most campus and hotel networks) keep devices from seeing
 each other. There the page will not open; use the hotspot or a cable instead.
@@ -71,7 +110,7 @@ each other. There the page will not open; use the hotspot or a cable instead.
 </details>
 
 <details>
-<summary><b>2. The phone's hotspot.</b> The laptop joins the phone's hotspot and stays online through it. About 65 MB/s.</summary>
+<summary><b>The phone's hotspot.</b> The laptop joins the phone's hotspot and stays online through it. About 65–83 MB/s.</summary>
 
 <br>
 
@@ -79,15 +118,13 @@ each other. There the page will not open; use the hotspot or a cable instead.
 
 Turn on the phone's ordinary hotspot and join it from the laptop. The phone is now the laptop's
 router, so there is only one hop between them, and the laptop keeps its internet through the
-phone. Home shows the hotspot address with its speed; the page shows *Phone's hotspot* as a badge.
-
-*Settings → Speed → Laptop link* shows the hotspot's name and password, so the laptop helper can
-join it by itself.
+phone. *Settings → Speed → Laptop link* shows the hotspot's name and password, so the laptop helper
+can join it by itself.
 
 </details>
 
 <details>
-<summary><b>3. A USB-C cable.</b> USB tethering on. About 250 MB/s, the fastest by far.</summary>
+<summary><b>A USB-C cable.</b> USB tethering on. About 250 MB/s, the fastest by far.</summary>
 
 <br>
 
@@ -101,7 +138,7 @@ laptop keeps its internet through the phone. Most charging cables are USB 2, whi
 </details>
 
 <details>
-<summary><b>4. The direct link.</b> A private network the phone starts by itself. 55–115 MB/s, no internet.</summary>
+<summary><b>The direct link.</b> A private network the phone starts by itself. 55–115 MB/s, no internet.</summary>
 
 <br>
 
@@ -116,7 +153,7 @@ the way.
 </details>
 
 <details>
-<summary><b>5. USB debugging.</b> The helper's last resort: works with no network between them at all.</summary>
+<summary><b>USB debugging.</b> The helper's last resort: works with no network between them at all.</summary>
 
 <br>
 
@@ -125,25 +162,26 @@ the way.
 When the laptop cannot reach the phone over any network (the phone on another Wi-Fi, tethering
 off) but the cable is in and *USB debugging* is on, the laptop helper forwards a port through
 `adb` and serves the phone at `127.0.0.2` as if it were on the network. The page, the clipboard
-and the trackpad work; the second screen needs a real network. It is slower than tethering, and
-the page says *turn on USB tethering for full speed*. The helper uses the Android SDK's `adb`, or
+and the trackpad work; the second screen needs a real network. It is slower than tethering (about
+30 MB/s), and the page says *USB tethering is faster*. The helper uses the Android SDK's `adb`, or
 the one that comes with scrcpy.
 
 </details>
 
 <details>
-<summary><b>6. The laptop helper.</b> One address, <code>localhost:8787</code>, always on the fastest of the above.</summary>
+<summary><b>The laptop helper.</b> One address, <code>localhost:8787</code>, always on the fastest way there is.</summary>
 
 <br>
 
-**Path:** browser → the helper on the laptop → whichever way above is fastest → phone.
+**Path:** browser → the helper on the laptop → whichever way is fastest → phone.
 
 On Windows, double-click **blazeit-pc.bat**; on Linux, run `python3 blazeit-linux.py` in a
 terminal; on a Mac, `python3 blazeit-mac.py` in Terminal. The page's Settings offers the one for
-the computer it is open on, and nothing is installed. The helper finds the phone by itself, over the cable, the hotspot, the direct link,
-Wi-Fi or USB debugging, and moves to a faster way the moment one appears and back when it goes.
-The page stays at `http://localhost:8787` whichever it is, so bookmarks and open tabs never
-change. Starting it again replaces the running copy.
+the computer it is open on, and nothing is installed. The helper finds the phone by itself, over
+the cable, the hotspot, the direct link, Wi-Fi, USB debugging, and from far away over the tunnel
+(section 4), and moves to a faster way the moment one appears and back when it goes. The page stays
+at `http://localhost:8787` whichever it is, so bookmarks and open tabs never change. Starting it
+again replaces the running copy. Downloaded through the phone's website, it signs itself in.
 
 The Linux helper needs only Python 3 and uses what the system has: `wl-clipboard` (Wayland) or
 `xclip` (X11) for the clipboard; write access to `/dev/uinput`, or `xdotool` (X11), or `ydotool`,
@@ -162,181 +200,87 @@ To use the phone's hotspot or direct link, join it from the Wi-Fi menu; the help
 phone there. A USB cable works when the phone's USB tethering uses NCM, which macOS supports
 (it has no RNDIS).
 
-<img src="docs/images/web-settings.png" width="620" alt="The helper, running, in the page's Settings">
-
 </details>
 
-### Phone and phone
+### 3. Who is connected, and how
+
+Every page and helper is named on the phone's Home under **Connected now**, with an icon for how it
+came (the cable, the hotspot, Wi-Fi, the direct link, USB debugging, the tunnel, the website), IPv4
+or IPv6, about how fast that way is, and what would be faster. A green dot means it is talking to
+the phone now. The page says the same in its hero (*Wi-Fi · router speed, USB is faster*) and at the
+foot of its Settings, where the helper card names the link and the phone's address on it.
+
+<img src="docs/images/web-settings.png" width="620" alt="The helper card and the link, in the page's Settings">
+
+### 4. From anywhere: the tunnel
+
+Pair once on the same network. After that, a laptop helper or a linked phone on another network
+reaches the phone through its **tunnel**: one connection with its own encryption and every request
+carried inside it ([how it works](docs/tunnel-protocol.md)). The phone is the only server; there is
+none on the internet. The helper and linked phones learn the phone's address while they are
+together, switch to the tunnel by themselves when no local way answers, and come back when one
+does.
+
+- **Over IPv6**, straight to the phone's mobile-data address over TCP.
+- **Over IPv4**, from a network with no IPv6: the laptop and the phone swap their public IPv4
+  addresses as two small sealed notes on a public message board ([ntfy.sh](https://ntfy.sh), which
+  keeps nothing), then **punch through both NATs** over UDP and run the same tunnel on that path,
+  with its own delivery and congestion control (CUBIC). Nothing but those notes goes through anyone
+  else. It works unless both networks have the hard kind of NAT (a new port for every
+  destination); from Airtel home broadband to a phone on Jio data it takes 5 to 9 s.
+- **When the phone's address changes** (mobile IPv6 changes whenever the phone reconnects), the
+  helper asks the phone where it is now through the same message board and is back in about 3 s.
+- **On the page** the link shows as *Internet · IPv6 tunnel* or *Internet · IPv4, punched through*,
+  and the page goes easy on it: the next song waits until the playing one has fully arrived.
+
+Through the tunnel: the clipboard, files, browsing the phone, music, notifications, the trackpad.
+The second screen and the phone's screen stay local. The phone stays awake while anyone is
+connected from far away, and for half a minute after. *Settings → Laptop access → From other
+networks* shows who is connected that way and how much it has carried, and turns it off.
 
 <details>
-<summary><b>7. Finding and linking phones.</b> Phones on the same Wi-Fi find each other; one code links them both ways.</summary>
+<summary><b>What works across different networks, and what does not.</b></summary>
 
 <br>
-
-**Path:** phone ⇄ phone over the network they share (a router, or one phone's hotspot).
-
-The **Devices** tab looks for other phones running Localhost 8787 on the same network (they
-announce themselves, as printers do). Tap one, compare the 4-digit code, and tap **Allow** on the
-other phone. That one approval links the two **both ways**: each can now reach the other without
-asking again, for a year, renewed on its own. A phone the search cannot see (another network
-that still routes to this one) can be added with **Connect by address**.
-
-<img src="docs/images/phone-devices.png" width="240" alt="The Devices tab: computers, and looking for phones">
-
-</details>
-
-<details>
-<summary><b>8. Each other's files.</b> A linked phone's folders open on this phone and on the laptop.</summary>
-
-<br>
-
-**Path:** this phone (or its laptop) → this phone → the linked phone.
-
-Tap a linked phone in *Devices* to browse its folders, with thumbnails, and save a file or a whole
-folder here. On the laptop page, the **Phone** tab has a chip for each linked phone, so a laptop
-connected to one phone can browse and download from the other. Read-only, as the laptop's view of
-the phone is.
-
-</details>
-
-<details>
-<summary><b>9. One clipboard.</b> Copy on one phone, paste on the other.</summary>
-
-<br>
-
-**Path:** phone → phone, then on to each phone's laptop.
-
-With *Sync clipboard* on, whatever is copied on one phone (text, a picture, a file) goes to every
-linked phone, and from there to the laptops on it. The newest copy wins; a copy that came from a
-phone is not sent back to it.
-
-</details>
-
-<details>
-<summary><b>10. Sending between phones.</b> Share a file to the other phone; big ones go over several connections at once.</summary>
-
-<br>
-
-**Path:** phone → phone.
-
-Send files from Home, from any app's Share menu, or from a linked phone's row in *Devices*. Files
-over 16 MB are split over up to 8 connections at once, in 64 MB pieces, and land in the other
-phone's received-files folder.
-
-</details>
-
-### Laptop and laptop
-
-<details>
-<summary><b>11. Through one phone.</b> Two laptops on the same phone: the file streams through it, kept nowhere.</summary>
-
-<br>
-
-**Path:** laptop → phone → laptop. The phone only passes it on.
-
-On the page, the **to …** menu on *Send files* lists every computer with the page open. Pick one:
-the other laptop gets a card with **Save** and **Decline**, and on Save the file streams through the
-phone as it is read. It is never written to the phone's storage, so a 50 GB file needs no room
-there. The speed is that of the slower link, and when both laptops share the phone's hotspot they
-share its air time too.
-
-| Where to send | A file arriving |
-| --- | --- |
-| <img src="docs/images/web-send-to.png" width="420" alt="Where to send: this phone, or a computer with the page open"> | <img src="docs/images/web-incoming.png" width="420" alt="A file arriving from another laptop, to Save or Decline"> |
-
-</details>
-
-<details>
-<summary><b>12. Through two phones.</b> Each laptop on its own phone, the phones linked: laptop → phone → phone → laptop.</summary>
-
-<br>
-
-**Path:** laptop → its phone → the linked phone → that phone's laptop.
-
-The menu lists the computers on linked phones too (*a laptop · through the other phone*), and
-the other phone itself. The file streams across both phones in one go and is stored on neither.
-This is how two laptops on two different hotspots reach each other.
-
-</details>
-
-<details>
-<summary><b>13. Direct, browser to browser.</b> When the two laptops can reach each other, the file skips the phones entirely.</summary>
-
-<br>
-
-**Path:** laptop → laptop. The phones only introduce them.
-
-Before streaming through the phone (11 or 12), the two pages try to connect to each other
-directly (WebRTC). The phones carry only the introductions, a few kilobytes: an offer, an answer,
-and the addresses each side can be reached at. Each phone answers STUN on UDP port 3478, which
-tells each browser its own address as seen from the network. If the laptops share a network (the
-same router, the same hotspot, a cable between them), the data then flows straight from one
-browser to the other and the phones carry none of it. If they cannot reach each other within
-8 seconds, the file goes through the phones as in 11 or 12, by itself.
-
-In Chrome and Edge the receiving laptop picks where to save, and the file is written as it
-arrives. Browsers without that (Firefox, Safari) take a direct send of up to 512 MB in memory;
-larger ones go through the phone as a normal download.
-
-</details>
-
-### Different networks
-
-<details>
-<summary><b>14. What works across different networks, and what does not.</b></summary>
-
-<br>
-
-Pair once on the same network. After that, a laptop or phone on another network reaches the
-phone through its **tunnel**: one connection to the phone's IPv6 address, with its own
-encryption and every request carried inside it
-([how it works](docs/tunnel-protocol.md)). The phone is the only server; there is none on the
-internet. The helper and linked phones learn the phone's address while they are together and
-switch to the tunnel by themselves when no local path answers, and back again when one does.
-
-From a network with no IPv6, the laptop and the phone swap their public IPv4 addresses as two
-small sealed notes on a public message board ([ntfy.sh](https://ntfy.sh), which keeps nothing),
-then **punch through both NATs** over UDP and run the same tunnel on that path. Nothing but those
-two notes goes through anyone else. It works unless both networks have the hard kind of NAT (a new
-port for every destination); from Airtel home broadband to a phone on Jio data it takes 5 to 9 s.
-Between two phones the tunnel is still IPv6 only.
-
-**The phone as a website.** With a free name from [dynv6](https://dynv6.com) set up in Settings, Website, the phone is also `https://yourname.v6.navy:8443` to any browser on a network with IPv6, with a real Let's Encrypt certificate it gets and renews itself; a browser there asks, and you tap Allow on the phone, as on the local network. The laptop helper signs in the same way from anywhere, once. [How it works](docs/website.md).
 
 | Situation | Works? |
 | :--- | :--- |
 | Laptop and phone on the same Wi-Fi, hotspot or cable | Yes |
-| Laptop and phone on different networks, cable plugged in | Yes, through USB debugging (5) |
-| Laptop on another network with IPv6, phone on mobile data | Yes, through the tunnel |
+| Laptop and phone on different networks, cable plugged in | Yes, through USB debugging |
+| Laptop on another network with IPv6, phone on mobile data | Yes, through the tunnel or the website |
+| Laptop on a network with IPv4 only, phone on mobile data | Yes, the helper punches through both NATs over UDP, unless both are the hard kind |
 | Two phones far apart, on mobile data | Yes, through the tunnel, once linked |
 | Two laptops on different networks, one phone | Yes: straight between the laptops when both have IPv6, else through the phone |
-| Two laptops, each on its own phone's hotspot | Yes, through both phones (12); from far apart, over the tunnel between the phones |
-| Laptop on a network with IPv4 only, phone on mobile data | Yes, punched through both NATs over UDP, unless both are the hard kind (then no) |
-| Guest or campus Wi-Fi that hides devices from each other | Through the tunnel if the network has IPv6; else use a hotspot or a cable |
-
-Through the tunnel: the clipboard, files, browsing the phone, music, notifications, the
-trackpad. The second screen and the phone's screen stay local. On mobile data every byte counts;
-Settings → Laptop access → From other networks shows who is connected that way and how much it
-has carried, and turns it off. If the phone's address changes while the two are apart (mobile IPv6
-changes whenever the phone reconnects), the helper asks the phone where it is now through the same
-message board and is back in about 3 seconds.
+| Two laptops, each on its own phone's hotspot | Yes, through both phones; from far apart, over the tunnel between the phones |
+| Guest or campus Wi-Fi that hides devices from each other | Through the tunnel or the website if the network has IPv6; else use a hotspot or a cable |
+| A proxy that allows only web traffic | No: it cannot reach the phone without a server outside |
 
 </details>
 
----
+### 5. From anywhere: the phone as a website
 
-## Features
+With a free name from [dynv6](https://dynv6.com) set up in *Settings → Website*, the phone is also
+`https://yourname.v6.navy:8443` to any browser on a network with IPv6, nothing installed. It has a
+real [Let's Encrypt](https://letsencrypt.org) certificate it gets and renews by itself. A browser
+there clicks **Ask to connect** and you tap **Allow** on the phone, as on the local network
+(anyone who finds the name can make the phone ask, so at most 10 asks per 10 minutes from one
+network and 60 an hour). [How it works](docs/website.md).
 
-### 1. Turn it on and connect a computer
+- **The name follows the phone**: mobile data's own IPv6 (the carrier lets connections in; a home
+  router usually does not), or, while the phone shares its data over the hotspot or USB tethering,
+  its address on that side, which works there and from the internet alike.
+- **At home** the website moves itself to `lan.yourname.v6.navy`, the phone's Wi-Fi address, in
+  the same certificate, instead of going out to the internet and back.
+- **Near the phone** (its hotspot, the cable, its Wi-Fi) the website moves to the phone's plain
+  address there, the old `http://IP:8787`, still signed in: a one-time code carries the sign-in
+  over, so the phone does not ask again. If that address does not open, Back returns to the website,
+  which stays.
+- **The helper from the website**: its download signs itself in with a code baked into it; started
+  anywhere, it finds the fastest way by itself.
+- Over the internet everything stays encrypted (HTTPS); on the phone's own links the plain address
+  is what it always was.
 
-Flip the switch at the top of Home. The phone shows its address in large type; tap it to copy, or
-show a QR code. Open that address on the laptop, click **Ask to connect**, and tap **Allow** on the
-phone (both show the same 4-digit code). No account, no password. The phone lists every computer
-and phone allowed in and can remove any.
-
-<img src="docs/images/web-login.png" width="480" alt="Connect this computer">
-
-### 2. One clipboard for both
+### 6. One clipboard for both
 
 Copy on one, paste on the other: text, pictures and files up to 50 MB. The box on Home shows what
 is shared, and under its title **Shared with** names every machine it reaches right now, on the
@@ -352,85 +296,69 @@ adb shell pm grant dev.periy.bridge.debug android.permission.READ_LOGS
 adb shell appops set dev.periy.bridge.debug SYSTEM_ALERT_WINDOW allow
 ```
 
-### 3. Send files and whole folders
+On HyperOS the phone may still keep its clipboard to itself in the background: share to
+**Copy to laptop**, or use *Send to laptop* on selected text, and it goes across at once.
+
+### 7. Send files and whole folders
 
 - **Laptop → phone**: drop files or folders on the page. Big files go over several connections at
   once and carry on where they stopped if the connection drops.
-- **Laptop → another computer or phone**: the **to …** menu on *Send files* (see
-  [Laptop and laptop](#laptop-and-laptop)).
+- **Laptop → another computer or phone**: the **to …** menu on *Send files* (section 19).
 - **Phone → laptop**: share anything to Localhost 8787 from any app, or tap *Send files* on Home.
   It appears under *On the phone* on the page.
 - Nothing can be deleted from the laptop. On the phone, *Clear* takes files off the list only.
 
-### 4. Browse the phone from the laptop
+<img src="docs/images/web-send-to.png" width="620" alt="Where to send: this phone, or a computer with the page open">
+
+### 8. Browse the phone from the laptop
 
 The page's **Phone** tab shows the phone's folders with thumbnails, and those of linked phones.
 Click a file to see it before downloading: photos (HEIC too), videos, music, PDFs, text and Office
 files, full screen with arrows to step through. Download one file or a whole folder as a zip.
 Read-only, and off until you allow it on the phone.
 
-| The phone's folders | A photo, previewed |
+| The phone's folders | A picture, previewed |
 | --- | --- |
 | <img src="docs/images/web-phone.png" width="420"> | <img src="docs/images/web-viewer.png" width="420"> |
 
-### 5. Your music, from the phone
+### 9. Your music, on the laptop
 
-The page's **Music** tab is the phone's Music (section 6), fitted to the window: on a laptop beside
-the page's own tabs, with more songs and albums to a row; in a phone's browser the whole screen,
-the other tabs a menu away at its top left. Songs stream straight from the phone, so FLAC and
-everything else starts at once, and skipping is instant. Media keys and the Windows media overlay
-work.
+The page's **Music** tab is the phone's Music (section 10), fitted to the window: on a laptop a
+sidebar with Albums, Songs and Favourites and a search, in a phone's browser the whole screen.
+Songs stream straight from the phone in their own format (FLAC, 24-bit included), so skipping is
+instant on a local link. Media keys and the Windows media overlay work.
 
-- **Tracks, Albums and Liked**, as the app's: Namida's bar along the foot to go between them (the
-  page slides in from its side), each page's count and what can be done to all of it (shuffle,
-  play) on the app bar's line beside the search. The app bar is a shade lighter than the page, so
-  a line runs along its foot.
-- **Tracks and Liked** are Namida's tiles: the cover, title, who it is by, the album and year, what
-  kind of file it is, how long it is, a heart, and a menu (play next, play last, go to its album).
-  **Pull a song left** and *Play After* shows from under it. **Albums** are Namida's cards, the
-  year frosted into a corner and a play button in the other.
+| Albums | Songs |
+| --- | --- |
+| <img src="docs/images/web-music.png" width="420"> | <img src="docs/images/web-tracks.png" width="420"> |
+
 - **An album** opens as a page pushed in from the right, its cover flying from its card into the
-  frame at the top, with shuffle, **Play Last**, its order (disc number, title, duration or
-  artist, either way round) and a header before each disc.
-- **Search** grows out of its button (or `/`), sliding the count away to the left; `Esc` clears it,
-  then closes it.
-- While a song plays, a small note sits beside *Music* in the tabs.
+  frame at the top, with **Play**, **Shuffle**, its genre and what the files are (*FLAC · 24-bit ·
+  96 kHz*), its order (disc number, title, duration or artist, either way round) and a header
+  before each disc.
 - **The player, full screen**, moves as [Namida](https://github.com/namidaco/namida)'s does, with
   its times and curves: every move up or down settles over 300 ms, a song sideways over 600. Drag
-  the mini player up (or click its cover) and it grows into a player the size of the window: the
-  cover flies from the mini player's corner to its place, the title and the play button follow,
-  and the waveform and the buttons come in last. Drag on up for the queue: every song in the order
-  it will play, to play from, drag into a new order by its handle, or take off. Let go anywhere and
-  it settles by how far and how fast you dragged, back into the mini player with a small bounce.
-  Swipe the cover or the mini player sideways for the song before or after: the cover and title
-  slide, the title a little quicker. The cover swells with the loud moments, the seek bar is the
-  song's own waveform (drag along it to choose a place, drag up off it to take the seek back), the
-  colour is the cover's, and faint specks drift behind, quicker when the music is loud. `Esc` or
-  Back steps back down.
-- **The queue is Namida's**: a sheet with round corners rising under the song, which shrinks to
-  the top as it comes. Its header says where you are in it and the time left, with a button back
-  down; each song is Namida's tile (cover, title, artist, album and year, its length, a heart, a
-  handle and a menu to take it off). Along its foot, a broom to remove the songs before or after,
-  and **Shuffle**, which shuffles only what is left. When the song changes, its colour passes from
-  one tile to the next.
-- **It looks like Namida's too**: its font (Lexend Deca) and its icons (Iconsax), the song large
-  over its artist with a **heart** beside them (kept on the phone, so a song with a heart has it on
-  the phone's player and every page), a thin waveform, and a glowing play disc in the cover's
-  colour, which tints the whole player. Along the bottom, **what the file is** (FLAC, MP3, OPUS...,
-  its bitrate, its sample rate and, for a 24-bit file, a Hi-Res badge), **repeat**, the **sound
-  controls** (Namida's Configure: speed and volume, each with a step either side of its slider) and
-  **lyrics**. Its menus, its notes and its dialog are Namida's too.
+  the mini player up (or click its cover) and it grows into a player the size of the window, with
+  what plays next beside the cover. The seek bar is the song's own waveform (drag along it to
+  choose a place, drag up off it to take the seek back), the colour is the cover's, and faint specks
+  drift behind, quicker when the music is loud. Under the waveform, **what the file is** (FLAC,
+  24-bit, 96 kHz, its bitrate). `Esc` or Back steps back down.
+- **The queue**: drag on up for every song in the order it will play, to play from, drag into a
+  new order by its handle, or take off. The broom removes the songs before or after; **Shuffle**
+  shuffles only what is left.
 - **Repeat** opens Namida's menu: stop after the last song, repeat this song, repeat it a number of
-  more times (set with its − and +), repeat the queue, or repeat the queue shuffled anew each time
-  round.
-- **Lyrics over the cover**, as the phone's (below), riding on the cover into the queue, and
-  **full-page lyrics** on a tap.
+  more times, repeat the queue, or repeat the queue shuffled anew each time round. The **sound
+  controls** set speed and volume.
+- **Hearts** are kept on the phone, so a song with a heart has it on the phone's player and every
+  page. **Search** grows out of its button (or `/`); `Esc` clears it, then closes it.
 
-| Your albums | Playing, with what is next |
+| The player | The queue |
 | --- | --- |
-| <img src="docs/images/web-music.png" width="420"> | <img src="docs/images/web-album.png" width="420"> |
+| <img src="docs/images/web-player.png" width="420"> | <img src="docs/images/web-queue.png" width="420"> |
 
-### 6. Music on the phone itself
+<img src="docs/images/web-album.png" width="620" alt="An album">
+
+### 10. Music on the phone itself
 
 The phone's own **Music** tab opens the phone's music full screen, laid out as
 [Namida](https://github.com/namidaco/namida)'s library, in the colour of the song playing (Back
@@ -439,93 +367,47 @@ in the background, the controls in the notification and on the lock screen, and 
 buttons working.
 
 - **Tracks, Albums and Liked**, side by side under Namida's bottom bar: tap one or swipe between
-  them. Sizes are Namida's own, text included (it draws its text at nine tenths). Each page's
-  count, with shuffle and play all, sits on the app bar's line beside the search, and the app bar
-  is a shade lighter than the page, so a line runs along its foot.
+  them. Each page's count, with shuffle and play all, sits beside the search.
 - **Tracks**: every song A to Z, each with its cover, who it is by, its album and year, what kind
-  of file it is (a small FLAC, MP3, OPUS... label, lossless ones in the song's colour), how long
-  it is, a heart, and a menu (play next, play last, go to its album). The song playing is lit. **Pull a song left** and *Play After* shows from under it, as in
-  Namida: let go past it and the song plays after the one playing.
-- **Liked**: the songs with a heart, newest heart first, with shuffle and play all; the same list
-  as the page's *Liked*.
-- **Albums**: three to a row, each cover with its year frosted into a corner (the cover seen
-  blurred through it, as Namida's) and a play button in the other, and how many songs and how long
-  under it.
-- **An album**: its cover in a frame with its name, who it is by and its year, **shuffle** and
-  **Play Last**; then its songs, each cover marked with its number in a frosted corner, in the
-  order you choose (disc number, title, duration or artist, either way round). An album on more
-  than one disc has a header before each disc.
-- **Search** at the top right filters the page you are on (or the album open) as you type; the
-  box grows out of its icon as the count slides out to the left, and back when it closes.
-- **Namida's transitions**: an album opens as a page pushed in from the right (the one under it
-  slides a third aside), its cover flying from the grid into the album's header; songs and albums
-  come in one after another, sliding up as they fade in; and the page sinks back a little as the
-  player opens over it. Going back, the page leaves quickly and slows as it arrives, as Namida's
-  does. It is all in Namida's font, Lexend Deca, with Namida's icons.
-
-What is playing floats over the bar as a mini player, the same player as the page's, after
-Namida's:
-
-- **One continuous drag.** Up from the mini player to full screen, and on up to the queue; down
-  again the same way. Everything follows the finger at once and settles where the drag says, with
-  Namida's times and curves: 300 ms up or down (the mini player with a small bounce), 600 ms for a
-  song sideways. The bar sinks away under it as it opens. Back steps down.
-- **Swipe sideways** on the mini player or the cover for the song before or after, with a tick
-  under the finger when it changes.
+  of file it is (lossless ones in the song's colour), how long it is, a heart, and a menu (play
+  next, play last, go to its album). **Pull a song left** and *Play After* shows from under it.
+- **Albums**: three to a row, each cover with its year frosted into a corner and a play button in
+  the other. **An album**: its cover in a frame with its name, who it is by and its year,
+  **shuffle** and **Play Last**, then its songs in the order you choose.
+- **Namida's transitions**: an album opens as a page pushed in from the right, its cover flying
+  from the grid into the album's header; songs and albums come in one after another; the page
+  sinks back a little as the player opens over it. Namida's font, Lexend Deca, and its icons.
+- **One continuous drag** from the mini player up to full screen and on up to the queue, and down
+  again; swipe sideways for the song before or after, with a tick under the finger.
 - **The cover swells** with the song's loud moments and **the seek bar is its waveform**, worked
   out once on the phone and kept (the page gets the same, from the phone).
-- **Namida's look**: the song over its artist with a heart, a thin waveform, the glowing play disc,
-  colours from the cover and specks drifting behind. Along the bottom, **what the file is** (FLAC,
-  MP3, OPUS..., its bitrate and sample rate), **repeat**, and the **sound controls**: speed, pitch
-  and volume in Namida's Configure dialog (pitch in percent or semitones, a one-tap 432 Hz, speed
-  carrying pitch if you like), kept for next time.
-- **Repeat** opens Namida's menu: stop after the last song, repeat this song, repeat it a number of
-  more times (set with its − and +; it counts down, then carries on), repeat the queue, or repeat
-  the queue shuffled anew each time round.
-- **Lyrics over the cover**, from Namida's lyrics button beside the sound controls: the cover
-  blurs and the words scroll over it in time with the song, the line being sung in the middle on
-  a card of the song's colour, each word lighting as it is sung (for songs timed word by word),
-  and three dots filling across a long pause. Scroll to look around and they come back to the
-  song three seconds later. Untimed lyrics scroll as a page. Pull up to the queue (or down to the
-  mini player) and they ride on the cover's middle at their own size, fading as it shrinks.
-- **Full-page lyrics**: tap the lyrics over the cover and they take the whole screen, as
-  Namida's: the cover blurred behind, who and what is playing along the top, the lines large from
-  the left with the one being sung on a soft card (tap a line to go there), and the waveform,
-  times and controls along the foot. Back, or the arrow at the top, returns to the player.
-- **Found by the phone itself.** A moment after each song starts (in the background too), when
-  the phone has no lyrics for it, it looks them up on [LRCLIB](https://lrclib.net) and keeps them
-  just as the page does: a `.lrc` beside the song and a copy in the app. Lyrics found by the phone
-  show on the page, and lyrics found by the page show on the phone. The button shows **?** when a
-  song has none and **x** when they could not be looked up (no internet); they are tried again
-  the next time it plays.
-- **The queue**: Namida's sheet, rising under the song as the cover shrinks to the top, opening at
-  the song playing. Tap a song to play it, drag it by its handle to move it, swipe it away or use
-  its menu to take it off. The broom removes the songs before or after (or all), **Shuffle**
-  shuffles what is left, and the round button goes back to the song playing. Pull the list down
-  from its top and the player comes back down with it.
-- Pull the mini player down under itself to stop and put it away. The queue is kept for next time,
-  paused where it stopped.
+- **Sound controls**: speed, pitch and volume in Namida's Configure dialog (pitch in percent or
+  semitones, a one-tap 432 Hz, speed carrying pitch if you like), kept for next time.
+- **The queue**: Namida's sheet, rising under the song as the cover shrinks to the top. Tap to
+  play, drag by the handle to move, swipe away to take off; the broom and **Shuffle** as on the page.
+- Pull the mini player down under itself to stop and put it away. The queue is kept for next time.
 
 Albums run on from one song to the next without a gap, and a call or another app's sound pauses
 it.
 
-### 7. Lyrics, found and saved by themselves
+### 11. Lyrics, found and saved by themselves
 
-Press the lyrics button in the full player's bottom row: the words scroll over the cover with the
-song, the line being sung on a card of the song's colour. Click them for the full page, where a
-click on a line jumps there. With word timing, each word fills as it is sung; in a long
-instrumental gap, three dots swell until the singing starts again.
+Press the lyrics button in the player's bottom row: the words scroll beside the cover (over it at
+a phone's width) with the song, the line being sung lit. Click a line to jump there. With word
+timing, each word fills as it is sung; in a long instrumental gap, three dots swell until the
+singing starts again. On the phone they ride over the cover too, and a tap opens them full page.
+
+| On the laptop | At phone width |
+| --- | --- |
+| <img src="docs/images/web-lyrics.png" width="520"> | <img src="docs/images/web-lyrics-phone.png" width="200"> |
 
 - **Looked up by themselves.** When a song starts and the phone has no lyrics for it, the browser
-  looks them up on [LRCLIB](https://lrclib.net), a free, open lyrics library, provided the laptop
-  has internet (the phone does the same for songs it plays itself). Nothing is typed and nothing
-  is sent but the song's title, artist, album and length.
+  looks them up on [LRCLIB](https://lrclib.net), a free, open lyrics library (the phone does the
+  same for songs it plays itself). Nothing is sent but the song's title, artist, album and length.
 - **Downloaded and kept.** What is found is saved on the phone twice: in the app, and as a
-  standard `.lrc` file **beside the song** in its music folder (for example `Music/Song.lrc`), which
-  other players read too. Next time the lyrics come from the phone, with or without internet.
-- **Your own files first.** A `.lrc` file already beside a song is used as it is and never
-  overwritten.
-- Saving `.lrc` files beside songs needs *All files access* for Localhost 8787 on the phone.
+  standard `.lrc` file **beside the song** in its music folder, which other players read too.
+  A `.lrc` file already beside a song is used as it is and never overwritten. Saving them needs
+  *All files access* for Localhost 8787 on the phone.
 - **Word by word, worked out on the laptop.** LRCLIB times most songs by the line only. With the
   phone plugged in, run `tools\lyrics-align\align.bat`: it fetches each song not yet timed by the
   word, pulls the vocals out of the mix (Demucs), lines every word up with the singing (PyTorch's
@@ -534,11 +416,7 @@ instrumental gap, three dots swell until the singing starts again.
   up in `tools\lyrics-align\venv` (Python 3.11 and ffmpeg needed, about 3 GB). Every song's lyrics
   as they were are kept in `tools\lyrics-align\backup`, and `align.bat usb --restore` puts them back.
 
-| On the laptop | At phone width |
-| --- | --- |
-| <img src="docs/images/web-lyrics.png" width="520"> | <img src="docs/images/web-lyrics-phone.png" width="200"> |
-
-### 8. The phone's notifications on the laptop
+### 12. The phone's notifications on the laptop
 
 The page's **Alerts** tab shows the phone's notifications. Reply to a message, press their
 buttons (*Mark as read*), or clear them, and it happens on the phone. Ongoing ones (music,
@@ -546,27 +424,27 @@ downloads) sit apart and never pop up. Needs *Notification access* on the phone.
 
 <img src="docs/images/web-alerts.png" width="620" alt="Alerts">
 
-### 9. The phone as trackpad and keyboard
+### 13. The phone as trackpad and keyboard
 
 The phone's **Control** tab is a trackpad for the laptop, with Windows gestures (two fingers to
 scroll, three for Task View, four to switch desktops), the phone's keyboard typing into the
 laptop, and the laptop's volume and play/pause/next keys. It opens **locked**: tap once to use it,
 so a swipe across it changes tab instead. It locks again when you leave.
 
-### 10. The phone's screen on the laptop
+### 14. The phone's screen on the laptop
 
 *Phone screen* on the page opens the phone in a window on the laptop, to use with the mouse and
 keyboard, sound included (via [scrcpy](https://github.com/Genymobile/scrcpy); the phone needs USB
 debugging on). It uses the cable when one is plugged in.
 
-### 11. The phone as a second screen
+### 15. The phone as a second screen
 
-*Use as a second screen* on the Control tab shows the laptop's desktop on the phone; taps on it
-click there. With a virtual-display driver on the laptop (Windows) or an extra monitor set up with
-`xrandr` (Linux) it is a real extra monitor; otherwise it mirrors the laptop's screen. Protected
-video (Netflix, Prime Video) shows black, as it does for any screen capture.
+*Second screen* shows the laptop's desktop on the phone; taps on it click there. With a
+virtual-display driver on the laptop (Windows) or an extra monitor set up with `xrandr` (Linux) it
+is a real extra monitor; otherwise it mirrors the laptop's screen. Protected video (Netflix, Prime
+Video) shows black, as it does for any screen capture.
 
-### 12. A live monitor
+### 16. A live monitor
 
 The pulse button shows a small floating pill: speed each way, ping and signal, over any screen.
 Tap it for the full picture: the last minute, how full the link is and with what, and the
@@ -576,40 +454,127 @@ session's peak and total. On the laptop, *Monitor* docks it down the right side.
 | --- | --- |
 | <img src="docs/images/phone-monitor.png" width="190"> | <img src="docs/images/web-monitor.png" width="560"> |
 
-The laptop downloading from the phone over shared Wi-Fi (both on channel 36, so every byte crosses
-the air twice) at about 10 MB/s: 57% of what that link carries.
+### 17. Measure the connection
 
-### 13. Measure the connection
+*Settings → Measure the link* on the page tests the connection alone for five seconds each way.
+Compare it with a real transfer: close means the network is the limit, far below means storage is.
 
-*Settings → Measure* on the page tests the connection alone for five seconds each way. Compare it
-with a real transfer: close means the network is the limit, far below means storage is.
+### 18. Phone and phone
 
-### 14. Back works as in an app
+<details>
+<summary><b>Finding and linking phones.</b> Phones on the same network find each other; one code links them both ways.</summary>
+
+<br>
+
+The **Devices** tab looks for other phones running Localhost 8787 on the same network (they
+announce themselves, as printers do). Tap one, compare the 4-digit code, and tap **Allow** on the
+other phone. That one approval links the two **both ways**: each can now reach the other without
+asking again, for a year, renewed on its own. A phone the search cannot see (another network
+that still routes to this one) can be added with **Connect by address**. Linked phones far apart
+reach each other through the tunnel.
+
+<img src="docs/images/phone-devices.png" width="240" alt="The Devices tab: computers, and looking for phones">
+
+</details>
+
+<details>
+<summary><b>Each other's files.</b> A linked phone's folders open on this phone and on the laptop.</summary>
+
+<br>
+
+Tap a linked phone in *Devices* to browse its folders, with thumbnails, and save a file or a whole
+folder here. On the laptop page, the **Phone** tab has a chip for each linked phone, so a laptop
+connected to one phone can browse and download from the other. Read-only.
+
+</details>
+
+<details>
+<summary><b>One clipboard.</b> Copy on one phone, paste on the other.</summary>
+
+<br>
+
+With *Sync clipboard* on, whatever is copied on one phone (text, a picture, a file) goes to every
+linked phone, and from there to the laptops on it. The newest copy wins; a copy that came from a
+phone is not sent back to it.
+
+</details>
+
+<details>
+<summary><b>Sending between phones.</b> Big files go over several connections at once.</summary>
+
+<br>
+
+Send files from Home, from any app's Share menu, or from a linked phone's row in *Devices*. Files
+over 16 MB are split over up to 8 connections at once, in 64 MB pieces, and land in the other
+phone's received-files folder.
+
+</details>
+
+### 19. Laptop and laptop
+
+<details>
+<summary><b>Through one phone.</b> Two laptops on the same phone: the file streams through it, kept nowhere.</summary>
+
+<br>
+
+On the page, the **to …** menu on *Send files* lists every computer with the page open. Pick one:
+the other laptop gets a card with **Save** and **Decline**, and on Save the file streams through the
+phone as it is read. It is never written to the phone's storage, so a 50 GB file needs no room
+there.
+
+<img src="docs/images/web-incoming.png" width="420" alt="A file arriving from another laptop, to Save or Decline">
+
+</details>
+
+<details>
+<summary><b>Through two phones.</b> Each laptop on its own phone, the phones linked.</summary>
+
+<br>
+
+The menu lists the computers on linked phones too (*a laptop · through the other phone*), and
+the other phone itself. The file streams across both phones in one go and is stored on neither.
+This is how two laptops on two different hotspots reach each other.
+
+</details>
+
+<details>
+<summary><b>Direct, browser to browser.</b> When the two laptops can reach each other, the file skips the phones.</summary>
+
+<br>
+
+Before streaming through the phone, the two pages try to connect to each other directly
+(WebRTC). The phones carry only the introductions, a few kilobytes, and answer STUN on UDP port
+3478. If the laptops share a network the data flows straight from one browser to the other; if they
+cannot reach each other within 8 seconds, the file goes through the phones by itself. In Chrome
+and Edge the receiving laptop picks where to save; Firefox and Safari take a direct send of up to
+512 MB in memory, and larger ones go through the phone.
+
+</details>
+
+### 20. Back works as in an app
 
 - **On the phone**, Back closes whatever is open (the player a step at a time, a search, an album,
-  Music, a linked phone's files, the clipboard's history), then returns to Home; at Home it sends the app to the background, as Home does. It
-  never closes the app, and the server keeps running. From Android 14 the swipe shows it coming:
-  what it would close follows the finger (a page slides aside and fades, an album slides off the
-  way it came, the player lowers), finishes quickly when you let go, and settles back if you swipe
-  back out first.
+  Music, a linked phone's files, the clipboard's history), then returns to Home; at Home it sends
+  the app to the background. It never closes the app, and the server keeps running. From Android
+  14 the swipe shows it coming: what it would close follows the finger.
 - **On the laptop**, the browser's Back steps back through the page: it closes the player, the
-  lyrics, a file being viewed or the monitor, then returns to the tab before. It leaves the page only from where
-  you opened it. Each tab has its own address (`#music`), so a reload or a bookmark opens it.
+  lyrics, a file being viewed or the monitor, then returns to the tab before. Each tab has its own
+  address (`#music`), so a reload or a bookmark opens it.
 
-### 15. Any browser, any computer
+### 21. Any browser, any computer
 
 The page is one file with no dependencies and works in Chrome, Edge, Brave, Opera, Firefox and
 Safari, on Windows, macOS, Linux, ChromeOS, Android and iPad. It is checked in Edge and Firefox,
-including over plain `http://` (a "not secure" address), where browsers switch off some features:
-there the page falls back by itself (copying still works, a direct laptop-to-laptop file is
-held in memory or goes through the phone). The laptop helper runs on Windows, Linux and macOS;
-everything else needs just a browser.
+including over plain `http://`, where browsers switch off some features: there the page falls back
+by itself (copying still works, a direct laptop-to-laptop file is held in memory or goes through
+the phone). The laptop helper runs on Windows, Linux and macOS; everything else needs just a
+browser.
 
-### 16. The look
+### 22. The look
 
-After the Apple TV app, the same on the phone and the laptop: the app's own icon, a night-blue banner, large titles,
-capsule buttons, and on the phone the tabs float along the bottom within reach of a thumb. Music
-has Namida's look of its own, in the colours of the song playing.
+After the Apple TV app, the same on the phone and the laptop: the app's own icon, a night-blue
+banner, large titles, capsule buttons, and on the phone the tabs float along the bottom within
+reach of a thumb. Music has Namida's look of its own, in the colours of the song playing.
 **Swipe left or right** to move between tabs. **Colour** (*Settings → Appearance*, shared by the
 phone and every open page): Automatic (black and white) or red, orange, yellow, green, mint, blue
 or purple. **Light, dark or automatic** sits underneath.
@@ -624,9 +589,11 @@ or purple. **Light, dark or automatic** sits underneath.
 3. Flip the switch on **Home** and open the address it shows on the laptop. Tap **Allow**.
 4. For full speed and the extras, get the laptop helper from the page's **Settings** and run it:
    **blazeit-pc.bat** on Windows, **blazeit-linux.py** on Linux (`python3 blazeit-linux.py`),
-   **blazeit-mac.py** on a Mac (`python3 blazeit-mac.py`).
-   Other computers need only the browser.
+   **blazeit-mac.py** on a Mac (`python3 blazeit-mac.py`). Other computers need only the browser.
 5. For the most speed, plug in a USB-C cable and turn on USB tethering, or use the hotspot.
+6. For from anywhere: the helper does it by itself once paired. For a browser with nothing
+   installed, set up the website in *Settings → Website* (a free dynv6 name and its HTTP token,
+   and your own "I agree" to Let's Encrypt's terms).
 
 Settings on the phone, top to bottom:
 
@@ -656,31 +623,36 @@ For hotspot mode, checked on 26 September 2026:
   it serves. Live updates reach the page over a single event stream.
 - Uploads use the resumable [tus](https://tus.io) protocol, split over parallel connections
   into one pre-allocated file. Downloads use byte ranges, so they resume too.
+- **The tunnel** ([protocol](docs/tunnel-protocol.md)): X25519 keys, HKDF, a SHAKE256 stream cipher
+  with HMAC, and streams multiplexed with credit-based flow control, over TCP (IPv6) or over UDP
+  after hole punching, where it runs its own sequence numbers, selective acks, RACK loss detection
+  and CUBIC. The two sides meet through sealed notes on ntfy.sh and STUN.
+- **The website** ([how it works](docs/website.md)): dynv6 for the name (its update URL and REST
+  API), Let's Encrypt over ACME with DNS checks (the phone writes the TXT records itself and asks
+  dynv6's own nameservers until they have them), a certificate for the name and `lan.` together,
+  and a TLS door on port 8443 that hands each connection to the page from its own loopback address,
+  so the page knows who came that way.
+- Only computers and phones you allow get in: each gets a signed session you can revoke on the
+  phone. On the phone's own links traffic is plain HTTP, like a file share on your own Wi-Fi;
+  across the internet it is always encrypted, by the tunnel or by HTTPS.
 - Phones find each other with DNS-SD (`_blazeit._tcp`) on the local network and link with the
   same pairing as computers, once each way.
 - A file sent to another computer or phone is a *pipe*: offered, accepted, then streamed through
   in one pass and never stored. A direct send uses WebRTC data channels; the phone passes the
   introductions along the pipe and answers STUN on UDP 3478.
 - Lyrics come from [LRCLIB](https://lrclib.net), fetched by the browser for the page and by the
-  phone for its own player (LyricsFinder, which reads them exactly as the page does), and stored
-  on the phone with a `.lrc` file beside the song.
+  phone for its own player, and stored on the phone with a `.lrc` file beside the song.
 - The phone's own player is Android's MediaPlayer, with the next song prepared and chained on for
   a gapless handover, in a media-playback service with a MediaSession. How loud each 50 ms of a
-  song is gets decoded once, at low priority, and kept (a few kilobytes a song); the phone's player
-  and the page (`/api/music/loudness/{id}`) both draw from it. What a file is (its kind as the
-  decoder sees it, bitrate and sample rate) is read once a song (`/api/music/info/{id}`), and the
-  hearts are kept on the phone (`/api/music/favourites`, announced to the pages as they change).
+  song is gets decoded once, at low priority, and kept; the phone's player and the page
+  (`/api/music/loudness/{id}`) both draw from it.
 - The player's motion is after [Namida](https://github.com/namidaco/namida)'s: one number from 0
   (mini) through 1 (full) to 2 (queue) that every piece is placed from, and the same settling rules
-  and curves, and its pages and player are drawn after Namida's, with its sizes, spacing and
-  colours. It is written anew for Compose and for the page; none of Namida's code is used.
+  and curves. It is written anew for Compose and for the page; none of Namida's code is used.
 - The music's font is [Lexend Deca](https://fonts.google.com/specimen/Lexend+Deca) (SIL Open Font
   License, `app/src/main/assets/fonts/OFL.txt`), bundled in the app and served to the page from
   `/fonts/`. Its icons are [Iconsax](https://github.com/lusaxweb/iconsax) in its Broken style (MIT
-  licence), drawn from the paths of the `iconsax-react` package.
-- Only computers and phones you allow get in: each gets a signed session you can revoke on the
-  phone. Everything stays on the local network: no cloud, no account. Traffic is plain HTTP, so
-  treat it like a file share on your own Wi-Fi.
+  licence).
 
 ## Building
 
@@ -696,23 +668,28 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 Kotlin and Jetpack Compose on the phone (Android 10+), Ktor 3 for the server; the page has no
 build step and no dependencies. The code lives in `app/src/main/`: `assets/bridge.html` (the
-page), `assets/blazeit-pc.bat` and `assets/blazeit-helper.py` (the helpers: Windows's, and one for Linux and the Mac), and `java/dev/periy/bridge/` (`server/` for the
-routes, uploads, music, lyrics, linked phones, pipes and notifications, `ui/` for the app's
-screens, `music/` for the phone's own player, `net/` for addresses, the direct link and STUN).
+page), `assets/blazeit-pc.bat` and `assets/blazeit-helper.py` (the helpers: Windows's, and one for
+Linux and the Mac), and `java/dev/periy/bridge/` (`server/` for the routes, uploads, music, lyrics,
+linked phones, pipes and notifications, `ui/` for the app's screens, `music/` for the phone's own
+player, `net/` for addresses, the direct link, STUN, the tunnel, hole punching and the website).
 
 ## Known limits
 
+- Across the internet the speed is the road between the two carriers: 0.13–0.22 MB/s measured
+  between Airtel home broadband and a phone on Jio data, too little for 24-bit lossless music.
+- A browser needs IPv6 to reach the website; from an IPv4-only network use the helper, which
+  punches through. A proxy that allows only web traffic cannot reach the phone at all (Android apps
+  cannot listen below port 1024, and the phone is the only server).
 - Over the air, 80 MHz Wi-Fi 6 is the most this phone's hotspot offers; for more, use a cable.
 - On the direct link the laptop has no internet until the link stops.
+- With the hotspot and USB tethering both on, the website's name points at the hotspot side.
 - On Linux the second screen works on X11 and on wlroots desktops (sway, Hyprland), not yet on
   GNOME or KDE under Wayland; the trackpad needs `/dev/uinput`, `xdotool` (X11) or `ydotool`. Under
   WSL the Windows helper runs both.
 - The Mac helper is written to Apple's documented tools and checked piece by piece, but has not
   yet run on a real Mac. On a Mac the helper does not switch Wi-Fi itself.
-- Across the internet the laptop needs IPv6 of its own, and the phone's carrier has to let
-  connections in to it; a proxy that allows only port 443 cannot reach the phone (Android apps
-  cannot listen below 1024).
 - Lyrics need internet on the laptop the first time a song is played; after that they are on
   the phone.
 - Protected video cannot be shown on the second screen.
 - Apple Lossless (ALAC) does not play in browsers. Empty folders are not created.
+- A free dynv6 name stays active only while the account is used.
