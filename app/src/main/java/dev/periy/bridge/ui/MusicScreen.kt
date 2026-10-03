@@ -774,8 +774,8 @@ private fun TrackTile(
                     }
                 }
                 .background(nc.bg)
-                // The song playing sits on a band of the song's colour, with a bar down its left.
-                .drawBehind { playingBand(nc.primary, lit) }
+                // The song playing is lifted onto a card of its own.
+                .drawBehind { playingCard(nc, lit) }
                 // A long press shows the song's album (from the songs and the liked; on an album's
                 // own page it is already there).
                 .combinedClickable(
@@ -789,10 +789,10 @@ private fun TrackTile(
         ) {
             Spacer(Modifier.width(16.dp))
             if (number != null) {
-                // In an album: the song's number, bold in the song's colour on the one playing.
+                // In an album: the song's number, bold on the one playing.
                 Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
                     Text("$number", style = Nm.small.copy(fontSize = 14.sp, fontFeatureSettings = "tnum",
-                        fontWeight = if (current) FontWeight.Bold else FontWeight.Normal, color = if (current) nc.primary else Nm.small.color), maxLines = 1)
+                        fontWeight = if (current) FontWeight.Bold else FontWeight.Normal, color = if (current) nc.large else Nm.small.color), maxLines = 1)
                 }
             } else Box(
                 Modifier.size(46.dp).graphicsLayer { scaleX = shrink; scaleY = shrink }
@@ -813,7 +813,7 @@ private fun TrackTile(
                     Text(
                         t.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         style = TextStyle(fontFamily = MusicType, fontSize = 16.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
-                            color = lerp(nc.large, nc.primary, lit)),
+                            color = nc.large),
                     )
                     if (!inAlbum) Text(t.artist, style = Nm.small.copy(fontSize = 14.sp, color = lerp(nc.small, nc.large.copy(alpha = 0.75f), lit)),
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -830,7 +830,7 @@ private fun TrackTile(
 
 /**
  * An album in the grid: the cover, square with a hairline round it, and under it the name and who
- * it is by. The one playing has a ring of the song's colour round its cover and its name lit.
+ * it is by. The one playing is lifted onto a card (drawn round it, so nothing moves), its name bold.
  */
 @Composable
 private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: Boolean, small: Boolean = false, modifier: Modifier = Modifier) {
@@ -839,18 +839,21 @@ private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: B
     // Where the cover is, for the hero when it is tapped; it hides while its hero is flying.
     val where = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
     val onOpen = { shelf.openAlbum(a, where[0]) }
-    Column(modifier.fillMaxWidth().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen)) {
+    val out = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.toPx() }
+    Column(modifier.fillMaxWidth()
+        .drawBehind { if (playing) playingCard(nc, 1f, inset = -out, top = -out) }
+        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen)) {
         val shape = RoundedCornerShape(8.dp)
         Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
             Cover(a.coverId, a.title, Modifier.fillMaxSize()
                 .onGloballyPositioned { where[0] = it.boundsInRoot() }
                 .graphicsLayer { alpha = if (shelf.heroFlying && shelf.heroKey == a.key) 0f else 1f }
-                .border(if (playing) 3.dp else 0.5.dp, if (playing) nc.primary else line, shape), radius = 8.dp)
+                .border(0.5.dp, line, shape), radius = 8.dp)
         }
         Spacer(Modifier.height(7.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(a.title, style = TextStyle(fontFamily = MusicType, fontSize = if (small) 12.sp else 14.sp,
-                fontWeight = if (playing) FontWeight.Bold else FontWeight.Medium, color = if (playing) nc.primary else nc.large),
+                fontWeight = if (playing) FontWeight.Bold else FontWeight.Medium, color = nc.large),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Text(a.artist, style = Nm.small.copy(fontSize = if (small) 12.sp else 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)

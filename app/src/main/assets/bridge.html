@@ -1710,7 +1710,8 @@
     background: color-mix(in srgb, var(--nm-card) 90%, transparent); transition: background-color .3s; user-select: none; -webkit-user-select: none; }
   .nt-row:hover { background: color-mix(in srgb, color-mix(in srgb, var(--nm-card) 90%, transparent), var(--nm-on-surface) 5%); }
   .nt-row:focus-visible { outline: 2px solid var(--nm-primary); outline-offset: -2px; }
-  .nt.playing .nt-row { background: linear-gradient(to bottom right, var(--nm-main) 60%, var(--nm-tint40)); }
+  /* The song playing: lifted onto a card of its own, a hairline round it, its words bold. */
+  .nt.playing .nt-row { background: var(--surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--txt) 14%, transparent); border-radius: 12px; }
   .nt.flash .nt-row { animation: nml-flash 1.2s ease; }
   @keyframes nml-flash { 30% { filter: brightness(1.25); } }
   .nt-art { position: relative; width: 63px; height: 63px; flex: 0 0 63px; margin-right: 12px; border-radius: 8px; overflow: hidden; transition: transform .4s cubic-bezier(.4, 0, .2, 1); }
@@ -1725,27 +1726,21 @@
   .nt-text b { font-size: 13.5px; font-weight: 600; color: var(--nm-medium); line-height: 1.3; }
   .nt-text span { font-size: 11.7px; color: var(--nm-small); line-height: 1.35; }
   .nt-text .who { font-weight: 500; }
-  .nt.playing .nt-text b { color: rgba(255, 255, 255, .667); }
-  .nt.playing .nt-text .who { color: rgba(255, 255, 255, .55); }
-  .nt.playing .nt-text .al { color: rgba(255, 255, 255, .51); }
+  .nt.playing .nt-text b { font-weight: 700; }
   .nt-side { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-left: 6px; }
   .nt-kind { --k: var(--nm-small); margin-bottom: 2px; padding: 1px 4px; border-radius: 4px; font-size: 8.1px; font-style: normal; font-weight: 600; letter-spacing: .4px; line-height: 9.9px;
     color: var(--k); background: color-mix(in srgb, var(--k) 12%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--k) 50%, transparent); }
   .nt-kind.lossless { --k: var(--nm-primary); }
-  .nt.playing .nt-kind { --k: rgba(255, 255, 255, .667); }
   .nt-d { font-size: 11.7px; font-weight: 500; color: var(--nm-small); font-variant-numeric: tabular-nums; }
-  .nt.playing .nt-d { color: rgba(255, 255, 255, .667); }
   .nt-heart { width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer;
     color: color-mix(in srgb, var(--nm-main) 40%, color-mix(in srgb, var(--nm-medium) 45%, transparent)); }
   .nt-heart svg { width: 20px; height: 20px; }
   .nt-heart.on svg { fill: currentColor; stroke: none; }
-  .nt.playing .nt-heart { color: rgba(255, 255, 255, .55); }
   .nt-heart.pop svg { animation: nml-pop .5s cubic-bezier(.2, 1.6, .4, 1); }
   @keyframes nml-pop { 40% { transform: scale(1.3); } }
   .nt-more { width: 30px; height: 30px; display: grid; place-items: center; margin: 0 4px 0 2px; padding: 0; border: 0; border-radius: 4px; background: none; cursor: pointer;
     color: color-mix(in srgb, var(--nm-icon) 63%, transparent); }
   .nt-more svg { width: 18px; height: 18px; transform: rotate(90deg); }
-  .nt.playing .nt-more { color: rgba(255, 255, 255, .63); }
 
   /* An album's card: on the card colour, rounded 12, the cover with the year frosted into its
      corner and a play button in the other; its words sized to the card. */
@@ -1775,9 +1770,9 @@
   .nc-cap > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nc-cap b { font-size: min(7.56cqw, 13.5px); font-weight: 600; color: var(--nm-medium); line-height: 1.3; }
   .nc-cap span { font-size: min(6.21cqw, 11.7px); color: var(--nm-small); line-height: 1.35; }
-  .nc.playing .nc-cap b { color: var(--nm-primary); font-weight: 700; }
-  /* The album playing: a ring of its colour round the cover. */
-  .nc.playing .nc-art { box-shadow: 0 0 0 3px var(--nm-primary); }
+  /* The album playing: lifted onto a card (drawn round it, so nothing moves), its name bold. */
+  .nc.playing { border-radius: 12px; background: var(--surface); box-shadow: 0 0 0 7px var(--surface), 0 0 0 8px color-mix(in srgb, var(--txt) 14%, transparent); }
+  .nc.playing .nc-cap b { color: var(--txt); font-weight: 700; }
 
   /* An album's page: the cover in its frame with the name, who it is by and the year, shuffle and
      Play Last; its bar of how many and how long, sticking under the app bar; its songs, numbered. */
@@ -1981,8 +1976,7 @@
   .nc-cap { display: block; padding: 7px 0 0; }
   .nc-cap b { display: block; font-size: 13.5px; font-weight: 500; color: var(--txt); line-height: 1.3; }
   .nc-cap span { display: block; font-size: 13.5px; color: var(--mx-dim); line-height: 1.35; }
-  .nc.playing .nc-cap b { color: var(--accent); font-weight: 700; }
-  .nc.playing .nc-art { box-shadow: 0 0 0 3px var(--accent); }
+  .nc.playing .nc-cap b { color: var(--txt); font-weight: 700; }
 
   /* Songs: one row each on a hairline; a small cover, or the number on an album's page. */
   .nml-tracks { display: block; padding: 0 16px; }
@@ -1992,16 +1986,16 @@
   .nt-after { top: 4px; bottom: 4px; right: 0; border-radius: 10px; background: var(--mx-fill2); color: var(--txt); }
   .nt-row { gap: 12px; padding: 0 6px 0 4px; background: var(--bg); border-bottom: 1px solid var(--line); }
   .nt-row:hover { background: color-mix(in srgb, var(--txt) 5%, var(--bg)); }
-  /* The song playing: a band of the accent, a bar down its left, its words bold. Nothing moves. */
-  .nt.playing .nt-row { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); box-shadow: inset 4px 0 0 var(--accent);
-    border-radius: 8px; border-bottom-color: transparent; }
-  .nt.playing .nt-row:hover { background: color-mix(in srgb, var(--accent) 19%, var(--bg)); }
+  /* The song playing: lifted onto a white card with a hairline round it, its words bold. Nothing moves. */
+  .nt.playing .nt-row { background: var(--surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--txt) 14%, transparent);
+    border-radius: 10px; border-bottom-color: transparent; }
+  .nt.playing .nt-row:hover { background: var(--surface); }
   .nt-art { width: 40px; height: 40px; flex: 0 0 40px; margin: 0; border-radius: 5px; box-shadow: 0 0 0 1px var(--mx-edge); }
   .nt.playing .nt-art { transform: none; }
   .nt-art.gen { font-size: 14px; }
   .nt-no { position: static; width: 26px; flex: 0 0 26px; padding: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none;
     font-size: 13px; color: var(--mx-faint); text-align: center; font-variant-numeric: tabular-nums; display: grid; place-items: center; }
-  .nt.playing .nt-no { color: var(--accent); font-weight: 700; }
+  .nt.playing .nt-no { color: var(--txt); font-weight: 700; }
   .nt-text { flex: 1 1 0; min-width: 0; flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 0; overflow: hidden; }
   .nt-heart, .nt-more { flex: 0 0 auto; }
   .nt-no > i { font-style: normal; }
@@ -2010,8 +2004,8 @@
   .nt-text .who { font-size: 13px; font-weight: 400; color: var(--mx-dim); flex: 0 1 auto; min-width: 0; }
   .nt.in-album .nt-text .who::before { content: "\00a0\00b7\00a0"; }
   .nt:not(.in-album) .nt-text { justify-content: center; }
-  .nt.playing .nt-text b { color: var(--accent); font-weight: 700; }
-  .nt.playing .nt-text .who, .nt.playing .nt-text .al, .nt.playing .nt-al, .nt.playing .nt-d { color: color-mix(in srgb, var(--accent) 70%, var(--txt)); }
+  .nt.playing .nt-text b { color: var(--txt); font-weight: 700; }
+  .nt.playing .nt-text .who, .nt.playing .nt-text .al { color: var(--mx-dim); }
   .nt-al { flex: 0 0 30%; min-width: 0; font-size: 13px; color: var(--mx-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   @media (max-width: 999px) { .nt-al { display: none; } }
   .nt-heart { width: 30px; height: 30px; color: var(--txt); opacity: 0; transition: opacity .12s; }

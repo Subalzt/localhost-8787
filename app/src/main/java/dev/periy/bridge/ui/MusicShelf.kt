@@ -249,18 +249,17 @@ fun fmtMinutes(ms: Long): String {
 }
 
 /**
- * The song playing, wherever it is listed: a band of the song's colour in from the edges with a
- * solid bar down its left, [f] from 0 (not playing) to 1. Nothing on it moves.
+ * What is playing, wherever it is listed: lifted onto a card of its own with a hairline round it,
+ * [f] from 0 (not playing) to 1; [inset] and [top] how far in from the sides and the top and
+ * bottom it starts (less than 0 reaches past them). Nothing on it moves.
  */
-fun androidx.compose.ui.graphics.drawscope.DrawScope.playingBand(color: Color, f: Float) {
+fun androidx.compose.ui.graphics.drawscope.DrawScope.playingCard(nc: NamidaColors, f: Float, inset: Float = 8.dp.toPx(), top: Float = 3.dp.toPx()) {
     if (f <= 0f) return
-    val inset = 8.dp.toPx()
-    val top = 3.dp.toPx()
-    val h = size.height - 2 * top
-    drawRoundRect(color.copy(alpha = 0.16f * f), androidx.compose.ui.geometry.Offset(inset, top),
-        androidx.compose.ui.geometry.Size(size.width - 2 * inset, h), androidx.compose.ui.geometry.CornerRadius(12.dp.toPx()))
-    drawRoundRect(color.copy(alpha = f), androidx.compose.ui.geometry.Offset(inset, top + 8.dp.toPx()),
-        androidx.compose.ui.geometry.Size(4.dp.toPx(), h - 16.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
+    val at = androidx.compose.ui.geometry.Offset(inset, top)
+    val sz = androidx.compose.ui.geometry.Size(size.width - 2 * inset, size.height - 2 * top)
+    val r = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx())
+    drawRoundRect(nc.cardColor.copy(alpha = f), at, sz, r)
+    drawRoundRect(nc.onSurface.copy(alpha = 0.14f * f), at, sz, r, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
 }
 
 /** How high the bars stand while paused: three heights, so they never read as "···". */

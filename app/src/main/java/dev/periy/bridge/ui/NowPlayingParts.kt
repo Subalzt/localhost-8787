@@ -423,8 +423,8 @@ private fun QueueRow(
             Modifier.fillMaxSize()
                 .offset { IntOffset(dx.value.roundToInt(), 0) }
                 .background(nc.bg)
-                // The song playing on a band of the song's colour, as in the library.
-                .drawBehind { if (current) playingBand(nc.primary, 1f) }
+                // The song playing lifted onto a card of its own, as in the library.
+                .drawBehind { if (current) playingCard(nc, 1f) }
                 .pointerInput(key) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -462,7 +462,7 @@ private fun QueueRow(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(t.title, style = TextStyle(fontFamily = MusicType, fontSize = 16.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
-                        color = if (current) nc.primary else nc.large), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        color = nc.large), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(t.artist, style = TextStyle(fontFamily = MusicType, fontSize = 14.sp, color = nc.small), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (hearted) Box(Modifier.size(30.dp).clip(CircleShape).clickable(onClick = onHeart), contentAlignment = Alignment.Center) {
