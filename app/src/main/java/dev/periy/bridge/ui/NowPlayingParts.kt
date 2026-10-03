@@ -423,13 +423,8 @@ private fun QueueRow(
             Modifier.fillMaxSize()
                 .offset { IntOffset(dx.value.roundToInt(), 0) }
                 .background(nc.bg)
-                // The song playing on a soft band of the type colour, as in the library.
-                .drawBehind {
-                    if (current) drawRoundRect(
-                        nc.onSurface.copy(alpha = 0.075f), Offset(8.dp.toPx(), 3.dp.toPx()),
-                        Size(size.width - 16.dp.toPx(), size.height - 6.dp.toPx()), CornerRadius(12.dp.toPx()),
-                    )
-                }
+                // The song playing on a band of the song's colour, as in the library.
+                .drawBehind { if (current) playingBand(nc.primary, 1f) }
                 .pointerInput(key) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -457,10 +452,6 @@ private fun QueueRow(
                 contentAlignment = Alignment.Center,
             ) {
                 Cover(t.albumId, t.album, Modifier.fillMaxSize(), radius = 6.dp)
-                if (current) {
-                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
-                    PlayingBars(Color.White, sounding, Modifier.size(14.dp))
-                }
             }
             Spacer(Modifier.width(14.dp))
             Row(

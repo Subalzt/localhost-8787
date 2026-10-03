@@ -248,6 +248,21 @@ fun fmtMinutes(ms: Long): String {
     return if (min >= 60) "${min / 60}h ${min % 60}min" else "${min}min"
 }
 
+/**
+ * The song playing, wherever it is listed: a band of the song's colour in from the edges with a
+ * solid bar down its left, [f] from 0 (not playing) to 1. Nothing on it moves.
+ */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.playingBand(color: Color, f: Float) {
+    if (f <= 0f) return
+    val inset = 8.dp.toPx()
+    val top = 3.dp.toPx()
+    val h = size.height - 2 * top
+    drawRoundRect(color.copy(alpha = 0.16f * f), androidx.compose.ui.geometry.Offset(inset, top),
+        androidx.compose.ui.geometry.Size(size.width - 2 * inset, h), androidx.compose.ui.geometry.CornerRadius(12.dp.toPx()))
+    drawRoundRect(color.copy(alpha = f), androidx.compose.ui.geometry.Offset(inset, top + 8.dp.toPx()),
+        androidx.compose.ui.geometry.Size(4.dp.toPx(), h - 16.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
+}
+
 /** How high the bars stand while paused: three heights, so they never read as "···". */
 private val PAUSED_BARS = floatArrayOf(0.55f, 1f, 0.75f)
 

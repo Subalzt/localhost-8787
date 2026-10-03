@@ -774,13 +774,8 @@ private fun TrackTile(
                     }
                 }
                 .background(nc.bg)
-                // The song playing sits on a soft band of the type colour, in from the edges.
-                .drawBehind {
-                    if (lit > 0f) drawRoundRect(
-                        nc.onSurface.copy(alpha = 0.075f * lit), Offset(8.dp.toPx(), 3.dp.toPx()),
-                        Size(size.width - 16.dp.toPx(), size.height - 6.dp.toPx()), CornerRadius(12.dp.toPx()),
-                    )
-                }
+                // The song playing sits on a band of the song's colour, with a bar down its left.
+                .drawBehind { playingBand(nc.primary, lit) }
                 // A long press shows the song's album (from the songs and the liked; on an album's
                 // own page it is already there).
                 .combinedClickable(
@@ -794,10 +789,10 @@ private fun TrackTile(
         ) {
             Spacer(Modifier.width(16.dp))
             if (number != null) {
-                // In an album: the song's number, or bars where it is the one playing.
+                // In an album: the song's number, bold in the song's colour on the one playing.
                 Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
-                    if (current) PlayingBars(nc.primary, sounding, Modifier.size(14.dp))
-                    else Text("$number", style = Nm.small.copy(fontSize = 14.sp, fontFeatureSettings = "tnum"), maxLines = 1)
+                    Text("$number", style = Nm.small.copy(fontSize = 14.sp, fontFeatureSettings = "tnum",
+                        fontWeight = if (current) FontWeight.Bold else FontWeight.Normal, color = if (current) nc.primary else Nm.small.color), maxLines = 1)
                 }
             } else Box(
                 Modifier.size(46.dp).graphicsLayer { scaleX = shrink; scaleY = shrink }
@@ -805,11 +800,6 @@ private fun TrackTile(
                 contentAlignment = Alignment.Center,
             ) {
                 Cover(coverId, t.album, Modifier.fillMaxSize(), radius = 6.dp)
-                // The song playing: its cover dimmed under the bars.
-                if (lit > 0f) {
-                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f * lit)))
-                    PlayingBars(Color.White.copy(alpha = lit), sounding, Modifier.size(15.dp))
-                }
             }
             Spacer(Modifier.width(14.dp))
             // The words, with the hairline under them (not under the cover), as a list in iOS.
@@ -840,7 +830,7 @@ private fun TrackTile(
 
 /**
  * An album in the grid: the cover, square with a hairline round it, and under it the name and who
- * it is by. The one playing has its name lit, with the bars before it.
+ * it is by. The one playing has a ring of the song's colour round its cover and its name lit.
  */
 @Composable
 private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: Boolean, small: Boolean = false, modifier: Modifier = Modifier) {
@@ -855,12 +845,12 @@ private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: B
             Cover(a.coverId, a.title, Modifier.fillMaxSize()
                 .onGloballyPositioned { where[0] = it.boundsInRoot() }
                 .graphicsLayer { alpha = if (shelf.heroFlying && shelf.heroKey == a.key) 0f else 1f }
-                .border(0.5.dp, line, shape), radius = 8.dp)
+                .border(if (playing) 3.dp else 0.5.dp, if (playing) nc.primary else line, shape), radius = 8.dp)
         }
         Spacer(Modifier.height(7.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (playing) { PlayingBars(nc.primary, sounding, Modifier.size(11.dp)); Spacer(Modifier.width(6.dp)) }
-            Text(a.title, style = TextStyle(fontFamily = MusicType, fontSize = if (small) 12.sp else 14.sp, fontWeight = FontWeight.Medium, color = if (playing) nc.primary else nc.large),
+            Text(a.title, style = TextStyle(fontFamily = MusicType, fontSize = if (small) 12.sp else 14.sp,
+                fontWeight = if (playing) FontWeight.Bold else FontWeight.Medium, color = if (playing) nc.primary else nc.large),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Text(a.artist, style = Nm.small.copy(fontSize = if (small) 12.sp else 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
