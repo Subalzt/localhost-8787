@@ -8139,27 +8139,27 @@ function npDrawWave() {
   // Namida's waveform, as a voice recorder draws one: many fine bars close together, growing in
   // as the song's loudness arrives; what has played in the text colour, the rest faint. While the
   // song plays, what has played melts into one solid shape whose front edge moves with the music
-  // like a level meter, the shape behind it its history; paused, or under a mouse or a finger,
-  // it goes back to bars to choose a place in.
+  // like a level meter, the shape behind it its history, and the rest settles into a plain bar;
+  // paused, or under a mouse or a finger, it goes back to bars to choose a place in.
   var pitch = 3, bw = 1.7, n = Math.max(8, Math.floor(w / pitch));
   if (np.barsFor !== (t && t.id) + ":" + n + ":" + !!env) { np.bars = npBarsSpread(env, n); np.barsFor = (t && t.id) + ":" + n + ":" + !!env; }
   var bars = np.bars, step = n > 1 ? (w - bw) / (n - 1) : 0, minH = 3, cy = h / 2, grow = np.grow;
   var dur = npDur(), at = np.seek !== null ? np.seek : npPos(), played = dur > 0 ? npClamp(at / dur, 0, 1) * w : 0;
-  function draw(style) {
+  function draw(style, flat) {
     x.fillStyle = style;
     x.beginPath();
     for (var i = 0; i < n; i++) {
-      var bh = minH + (h - minH) * bars[i] * grow, bx = i * step;
+      var bh = minH + (h - minH) * bars[i] * grow * (1 - (flat || 0)), bx = i * step;
       if (x.roundRect) x.roundRect(bx, cy - bh / 2, bw, bh, bw / 2); else x.rect(bx, cy - bh / 2, bw, bh);
     }
     x.fill();
   }
   var on = np.txtRgb || [255, 255, 255], rgb = on.join(",");
-  function band(from, to, alpha) {
+  function band(from, to, alpha, flat) {
     if (to <= from) return;
     x.save();
     x.beginPath(); x.rect(from, 0, to - from, h); x.clip();
-    draw("rgba(" + rgb + "," + alpha + ")");
+    draw("rgba(" + rgb + "," + alpha + ")", flat);
     x.restore();
   }
   // With a mouse over it (not dragging): from where the song is to the pointer the bars come up
@@ -8167,7 +8167,15 @@ function npDrawWave() {
   // there sits on a small pill at the pointer.
   var hx = np.hover !== null && np.seek === null && dur > 0 ? npClamp(np.hover / dur, 0, 1) * w : -1;
   var live = np.live;
-  band(played, w, ".22");
+  // What is still to come: faint bars, or while it plays, the bars settle into a plain bar.
+  if (live < 0.99) band(played, w, ".22", live);
+  if (live > 0.01 && played < w) {
+    var th = 4;
+    x.fillStyle = "rgba(" + rgb + "," + (0.24 * live).toFixed(3) + ")";
+    x.beginPath();
+    if (x.roundRect) x.roundRect(played, cy - th / 2, w - played, th, th / 2); else x.rect(played, cy - th / 2, w - played, th);
+    x.fill();
+  }
   if (hx >= 0 && hx > played) { band(0, played, ".9"); band(played, hx, ".5"); }
   else if (hx >= 0) { band(0, hx, ".9"); band(hx, played, ".55"); }
   else {
