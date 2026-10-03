@@ -159,6 +159,13 @@ class BridgeServer(
         return devices.get(id)
     }
 
+    /** The page, gzipped once (it only changes with the app). */
+    private val pageGzip: ByteArray by lazy {
+        val out = java.io.ByteArrayOutputStream()
+        java.util.zip.GZIPOutputStream(out).use { gz -> ctx.assets.open("bridge.html").use { it.copyTo(gz) } }
+        out.toByteArray()
+    }
+
     /** Website sign-ins on their way to the plain address: code to device id and when it runs out. */
     private val handoffs = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
 
@@ -1374,9 +1381,16 @@ class BridgeServer(
 
     private fun io.ktor.server.routing.Route.page() {
         get("/") {
-            val html = ctx.assets.open("bridge.html").use { it.readBytes() }
             call.response.header(HttpHeaders.CacheControl, "no-store")
-            call.respondBytes(html, ContentType.Text.Html.withCharset(Charsets.UTF_8))
+            call.response.header(HttpHeaders.Vary, HttpHeaders.AcceptEncoding)
+            // Gzipped (lossless) for any browser that takes it: a quarter of the size, which is
+            // what keeps the page from sitting blank for seconds across the internet.
+            if (call.request.header(HttpHeaders.AcceptEncoding)?.contains("gzip") == true) {
+                call.response.header(HttpHeaders.ContentEncoding, "gzip")
+                call.respondBytes(pageGzip, ContentType.Text.Html.withCharset(Charsets.UTF_8))
+            } else {
+                call.respondBytes(ctx.assets.open("bridge.html").use { it.readBytes() }, ContentType.Text.Html.withCharset(Charsets.UTF_8))
+            }
         }
         get("/favicon.ico") { call.respond(HttpStatusCode.NoContent) }
         // Lexend Deca (SIL OFL 1.1), the typeface of the page's player, as Namida is set in it.
