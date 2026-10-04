@@ -536,7 +536,7 @@ Compare it with a real transfer: close means the network is the limit, far below
 
 ### 18. Phone and phone
 
-Linked phones are listed under **Phones** in *Devices*: each row is the conversation with that
+Linked phones have a tab of their own, **Phones**: each row is the conversation with that
 phone (section 19), says how it is reached now (*Nearby · same Wi-Fi*, *Internet tunnel · IPv6*,
 *Internet tunnel · punched over IPv4*), and has its files and a send on it.
 
@@ -545,7 +545,7 @@ phone (section 19), says how it is reached now (*Nearby · same Wi-Fi*, *Interne
 
 <br>
 
-*Devices → Add a phone* looks for other phones running Localhost 8787 on the same network (they
+*Phones → Add a phone* looks for other phones running Localhost 8787 on the same network (they
 announce themselves, as printers do). Tap **Link**, compare the 4-digit code, and tap **Allow** on
 the other phone. That one approval links the two **both ways**: each can now reach the other
 without asking again, for a year, renewed on its own. A phone the search cannot see (another
@@ -558,7 +558,7 @@ network that still routes to this one) can be added with **Connect by address**.
 
 <br>
 
-*Devices → Show a link code* gives ten letters and numbers, open for ten minutes. On the other
+*Phones → Show a link code* gives ten letters and numbers, open for ten minutes. On the other
 phone, anywhere in the world, *Enter a link code* and type them. The code alone lets that phone
 find this one through the message board and reach it through its tunnel, over IPv6 or punched
 across IPv4, and there it asks to be let in exactly as on a shared Wi-Fi: compare the 4-digit
@@ -617,7 +617,7 @@ phone's received-files folder.
 
 ### 19. Messages and calls, phone to phone
 
-Tap a linked phone in *Devices* and write to it. **Each phone is the other's server**: a message
+Tap a linked phone in *Phones* and write to it. **Each phone is the other's server**: a message
 goes straight from one to the other, over the same Wi-Fi, through the tunnel, or punched across
 IPv4, and nothing else ever holds it. No account, no number, no company.
 
@@ -626,7 +626,7 @@ IPv4, and nothing else ever holds it. No account, no number, no company.
   anyone else. Messages are kept only in the app's own storage on the two phones.
 - **Waits instead of failing.** When the other phone cannot be reached, the message stays on
   yours, marked *Waiting*, and goes the moment it can (tried every 20 seconds).
-- **Delivered and Read** under the newest of yours; a red count on *Devices* for what you have not
+- **Delivered and Read** under the newest of yours; a red count on *Phones* for what you have not
   read; a notification with the text, which opens the conversation.
 - **Unlink** sits in the conversation's header, and asks first.
 
@@ -711,8 +711,8 @@ browser.
 
 Quiet and black, the same on the phone and the laptop: OLED black, plain white cards, small grey
 section labels, one accent at most. **The icon** is the port's own number, an 8 of two rings and a
-yellow 7. On the phone, four tabs along the bottom (Home, Devices, Music, Settings), with
-everything done with a device opening from *Devices*. On a computer the tabs run down a **sidebar**
+yellow 7. On the phone, five tabs along the bottom (Home, Devices, Phones, Music, Settings): the
+computers and Control in *Devices*, the linked phones, their conversations and adding a phone in *Phones*. On a computer the tabs run down a **sidebar**
 with the devices under them and Music's library under Music, and **Ctrl K** searches songs,
 albums and commands. Music keeps Namida's look, in the colours of the song playing. **Swipe left
 or right** to move between tabs on the phone. **Colour** (*Settings → Appearance*, shared by the
@@ -738,7 +738,7 @@ or purple. **Light, dark or automatic** sits underneath.
 6. For from anywhere: the helper does it by itself once paired. For a browser with nothing
    installed, set up the website in *Settings → Website* (a free dynv6 name and its HTTP token,
    and your own "I agree" to Let's Encrypt's terms).
-7. For another phone: install the app there too, and link them in *Devices* (nearby, or with a
+7. For another phone: install the app there too, and link them in *Phones* (nearby, or with a
    link code from anywhere). Then tap it to message it.
 
 Settings on the phone, top to bottom:

@@ -258,16 +258,18 @@ class MainActivity : ComponentActivity() {
 
 /**
  * The tabs along the bottom. Music is not a page beside the others: it opens full screen
- * (MusicScreen.kt). Control and the conversations with linked phones open from Devices.
+ * (MusicScreen.kt). Control opens from Devices (the computers); the linked phones, their
+ * conversations and calls, and adding a phone have Phones to themselves.
  */
 private val TABS = listOf(
     "Home" to BlazeIcons.Home,
-    "Devices" to BlazeIcons.Phones,
+    "Devices" to BlazeIcons.Laptop,
+    "Phones" to BlazeIcons.Phones,
     "Music" to BlazeIcons.Music,
     "Settings" to BlazeIcons.Sliders,
 )
-private const val PILL_MUSIC = 2
-private const val PILL_DEVICES = 1
+private const val PILL_MUSIC = 3
+private const val PILL_PHONES = 2
 
 /** The pages a swipe moves between: every tab but Music. */
 private val PAGES = TABS.filterIndexed { i, _ -> i != PILL_MUSIC }
@@ -293,6 +295,7 @@ private val answerCall = kotlinx.coroutines.flow.MutableStateFlow(false)
 /** Debug builds: a linked phone whose files to open (`--es peerbrowse <name>`). */
 private val debugBrowse = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 private const val TAB_DEVICES = 1
+private const val TAB_PHONES = 2
 
 /** The header at the top of every screen: its large title and the monitor switch, over the content. */
 private val HeaderHeight = 60.dp
@@ -454,12 +457,12 @@ private fun BlazeItUi(vm: MainViewModel) {
 
     // A computer asking to connect is waiting on you, so jump to where the answer is.
     LaunchedEffect(requests.size) { if (requests.isNotEmpty()) { goTo(TAB_HOME); showOem = false } }
-    // Debug builds: `--ei tab 0` opens that tab (2 is Music), for screenshots without touching the screen.
+    // Debug builds: `--ei tab 0` opens that tab (3 is Music), for screenshots without touching the screen.
     LaunchedEffect(Unit) { debugTab.collect { if (it >= 0) { onPill(it); debugTab.value = -1 } } }
     LaunchedEffect(Unit) { debugBrowse.collect { n -> if (n != null) { browsePeer = peers.find(n); debugBrowse.value = null } } }
     LaunchedEffect(Unit) { openPlayer.collect { if (it) { showOem = false; browsePeer = null; motion.expand(); openPlayer.value = false } } }
     LaunchedEffect(Unit) { debugControl.collect { if (it) { chatWith = null; controlOpen = true; debugControl.value = false } } }
-    LaunchedEffect(Unit) { openChat.collect { n -> if (n != null) { showOem = false; browsePeer = null; shelf.showing = false; goTo(TAB_DEVICES); controlOpen = false; chatWith = n; openChat.value = null } } }
+    LaunchedEffect(Unit) { openChat.collect { n -> if (n != null) { showOem = false; browsePeer = null; shelf.showing = false; goTo(TAB_PHONES); controlOpen = false; chatWith = n; openChat.value = null } } }
     // The library loads once it can be read (the queue from last time comes back with it), and
     // covers the catalogue finds later are drawn when they arrive.
     LoadMusicOnce(shelf, ctx.container.music, open = shelf.showing, granted = state.musicGranted) { player.restore(it) }
@@ -512,7 +515,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     val toggleServer = { if (running) BridgeService.stop(ctx) else BridgeService.start(ctx) }
 
     // Other phones are looked for only while the Phones tab is open.
-    if (tab == TAB_DEVICES) {
+    if (tab == TAB_PHONES) {
         DisposableEffect(Unit) {
             peers.startDiscovery()
             onDispose { peers.stopDiscovery() }
@@ -569,13 +572,16 @@ private fun BlazeItUi(vm: MainViewModel) {
                                     onToggle = toggleServer,
                                 )
                                 TAB_DEVICES -> devicesTab(
-                                    running, transfers, nearby, paired, peerStatus, routes, devices, live, threads, vm,
+                                    running, transfers, paired, devices, live, vm,
+                                    openControl = { controlOpen = true },
+                                    openLaptopFiles = { laptopFilesOpen = true },
+                                )
+                                TAB_PHONES -> phonesTab(
+                                    running, nearby, paired, peerStatus, routes, threads,
                                     connect = peers::connect,
                                     sendFilesTo = { sendTarget = it; pickForPhone.launch(arrayOf("*/*")) },
                                     browse = { browsePeer = it },
                                     chat = { chatWith = it },
-                                    openControl = { controlOpen = true },
-                                    openLaptopFiles = { laptopFilesOpen = true },
                                 )
                                 else -> settingsTab(
                                     state, vm, theme, look, laptopLink, direct, toggleDirect,
@@ -629,8 +635,8 @@ private fun BlazeItUi(vm: MainViewModel) {
                     ) {
                         BarTabs(
                             TABS, pillOfPage(shown.toFloat()).toInt(), position = pillOfPage(pagePos),
-                            // Messages not yet read, on Devices, where the conversations are.
-                            badges = mapOf(PILL_DEVICES to threads.values.sumOf { l -> l.count { !it.mine && it.state == "new" } }),
+                            // Messages not yet read, on Phones, where the conversations are.
+                            badges = mapOf(PILL_PHONES to threads.values.sumOf { l -> l.count { !it.mine && it.state == "new" } }),
                         ) { onPill(it); showOem = false }
                     }
                 }
@@ -1628,33 +1634,22 @@ private fun ago(at: Long): String {
 // ---------------------------------------------------------------------- tab: devices
 
 /**
- * Everything this phone talks to, and from here everything done with them: the computers, each
- * with how it is connected now (the cable, the hotspot, Wi-Fi, the tunnel, the website), and
- * Control for the one with the helper; the linked phones, each a conversation, its files and a
- * send; then adding a phone (nearby, by address, or by a code from anywhere), and unpairing.
+ * The computers this phone talks to, each with how it is connected now (the cable, the hotspot,
+ * Wi-Fi, the tunnel, the website), Control for the one with the helper, what is moving, and
+ * unpairing. The linked phones have Phones to themselves.
  */
 private fun LazyListScope.devicesTab(
     running: Boolean,
     transfers: List<Transfer>,
-    nearby: List<NearbyPhone>,
     paired: List<Peer>,
-    peerStatus: Map<String, PeerStatus>,
-    routes: Map<String, String>,
     devices: List<PairedDevice>,
     live: Map<String, Int>,
-    threads: Map<String, List<dev.periy.bridge.server.ChatMsg>>,
     vm: MainViewModel,
-    connect: (NearbyPhone) -> Unit,
-    sendFilesTo: (Peer) -> Unit,
-    browse: (Peer) -> Unit,
-    chat: (String) -> Unit,
     openControl: () -> Unit,
     openLaptopFiles: () -> Unit,
 ) {
-    val pairedNames = paired.map { it.name }.toSet()
-    val unpaired = nearby.filter { it.name !in pairedNames }
-    // Linked phones have their own list below: their ways in here (the one each was let in by,
-    // and the one it asked with) are not shown as computers.
+    // Linked phones are on Phones: their ways in here (the one each was let in by, and the one it
+    // asked with) are not shown as computers.
     val linkedIds = paired.map { it.deviceId }.filter { it.isNotEmpty() }.toSet()
     val computers = devices.filter { it.id !in linkedIds && !it.name.startsWith(dev.periy.bridge.server.PHONE_PREFIX) }
 
@@ -1668,7 +1663,39 @@ private fun LazyListScope.devicesTab(
     item { Spacer(Modifier.height(12.dp)) }
     item { ControlRow(running, openControl, openLaptopFiles) }
 
-    item { SectionBar("Phones") }
+    transfersSection(transfers)
+
+    // Last, and apart: it signs out every computer and phone at once.
+    item { SectionBar("Pairing") }
+    item {
+        GroupCard {
+            SettingRow("Sign out all devices", first = true, titleColor = Bridge.Danger, onClick = { vm.unpairAll() })
+        }
+    }
+}
+
+// ---------------------------------------------------------------------- tab: phones
+
+/**
+ * Phone to phone: the linked phones, each a conversation (with calls), its files and a send; then
+ * adding a phone, nearby on the same Wi-Fi, by address, or by a code from anywhere.
+ */
+private fun LazyListScope.phonesTab(
+    running: Boolean,
+    nearby: List<NearbyPhone>,
+    paired: List<Peer>,
+    peerStatus: Map<String, PeerStatus>,
+    routes: Map<String, String>,
+    threads: Map<String, List<dev.periy.bridge.server.ChatMsg>>,
+    connect: (NearbyPhone) -> Unit,
+    sendFilesTo: (Peer) -> Unit,
+    browse: (Peer) -> Unit,
+    chat: (String) -> Unit,
+) {
+    val pairedNames = paired.map { it.name }.toSet()
+    val unpaired = nearby.filter { it.name !in pairedNames }
+
+    item { SectionBar("Linked phones", Modifier.padding(top = 4.dp)) }
     item { PhonesCard(paired, nearby, threads, routes, chat, browse, sendFilesTo) }
     if (paired.isNotEmpty()) item {
         Text(
@@ -1722,15 +1749,6 @@ private fun LazyListScope.devicesTab(
     item { Spacer(Modifier.height(12.dp)) }
     item { LinkFromAnywhere(peerStatus[dev.periy.bridge.server.PeerManager.LINK_KEY]) }
 
-    transfersSection(transfers)
-
-    // Last, and apart: it signs out every computer and phone at once.
-    item { SectionBar("Pairing") }
-    item {
-        GroupCard {
-            SettingRow("Sign out all devices", first = true, titleColor = Bridge.Danger, onClick = { vm.unpairAll() })
-        }
-    }
 }
 
 /** A way in, as an icon: the cable, the hotspot, Wi-Fi, the direct link, the website, the tunnel. */
@@ -1957,7 +1975,7 @@ private fun LinkFromAnywhere(status: PeerStatus?) {
                     }
                 }
                 Text(
-                    "On the other phone: Devices, Enter a link code. Any network, for the next ${(left + 59_999) / 60_000} min. You allow it here when it asks.",
+                    "On the other phone: Phones, Enter a link code. Any network, for the next ${(left + 59_999) / 60_000} min. You allow it here when it asks.",
                     style = CaptionStyle, color = Bridge.Muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
                 Spacer(Modifier.height(12.dp))

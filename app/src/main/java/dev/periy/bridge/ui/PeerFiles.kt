@@ -105,7 +105,7 @@ fun PeerFilesScreen(peer: Peer, onClose: () -> Unit) {
                 contentAlignment = Alignment.Center,
             ) { Icon(BlazeIcons.Chevron, "Back", tint = Bridge.Accent, modifier = Modifier.size(24.dp).rotate(180f)) }
             Text(
-                if (path.isEmpty()) "Devices" else path.substringBeforeLast('/', "").substringAfterLast('/').ifEmpty { peer.name },
+                if (path.isEmpty()) "Phones" else path.substringBeforeLast('/', "").substringAfterLast('/').ifEmpty { peer.name },
                 style = TextStyle(fontSize = 17.sp), color = Bridge.Accent, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).clickable { if (path.isEmpty()) onClose() else up() },
             )
