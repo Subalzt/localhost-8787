@@ -14,6 +14,8 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import dev.periy.bridge.R
 import dev.periy.bridge.container
 import dev.periy.bridge.server.CallState
@@ -28,8 +30,12 @@ class CallService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Watches the call once in the foreground, and leaves when it ends (stopping it from outside before then would crash it). */
+    private var watch: kotlinx.coroutines.Job? = null
+
     override fun onDestroy() {
         started = false
+        watch?.cancel()
         super.onDestroy()
     }
 
@@ -59,6 +65,12 @@ class CallService : Service() {
             // Without call standing the microphone alone still keeps it going.
             if (Build.VERSION.SDK_INT >= 30) startForeground(ONGOING_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         }
+        if (watch == null) watch = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            container.calls.state.first { it == null || it.phase == "ended" }
+            started = false
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
         return START_NOT_STICKY
     }
 
@@ -80,9 +92,8 @@ class CallService : Service() {
             val nm = app.getSystemService(NotificationManager::class.java) ?: return
             channels(nm)
             if (s == null || s.phase == "ended") {
+                // The service sees the call end and goes by itself.
                 nm.cancel(RING_ID)
-                if (started) app.stopService(Intent(app, CallService::class.java))
-                started = false
                 return
             }
             if (s.phase == "ringing" && !s.outgoing) {
