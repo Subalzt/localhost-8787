@@ -2888,7 +2888,69 @@ def laptop_list(rid, path):
         pass
 
 
+class ChunkedUpload(object):
+    """A file-like upload to the phone in HTTP chunks, for a zip written into it as it is made."""
+    def __init__(self, conn):
+        self.conn, self.n = conn, 0
+
+    def write(self, b):
+        if b:
+            self.conn.send(b"%x\r\n" % len(b) + bytes(b) + b"\r\n")
+            self.n += len(b)
+        return len(b)
+
+    def tell(self):
+        return self.n
+
+    def flush(self):
+        pass
+
+
+def laptop_send_folder(rid, path):
+    """A whole folder as one zip, written straight into the upload as it is read; what cannot be read is left out."""
+    import zipfile
+    name = os.path.basename(os.path.normpath(path)) or "computer"
+    q = "/api/laptop/fs/file?id=%s&name=%s" % (urllib.parse.quote(rid), urllib.parse.quote(name + ".zip"))
+    host, port = phone
+    conn = http.client.HTTPConnection(host, port, timeout=60)
+    files = 0
+    try:
+        conn.putrequest("POST", q)
+        conn.putheader("User-Agent", user_agent())
+        conn.putheader("Content-Type", "application/zip")
+        conn.putheader("Transfer-Encoding", "chunked")
+        if session:
+            conn.putheader("Cookie", session)
+        conn.endheaders()
+        out = ChunkedUpload(conn)
+        packed = (".jpg", ".jpeg", ".png", ".heic", ".webp", ".gif", ".mp4", ".mkv", ".mov", ".mp3", ".m4a", ".aac",
+                  ".flac", ".ogg", ".opus", ".zip", ".7z", ".rar", ".gz")
+        with zipfile.ZipFile(out, "w") as z:
+            for top, dirs, names in os.walk(path):
+                dirs[:] = [d for d in dirs if not d.startswith(".")]
+                for n in names:
+                    if n.startswith("."):
+                        continue
+                    full = os.path.join(top, n)
+                    try:
+                        z.write(full, os.path.relpath(full, path),
+                                zipfile.ZIP_STORED if n.lower().endswith(packed) else zipfile.ZIP_DEFLATED)
+                        files += 1
+                    except OSError:
+                        pass
+        conn.send(b"0\r\n\r\n")
+        conn.getresponse().read()
+        say("Sent the folder %s (%d files) to the phone." % (name, files))
+    except (OSError, http.client.HTTPException) as e:
+        say("Could not send the folder %s to the phone: %s" % (name, e))
+    finally:
+        conn.close()
+
+
 def laptop_send(rid, path):
+    if os.path.isdir(path):
+        laptop_send_folder(rid, path)
+        return
     q = "/api/laptop/fs/file?id=%s&name=%s" % (urllib.parse.quote(rid), urllib.parse.quote(os.path.basename(path)))
     try:
         f = open(path, "rb")

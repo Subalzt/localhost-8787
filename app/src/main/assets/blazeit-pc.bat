@@ -792,8 +792,59 @@ public static class BlazeItPc
         catch { }
     }
 
+    /**
+     * A whole folder as one zip, written straight into the upload as it is read (nothing kept on
+     * the laptop), its folders inside as they are; files it cannot read are left out.
+     */
+    static void LaptopSendFolder(string id, string path)
+    {
+        string name = Path.GetFileName(path.TrimEnd('\\', '/'));
+        if (string.IsNullOrEmpty(name)) name = path.Replace(":", "").Replace("\\", "").Trim();
+        string q = "/api/laptop/fs/file?id=" + Uri.EscapeDataString(id) + "&name=" + Uri.EscapeDataString(name + ".zip");
+        try
+        {
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + phone + ":" + PhonePort + q);
+            r.Proxy = null; r.Method = "POST"; r.UserAgent = Ua; r.Headers["Cookie"] = session;
+            r.ContentType = "application/zip"; r.SendChunked = true;
+            r.AllowWriteStreamBuffering = false; r.Timeout = System.Threading.Timeout.Infinite; r.ReadWriteTimeout = 60000;
+            r.ServicePoint.Expect100Continue = false;
+            int files = 0;
+            using (Stream o = r.GetRequestStream())
+            using (var zip = new System.IO.Compression.ZipArchive(o, System.IO.Compression.ZipArchiveMode.Create, true))
+            {
+                string root = Path.GetFullPath(path).TrimEnd('\\') + "\\";
+                foreach (string f in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        using (FileStream src = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                        {
+                            string rel = Path.GetFullPath(f).Substring(root.Length).Replace('\\', '/');
+                            // Pictures, music and video are compressed already: stored as they are, which is faster.
+                            string ext = Path.GetExtension(f).ToLowerInvariant();
+                            bool packed = ".jpg .jpeg .png .heic .webp .gif .mp4 .mkv .mov .avi .mp3 .m4a .aac .flac .ogg .opus .zip .7z .rar .gz".Contains(ext.Length > 0 ? ext : "?");
+                            var e = zip.CreateEntry(rel, packed ? System.IO.Compression.CompressionLevel.NoCompression : System.IO.Compression.CompressionLevel.Fastest);
+                            e.LastWriteTime = File.GetLastWriteTime(f);
+                            using (Stream w = e.Open()) src.CopyTo(w, 256 * 1024);
+                            files++;
+                        }
+                    }
+                    catch { }
+                }
+            }
+            using (r.GetResponse()) { }
+            Say("Sent the folder " + name + " (" + files + " files) to the phone.");
+        }
+        catch (Exception e)
+        {
+            Say("Could not send the folder " + name + " to the phone: " + e.Message);
+            try { using (Http("POST", q + "&error=" + Uri.EscapeDataString("The laptop could not send it: " + e.Message), session, 10000)) { } } catch { }
+        }
+    }
+
     static void LaptopSend(string id, string path)
     {
+        if (Directory.Exists(path)) { LaptopSendFolder(id, path); return; }
         string q = "/api/laptop/fs/file?id=" + Uri.EscapeDataString(id) + "&name=" + Uri.EscapeDataString(Path.GetFileName(path));
         FileStream f = null;
         try { f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); }

@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import dev.periy.bridge.server.LaptopFiles
 import dev.periy.bridge.server.LaptopListing
 import dev.periy.bridge.service.formatBytes
@@ -59,6 +61,15 @@ fun LaptopFilesScreen(onClose: () -> Unit) {
     LaunchedEffect(path, reload) { seen[path] = LaptopFiles.list(path) }
     val listing = seen[path]
     BackHandler { if (trail.size > 1) trail.removeAt(trail.lastIndex) else onClose() }
+    // A file as it is, a folder as one zip of everything in it; it lands with what this phone has received.
+    val save = { target: String, name: String, dir: Boolean ->
+        Toast.makeText(ctx, "Saving " + name + if (dir) " as a zip" else "", Toast.LENGTH_SHORT).show()
+        scope.launch {
+            LaptopFiles.save(target)
+                .onSuccess { Toast.makeText(ctx, "Saved $it", Toast.LENGTH_SHORT).show() }
+                .onFailure { Toast.makeText(ctx, it.message ?: "Could not save it", Toast.LENGTH_LONG).show() }
+        }
+    }
 
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -70,6 +81,13 @@ fun LaptopFilesScreen(onClose: () -> Unit) {
             Column(Modifier.weight(1f).padding(start = 4.dp)) {
                 Text(if (trail.size > 1) trail.last().second else (listing?.laptop?.ifEmpty { null } ?: "The laptop"), style = TitleStyle, color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(if (path.isEmpty()) "Folders and drives" else path, style = CaptionStyle, color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (path.isNotEmpty() && listing != null && listing.error.isEmpty() && listing.entries.isNotEmpty()) {
+                Text(
+                    "Save folder", style = TitleStyle.copy(fontSize = 15.sp), color = Bridge.Text,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable { save(path, trail.last().second, true) }
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                )
             }
         }
         when {
@@ -93,18 +111,13 @@ fun LaptopFilesScreen(onClose: () -> Unit) {
                                 icon = if (e.dir) BlazeIcons.Folder else BlazeIcons.File,
                                 color = if (e.dir) Color(0xFF0A84FF) else Color(0xFF8E8E93),
                                 first = i == 0,
-                                onClick = {
-                                    if (e.dir) trail.add(e.path to e.name)
-                                    else {
-                                        Toast.makeText(ctx, "Saving ${e.name}", Toast.LENGTH_SHORT).show()
-                                        scope.launch {
-                                            LaptopFiles.save(e.path)
-                                                .onSuccess { Toast.makeText(ctx, "Saved $it", Toast.LENGTH_SHORT).show() }
-                                                .onFailure { Toast.makeText(ctx, it.message ?: "Could not save it", Toast.LENGTH_LONG).show() }
-                                        }
-                                    }
-                                },
-                            )
+                                onClick = { if (e.dir) trail.add(e.path to e.name) else save(e.path, e.name, false) },
+                            ) {
+                                // Drives are too big to send whole; everything else has its download.
+                                if (!(e.dir && path.isEmpty() && e.size > 0)) {
+                                    IconChip(BlazeIcons.Download, "Save ${e.name}", tint = Bridge.Text, size = 34.dp) { save(e.path, e.name, e.dir) }
+                                }
+                            }
                         }
                     }
                 }
