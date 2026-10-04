@@ -1748,7 +1748,7 @@ public static class BlazeItPc
      * Airtel-to-Jio road carries 1 to 1.8 Mbit/s, often less), steps down when the picture backs
      * up on its way and back up after a calm minute, to 2 Mbit/s at most.
      */
-    static volatile int remoteKbit = 800;
+    static volatile int remoteKbit = 700;
 
     static Displays.Mon MainScreen()
     {
@@ -1963,17 +1963,19 @@ public static class BlazeItPc
     {
         int adapter, output; string adapterName;
         if (!Dxgi.Find(target.Device, out adapter, out output, out adapterName)) { adapter = -1; output = -1; adapterName = ""; }
-        int wide = kbit >= 1000 ? 1280 : kbit >= 500 ? 1024 : 854;
-        int fps = kbit >= 600 ? 20 : 15;
+        int wide = kbit >= 1200 ? 1280 : kbit >= 500 ? 1024 : 854;
+        int fps = kbit >= 500 ? 20 : 15;
         string label = "setparams=color_primaries=bt470bg:color_trc=smpte170m";
         string scale = "scale=" + wide + ":-2:flags=bilinear,format=yuv420p";
         // No large picture every few seconds: the refresh is spread over the frames (intra refresh),
         // so the stream stays as even as the link, and a lost moment heals within a second.
-        string rate = " -b:v " + kbit + "k -maxrate " + kbit + "k -bufsize " + Math.Max(100, kbit / 2) + "k -g " + (fps * 10) + " -bf 0";
+        // A whole refresh every 2 s, so a frame dropped on a slow moment heals within that; each frame
+        // starts with a delimiter, so the sender can tell frames apart and drop late ones (PostFrames).
+        string rate = " -b:v " + kbit + "k -maxrate " + kbit + "k -bufsize " + Math.Max(100, kbit / 2) + "k -g " + (fps * 2) + " -bf 0";
         string nv = " -c:v h264_nvenc -preset p4 -tune ll -zerolatency 1 -rc cbr -intra-refresh 1" + rate;
         string x264 = " -c:v libx264 -preset veryfast -tune zerolatency -intra-refresh 1" + rate;
         bool nvidia = adapterName.IndexOf("NVIDIA", StringComparison.OrdinalIgnoreCase) >= 0;
-        string dest = " -f h264 pipe:1";
+        string dest = " -bsf:v h264_metadata=aud=insert -f h264 pipe:1";
         var tries = new List<string>();
         if (adapter >= 0)
         {
@@ -2077,6 +2079,137 @@ public static class BlazeItPc
         return why;
     }
 
+    /** The phone's page-port upload for the screen, as PostStream opens it. */
+    static HttpWebRequest StreamRequest(string at)
+    {
+        HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + at + ":" + PhonePort + "/api/display/stream");
+        req.Proxy = null;
+        req.Method = "POST";
+        req.UserAgent = Ua;
+        req.Headers["Cookie"] = session;
+        req.ContentType = "video/h264";
+        req.SendChunked = true;
+        req.AllowWriteStreamBuffering = false;
+        req.Timeout = System.Threading.Timeout.Infinite;
+        req.ReadWriteTimeout = 30000;
+        req.ServicePoint.Expect100Continue = false;
+        return req;
+    }
+
+    /** Whether an access unit starts the picture afresh (SPS or IDR), which is never dropped. */
+    static bool StartsAfresh(byte[] f)
+    {
+        for (int i = 0; i + 3 < f.Length; i++)
+            if (f[i] == 0 && f[i + 1] == 0 && f[i + 2] == 1)
+            {
+                int t = f[i + 3] & 0x1F;
+                if (t == 7 || t == 5) return true;
+            }
+        return false;
+    }
+
+    /**
+     * From afar: ffmpeg's stream cut into frames at its delimiters and posted to the phone, newest
+     * first in mind. A frame still waiting after half a second is dropped (all but the newest),
+     * as a video call does, so the phone shows the laptop as it is now rather than falling
+     * behind; the refresh spread over the frames heals the gap within 2 s. Many drops in ten
+     * seconds ask for a smaller stream; a minute with none, a sharper one. Returns as PostStream.
+     */
+    static string PostFrames(Process p, string at)
+    {
+        var frames = new LinkedList<KeyValuePair<DateTime, byte[]>>();
+        bool eof = false;
+        object gate = new object();
+        var rd = new Thread(delegate ()
+        {
+            try
+            {
+                Stream src = p.StandardOutput.BaseStream;
+                MemoryStream acc = new MemoryStream();
+                byte[] buf = new byte[64 * 1024];
+                int n, scanFrom = 1;
+                while ((n = src.Read(buf, 0, buf.Length)) > 0)
+                {
+                    acc.Write(buf, 0, n);
+                    byte[] a = acc.GetBuffer();
+                    int len = (int)acc.Length, start = 0;
+                    for (int i = Math.Max(1, scanFrom); i + 3 < len; i++)
+                    {
+                        if (a[i] != 0 || a[i + 1] != 0 || a[i + 2] != 1 || (a[i + 3] & 0x1F) != 9) continue;
+                        int cut = a[i - 1] == 0 ? i - 1 : i;
+                        if (cut > start)
+                        {
+                            byte[] f = new byte[cut - start];
+                            Buffer.BlockCopy(a, start, f, 0, f.Length);
+                            lock (gate) { frames.AddLast(new KeyValuePair<DateTime, byte[]>(DateTime.UtcNow, f)); System.Threading.Monitor.Pulse(gate); }
+                        }
+                        start = cut;
+                        i = cut + 4;
+                    }
+                    MemoryStream rest = new MemoryStream();
+                    rest.Write(a, start, len - start);
+                    acc = rest;
+                    scanFrom = Math.Max(1, (int)acc.Length - 4);
+                }
+                byte[] tail = acc.ToArray();
+                if (tail.Length > 0) lock (gate) frames.AddLast(new KeyValuePair<DateTime, byte[]>(DateTime.UtcNow, tail));
+            }
+            catch { }
+            lock (gate) { eof = true; System.Threading.Monitor.Pulse(gate); }
+        });
+        rd.IsBackground = true; rd.Start();
+        string why = "ended";
+        try
+        {
+            HttpWebRequest req = StreamRequest(at);
+            using (Stream o = req.GetRequestStream())
+            {
+                int dropped = 0, calm = 0;
+                DateTime window = DateTime.UtcNow;
+                while (true)
+                {
+                    byte[] f;
+                    lock (gate)
+                    {
+                        while (frames.Count == 0 && !eof) System.Threading.Monitor.Wait(gate, 1000);
+                        if (frames.Count == 0) break;
+                        while (frames.Count > 1 && (DateTime.UtcNow - frames.First.Value.Key).TotalMilliseconds > 500 && !StartsAfresh(frames.First.Value.Value))
+                        {
+                            frames.RemoveFirst();
+                            dropped++;
+                        }
+                        f = frames.First.Value.Value;
+                        frames.RemoveFirst();
+                    }
+                    o.Write(f, 0, f.Length);
+                    o.Flush();
+                    if ((DateTime.UtcNow - window).TotalSeconds < 10) continue;
+                    window = DateTime.UtcNow;
+                    if (dropped > 20 && remoteKbit > 250)
+                    {
+                        remoteKbit = Math.Max(250, remoteKbit * 6 / 10);
+                        Say("The link to the phone is slower: the laptop's screen goes at " + remoteKbit + " kbit/s now.");
+                        why = "rate";
+                        break;
+                    }
+                    calm = dropped == 0 ? calm + 10 : 0;
+                    dropped = 0;
+                    if (calm >= 60 && remoteKbit < 2000)
+                    {
+                        remoteKbit = Math.Min(2000, remoteKbit * 13 / 10);
+                        Say("The link to the phone keeps up: the laptop's screen goes at " + remoteKbit + " kbit/s now.");
+                        why = "rate";
+                        break;
+                    }
+                }
+            }
+            if (why == "ended") using (req.GetResponse()) { }
+        }
+        catch (Exception) { if (why == "ended") why = "phone"; }
+        try { if (!p.HasExited) p.Kill(); } catch { }
+        return why;
+    }
+
     /** One go at streaming a monitor: "phone" (the phone closed it), "relayout", "ended", "failed" or "stopped". */
     static string Capture(string ff, Displays.Mon target, string at, int port, int gen, bool http, bool remote)
     {
@@ -2103,7 +2236,7 @@ public static class BlazeItPc
             Thread pump = null;
             if (http)
             {
-                pump = new Thread(delegate () { sent = PostStream(p, at, remote); });
+                pump = new Thread(delegate () { sent = remote ? PostFrames(p, at) : PostStream(p, at, false); });
                 pump.IsBackground = true; pump.Start();
             }
             // Still going after a few seconds: it works. Stopped at once: try the next way.

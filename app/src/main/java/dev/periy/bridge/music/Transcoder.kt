@@ -12,6 +12,7 @@ import dev.periy.bridge.server.MusicLibrary
 import dev.periy.bridge.server.TrackInfoDto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.RandomAccessFile
@@ -34,7 +35,9 @@ class Transcoder(ctx: Context, private val music: MusicLibrary) {
 
     /** CD quality, then AAC at three bitrates (Apple Music's 256, and lower for thinner links, as Spotify's). */
     enum class Mode(val ext: String, val mime: String, val kbps: Int) {
-        CD("flac", "audio/flac", 0), AAC("m4a", "audio/mp4", 256), AAC128("m4a", "audio/mp4", 128), AAC64("m4a", "audio/mp4", 64);
+        // AAC as ADTS (frames each with its own small header), which a browser plays while it is
+        // still arriving; an MP4 can be played only once its index, written last, is there.
+        CD("flac", "audio/flac", 0), AAC("aac", "audio/aac", 256), AAC128("aac", "audio/aac", 128), AAC64("aac", "audio/aac", 64);
 
         companion object {
             /** From the page's ?q=: cd, aac, aac128 or aac64. */
@@ -46,8 +49,19 @@ class Transcoder(ctx: Context, private val music: MusicLibrary) {
     private val dir = File(app.cacheDir, "smaller")
     private val busy = ConcurrentHashMap<String, CompletableDeferred<File?>>()
 
-    /** One song at a time: the one asked for is the one being waited on. */
-    private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "Transcoder").apply { isDaemon = true } }.asCoroutineDispatcher()
+    /** Two at a time: the song pressed is made while the next one is prepared, not after it. */
+    private val worker = Executors.newFixedThreadPool(2) { r -> Thread(r, "Transcoder").apply { isDaemon = true } }.asCoroutineDispatcher()
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
+    /** The finished copy if there is one, else null. */
+    fun ready(id: Long, mode: Mode): File? = file(id, mode).takeIf { it.isFile }?.also { it.setLastModified(System.currentTimeMillis()) }
+
+    /** The copy as it is being written: what a page can be sent before it is finished. */
+    fun part(id: Long, mode: Mode): File = File(dir, file(id, mode).name + ".part")
+
+    /** Starts making the copy, if it is not made or being made; the result when it is done. */
+    fun start(id: Long, mode: Mode): kotlinx.coroutines.Deferred<File?> =
+        scope.async { runCatching { get(id, mode) }.getOrNull() }
 
     /**
      * What to send over a link of [linkKbps] (measured by the page): the song's own file when it
@@ -201,10 +215,10 @@ class Transcoder(ctx: Context, private val music: MusicLibrary) {
 
     private fun aac(id: Long, out: File, kbps: Int): Boolean {
         out.delete()
-        var mux: MediaMuxer? = null
-        var track = -1
-        var enc: Feeder? = null
-        try {
+        java.io.FileOutputStream(out).use { o ->
+            var enc: Feeder? = null
+            var frames = 0
+            var head = ByteArray(0)
             decode(id, start = { r, c ->
                 val f = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, r, c)
                 f.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
@@ -213,21 +227,41 @@ class Transcoder(ctx: Context, private val music: MusicLibrary) {
                 val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
                 codec.configure(f, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
                 codec.start()
-                val m = MediaMuxer(out.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-                mux = m
-                enc = Feeder(codec, r, c, onFormat = { of -> track = m.addTrack(of); m.start() }) { buf, bi ->
-                    if (bi.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0 || bi.size == 0 || track < 0) return@Feeder
-                    m.writeSampleData(track, buf, bi)
+                head = adtsHead(r, c)
+                enc = Feeder(codec, r, c, onFormat = {}) { buf, bi ->
+                    if (bi.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0 || bi.size == 0) return@Feeder
+                    val body = ByteArray(bi.size).also { buf.position(bi.offset); buf.get(it) }
+                    // Each frame with its own header, written at once, so it can go to a page straight away.
+                    o.write(adts(head, body.size))
+                    o.write(body)
+                    frames++
                 }
             }, take = { s, n -> enc!!.feed(s, n) })
             val e = enc ?: return false
             e.finish()
             e.release()
-            return track >= 0
-        } finally {
-            runCatching { if (track >= 0) mux?.stop() }
-            runCatching { mux?.release() }
+            return frames > 0
         }
+    }
+
+    /** The parts of an ADTS header that stay the same: AAC LC, the sample rate, the channels. */
+    private fun adtsHead(rate: Int, channels: Int): ByteArray {
+        val idx = intArrayOf(96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350)
+            .indexOf(rate).let { if (it < 0) 4 else it }
+        return byteArrayOf(idx.toByte(), channels.toByte())
+    }
+
+    /** One frame's 7-byte ADTS header, for [len] bytes of AAC after it. */
+    private fun adts(head: ByteArray, len: Int): ByteArray {
+        val idx = head[0].toInt(); val ch = head[1].toInt(); val full = len + 7
+        return byteArrayOf(
+            0xFF.toByte(), 0xF1.toByte(),
+            ((1 shl 6) or (idx shl 2) or (ch shr 2)).toByte(),
+            (((ch and 3) shl 6) or (full shr 11)).toByte(),
+            ((full shr 3) and 0xFF).toByte(),
+            (((full and 7) shl 5) or 0x1F).toByte(),
+            0xFC.toByte(),
+        )
     }
 
     // ------------------------------------------------------------------ decoding
@@ -447,7 +481,7 @@ class Transcoder(ctx: Context, private val music: MusicLibrary) {
     companion object {
         private const val TAG = "Transcoder"
         /** t2: t1's copies were made from misread samples. */
-        private const val VERSION = "t2"
+        private const val VERSION = "t3"
         /** The link has to carry this much more than the song needs: room for the rest and for dips. */
         const val HEADROOM = 1.25
         private const val CACHE_BYTES = 1L shl 30

@@ -86,22 +86,10 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
         root.addView(note, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         // The phone's keyboard types into the laptop: an unseen field takes it, as on the trackpad.
         keys = KeyCatcher(this,
-            onText = { t -> Control.send("t " + java.net.URLEncoder.encode(t, "UTF-8").replace("+", "%20")) },
-            onKey = { k -> Control.send("k $k") })
+            onText = { t -> withMods { Control.send("t " + java.net.URLEncoder.encode(t, "UTF-8").replace("+", "%20")) } },
+            onKey = { k -> withMods { Control.send("k $k") } })
         root.addView(keys, FrameLayout.LayoutParams(1, 1))
-        val d = resources.displayMetrics.density
-        val kb = TextView(this).apply {
-            text = "Keyboard"; textSize = 13f; setTextColor(0xFFFFFFFF.toInt()); gravity = Gravity.CENTER
-            setPadding((14 * d).toInt(), (8 * d).toInt(), (14 * d).toInt(), (8 * d).toInt())
-            background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 20 * d; setColor(0x88000000.toInt()); setStroke((1 * d).toInt(), 0x44FFFFFF) }
-            setOnClickListener {
-                keys.requestFocus()
-                getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.showSoftInput(keys, 0)
-            }
-        }
-        root.addView(kb, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
-            setMargins(0, 0, (16 * d).toInt(), (16 * d).toInt())
-        })
+        root.addView(keyBar(), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
         setContentView(root)
         surface.holder.addCallback(this)
         surface.setOnTouchListener { _, e -> touch(e); true }
@@ -157,6 +145,104 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
         DisplayFeed.drain()
         runCatching { socket?.close() }
         runCatching { server?.close() }
+    }
+
+    // -------------------------------------------------------------- the keys
+
+    /** Ctrl, Alt, Shift and Win, tapped to hold for the next key, character or click, as on Control's trackpad. */
+    private val mods = linkedSetOf<String>()
+    private val modViews = mutableMapOf<String, TextView>()
+
+    /** Runs [send] with the held keys down, then lets them go. */
+    private fun withMods(send: () -> Unit) {
+        val held = mods.toList()
+        held.forEach { Control.send("kd $it") }
+        send()
+        held.asReversed().forEach { Control.send("ku $it") }
+        if (held.isNotEmpty()) { mods.clear(); paintMods() }
+    }
+
+    private fun paintMods() = modViews.forEach { (k, v) -> styleKey(v, k in mods) }
+
+    private fun styleKey(v: TextView, on: Boolean) {
+        val d = resources.displayMetrics.density
+        v.background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 10 * d
+            setColor(if (on) 0xFFFFFFFF.toInt() else 0x99000000.toInt())
+            setStroke((1 * d).toInt(), 0x33FFFFFF)
+        }
+        v.setTextColor(if (on) 0xFF000000.toInt() else 0xFFFFFFFF.toInt())
+    }
+
+    /**
+     * Along the foot of the screen, what Control's trackpad has: the keyboard; Esc, Tab, Ctrl, Alt,
+     * Shift and Win (held for the next key or click); the arrows, which repeat while held; and the
+     * laptop's media keys and volume. "Keys" folds it away to a single button.
+     */
+    private fun keyBar(): View {
+        val d = resources.displayMetrics.density
+        val wrap = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL; gravity = Gravity.END or Gravity.CENTER_VERTICAL }
+        val row = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val scroll = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(row) }
+        fun key(label: String, repeat: Boolean = false, onTap: () -> Unit): TextView = TextView(this).apply {
+            text = label; textSize = 14f; gravity = Gravity.CENTER
+            minWidth = (44 * d).toInt()
+            setPadding((12 * d).toInt(), (9 * d).toInt(), (12 * d).toInt(), (9 * d).toInt())
+            styleKey(this, false)
+            if (repeat) {
+                // Held: again every 70 ms after a short wait, as a real key.
+                val again = object : Runnable { override fun run() { onTap(); postDelayed(this, 70) } }
+                setOnTouchListener { v, e ->
+                    when (e.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> { onTap(); v.postDelayed(again, 400); v.isPressed = true }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { v.removeCallbacks(again); v.isPressed = false }
+                    }
+                    true
+                }
+            } else setOnClickListener { onTap() }
+            row.addView(this, android.widget.LinearLayout.LayoutParams(-2, -2).apply { setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0) })
+        }
+        fun mod(label: String, name: String) {
+            val v = key(label) { if (!mods.remove(name)) mods.add(name); paintMods() }
+            modViews[name] = v
+        }
+        key("Keyboard") {
+            keys.requestFocus()
+            getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.showSoftInput(keys, 0)
+        }
+        key("Esc") { withMods { Control.send("k esc") } }
+        key("Tab") { withMods { Control.send("k tab") } }
+        mod("Ctrl", "ctrl"); mod("Alt", "alt"); mod("Shift", "shift"); mod("Win", "win")
+        key("\u2190", repeat = true) { withMods { Control.send("k left") } }
+        key("\u2191", repeat = true) { withMods { Control.send("k up") } }
+        key("\u2193", repeat = true) { withMods { Control.send("k down") } }
+        key("\u2192", repeat = true) { withMods { Control.send("k right") } }
+        key("Del") { withMods { Control.send("k del") } }
+        key("\u23EE") { Control.send("k prev") }
+        key("\u23EF") { Control.send("k playpause") }
+        key("\u23ED") { Control.send("k next") }
+        // The laptop's volume, a step at a time from where its helper last said it was.
+        fun volume(by: Float) {
+            val now = Control.volume.value.level.takeIf { it >= 0f } ?: 0.5f
+            Control.send("v " + String.format(java.util.Locale.US, "%.3f", (now + by).coerceIn(0f, 1f)))
+        }
+        key("Vol \u2212", repeat = true) { volume(-0.04f) }
+        key("Vol +", repeat = true) { volume(0.04f) }
+        // Folded away, the bar is one button at the corner.
+        val toggle = TextView(this).apply {
+            text = "Keys"; textSize = 14f; gravity = Gravity.CENTER
+            setPadding((14 * d).toInt(), (9 * d).toInt(), (14 * d).toInt(), (9 * d).toInt())
+            styleKey(this, false)
+            setOnClickListener {
+                scroll.visibility = if (scroll.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                styleKey(this, scroll.visibility == View.VISIBLE)
+            }
+        }
+        scroll.visibility = View.GONE
+        wrap.addView(scroll, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+        wrap.addView(toggle, android.widget.LinearLayout.LayoutParams(-2, -2).apply { setMargins((6 * d).toInt(), 0, 0, 0) })
+        wrap.setPadding((12 * d).toInt(), 0, (12 * d).toInt(), (12 * d).toInt())
+        return wrap
     }
 
     /** The stream being shown now. */
@@ -417,7 +503,7 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
     private val longPress = Runnable {
         if (!dragging && !scrolling && !held) {
             held = true
-            at(downX, downY); Control.send("c r")
+            at(downX, downY); withMods { Control.send("c r") }
             surface.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         }
     }
@@ -522,7 +608,7 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
                 surface.removeCallbacks(longPress)
                 when {
                     dragging -> { at(e.x, e.y); Control.send("b l u") }
-                    !scrolling && !held -> { at(e.x, e.y); Control.send("c l") }
+                    !scrolling && !held -> { at(e.x, e.y); withMods { Control.send("c l") } }
                 }
                 dragging = false; scrolling = false; held = false
             }

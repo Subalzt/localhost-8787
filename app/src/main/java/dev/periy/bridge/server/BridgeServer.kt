@@ -347,13 +347,50 @@ class BridgeServer(
             // The file will not change under this id, so the browser may keep what it has
             // fetched -- replaying a song then costs nothing at all.
             call.response.header(HttpHeaders.CacheControl, "private, max-age=86400")
-            // Over a thin link the page asks for the smaller copy its info said (?q=cd or aac),
-            // made here once and served as a file, byte ranges and all.
+            // Over a thin link the page asks for the smaller copy its info said (?q=cd or aac), made
+            // here once and served as a file, byte ranges and all. Not made yet: it is sent as it is
+            // being made, so the song starts within a second instead of after the whole copy; a
+            // seek before it is finished waits for it.
             val mode = dev.periy.bridge.music.Transcoder.Mode.of(call.request.queryParameters["q"])
-            val smaller = mode?.let { m -> runCatching { transcoder.get(track.id, m) }.getOrNull() }
-            if (mode != null && smaller != null) {
-                call.respond(io.ktor.server.http.content.LocalFileContent(smaller, ContentType.parse(mode.mime)))
-                return@get
+            if (mode != null) {
+                val made = transcoder.ready(track.id, mode)
+                if (made != null) {
+                    call.respond(io.ktor.server.http.content.LocalFileContent(made, ContentType.parse(mode.mime)))
+                    return@get
+                }
+                val job = transcoder.start(track.id, mode)
+                val ranged = call.request.header(HttpHeaders.Range)?.let { !it.startsWith("bytes=0-") } == true
+                if (ranged) {
+                    job.await()?.let {
+                        call.respond(io.ktor.server.http.content.LocalFileContent(it, ContentType.parse(mode.mime)))
+                        return@get
+                    }
+                } else {
+                    // The copy as it grows, followed until it is done.
+                    val part = transcoder.part(track.id, mode)
+                    var waited = 0
+                    while (!part.isFile && !job.isCompleted && waited < 10_000) { kotlinx.coroutines.delay(20); waited += 20 }
+                    if (part.isFile || job.isCompleted) {
+                        call.response.header(HttpHeaders.CacheControl, "no-store")
+                        call.respondOutputStream(ContentType.parse(mode.mime)) {
+                            val src = runCatching { java.io.RandomAccessFile(if (part.isFile) part else (job.await() ?: part), "r") }.getOrNull() ?: return@respondOutputStream
+                            src.use { raf ->
+                                val buf = ByteArray(64 * 1024)
+                                while (true) {
+                                    val n = raf.read(buf)
+                                    if (n > 0) { write(buf, 0, n); flush(); continue }
+                                    if (job.isCompleted) {
+                                        // Done: whatever was written after the last read, then the end.
+                                        while (true) { val m = raf.read(buf); if (m <= 0) break; write(buf, 0, m) }
+                                        break
+                                    }
+                                    Thread.sleep(40)
+                                }
+                            }
+                        }
+                        return@get
+                    }
+                }
             }
             call.respond(
                 UriRangeContent(
@@ -371,7 +408,7 @@ class BridgeServer(
         post("/api/music/prepare/{id}") {
             val id = call.parameters["id"]?.toLongOrNull()
             val mode = dev.periy.bridge.music.Transcoder.Mode.of(call.request.queryParameters["q"])
-            if (id != null && mode != null) call.application.launch { runCatching { transcoder.get(id, mode) } }
+            if (id != null && mode != null) transcoder.start(id, mode)
             call.respond(HttpStatusCode.Accepted, ApiResult(true))
         }
 
