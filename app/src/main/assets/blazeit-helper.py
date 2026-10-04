@@ -2737,6 +2737,12 @@ def events_loop():
                                          daemon=True).start()
                     else:
                         stop_second_screen()
+                elif ev == "displayack":
+                    # The phone has had this much of the screen stream named so (post_frames).
+                    q = d.split(" ")
+                    if len(q) >= 2 and q[1].isdigit():
+                        with ack_lock:
+                            ack["sid"], ack["bytes"] = q[0], int(q[1])
                 elif ev == "laptopfs" and not snapshot:
                     # The phone asks for a folder here, or a file from it (LaptopFiles on the phone).
                     q = d.split(" ")
@@ -2874,13 +2880,21 @@ def session_kind():
     return "x11" if os.environ.get("DISPLAY") else ""
 
 
-def capture_tries(geom, w, h, fps, dest, grab=None, remote=False):
+def remote_size(kbit):
+    """From afar, the picture for a rate: width and frames a second (as the Windows helper)."""
+    wide = 1920 if kbit >= 4000 else 1600 if kbit >= 2400 else 1280 if kbit >= 1200 else 1024 if kbit >= 500 else 854
+    return wide, 30 if kbit >= 2400 else 20 if kbit >= 500 else 15
+
+
+def capture_tries(geom, w, h, fps, dest, grab=None, remote=False, kbit=700):
     """ffmpeg arguments, fastest encoder first: X11's screen grab, or the one given (macOS's).
-    From afar (the phone reached through the tunnel): 1024 wide, 20 frames a second, 900 kbit/s, the
-    refresh spread over the frames (intra refresh) so the stream stays even."""
+    From afar (the phone reached through the tunnel): sized and paced for the rate the link carries
+    (remote_kbit), the refresh spread over the frames (intra refresh) so the stream stays even, and
+    each frame marked so the sender can tell frames apart and drop late ones (post_frames)."""
     x, y, gw, gh = geom
     if remote:
-        fps, w, h = min(fps, 20), 1024, 640
+        wide, rfps = remote_size(kbit)
+        fps, w, h = min(fps, rfps), min(wide, gw), min(wide * 10 // 16, gh)
     grab = grab or ["-f", "x11grab", "-framerate", str(fps), "-video_size", "%dx%d" % (gw, gh), "-draw_mouse", "1",
                     "-i", "%s+%d,%d" % (os.environ.get("DISPLAY", ":0"), x, y)]
     # Fitted to the phone's screen; labelled BT.601 in full, as the phone decodes it.
@@ -2889,13 +2903,13 @@ def capture_tries(geom, w, h, fps, dest, grab=None, remote=False):
     mbit = min(80, max(40, 40 * fps // 60))
     rate = ["-b:v", "%dM" % mbit, "-maxrate", "%dM" % mbit, "-bufsize", "%dM" % max(3, mbit // 13), "-g", str(fps * 2), "-bf", "0"]
     if remote:
-        rate = ["-b:v", "900k", "-maxrate", "900k", "-bufsize", "450k", "-g", str(fps * 10), "-bf", "0", "-intra-refresh", "1"]
+        rate = ["-b:v", "%dk" % kbit, "-maxrate", "%dk" % kbit, "-bufsize", "%dk" % max(100, kbit // 2), "-g", str(fps * 2), "-bf", "0", "-intra-refresh", "1"]
     base = ["-hide_banner", "-loglevel", "error"]
     # And written into the stream's own header, which every encoder then carries (OpenH264 would
     # otherwise leave it out, and the phone would take the picture for BT.709 and shift its colours).
     dest = ["-color_primaries", "bt470bg", "-color_trc", "smpte170m", "-colorspace", "bt470bg", "-color_range", "tv",
             "-bsf:v", "h264_metadata=video_format=5:colour_primaries=5:transfer_characteristics=6:"
-                      "matrix_coefficients=5:video_full_range_flag=0"] + dest
+                      "matrix_coefficients=5:video_full_range_flag=0" + (":aud=insert" if remote else "")] + dest
     tries = []
     if MAC:
         # The Mac's own hardware encoder.
@@ -3134,6 +3148,167 @@ def laptop_send(rid, path):
             conn.close()
 
 
+# From afar the picture goes at what the link carries: it starts where the last time ended (700
+# kbit/s the first time), steps down when frames back up, up by half after 20 calm seconds, to 6
+# Mbit/s at most; a rate that backed up is not tried again for three minutes.
+MAX_KBIT = 6000
+remote_kbit = 700
+rate_read = False
+failed_kbit, failed_at = None, 0.0
+ack_lock = threading.Lock()
+ack = {"sid": "", "bytes": -1}
+
+
+def rate_file():
+    return os.path.join(CONF, "screen-rate.txt")
+
+
+def read_rate():
+    global remote_kbit, rate_read
+    if rate_read:
+        return
+    rate_read = True
+    try:
+        with open(rate_file()) as f:
+            remote_kbit = max(250, min(MAX_KBIT, int(f.read().strip()) * 85 // 100))
+    except (OSError, ValueError):
+        pass
+
+
+def set_rate(kbit, slower):
+    global remote_kbit, failed_kbit, failed_at
+    if slower:
+        failed_kbit, failed_at = remote_kbit, time.time()
+    remote_kbit = kbit
+    try:
+        write_file(rate_file(), str(kbit))
+    except OSError:
+        pass
+    say(("The link to the phone is slower: this screen goes at %d kbit/s now." if slower else
+         "The link to the phone keeps up: this screen goes at %d kbit/s now.") % kbit)
+
+
+def next_rate():
+    global failed_kbit
+    if failed_kbit and time.time() - failed_at > 180:
+        failed_kbit = None
+    up = min(MAX_KBIT, remote_kbit * 3 // 2)
+    if failed_kbit:
+        up = min(up, failed_kbit * 85 // 100)
+    return up if up > remote_kbit * 21 // 20 else 0
+
+
+def starts_afresh(f):
+    """A frame the stream can start again from: it carries its settings or a whole picture."""
+    i = f.find(b"\x00\x00\x01")
+    while i >= 0 and i + 3 < len(f):
+        if f[i + 3] & 0x1F in (5, 7):
+            return True
+        i = f.find(b"\x00\x00\x01", i + 3)
+    return False
+
+
+def post_frames(src, addr, gen):
+    """From afar: the stream cut into frames at their delimiters and posted to the phone, no more
+    let out than the phone's word ("displayack") takes to come back plus 0.3 s, so nothing backs up
+    on the way; a frame still waiting after half a second is dropped (all but the newest), as a
+    video call does. Returns "ended", "phone", or "rate" when the rate changed (start again)."""
+    frames, lock, done = collections.deque(), threading.Condition(), [False]
+
+    def read():
+        acc = b""
+        try:
+            while True:
+                data = src.read1(1 << 16) if hasattr(src, "read1") else src.read(1 << 16)
+                if not data:
+                    break
+                acc += data
+                # Each frame starts with an access unit delimiter (NAL type 9).
+                while True:
+                    j = acc.find(b"\x00\x00\x01\x09", 4)
+                    if j < 0:
+                        break
+                    k = j - 1 if j > 0 and acc[j - 1] == 0 else j
+                    with lock:
+                        frames.append((time.time(), acc[:k]))
+                        lock.notify()
+                    acc = acc[k:]
+            if acc:
+                with lock:
+                    frames.append((time.time(), acc))
+        finally:
+            with lock:
+                done[0] = True
+                lock.notify()
+
+    threading.Thread(target=read, daemon=True).start()
+    sid = os.urandom(6).hex()
+    host, port = via(addr)
+    conn = http.client.HTTPConnection(host, port, timeout=10)
+    try:
+        conn.putrequest("POST", "/api/display/stream?s=" + sid)
+        conn.putheader("User-Agent", user_agent())
+        conn.putheader("Content-Type", "video/h264")
+        conn.putheader("Transfer-Encoding", "chunked")
+        if session:
+            conn.putheader("Cookie", session)
+        conn.endheaders()
+        conn.sock.settimeout(None)
+        sent, began, window = 0, time.time(), time.time()
+        sent_at, rtt, least = collections.deque(), 0.7, None
+        dropped, calm = 0, 0
+        while gen == screen_gen:
+            room = max(24 * 1024, int(remote_kbit * 1000 / 8 * (min(rtt, 2.0) + 0.3)))
+            while gen == screen_gen:
+                with ack_lock:
+                    acked = ack["bytes"] if ack["sid"] == sid else -1
+                while sent_at and acked >= sent_at[0][0]:
+                    t = time.time() - sent_at.popleft()[1]
+                    least = t if least is None else min(least, t)
+                # A phone that never says (an older app) gets the stream unmetered after 3 s.
+                if (acked < 0 and time.time() - began > 3) or sent - max(0, acked) <= room:
+                    break
+                time.sleep(0.005)
+            with lock:
+                while not frames and not done[0]:
+                    lock.wait(1)
+                if not frames:
+                    break
+                while len(frames) > 1 and time.time() - frames[0][0] > 0.5 and not starts_afresh(frames[0][1]):
+                    frames.popleft()
+                    dropped += 1
+                _, f = frames.popleft()
+            if not f:
+                continue
+            conn.send(b"%x\r\n" % len(f) + f + b"\r\n")
+            sent += len(f)
+            sent_at.append((sent, time.time()))
+            if len(sent_at) > 4000:
+                sent_at.popleft()
+            if time.time() - window < 10:
+                continue
+            window = time.time()
+            if least is not None and least < 5:
+                rtt = least
+            least = None
+            if dropped > 20 and remote_kbit > 250:
+                set_rate(max(250, remote_kbit * 6 // 10), True)
+                return "rate"
+            calm = calm + 10 if dropped == 0 else 0
+            dropped = 0
+            up = next_rate() if calm >= 20 else 0
+            if up:
+                set_rate(up, False)
+                return "rate"
+        conn.send(b"0\r\n\r\n")
+        conn.getresponse().read()
+        return "ended"
+    except (OSError, http.client.HTTPException):
+        return "phone"
+    finally:
+        conn.close()
+
+
 def post_stream(src, addr, gen, path="/api/display/stream", kind="video/h264"):
     """Posts ffmpeg's or wf-recorder's stream to the phone's page port, the way this helper reaches it
     (the tunnel included), until it ends: "ended", or "phone" when the phone closed it or went."""
@@ -3192,9 +3367,14 @@ def stream_x11(at, port, w, h, fps, gen, http_ok=False):
     say("Showing this computer's %s on the phone (%dx%d)." % ("extra monitor" if len(monitors()) > 1 else "screen, mirrored,", geom[2], geom[3]))
     remote = http_ok and tunnel_local is not None and tuple(at) == tuple(tunnel_local)
     if remote:
-        say("From another network: this screen goes smaller, at 900 kbit/s, so the link keeps up.")
+        read_rate()
+        say("From another network: this screen goes at what the link carries (%d kbit/s to start)." % remote_kbit)
     dest = ["-f", "h264", "pipe:1"] if http_ok else ["-f", "h264", "tcp://%s:%d?tcp_nodelay=1" % (at[0], port)]
-    for args in capture_tries(geom, w, h, fps, dest, grab, remote):
+    tries = capture_tries(geom, w, h, fps, dest, grab, remote, remote_kbit)
+    i = 0
+    while i < len(tries):
+        args = tries[i]
+        i += 1
         if gen != screen_gen:
             return
         try:
@@ -3207,13 +3387,18 @@ def stream_x11(at, port, w, h, fps, gen, http_ok=False):
             errs = []
             threading.Thread(target=lambda: errs.append(p.stderr.read()), daemon=True).start()
             began = time.time()
-            why = post_stream(p.stdout, at, gen)
+            why = post_frames(p.stdout, at, gen) if remote else post_stream(p.stdout, at, gen)
             if p.poll() is None:
                 p.terminate()
             p.wait()
             err = b"".join(errs).decode("utf-8", "replace")
             if why == "phone" or gen != screen_gen:
                 return
+            if why == "rate":
+                # The same encoder again, at the new rate.
+                tries = capture_tries(geom, w, h, fps, dest, grab, remote, remote_kbit)
+                i -= 1
+                continue
             if time.time() - began > 4:
                 log("Second screen ended: %s" % err.strip()[-300:])
                 return
