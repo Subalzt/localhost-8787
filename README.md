@@ -38,7 +38,7 @@
 12 [Notifications](#12-the-phones-notifications-on-the-laptop) ·
 13 [Trackpad](#13-the-phone-as-trackpad-and-keyboard) ·
 14 [Phone screen](#14-the-phones-screen-on-the-laptop) ·
-15 [Second screen](#15-the-phone-as-a-second-screen) ·
+15 [The laptop's screen](#15-the-laptops-screen-on-the-phone-from-anywhere) ·
 16 [Monitor](#16-a-live-monitor) ·
 17 [Measure](#17-measure-the-connection) ·
 18 [Phone and phone](#18-phone-and-phone) ·
@@ -162,9 +162,9 @@ the way.
 
 When the laptop cannot reach the phone over any network (the phone on another Wi-Fi, tethering
 off) but the cable is in and *USB debugging* is on, the laptop helper forwards a port through
-`adb` and serves the phone at `127.0.0.2` as if it were on the network. The page, the clipboard
-and the trackpad work; the second screen needs a real network. It is slower than tethering (about
-30 MB/s), and the page says *USB tethering is faster*. The helper uses the Android SDK's `adb`, or
+`adb` and serves the phone at `127.0.0.2` as if it were on the network. The page, the clipboard,
+the trackpad and the laptop's screen work (the screen at 4K, 120 frames a second). It is slower
+than tethering for files (about 30 MB/s), and the page says *USB tethering is faster*. The helper uses the Android SDK's `adb`, or
 the one that comes with scrcpy.
 
 </details>
@@ -238,8 +238,8 @@ does.
 - **On the page** the link shows as *Internet · IPv6 tunnel* or *Internet · IPv4, punched through*,
   and the page goes easy on it: the next song waits until the playing one has fully arrived.
 
-Through the tunnel: the clipboard, files, browsing the phone, music, notifications, the trackpad.
-The second screen and the phone's screen stay local. The phone stays awake while anyone is
+Through the tunnel: the clipboard, files, browsing the phone, music, notifications, the trackpad,
+and the laptop's screen on the phone (section 15). The phone's screen on the laptop stays local. The phone stays awake while anyone is
 connected from far away, and for half a minute after. *Settings → Laptop access → From other
 networks* shows who is connected that way and how much it has carried, and turns it off.
 
@@ -472,12 +472,25 @@ needed.
 keyboard, sound included (via [scrcpy](https://github.com/Genymobile/scrcpy); the phone needs USB
 debugging on). It uses the cable when one is plugged in.
 
-### 15. The phone as a second screen
+### 15. The laptop's screen on the phone, from anywhere
 
-*Second screen* shows the laptop's desktop on the phone; taps on it click there. With a
-virtual-display driver on the laptop (Windows) or an extra monitor set up with `xrandr` (Linux) it
-is a real extra monitor; otherwise it mirrors the laptop's screen. Protected video (Netflix, Prime
-Video) shows black, as it does for any screen capture.
+*Devices → Control → The laptop's screen* (or *Second screen* on the page) shows the laptop on the
+phone, as scrcpy shows a phone on a laptop, the other way round. Tap to click, hold to
+right-click, drag to drag, two fingers to scroll, **pinch to zoom** in on small text (two fingers
+then move round), and the **Keyboard** button types into the laptop.
+
+- **In the same room** it is a second screen: with a virtual-display driver on the laptop
+  (Windows) or an extra monitor set up with `xrandr` (Linux) it is a real extra monitor, else it
+  mirrors the laptop's screen. Encoded on the laptop's GPU and decoded by the phone's hardware, up
+  to 4K at 120 frames a second over the cable.
+- **From anywhere**, through the tunnel: the laptop's own main screen, so you can use it while
+  away. The laptop helper reaches the phone by itself, so the laptop needs nothing opened up. The
+  picture is made to fit the link: 1280 wide at 24 frames a second from 1.5 Mbit/s; when it backs
+  up on the way it steps down (to 854 wide, 15 frames a second, 300 kbit/s at the least), and after
+  a calm while it steps back up (to 2.5 Mbit/s).
+- The laptop needs to be on, awake and running the helper. Windows' lock screen and its
+  administrator prompts are hidden from screen capture, and protected video (Netflix, Prime Video)
+  shows black, as for any screen capture.
 
 ### 16. A live monitor
 
@@ -590,9 +603,11 @@ IPv4, and nothing else ever holds it. No account, no number, no company.
   read; a notification with the text, which opens the conversation.
 - **Unlink** sits in the conversation's header, and asks first.
 
-<img src="docs/images/phone-chat.png" width="240" alt="A conversation">
+| A conversation | A call |
+| --- | --- |
+| <img src="docs/images/phone-chat.png" width="240" alt="A conversation"> | <img src="docs/images/phone-call.png" width="240" alt="A call"> |
 
-*In the picture the phone is linked with itself, so each message shows once sent and once received.*
+*In the pictures the phone is linked with itself: each message shows once sent and once received, and the call is to itself.*
 
 **Calls.** The handset in a conversation's header calls that phone. The sound goes straight
 between the two phones (WebRTC: Opus, with the phone's own echo cancelling and noise suppression),
@@ -746,6 +761,10 @@ For hotspot mode, checked on 26 September 2026:
 - **Messages** go phone to phone over the same routes, each sealed with AES-256-GCM under
   `HMAC(psk, "L87M/1 msg")`, the tunnel key the receiving phone made for the sender, with the
   message's id and time bound in ([messages](docs/tunnel-protocol.md#messages)).
+- **The laptop's screen**: the helper captures with ffmpeg (Desktop Duplication and NVENC on Windows,
+  x11grab, avfoundation or wf-recorder elsewhere) and posts the H.264 stream to the phone's page
+  port (`POST /api/display/stream`), so it goes the way the helper reaches the phone, tunnel
+  included; the phone decodes it with MediaCodec straight onto the screen.
 - **Calls**: WebRTC (`io.github.webrtc-sdk:android`) with the hardware echo canceller and noise
   suppressor, STUN only to learn the phone's own public address, no TURN; the offer, answer and
   late candidates go as sealed `POST /api/peers/call` (AES-256-GCM under `HMAC(psk, "L87C/1 call")`).
@@ -807,11 +826,13 @@ player, `net/` for addresses, the direct link, STUN, the tunnel, hole punching a
   yet run on a real Mac. On a Mac the helper does not switch Wi-Fi itself.
 - Lyrics need internet on the laptop the first time a song is played; after that they are on
   the phone.
-- Protected video cannot be shown on the second screen.
+- Protected video cannot be shown on the laptop's screen on the phone.
 - Apple Lossless (ALAC) does not play in browsers. Empty folders are not created.
 - A free dynv6 name stays active only while the account is used.
 - Messages are text only so far, between the phones' apps; the page does not show them yet. A
   message goes only while both phones are on; until then it waits on the sending phone.
+- From another network the laptop's screen adjusts its picture on Windows; the Linux and Mac
+  helper sends a fixed 1280-wide picture at 1.5 Mbit/s. The laptop's sound is not sent yet.
 - Calls are voice only for now, between linked phones. With no relay, a call needs the two phones
   to reach each other directly: on a network that allows only a web proxy (no IPv6, UDP only to a
   few ports) neither calls nor the tunnel get through.

@@ -2646,11 +2646,14 @@ def events_loop():
                 if ev == "clipsync":
                     clip_sync = d == "on"
                 elif ev == "display":
-                    # "start PORT W H [HZ ...]" when the phone opens its second screen; anything else stops it.
+                    # "start PORT W H [HZ BLOCKS [http]]" when the phone opens its screen view; anything else
+                    # stops it. "http": the phone takes the stream on the page's port, the way this helper
+                    # reaches it (the tunnel included), rather than on PORT.
                     p = d.split()
                     if p and p[0] == "start" and len(p) >= 4:
                         fps = max(30, min(120, int(p[4]))) if len(p) >= 5 else 60
-                        threading.Thread(target=start_second_screen, args=(at[0], int(p[1]), int(p[2]), int(p[3]), fps),
+                        http_ok = len(p) >= 7 and p[6] == "http"
+                        threading.Thread(target=start_second_screen, args=(at, int(p[1]), int(p[2]), int(p[3]), fps, http_ok),
                                          daemon=True).start()
                     else:
                         stop_second_screen()
@@ -2779,9 +2782,12 @@ def session_kind():
     return "x11" if os.environ.get("DISPLAY") else ""
 
 
-def capture_tries(geom, w, h, fps, dest, grab=None):
-    """ffmpeg arguments, fastest encoder first: X11's screen grab, or the one given (macOS's)."""
+def capture_tries(geom, w, h, fps, dest, grab=None, remote=False):
+    """ffmpeg arguments, fastest encoder first: X11's screen grab, or the one given (macOS's).
+    From afar (the phone reached through the tunnel): 1280 wide, 24 frames a second, 1.5 Mbit/s."""
     x, y, gw, gh = geom
+    if remote:
+        fps, w, h = min(fps, 24), 1280, 800
     grab = grab or ["-f", "x11grab", "-framerate", str(fps), "-video_size", "%dx%d" % (gw, gh), "-draw_mouse", "1",
                     "-i", "%s+%d,%d" % (os.environ.get("DISPLAY", ":0"), x, y)]
     # Fitted to the phone's screen; labelled BT.601 in full, as the phone decodes it.
@@ -2789,6 +2795,8 @@ def capture_tries(geom, w, h, fps, dest, grab=None):
     label = "setparams=color_primaries=bt470bg:color_trc=smpte170m:colorspace=bt470bg:range=tv"
     mbit = min(80, max(40, 40 * fps // 60))
     rate = ["-b:v", "%dM" % mbit, "-maxrate", "%dM" % mbit, "-bufsize", "%dM" % max(3, mbit // 13), "-g", str(fps * 2), "-bf", "0"]
+    if remote:
+        rate = ["-b:v", "1500k", "-maxrate", "1500k", "-bufsize", "750k", "-g", str(fps * 4), "-bf", "0"]
     base = ["-hide_banner", "-loglevel", "error"]
     # And written into the stream's own header, which every encoder then carries (OpenH264 would
     # otherwise leave it out, and the phone would take the picture for BT.709 and shift its colours).
@@ -2806,8 +2814,8 @@ def capture_tries(geom, w, h, fps, dest, grab=None):
     if os.path.exists("/dev/dri/renderD128"):
         tries.append(base + ["-vaapi_device", "/dev/dri/renderD128"] + grab +
                      ["-vf", fit + ",format=nv12," + label + ",hwupload", "-c:v", "h264_vaapi"] + rate + dest)
-    tries.append(base + grab + ["-vf", fit + ",format=yuv420p," + label, "-c:v", "libx264", "-preset", "ultrafast",
-                                "-tune", "zerolatency", "-b:v", "20M", "-g", "120", "-bf", "0"] + dest)
+    tries.append(base + grab + ["-vf", fit + ",format=yuv420p," + label, "-c:v", "libx264", "-preset", "veryfast" if remote else "ultrafast",
+                                "-tune", "zerolatency"] + (rate if remote else ["-b:v", "20M", "-g", "120", "-bf", "0"]) + dest)
     # Fedora's ffmpeg has no libx264; it has Cisco's OpenH264.
     tries.append(base + grab + ["-vf", fit + ",format=yuv420p," + label, "-c:v", "libopenh264", "-b:v", "20M",
                                 "-g", "120", "-allow_skip_frames", "1"] + dest)
@@ -2831,7 +2839,35 @@ def mac_screen_devices(text):
     return {int(m.group(2)): int(m.group(1)) for m in re.finditer(r"\[(\d+)\] Capture screen (\d+)", text)}
 
 
-def stream_x11(at, port, w, h, fps, gen):
+def post_stream(src, addr, gen):
+    """Posts ffmpeg's or wf-recorder's stream to the phone's page port, the way this helper reaches it
+    (the tunnel included), until it ends: "ended", or "phone" when the phone closed it or went."""
+    host, port = addr
+    conn = http.client.HTTPConnection(host, port, timeout=10)
+    try:
+        conn.putrequest("POST", "/api/display/stream")
+        conn.putheader("User-Agent", user_agent())
+        conn.putheader("Content-Type", "video/h264")
+        conn.putheader("Transfer-Encoding", "chunked")
+        if session:
+            conn.putheader("Cookie", session)
+        conn.endheaders()
+        conn.sock.settimeout(None)
+        while gen == screen_gen:
+            data = src.read1(1 << 16) if hasattr(src, "read1") else src.read(1 << 16)
+            if not data:
+                break
+            conn.send(b"%x\r\n" % len(data) + data + b"\r\n")
+        conn.send(b"0\r\n\r\n")
+        conn.getresponse().read()
+        return "ended"
+    except (OSError, http.client.HTTPException):
+        return "phone"
+    finally:
+        conn.close()
+
+
+def stream_x11(at, port, w, h, fps, gen, http_ok=False):
     global stream_proc, shown
     ff = shutil.which("ffmpeg")
     if not ff:
@@ -2859,16 +2895,35 @@ def stream_x11(at, port, w, h, fps, gen):
         say_once("mac-screen-rec", "If the phone shows only the wallpaper or a black screen, allow Screen Recording for "
                  "the app this helper runs in (System Settings, Privacy & Security, Screen Recording), and start it again.")
     say("Showing this computer's %s on the phone (%dx%d)." % ("extra monitor" if len(monitors()) > 1 else "screen, mirrored,", geom[2], geom[3]))
-    dest = ["-f", "h264", "tcp://%s:%d?tcp_nodelay=1" % (at, port)]
-    for args in capture_tries(geom, w, h, fps, dest, grab):
+    remote = http_ok and tunnel_local is not None and tuple(at) == tuple(tunnel_local)
+    if remote:
+        say("From another network: this screen goes smaller, at 1.5 Mbit/s, so the link keeps up.")
+    dest = ["-f", "h264", "pipe:1"] if http_ok else ["-f", "h264", "tcp://%s:%d?tcp_nodelay=1" % (at[0], port)]
+    for args in capture_tries(geom, w, h, fps, dest, grab, remote):
         if gen != screen_gen:
             return
         try:
-            p = subprocess.Popen([ff] + args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            p = subprocess.Popen([ff] + args, stdout=subprocess.PIPE if http_ok else subprocess.DEVNULL, stderr=subprocess.PIPE)
         except OSError as e:
             say("Could not start ffmpeg (%s)." % e)
             return
         stream_proc = p
+        if http_ok:
+            errs = []
+            threading.Thread(target=lambda: errs.append(p.stderr.read()), daemon=True).start()
+            began = time.time()
+            why = post_stream(p.stdout, at, gen)
+            if p.poll() is None:
+                p.terminate()
+            p.wait()
+            err = b"".join(errs).decode("utf-8", "replace")
+            if why == "phone" or gen != screen_gen:
+                return
+            if time.time() - began > 4:
+                log("Second screen ended: %s" % err.strip()[-300:])
+                return
+            log("Second screen, trying the next encoder: %s" % err.strip()[-300:])
+            continue
         try:
             err = p.communicate(timeout=4)[1].decode("utf-8", "replace")
         except subprocess.TimeoutExpired:
@@ -2885,12 +2940,26 @@ def stream_x11(at, port, w, h, fps, gen):
     say("Could not stream this screen to the phone.")
 
 
-def stream_wlroots(at, port, w, h, fps, gen):
+def stream_wlroots(at, port, w, h, fps, gen, http_ok=False):
     """wf-recorder writes the stream; this helper hands it to the phone."""
     global stream_proc, shown
     shown = None
+    if http_ok:
+        try:
+            p = subprocess.Popen(["wf-recorder", "--muxer=h264", "--codec=libx264", "-p", "preset=ultrafast", "-p", "tune=zerolatency",
+                                  "-p", "bf=0", "-r", str(fps), "--file=/dev/stdout"],
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            say("Could not start wf-recorder (%s)." % e)
+            return
+        stream_proc = p
+        say("Showing this computer's screen on the phone.")
+        post_stream(p.stdout, at, gen)
+        if p.poll() is None:
+            p.terminate()
+        return
     try:
-        sock = socket.create_connection((at, port), timeout=10)
+        sock = socket.create_connection((at[0], port), timeout=10)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     except OSError as e:
         say("Could not reach the phone's second screen (%s)." % e)
@@ -2919,7 +2988,7 @@ def stream_wlroots(at, port, w, h, fps, gen):
             p.terminate()
 
 
-def start_second_screen(at, port, w, h, fps):
+def start_second_screen(at, port, w, h, fps, http_ok=False):
     global screen_gen
     stop_second_screen()
     gen = screen_gen
@@ -2928,9 +2997,9 @@ def start_second_screen(at, port, w, h, fps):
         return
     kind = session_kind()
     if kind in ("x11", "mac"):
-        stream_x11(at, port, w, h, fps, gen)
+        stream_x11(at, port, w, h, fps, gen, http_ok)
     elif kind == "wayland" and have("wf-recorder") and not re.search(r"GNOME|KDE", os.environ.get("XDG_CURRENT_DESKTOP", ""), re.I):
-        stream_wlroots(at, port, w, h, fps, gen)
+        stream_wlroots(at, port, w, h, fps, gen, http_ok)
     elif kind == "wayland" and re.search(r"GNOME|KDE", os.environ.get("XDG_CURRENT_DESKTOP", ""), re.I):
         say("The phone asked to be a second screen. On GNOME or KDE under Wayland that needs their screen-sharing "
             "prompt, which this helper does not drive yet: log in to an X11 (Xorg) session to use it.")
