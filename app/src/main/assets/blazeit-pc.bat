@@ -153,7 +153,43 @@ public static class BlazeItPc
         far.IsBackground = true;
         far.Start();
 
+        Thread awake = new Thread(AwakeLoop);
+        awake.IsBackground = true;
+        awake.Start();
+
         ControlLoop();
+    }
+
+    [DllImport("kernel32.dll")] static extern uint SetThreadExecutionState(uint flags);
+
+    /**
+     * Keeps the laptop from going to sleep while the helper runs (plugged in, or on a battery above
+     * a quarter), so the phone reaches it from anywhere, a lecture hall included. The screen may still
+     * turn off; it is kept on only while the phone shows it. Closing the lid still does what Windows
+     * is set to do.
+     */
+    static void AwakeLoop()
+    {
+        const uint CONTINUOUS = 0x80000000, SYSTEM = 0x1, DISPLAY = 0x2;
+        uint last = 0;
+        while (true)
+        {
+            try
+            {
+                var ps = System.Windows.Forms.SystemInformation.PowerStatus;
+                bool power = ps.PowerLineStatus != System.Windows.Forms.PowerLineStatus.Offline || ps.BatteryLifePercent >= 0.25f;
+                uint want = CONTINUOUS | (power ? SYSTEM : 0) | (secondScreen != null ? DISPLAY : 0);
+                if (want != last)
+                {
+                    SetThreadExecutionState(want);
+                    if ((want & SYSTEM) != (last & SYSTEM) || last == 0)
+                        Log(power ? "Keeping the laptop awake for the phone." : "On a low battery: the laptop may sleep again.");
+                    last = want;
+                }
+            }
+            catch (Exception e) { Log("Keeping awake: " + e.Message); }
+            Thread.Sleep(10000);
+        }
     }
 
     delegate bool ConsoleEvent(int type);
