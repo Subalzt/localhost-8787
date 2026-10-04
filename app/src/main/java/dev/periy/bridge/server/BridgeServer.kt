@@ -1152,6 +1152,30 @@ class BridgeServer(
         }
     }
 
+    /** A file arriving whole from a computer, [size] bytes or until it ends when not known, into the folder for received files. */
+    private fun storeStream(id: String, name: String, mime: String, input: java.io.InputStream, size: Long, tid: String): FileEntry {
+        val slot = storage.newSlot(id)
+        try {
+            var got = 0L
+            slot.writer(0).use { w ->
+                val buf = ByteArray(256 * 1024)
+                while (size < 0 || got < size) {
+                    val n = input.read(buf, 0, if (size < 0) buf.size else minOf(buf.size.toLong(), size - got).toInt())
+                    if (n < 0) { if (size < 0) break else error("The file stopped part way") }
+                    w.write(buf, 0, n)
+                    got += n
+                    Monitor.addIn(n)
+                    Transfers.progress(tid, got)
+                }
+                w.sync()
+            }
+            return slot.finish(name, mime, Origin.PC, emptyList()).also { index.add(it) }
+        } catch (t: Throwable) {
+            slot.discard()
+            throw t
+        }
+    }
+
     private fun sinkName(s: Pipes.Sink): String = when (s) {
         is Pipes.Sink.Device -> devices.get(s.id)?.let(::displayName) ?: "a computer"
         Pipes.Sink.Store -> config.deviceName
@@ -1437,6 +1461,38 @@ class BridgeServer(
             }
             withContext(Dispatchers.IO) { DisplaySound.play(call.receiveStream()) }
             call.respond(ApiResult(true))
+        }
+        // The laptop's files (server/LaptopFiles.kt): its helper's answer to "what is in this folder".
+        post("/api/laptop/fs/answer") {
+            val id = call.request.queryParameters["id"].orEmpty()
+            val l = runCatching { call.receive<LaptopListing>() }.getOrNull()
+            if (l != null) LaptopFiles.answer(id, l)
+            call.respond(ApiResult(l != null))
+        }
+        // ...and a file it was asked for, saved here as one sent from a computer.
+        post("/api/laptop/fs/file") {
+            val id = call.request.queryParameters["id"].orEmpty()
+            val name = call.request.queryParameters["name"].orEmpty().ifBlank { "file" }
+            val size = call.request.queryParameters["size"]?.toLongOrNull() ?: -1L
+            if (call.request.queryParameters["error"] != null) {
+                LaptopFiles.saved(id, "!" + call.request.queryParameters["error"])
+                call.respond(ApiResult(true))
+                return@post
+            }
+            if (!storage.hasDestination()) {
+                LaptopFiles.saved(id, "!This phone has no folder for received files yet")
+                call.respond(HttpStatusCode.Conflict, ApiResult(false, "No folder for received files"))
+                return@post
+            }
+            val mime = java.net.URLConnection.guessContentTypeFromName(name) ?: "application/octet-stream"
+            val tid = "laptop-" + id
+            Transfers.begin(tid, name, Direction.INBOUND, size.coerceAtLeast(0))
+            val r = runCatching {
+                withContext(Dispatchers.IO) { storeStream(id, name, mime, call.receiveChannel().toInputStream(), size, tid) }
+            }
+            r.onSuccess { LaptopFiles.saved(id, it.name); Transfers.finish(tid, true) }
+                .onFailure { LaptopFiles.saved(id, "!" + (it.message ?: "It stopped part way")); Transfers.finish(tid, false) }
+            call.respond(ApiResult(r.isSuccess))
         }
         post("/api/mirror") {
             val mode = call.request.queryParameters["mode"] ?: "start"

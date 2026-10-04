@@ -2657,6 +2657,12 @@ def events_loop():
                                          daemon=True).start()
                     else:
                         stop_second_screen()
+                elif ev == "laptopfs" and not snapshot:
+                    # The phone asks for a folder here, or a file from it (LaptopFiles on the phone).
+                    q = d.split(" ")
+                    if len(q) >= 3:
+                        path = base64.b64decode(q[2]).decode("utf-8", "replace") if q[2] else ""
+                        threading.Thread(target=laptop_send if q[0] == "get" else laptop_list, args=(q[1], path), daemon=True).start()
                 elif ev == "mirror" and not snapshot:
                     threading.Thread(target=open_phone_screen, daemon=True).start()
                 elif ev == "clip" and clip:
@@ -2838,6 +2844,83 @@ def pick_screen():
 def mac_screen_devices(text):
     """{screen number: avfoundation device index} from ffmpeg -f avfoundation -list_devices true."""
     return {int(m.group(2)): int(m.group(1)) for m in re.finditer(r"\[(\d+)\] Capture screen (\d+)", text)}
+
+
+# ---------------------------------------------------------------------- this computer's files on the phone
+#
+# Read only, and only what this user can read: the usual folders and the whole disk at the top,
+# then any folder's folders and files; a file is sent to the phone, which keeps it with what it has
+# received. Answered on the page's port, so it works through the tunnel too.
+
+def laptop_list(rid, path):
+    entries, error = [], ""
+    try:
+        if not path:
+            home = os.path.expanduser("~")
+            for name in ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos", "Movies"):
+                full = os.path.join(home, name)
+                if os.path.isdir(full):
+                    entries.append({"name": name, "path": full, "dir": True})
+            entries.append({"name": "Home", "path": home, "dir": True})
+            entries.append({"name": "This computer", "path": "/", "dir": True})
+        else:
+            with os.scandir(path) as it:
+                items = sorted(it, key=lambda e: (not e.is_dir(follow_symlinks=False), e.name.lower()))
+            for e in items:
+                if e.name.startswith("."):
+                    continue
+                try:
+                    st = e.stat(follow_symlinks=False)
+                except OSError:
+                    continue
+                is_dir = e.is_dir(follow_symlinks=False)
+                entries.append({"name": e.name, "path": e.path, "dir": is_dir, "size": 0 if is_dir else st.st_size,
+                                "modified": int(st.st_mtime * 1000)})
+                if len(entries) >= 3000:
+                    break
+    except OSError as e:
+        error = str(e)
+    body = json.dumps({"path": path, "laptop": machine_name(), "error": error, "entries": entries})
+    try:
+        request("POST", "/api/laptop/fs/answer?id=" + urllib.parse.quote(rid), body=body,
+                headers={"Content-Type": "application/json"}, timeout=20)
+    except OSError:
+        pass
+
+
+def laptop_send(rid, path):
+    q = "/api/laptop/fs/file?id=%s&name=%s" % (urllib.parse.quote(rid), urllib.parse.quote(os.path.basename(path)))
+    try:
+        f = open(path, "rb")
+    except OSError as e:
+        try:
+            request("POST", q + "&error=" + urllib.parse.quote("The computer could not open it: %s" % e), timeout=10)
+        except OSError:
+            pass
+        return
+    with f:
+        size = os.fstat(f.fileno()).st_size
+        host, port = phone
+        conn = http.client.HTTPConnection(host, port, timeout=60)
+        try:
+            conn.putrequest("POST", q + "&size=%d" % size)
+            conn.putheader("User-Agent", user_agent())
+            conn.putheader("Content-Type", "application/octet-stream")
+            conn.putheader("Content-Length", str(size))
+            if session:
+                conn.putheader("Cookie", session)
+            conn.endheaders()
+            while True:
+                b = f.read(256 * 1024)
+                if not b:
+                    break
+                conn.send(b)
+            conn.getresponse().read()
+            say("Sent %s to the phone." % os.path.basename(path))
+        except (OSError, http.client.HTTPException) as e:
+            say("Could not send %s to the phone: %s" % (os.path.basename(path), e))
+        finally:
+            conn.close()
 
 
 def post_stream(src, addr, gen, path="/api/display/stream", kind="video/h264"):

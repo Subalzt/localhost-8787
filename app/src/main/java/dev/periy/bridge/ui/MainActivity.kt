@@ -363,6 +363,8 @@ private fun BlazeItUi(vm: MainViewModel) {
     var chatWith by remember { mutableStateOf<String?>(null) }
     // The trackpad and keys for a computer, open over the app.
     var controlOpen by remember { mutableStateOf(false) }
+    // The laptop's files, open over the app.
+    var laptopFilesOpen by remember { mutableStateOf(false) }
     val threads by ctx.container.messages.threads.collectAsStateWithLifecycle()
     var showMonitor by remember { mutableStateOf(ctx.container.prefs.showMonitor) }
     val setMonitor = { on: Boolean -> showMonitor = on; ctx.container.prefs.showMonitor = on }
@@ -377,7 +379,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     // lyrics do the same in their own screens.)
     val oemSwipe = rememberBackSwipe(enabled = showOem) { showOem = false }
     // A tab goes back to Home: the pages slide towards it with the swipe, a little under half way.
-    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && tab != TAB_HOME && !shelf.showing) { events ->
+    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && tab != TAB_HOME && !shelf.showing) { events ->
         val from = pager.currentPage
         val toward = if (from > TAB_HOME) -1 else 1
         try {
@@ -389,14 +391,14 @@ private fun BlazeItUi(vm: MainViewModel) {
     }
     // At Home, from Android 12 on the system takes back itself (and, from 14, shows it coming):
     // the app goes to the background, as it does below 12 here.
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
         (ctx as? android.app.Activity)?.moveTaskToBack(true)
     }
     // Music, open: a search closes, then an album (in Music's own screen), then Music itself, back
     // to the app, following the finger. The player, open over it, goes back down a step first.
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && shelf.showing) { shelf.back() }
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && shelf.showing) { shelf.back() }
     val musicSwipe = rememberBackSwipe(
-        enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
+        enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
     ) { shelf.showing = false }
     // A linked phone's files, at their top folder (a folder inside goes up a folder first, in its screen).
     val peerSwipe = rememberBackSwipe(enabled = browsePeer != null) { browsePeer = null }
@@ -573,6 +575,7 @@ private fun BlazeItUi(vm: MainViewModel) {
                                     browse = { browsePeer = it },
                                     chat = { chatWith = it },
                                     openControl = { controlOpen = true },
+                                    openLaptopFiles = { laptopFilesOpen = true },
                                 )
                                 else -> settingsTab(
                                     state, vm, theme, look, laptopLink, direct, toggleDirect,
@@ -689,6 +692,15 @@ private fun BlazeItUi(vm: MainViewModel) {
                     )
                 }
             }
+        }
+
+        // The laptop's files slide in over the app, as a linked phone's do.
+        androidx.compose.animation.AnimatedVisibility(
+            laptopFilesOpen,
+            enter = androidx.compose.animation.slideInHorizontally(tween(300)) { it } + androidx.compose.animation.fadeIn(tween(200)),
+            exit = androidx.compose.animation.slideOutHorizontally(tween(260)) { it } + androidx.compose.animation.fadeOut(tween(200)),
+        ) {
+            LaptopFilesScreen { laptopFilesOpen = false }
         }
 
         // A conversation slides in over the app, as a linked phone's files do.
@@ -1637,6 +1649,7 @@ private fun LazyListScope.devicesTab(
     browse: (Peer) -> Unit,
     chat: (String) -> Unit,
     openControl: () -> Unit,
+    openLaptopFiles: () -> Unit,
 ) {
     val pairedNames = paired.map { it.name }.toSet()
     val unpaired = nearby.filter { it.name !in pairedNames }
@@ -1653,7 +1666,7 @@ private fun LazyListScope.devicesTab(
     }
     item { ComputersCard(computers, devices, live) { vm.removeDevice(it) } }
     item { Spacer(Modifier.height(12.dp)) }
-    item { ControlRow(running, openControl) }
+    item { ControlRow(running, openControl, openLaptopFiles) }
 
     item { SectionBar("Phones") }
     item { PhonesCard(paired, nearby, threads, routes, chat, browse, sendFilesTo) }
@@ -1786,7 +1799,7 @@ private fun ComputersCard(computers: List<PairedDevice>, all: List<PairedDevice>
 
 /** Control: the trackpad and keys for the computer running the helper, on a screen of its own. */
 @Composable
-private fun ControlRow(running: Boolean, open: () -> Unit) {
+private fun ControlRow(running: Boolean, open: () -> Unit, openFiles: () -> Unit) {
     val laptops by dev.periy.bridge.server.Control.connected.collectAsStateWithLifecycle()
     GroupCard {
         SettingRow(
@@ -1797,6 +1810,12 @@ private fun ControlRow(running: Boolean, open: () -> Unit) {
                 else -> "Trackpad and keys for " + dev.periy.bridge.server.helperMachine(laptops.first())
             },
             first = true, icon = BlazeIcons.Trackpad, iconColor = Color(0xFF5E5CE6), onClick = open,
+        ) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
+        // Its files, from anywhere, through the same helper.
+        SettingRow(
+            "Files on the laptop",
+            detail = if (laptops.isEmpty()) "Needs the helper on the computer" else "Browse and save to this phone",
+            icon = BlazeIcons.Folder, iconColor = Color(0xFF0A84FF), onClick = openFiles,
         ) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
     }
 }

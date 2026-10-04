@@ -721,6 +721,104 @@ public static class BlazeItPc
         }
     }
 
+    // ------------------------------------------------------------------ this laptop's files on the phone
+    //
+    // Read only, and only what this user can read: the usual folders and the drives at the top,
+    // then any folder's folders and files; a file is sent to the phone, which keeps it with what it
+    // has received. Answered on the page's port, so it works through the tunnel too.
+
+    static long Millis(DateTime t) { return (long)(t.ToUniversalTime() - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds; }
+
+    static string Entry(string name, string path, bool dir, long size, long modified)
+    {
+        return "{\"name\":" + Json(name) + ",\"path\":" + Json(path) + ",\"dir\":" + (dir ? "true" : "false") +
+            ",\"size\":" + size + ",\"modified\":" + modified + "}";
+    }
+
+    static void LaptopList(string id, string path)
+    {
+        var items = new List<string>();
+        string error = "";
+        try
+        {
+            if (path.Length == 0)
+            {
+                string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                foreach (string[] f in new string[][] {
+                    new string[] { "Desktop", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory) },
+                    new string[] { "Documents", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) },
+                    new string[] { "Downloads", Path.Combine(home, "Downloads") },
+                    new string[] { "Pictures", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures) },
+                    new string[] { "Music", Environment.GetFolderPath(Environment.SpecialFolder.MyMusic) },
+                    new string[] { "Videos", Environment.GetFolderPath(Environment.SpecialFolder.MyVideos) } })
+                    if (Directory.Exists(f[1])) items.Add(Entry(f[0], f[1], true, 0, 0));
+                foreach (DriveInfo dr in DriveInfo.GetDrives())
+                {
+                    if (!dr.IsReady || (dr.DriveType != DriveType.Fixed && dr.DriveType != DriveType.Removable)) continue;
+                    string label = string.IsNullOrEmpty(dr.VolumeLabel) ? "Local disk" : dr.VolumeLabel;
+                    items.Add(Entry(label + " (" + dr.Name.TrimEnd('\\') + ")", dr.Name, true, dr.TotalSize, 0));
+                }
+            }
+            else
+            {
+                var di = new DirectoryInfo(path);
+                foreach (DirectoryInfo sub in di.GetDirectories())
+                {
+                    if ((sub.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0) continue;
+                    items.Add(Entry(sub.Name, sub.FullName, true, 0, Millis(sub.LastWriteTime)));
+                    if (items.Count >= 3000) break;
+                }
+                foreach (FileInfo fi in di.GetFiles())
+                {
+                    if ((fi.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0) continue;
+                    items.Add(Entry(fi.Name, fi.FullName, false, fi.Length, Millis(fi.LastWriteTime)));
+                    if (items.Count >= 3000) break;
+                }
+            }
+        }
+        catch (Exception e) { error = e.Message; }
+        string json = "{\"path\":" + Json(path) + ",\"laptop\":" + Json(Environment.MachineName) + ",\"error\":" + Json(error) +
+            ",\"entries\":[" + string.Join(",", items.ToArray()) + "]}";
+        try
+        {
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + phone + ":" + PhonePort + "/api/laptop/fs/answer?id=" + Uri.EscapeDataString(id));
+            r.Proxy = null; r.Method = "POST"; r.UserAgent = Ua; r.Headers["Cookie"] = session;
+            r.ContentType = "application/json"; r.Timeout = 20000; r.KeepAlive = false;
+            byte[] body = Encoding.UTF8.GetBytes(json);
+            r.ContentLength = body.Length;
+            using (Stream o = r.GetRequestStream()) o.Write(body, 0, body.Length);
+            using (r.GetResponse()) { }
+        }
+        catch { }
+    }
+
+    static void LaptopSend(string id, string path)
+    {
+        string q = "/api/laptop/fs/file?id=" + Uri.EscapeDataString(id) + "&name=" + Uri.EscapeDataString(Path.GetFileName(path));
+        FileStream f = null;
+        try { f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); }
+        catch (Exception e)
+        {
+            try { using (Http("POST", q + "&error=" + Uri.EscapeDataString("The laptop could not open it: " + e.Message), session, 10000)) { } } catch { }
+            return;
+        }
+        using (f)
+        {
+            try
+            {
+                HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + phone + ":" + PhonePort + q + "&size=" + f.Length);
+                r.Proxy = null; r.Method = "POST"; r.UserAgent = Ua; r.Headers["Cookie"] = session;
+                r.ContentType = "application/octet-stream"; r.ContentLength = f.Length;
+                r.AllowWriteStreamBuffering = false; r.Timeout = System.Threading.Timeout.Infinite; r.ReadWriteTimeout = 60000;
+                r.ServicePoint.Expect100Continue = false;
+                using (Stream o = r.GetRequestStream()) f.CopyTo(o, 256 * 1024);
+                using (r.GetResponse()) { }
+                Say("Sent " + Path.GetFileName(path) + " to the phone.");
+            }
+            catch (Exception e) { Say("Could not send " + Path.GetFileName(path) + " to the phone: " + e.Message); }
+        }
+    }
+
     static string Body(HttpWebResponse r)
     {
         using (StreamReader rd = new StreamReader(r.GetResponseStream())) return rd.ReadToEnd();
@@ -1343,6 +1441,18 @@ public static class BlazeItPc
                                     s.Start();
                                 }
                                 else StopSecondScreen();
+                            }
+                            else if (ev == "laptopfs" && !snapshot)
+                            {
+                                // The phone asks for a folder here, or a file from it (LaptopFiles on the phone).
+                                string[] q = d.Split(' ');
+                                if (q.Length >= 3)
+                                {
+                                    string id = q[1], path = Encoding.UTF8.GetString(Convert.FromBase64String(q[2]));
+                                    bool get = q[0] == "get";
+                                    Thread f = new Thread(delegate () { if (get) LaptopSend(id, path); else LaptopList(id, path); });
+                                    f.IsBackground = true; f.Start();
+                                }
                             }
                             else if (ev == "mirror" && !snapshot)
                             {
