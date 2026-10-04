@@ -357,10 +357,11 @@ finds any song or album from anywhere on the page.
   bars, the last dozen rising and falling with the music like a level meter, and what is still to
   come is a plain bar. Paused, pointed at or dragged, the whole song is bars again to choose a
   place in (drag up off it to take the seek back).
-- **Across the internet it steps down by itself**, as Spotify and Apple Music do. The page
+- **Across the internet it starts at once and steps down by itself**, as Spotify and Apple Music do. The page
   measures the link and asks for what it carries: the song's own file when there is room, else a
-  CD-quality FLAC copy (16-bit, 44.1 or 48 kHz), else AAC at 256, 128 or 64 kbps. The phone makes
-  the copy, keeps it (up to 1 GB) and gets the next song's ready while this one plays. The line
+  CD-quality FLAC copy (16-bit, 44.1 or 48 kHz), else AAC at 256, 128 or 64 kbps. The phone sends
+  the copy while it is still making it, so a song starts within a second (it took 8 to 10 before),
+  keeps it (up to 1 GB), and makes the next song's alongside. The line
   under the waveform says what you are hearing (*AAC 128 kbps for the internet*).
 - **The queue**: drag on up for every song in the order it will play, to play from, drag into a
   new order by its handle, or take off. The broom removes the songs before or after; **Shuffle**
@@ -475,9 +476,11 @@ debugging on). It uses the cable when one is plugged in.
 ### 15. The laptop's screen on the phone, from anywhere
 
 *Devices → Control → The laptop's screen* (or *Second screen* on the page) shows the laptop on the
-phone, as scrcpy shows a phone on a laptop, the other way round. Tap to click, hold to
-right-click, drag to drag, two fingers to scroll, **pinch to zoom** in on small text (two fingers
-then move round), and the **Keyboard** button types into the laptop.
+phone, as scrcpy shows a phone on a laptop, the other way round, **with its sound**. Tap to click,
+hold to right-click, drag to drag, two fingers to scroll, **pinch to zoom** in on small text (two
+fingers then move round). **Keys** opens what Control's trackpad has: the keyboard, Esc, Tab,
+Ctrl, Alt, Shift and Win (held for the next key or click, so Ctrl+click works), the arrows and
+Del, and the laptop's media keys and volume.
 
 - **In the same room** it is a second screen: with a virtual-display driver on the laptop
   (Windows) or an extra monitor set up with `xrandr` (Linux) it is a real extra monitor, else it
@@ -485,12 +488,22 @@ then move round), and the **Keyboard** button types into the laptop.
   to 4K at 120 frames a second over the cable.
 - **From anywhere**, through the tunnel: the laptop's own main screen, so you can use it while
   away. The laptop helper reaches the phone by itself, so the laptop needs nothing opened up. The
-  picture is made to fit the link: 1280 wide at 24 frames a second from 1.5 Mbit/s; when it backs
-  up on the way it steps down (to 854 wide, 15 frames a second, 300 kbit/s at the least), and after
-  a calm while it steps back up (to 2.5 Mbit/s).
+  picture is made to fit the link: 1024 wide at 20 frames a second from 700 kbit/s, its refresh
+  spread over the frames so the stream stays even. As a video call does, a frame still waiting
+  after half a second is dropped rather than shown late, so the phone shows the laptop as it is
+  now; when many are dropped it steps down (to 854 wide, 15 frames a second, 250 kbit/s at the
+  least), and after a calm minute it steps back up (to 2 Mbit/s).
+- **The sound** goes with the picture: what the laptop's speakers play (Windows' own loopback, or
+  the Pulse monitor on Linux), as AAC at 160 kbit/s nearby and 64 from afar, late sound dropped so
+  it stays with the picture. A Mac sends the picture only.
 - The laptop needs to be on, awake and running the helper. Windows' lock screen and its
   administrator prompts are hidden from screen capture, and protected video (Netflix, Prime Video)
   shows black, as for any screen capture.
+
+**Files on the laptop** (*Devices → Files on the laptop*): the laptop's usual folders and drives,
+then any folder, from anywhere; a tap on a file saves it with what the phone has received. Read
+only. It goes through the helper's own connection to the phone, so nothing on the laptop listens
+and no port is opened.
 
 ### 16. A live monitor
 
