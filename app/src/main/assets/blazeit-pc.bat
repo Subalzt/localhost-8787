@@ -1924,11 +1924,37 @@ public static class BlazeItPc
 
     /**
      * From another network (the phone reached through the tunnel): the laptop's own main screen,
-     * to see and use it, made smaller and sent at what the link carries. Starts at 800 kbit/s (an
-     * Airtel-to-Jio road carries 1 to 1.8 Mbit/s, often less), steps down when the picture backs
-     * up on its way and back up after a calm minute, to 2 Mbit/s at most.
+     * to see and use it, made smaller and sent at what the link carries. Starts where the last time
+     * ended (700 kbit/s the first time), steps down when the picture backs up on its way and up
+     * by half after 20 calm seconds, to 6 Mbit/s (1080p, 30 frames a second) at most; a rate that
+     * backed up is not tried again for three minutes.
      */
     static volatile int remoteKbit = 700;
+    const int MaxKbit = 6000;
+    static int failedKbit = int.MaxValue;
+    static DateTime failedAt;
+    static bool rateRead;
+
+    static string RateFile { get { return Path.Combine(Dir, "screen-rate.txt"); } }
+
+    /** The rate from afar, kept for next time, and said. */
+    static void SetRemoteKbit(int kbit, bool slower)
+    {
+        if (slower) { failedKbit = remoteKbit; failedAt = DateTime.UtcNow; }
+        remoteKbit = kbit;
+        try { File.WriteAllText(RateFile, kbit.ToString()); } catch { }
+        Say(slower ? "The link to the phone is slower: the laptop's screen goes at " + kbit + " kbit/s now."
+                   : "The link to the phone keeps up: the laptop's screen goes at " + kbit + " kbit/s now.");
+    }
+
+    /** The next rate up after a calm stretch, or 0 when there is none to try. */
+    static int NextKbit()
+    {
+        if ((DateTime.UtcNow - failedAt).TotalMinutes > 3) failedKbit = int.MaxValue;
+        int next = Math.Min(MaxKbit, remoteKbit * 3 / 2);
+        if (failedKbit != int.MaxValue) next = Math.Min(next, failedKbit * 85 / 100);
+        return next > remoteKbit * 21 / 20 ? next : 0;
+    }
 
     static Displays.Mon MainScreen()
     {
@@ -1952,6 +1978,13 @@ public static class BlazeItPc
                 return;
             }
             Displays.Mon target = remote ? MainScreen() : PrepareScreen(w, h, true);
+            if (remote && !rateRead)
+            {
+                // Where the last time ended, a little under it, rather than climbing from the bottom again.
+                rateRead = true;
+                int saved;
+                try { if (int.TryParse(File.ReadAllText(RateFile).Trim(), out saved)) remoteKbit = Math.Max(250, Math.Min(MaxKbit, saved * 85 / 100)); } catch { }
+            }
             if (http) StartSound(ff, at, remote);
             string said = null;
             int failures = 0;
@@ -2144,8 +2177,9 @@ public static class BlazeItPc
     {
         int adapter, output; string adapterName;
         if (!Dxgi.Find(target.Device, out adapter, out output, out adapterName)) { adapter = -1; output = -1; adapterName = ""; }
-        int wide = kbit >= 1200 ? 1280 : kbit >= 500 ? 1024 : 854;
-        int fps = kbit >= 500 ? 20 : 15;
+        int wide = kbit >= 4000 ? 1920 : kbit >= 2400 ? 1600 : kbit >= 1200 ? 1280 : kbit >= 500 ? 1024 : 854;
+        if (target.W > 0 && wide > target.W) wide = target.W & ~1;
+        int fps = kbit >= 2400 ? 30 : kbit >= 500 ? 20 : 15;
         string label = "setparams=color_primaries=bt470bg:color_trc=smpte170m";
         string scale = "scale=" + wide + ":-2:flags=bilinear,format=yuv420p";
         // No large picture every few seconds: the refresh is spread over the frames (intra refresh),
@@ -2356,6 +2390,11 @@ public static class BlazeItPc
             string sid = Guid.NewGuid().ToString("N").Substring(0, 12);
             long sentBytes = 0;
             DateTime began = DateTime.UtcNow;
+            // How long the phone's word takes to come back (the way there, its 0.2 s between words,
+            // the way back), the least seen in each ten seconds: the picture let out is that much
+            // plus 0.3 s, or the stream could never run at its own rate across a slow road.
+            var sentAt = new Queue<KeyValuePair<long, DateTime>>();
+            double rtt = 0.7, rttLeast = double.MaxValue;
             HttpWebRequest req = StreamRequest(at, sid);
             using (Stream o = req.GetRequestStream())
             {
@@ -2363,10 +2402,12 @@ public static class BlazeItPc
                 DateTime window = DateTime.UtcNow;
                 while (true)
                 {
-                    long room = Math.Max(24 * 1024, (long)remoteKbit * 1000 / 8 * 3 / 10);
+                    long room = Math.Max(24 * 1024, (long)(remoteKbit * 1000 / 8 * (Math.Min(rtt, 2.0) + 0.3)));
                     while (true)
                     {
                         long acked = AckedFor(sid);
+                        while (sentAt.Count > 0 && acked >= sentAt.Peek().Key)
+                            rttLeast = Math.Min(rttLeast, (DateTime.UtcNow - sentAt.Dequeue().Value).TotalSeconds);
                         if (acked < 0 && (DateTime.UtcNow - began).TotalSeconds > 3) break;
                         if (sentBytes - Math.Max(0, acked) <= room) break;
                         Thread.Sleep(5);
@@ -2388,21 +2429,24 @@ public static class BlazeItPc
                     o.Write(f, 0, f.Length);
                     o.Flush();
                     sentBytes += f.Length;
+                    sentAt.Enqueue(new KeyValuePair<long, DateTime>(sentBytes, DateTime.UtcNow));
+                    if (sentAt.Count > 4000) sentAt.Dequeue();
                     if ((DateTime.UtcNow - window).TotalSeconds < 10) continue;
                     window = DateTime.UtcNow;
+                    if (rttLeast < 5) rtt = rttLeast;
+                    rttLeast = double.MaxValue;
                     if (dropped > 20 && remoteKbit > 250)
                     {
-                        remoteKbit = Math.Max(250, remoteKbit * 6 / 10);
-                        Say("The link to the phone is slower: the laptop's screen goes at " + remoteKbit + " kbit/s now.");
+                        SetRemoteKbit(Math.Max(250, remoteKbit * 6 / 10), true);
                         why = "rate";
                         break;
                     }
                     calm = dropped == 0 ? calm + 10 : 0;
                     dropped = 0;
-                    if (calm >= 60 && remoteKbit < 2000)
+                    int up = calm >= 20 ? NextKbit() : 0;
+                    if (up > 0)
                     {
-                        remoteKbit = Math.Min(2000, remoteKbit * 13 / 10);
-                        Say("The link to the phone keeps up: the laptop's screen goes at " + remoteKbit + " kbit/s now.");
+                        SetRemoteKbit(up, false);
                         why = "rate";
                         break;
                     }
