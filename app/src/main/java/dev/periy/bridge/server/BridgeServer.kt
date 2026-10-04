@@ -524,6 +524,22 @@ class BridgeServer(
             call.respondBytes(favourites.json().toByteArray(), ContentType.Application.Json)
         }
 
+        // The equalizer: one for the phone's player and every page's; the curves to choose from come with it.
+        get("/api/music/eq") {
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respond((ctx.applicationContext as dev.periy.bridge.BridgeApp).container.eq.dto())
+        }
+        put("/api/music/eq") {
+            val s = runCatching { call.receive<dev.periy.bridge.music.EqState>() }.getOrNull()
+            if (s == null) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "On or off, the curve and its ten gains"))
+                return@put
+            }
+            val store = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.eq
+            store.set(s)
+            call.respond(store.dto())
+        }
+
         get("/api/music/art/{albumId}") {
             val albumId = call.parameters["albumId"]?.toLongOrNull()
             // ?s=128 or 384: a small WebP for a row or a tile, a tenth of the full cover's bytes.

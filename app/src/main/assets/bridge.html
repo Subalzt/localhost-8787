@@ -1409,6 +1409,30 @@
   :root.nm-dark .np-bubble { background: #232323; color: rgba(255,255,255,.824); }
   .np-slider.drag .np-bubble { transform: translateX(-50%) scale(1); }
   .np-card-actions { display: flex; justify-content: flex-end; align-items: center; gap: 6px; padding: 12px 16px; }
+  /* The equalizer: its line in Configure, and its own card. */
+  .np-eq-line { display: flex; align-items: center; width: calc(100% - 16px); margin: 8px 8px 0; padding: 10px 14px 10px 4px; border: 0; border-radius: 12px;
+    background: none; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+  .np-eq-line:hover { background: color-mix(in srgb, var(--nm-icon) 8%, transparent); }
+  .np-eq-line i { display: grid; place-items: center; padding: 0 6px; margin-right: 6px; color: var(--nm-secondary, var(--txt)); }
+  .np-eq-line i svg { width: 24px; height: 24px; }
+  .np-eq-line b { flex: 1 1 auto; font-size: 14.4px; font-weight: 700; color: var(--nm-large, var(--txt)); }
+  .np-eq-line em { font-style: normal; font-size: 12.15px; font-weight: 600; color: var(--nm-medium, var(--sub)); }
+  .np-eq-line .np-eq-go { margin: 0 0 0 6px; padding: 0; transform: rotate(180deg); color: var(--nm-icon); }
+  .np-eq-line .np-eq-go svg { width: 16px; height: 16px; }
+  .np-eq-card { width: min(470px, calc(100% - 44px)); }
+  .np-eq-title { position: relative; }
+  .np-eq-switch { position: absolute; right: 14px; top: 50%; width: 44px; height: 26px; padding: 0; border: 0; border-radius: 13px; cursor: pointer; transform: translateY(-50%);
+    background: color-mix(in srgb, var(--nm-secondary, #888) 28%, transparent); transition: background .2s; }
+  .np-eq-switch i { position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+    transition: transform .28s cubic-bezier(.3, 1.4, .5, 1); }
+  .np-eq-switch[aria-checked="true"] { background: var(--nm-primary); }
+  .np-eq-switch[aria-checked="true"] i { transform: translateX(18px); }
+  .np-eq-c { display: block; width: calc(100% - 24px); height: 210px; margin: 12px 12px 4px; touch-action: none; cursor: ns-resize; }
+  .np-eq-presets { display: flex; gap: 6px; overflow-x: auto; padding: 4px 14px; scrollbar-width: none; }
+  .np-eq-presets button { flex: 0 0 auto; padding: 7px 11px; border: 0; border-radius: 9px; cursor: pointer; font: 500 12.5px "Lexend Deca", system-ui, sans-serif;
+    color: var(--nm-small, var(--sub)); background: color-mix(in srgb, var(--nm-sec, var(--surface-2)) 40%, transparent); }
+  .np-eq-presets button.on { color: var(--nm-on-sec, var(--txt)); background: var(--nm-sec, var(--surface-3)); }
+  .np-eq-note { margin: 0; padding: 8px 20px; font-size: 11px; color: var(--nm-small, var(--sub)); }
   .np-card-actions .np-reset { padding: 0 8px; }
   .np-card-actions .np-reset svg { width: 24px; height: 24px; }
   /* Namida's button: a faint wash of the colour with a hairline edge in it, capsule, words alone given room. */
@@ -2716,8 +2740,21 @@
           <div class="np-sl-head"><i data-nx="volume" id="np-vol-i"></i><b>Volume</b><em id="np-vol-v">100.0%</em><button type="button" class="np-restore" id="np-vol-r" data-nx="reset" title="Volume back to normal" aria-label="Volume back to normal"></button></div>
           <div class="np-sl-row"><button type="button" class="np-step" data-for="np-vol" data-by="-1" data-nx="back" title="Quieter" aria-label="Quieter"></button><span class="np-slider"><input id="np-vol" type="range" min="0" max="100" step="1" value="100" aria-label="Volume"><output class="np-bubble" aria-hidden="true"></output></span><button type="button" class="np-step" data-for="np-vol" data-by="1" data-nx="stepUp" title="Louder" aria-label="Louder"></button></div>
         </div>
+        <button type="button" class="np-eq-line" id="np-eq-line"><i data-nx="sound"></i><b>Equalizer</b><em id="np-eq-v">Off</em><i class="np-eq-go" data-nx="back"></i></button>
       </div>
       <div class="np-card-actions"><button type="button" class="np-step np-reset" id="np-reset" title="Put them all back" aria-label="Put them all back" data-nx="reset"></button><button type="button" class="np-done" id="np-done">Done</button></div>
+    </div>
+  </div>
+  <!-- The equalizer: the switch on the title band, the curve with a point for each band to drag,
+       the famous curves along a row, how far the level comes down; flat and Done. -->
+  <div class="np-sheet" id="np-eq-sheet" hidden>
+    <div class="np-scrim" id="np-eq-scrim"></div>
+    <div class="np-card np-eq-card" role="dialog" aria-label="Equalizer">
+      <div class="np-card-title np-eq-title">Equalizer<button type="button" class="np-eq-switch" id="np-eq-on" role="switch" aria-checked="false" aria-label="Equalizer on"><i></i></button></div>
+      <canvas class="np-eq-c" id="np-eq-c" role="img" aria-label="Equalizer curve: drag a band's point up or down, double-click it for 0"></canvas>
+      <div class="np-eq-presets" id="np-eq-presets"></div>
+      <p class="np-eq-note" id="np-eq-note"></p>
+      <div class="np-card-actions"><button type="button" class="np-step np-reset" id="np-eq-flat" title="Flat" aria-label="Flat" data-nx="reset"></button><button type="button" class="np-done" id="np-eq-done">Done</button></div>
     </div>
   </div>
 </div>
@@ -5298,6 +5335,7 @@ function connectEvents() {
   events.addEventListener("look", function (e) { try { applyLook(JSON.parse(e.data)); } catch (err) {} });
   events.addEventListener("cover", function (e) { coverArrived(e.data); });
   events.addEventListener("favourites", function (e) { try { setFavourites(JSON.parse(e.data)); } catch (err) {} });
+  events.addEventListener("eq", function (e) { if (Date.now() - eq.mine > 800 && eq.held < 0) try { eqTake(JSON.parse(e.data)); } catch (err) {} });
   // The phone's links changed: the helper may be moving this page onto another one.
   events.addEventListener("direct", function () { setTimeout(refreshRoute, 1500); setTimeout(refreshRoute, 5000); });
   events.addEventListener("files", function (e) {
@@ -7084,9 +7122,20 @@ function vizEnsure() {
     var an = ctx.createAnalyser();
     an.fftSize = 1024;
     an.smoothingTimeConstant = 0.7;
-    src.connect(an);
+    // The equalizer on the way: the level, then a peaking filter for each band (0 dB while it is off).
+    var pre = ctx.createGain(), last = pre;
+    src.connect(pre);
+    eq.nodes = eq.bands.map(function (f, i) {
+      var b = ctx.createBiquadFilter(), k = eqKind(i);
+      b.type = k[0]; b.frequency.value = k[1]; b.Q.value = eq.q; b.gain.value = 0;
+      last.connect(b); last = b;
+      return b;
+    });
+    eq.pre = pre;
+    last.connect(an);
     an.connect(ctx.destination);
     viz.ctx = ctx; viz.an = an; viz.data = new Uint8Array(an.frequencyBinCount);
+    eqApply();
     if (ctx.state === "suspended") ctx.resume().catch(function () {});
   } catch (e) { viz.failed = true; }
 }
@@ -8160,9 +8209,8 @@ function npDrawWave() {
   var x = npCanvas(c, w, h), t = npTrack(), env = t ? np.env[t.id] : null;
   // Namida's waveform, as a voice recorder draws one: many fine bars close together, growing in
   // as the song's loudness arrives; what has played in the text colour, the rest faint. While the
-  // song plays the rest settles into a plain bar, and the last few bars played move with the
-  // music like a level meter, the bars behind them its history; paused, or under a mouse or a
-  // finger, the whole song is bars again to choose a place in.
+  // song plays the last few bars played move with the music like a level meter, the bars behind
+  // them its history, and what is to come stays in view, faint.
   var pitch = 3, bw = 1.7, n = Math.max(8, Math.floor(w / pitch));
   if (np.barsFor !== (t && t.id) + ":" + n + ":" + !!env) { np.bars = npBarsSpread(env, n); np.barsFor = (t && t.id) + ":" + n + ":" + !!env; }
   var bars = np.bars, step = n > 1 ? (w - bw) / (n - 1) : 0, minH = 3, cy = h / 2, grow = np.grow;
@@ -8189,15 +8237,8 @@ function npDrawWave() {
   // there sits on a small pill at the pointer.
   var hx = np.hover !== null && np.seek === null && dur > 0 ? npClamp(np.hover / dur, 0, 1) * w : -1;
   var live = np.live;
-  // What is still to come: faint bars, or while it plays, the bars settle into a plain bar.
-  if (live < 0.99) band(played, w, ".22", live);
-  if (live > 0.01 && played < w) {
-    var th = 4;
-    x.fillStyle = "rgba(" + rgb + "," + (0.24 * live).toFixed(3) + ")";
-    x.beginPath();
-    if (x.roundRect) x.roundRect(played, cy - th / 2, w - played, th, th / 2); else x.rect(played, cy - th / 2, w - played, th);
-    x.fill();
-  }
+  // What is still to come: faint bars, the song's shape ahead.
+  band(played, w, ".22");
   if (hx >= 0 && hx > played) { band(0, played, ".9"); band(played, hx, ".5"); }
   else if (hx >= 0) { band(0, hx, ".9"); band(hx, played, ".55"); }
   else if (played > 0) {
@@ -8578,6 +8619,7 @@ function likedChanged() {
 
 function loadFavourites() {
   api("/api/music/favourites").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { if (j) setFavourites(j); }).catch(function () {});
+  eqLoad();
 }
 
 function toggleFavourite(id) {
@@ -8628,6 +8670,7 @@ function npSoundPaint() {
   $("np-vol-v").textContent = v.toFixed(1) + "%";
   sp.parentNode.querySelector(".np-bubble").textContent = Math.round(np.speed * 100) + "%";
   vo.parentNode.querySelector(".np-bubble").textContent = v + "%";
+  $("np-eq-v").textContent = eqName();
   var vi = $("np-vol-i"), vn = v === 0 ? "mute" : "volume";
   if (vi.dataset.nx !== vn) { vi.dataset.nx = vn; vi.innerHTML = nx(vn); }
 }
@@ -8647,6 +8690,284 @@ function npSoundClose() {
   sh.classList.remove("in");
   clearTimeout(np.sheetTimer);
   np.sheetTimer = setTimeout(function () { if (!sh.classList.contains("in")) sh.hidden = true; }, 300);
+}
+
+// ---- the equalizer
+//
+// A ten-band graphic equalizer, as a hi-fi has one, the same setting as the phone's player (kept on
+// the phone, told to every page): bands an octave apart from 32 Hz to 16 kHz, made the accurate way
+// (Valimaki and Liski, 2017): a peaking filter 1.5 octaves wide for each band between, shelves for the
+// ends, and each filter's gain solved so the curve passes exactly through the points set. The curve
+// drawn is what Web Audio plays; the level comes down by its highest boost, so a boost never clips.
+var eq = {
+  on: false, preset: "flat", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  bands: [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000], q: 0.92, lowShelf: 45, highShelf: 11300, max: 12, presets: [],
+  nodes: null, pre: null, shown: null, held: -1, mine: 0, raf: 0, saveTimer: 0, lastTap: 0, lastBand: -1,
+};
+
+/** Band i's filter: Web Audio's type and frequency for it. */
+function eqKind(i) {
+  var last = eq.bands.length - 1;
+  return i === 0 ? ["lowshelf", eq.lowShelf] : i === last ? ["highshelf", eq.highShelf] : ["peaking", eq.bands[i]];
+}
+
+/** One filter's level at f Hz in dB, at gain g: the RBJ formulas Web Audio's own filters use. */
+function eqOne(i, g, f) {
+  if (!g) return 0;
+  var k = eqKind(i), fs = 48000, A = Math.pow(10, g / 40), w0 = 2 * Math.PI * k[1] / fs, cw = Math.cos(w0), sw = Math.sin(w0), c;
+  if (k[0] === "peaking") {
+    var al = sw / (2 * eq.q);
+    c = [1 + al * A, -2 * cw, 1 - al * A, 1 + al / A, -2 * cw, 1 - al / A];
+  } else {
+    var sa = 2 * Math.sqrt(A) * sw / 2 * Math.SQRT2;
+    c = k[0] === "lowshelf"
+      ? [A * ((A + 1) - (A - 1) * cw + sa), 2 * A * ((A - 1) - (A + 1) * cw), A * ((A + 1) - (A - 1) * cw - sa), (A + 1) + (A - 1) * cw + sa, -2 * ((A - 1) + (A + 1) * cw), (A + 1) + (A - 1) * cw - sa]
+      : [A * ((A + 1) + (A - 1) * cw + sa), -2 * A * ((A - 1) + (A + 1) * cw), A * ((A + 1) + (A - 1) * cw - sa), (A + 1) - (A - 1) * cw + sa, 2 * ((A - 1) - (A + 1) * cw), (A + 1) - (A - 1) * cw - sa];
+  }
+  var w = 2 * Math.PI * f / fs, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
+  var nr = c[0] + c[1] * c1 + c[2] * c2, ni = -(c[1] * s1 + c[2] * s2), dr = c[3] + c[4] * c1 + c[5] * c2, di = -(c[4] * s1 + c[5] * s2);
+  return 10 * Math.log10((nr * nr + ni * ni) / (dr * dr + di * di));
+}
+
+/**
+ * Each filter's gain for the points set: how much each filter moves each point (per dB, at about
+ * the gain it will have) is a 10 by 10 table; solving it three times over, as the gains settle,
+ * gives gains whose curve meets every point. Kept for the last points asked.
+ */
+function eqSolve(t) {
+  var key = t.join();
+  if (eq.solvedFor === key) return eq.solved;
+  var n = eq.bands.length, g = t.slice();
+  if (t.every(function (v) { return !v; })) g = t.map(function () { return 0; });
+  else for (var it = 0; it < 3; it++) {
+    var m = eq.bands.map(function (fr, r) {
+      return eq.bands.map(function (_, c) { var gc = Math.abs(g[c]) > 0.5 ? g[c] : 6; return eqOne(c, gc, fr) / gc; }).concat([t[r]]);
+    });
+    for (var col = 0; col < n; col++) {
+      var p = col;
+      for (var r = col + 1; r < n; r++) if (Math.abs(m[r][col]) > Math.abs(m[p][col])) p = r;
+      var tmp = m[col]; m[col] = m[p]; m[p] = tmp;
+      for (var r2 = 0; r2 < n; r2++) if (r2 !== col) { var k = m[r2][col] / m[col][col]; for (var j = col; j <= n; j++) m[r2][j] -= k * m[col][j]; }
+    }
+    g = m.map(function (row, i) { return npClamp(row[n] / row[i], -24, 24); });
+  }
+  eq.solvedFor = key; eq.solved = g;
+  return g;
+}
+
+/** The curve's level at f Hz in dB, for the points set. */
+function eqDb(t, f) {
+  var g = eqSolve(t), s = 0;
+  for (var i = 0; i < g.length; i++) s += eqOne(i, g[i], f);
+  return s;
+}
+
+/** The curve's highest point from 20 Hz to 20 kHz (0 when it only cuts). */
+function eqPeak(t) {
+  var top = 0;
+  for (var k = 0; k <= 240; k++) top = Math.max(top, eqDb(t, 20 * Math.pow(1000, k / 240)));
+  return top;
+}
+
+function eqName() {
+  if (!eq.on) return "Off";
+  var p = eq.presets.filter(function (x) { return x.id === eq.preset; })[0];
+  return p ? p.name : "Custom";
+}
+
+function eqLoad() {
+  api("/api/music/eq").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) { if (d) eqTake(d); }).catch(function () {});
+}
+
+function eqTake(d) {
+  if (d.presets) { eq.presets = d.presets; eq.max = d.max || eq.max; }
+  eq.on = !!d.on;
+  eq.preset = d.preset || "custom";
+  eq.gains = eq.bands.map(function (f, i) { return +((d.gains || [])[i] || 0); });
+  eqApply();
+  eqPaint();
+}
+
+/** Sets the filters and the level to the curve (gently, so a change never clicks). */
+function eqApply() {
+  if (!viz.ctx || !eq.nodes) return;
+  var t = viz.ctx.currentTime;
+  var g = eqSolve(eq.gains);
+  eq.nodes.forEach(function (n, i) { n.gain.setTargetAtTime(eq.on ? g[i] : 0, t, 0.03); });
+  eq.pre.gain.setTargetAtTime(eq.on ? Math.pow(10, -eqPeak(eq.gains) / 20) : 1, t, 0.03);
+}
+
+/** A change made here: played at once, told to the phone a moment later. */
+function eqChanged() {
+  eq.mine = Date.now();
+  eqApply();
+  eqPaint();
+  clearTimeout(eq.saveTimer);
+  eq.saveTimer = setTimeout(function () {
+    api("/api/music/eq", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on: eq.on, preset: eq.preset, gains: eq.gains }) }).catch(function () {});
+  }, 150);
+}
+
+function eqSetBand(i, db) {
+  eq.gains[i] = db;
+  eq.on = true;
+  var same = eq.presets.filter(function (p) { return p.gains.every(function (v, k) { return Math.abs(v - eq.gains[k]) < 0.01; }); })[0];
+  eq.preset = same ? same.id : "custom";
+  eqChanged();
+}
+
+function eqOpen() {
+  var sh = $("np-eq-sheet");
+  if (!sh.hidden) return;
+  npSoundClose();
+  if (!eq.presets.length) eqLoad();
+  sh.hidden = false;
+  eqPaint();
+  void sh.offsetWidth;
+  sh.classList.add("in");
+}
+
+function eqClose() {
+  var sh = $("np-eq-sheet");
+  if (sh.hidden) return;
+  sh.classList.remove("in");
+  setTimeout(function () { if (!sh.classList.contains("in")) sh.hidden = true; }, 300);
+}
+
+function eqPaint() {
+  if ($("np-eq-v")) $("np-eq-v").textContent = eqName();
+  var sh = $("np-eq-sheet");
+  if (!sh || sh.hidden) return;
+  $("np-eq-on").setAttribute("aria-checked", eq.on ? "true" : "false");
+  var row = $("np-eq-presets"), list = eq.presets.concat(eq.preset === "custom" ? [{ id: "custom", name: "Custom" }] : []);
+  if (row.dataset.ids !== list.map(function (p) { return p.id; }).join()) {
+    row.dataset.ids = list.map(function (p) { return p.id; }).join();
+    row.innerHTML = "";
+    list.forEach(function (p) {
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = p.name; b.dataset.id = p.id;
+      b.onclick = function () {
+        if (p.gains) { eq.preset = p.id; eq.gains = p.gains.slice(); }
+        eq.on = true;
+        eqChanged();
+      };
+      row.appendChild(b);
+    });
+  }
+  Array.prototype.forEach.call(row.children, function (b) { b.classList.toggle("on", eq.on && b.dataset.id === eq.preset); });
+  var peak = eqPeak(eq.gains);
+  $("np-eq-note").textContent = !eq.on ? "Off: the music plays as it was made."
+    : peak > 0.05 ? "The level comes down " + peak.toFixed(1) + " dB, so a boost never clips." : "Cuts only, so the level stays as it is.";
+  if (!eq.raf) eq.raf = requestAnimationFrame(eqDraw);
+}
+
+/** Where things sit on the curve's canvas, for drawing and for the pointer alike. */
+function eqGeo(c) {
+  var w = c.clientWidth, h = c.clientHeight, left = 30, pad = 10, bottom = 18;
+  return {
+    w: w, h: h, left: left, top: pad, pw: w - left - pad, ph: h - bottom - pad,
+    x: function (f) { return left + (w - left - pad) * Math.log(f / 20) / Math.log(1000); },
+    y: function (db) { return pad + (h - bottom - pad) * (1 - npClamp((db + eq.max) / (2 * eq.max), 0, 1)); },
+    db: function (y) { var v = (1 - (y - pad) / (h - bottom - pad)) * 2 * eq.max - eq.max; return npClamp(Math.round(v * 2) / 2, -eq.max, eq.max); },
+  };
+}
+
+function eqDraw() {
+  eq.raf = 0;
+  var c = $("np-eq-c");
+  if ($("np-eq-sheet").hidden || !c.clientWidth) return;
+  // The curve eases to a new setting instead of jumping; the band held follows the pointer at once.
+  if (!eq.shown) eq.shown = eq.gains.slice();
+  var moving = false;
+  for (var i = 0; i < eq.gains.length; i++) {
+    var d = eq.gains[i] - eq.shown[i];
+    if (i === eq.held || Math.abs(d) < 0.02) eq.shown[i] = eq.gains[i]; else { eq.shown[i] += d * 0.25; moving = true; }
+  }
+  var g = eqGeo(c), x = npCanvas(c, g.w, g.h), cs = getComputedStyle(c);
+  var line = cs.getPropertyValue("--nm-primary").trim() || "#FA2D48", txt = cs.color || "#FFFFFF";
+  var dim = eq.on ? 1 : 0.4;
+  x.font = "500 9.5px 'Lexend Deca', system-ui, sans-serif";
+  x.textBaseline = "middle";
+  // dB lines (0 brighter) with their figures, and a line up from each band with its frequency.
+  [12, 6, 0, -6, -12].forEach(function (db) {
+    var y = Math.round(g.y(db)) + 0.5;
+    x.strokeStyle = txt; x.globalAlpha = db === 0 ? 0.2 : 0.08; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(g.left, y); x.lineTo(g.left + g.pw, y); x.stroke();
+    x.globalAlpha = 0.6; x.fillStyle = txt; x.textAlign = "right";
+    x.fillText(db > 0 ? "+" + db : String(db), g.left - 6, y);
+  });
+  var names = ["32", "64", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"];
+  eq.bands.forEach(function (f, i) {
+    var bx = Math.round(g.x(f)) + 0.5;
+    x.globalAlpha = 0.08; x.beginPath(); x.moveTo(bx, g.top); x.lineTo(bx, g.top + g.ph); x.stroke();
+    x.globalAlpha = 0.6; x.textAlign = "center"; x.fillText(names[i] || "", bx, g.top + g.ph + 10);
+  });
+  // The curve as it plays, filled to the 0 line.
+  var zero = g.y(0), pts = [];
+  for (var k = 0; k <= 180; k++) { var f = 20 * Math.pow(1000, k / 180); pts.push([g.x(f), g.y(eqDb(eq.shown, f))]); }
+  var grad = x.createLinearGradient(0, g.top, 0, g.top + g.ph);
+  grad.addColorStop(0, line); grad.addColorStop(0.5, "transparent"); grad.addColorStop(1, line);
+  x.globalAlpha = 0.28 * dim; x.fillStyle = grad;
+  x.beginPath(); x.moveTo(pts[0][0], zero);
+  pts.forEach(function (p) { x.lineTo(p[0], p[1]); });
+  x.lineTo(pts[pts.length - 1][0], zero); x.closePath(); x.fill();
+  x.globalAlpha = dim; x.strokeStyle = line; x.lineWidth = 2.4; x.lineJoin = "round"; x.lineCap = "round";
+  x.beginPath(); pts.forEach(function (p, j) { if (j) x.lineTo(p[0], p[1]); else x.moveTo(p[0], p[1]); }); x.stroke();
+  // A point for each band at its own setting; the one held larger, with its figure over it.
+  var card = getComputedStyle($("np-eq-sheet").querySelector(".np-card")).backgroundColor;
+  eq.bands.forEach(function (f, i) {
+    var px = g.x(f), py = g.y(eq.shown[i]), r = i === eq.held ? 8 : 6;
+    x.globalAlpha = 1; x.fillStyle = card; x.beginPath(); x.arc(px, py, r + 2, 0, Math.PI * 2); x.fill();
+    x.globalAlpha = dim; x.fillStyle = line; x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.fill();
+    if (i === eq.held) {
+      var label = (eq.shown[i] > 0 ? "+" : "") + eq.shown[i].toFixed(1) + " dB";
+      x.font = "600 11px 'Lexend Deca', system-ui, sans-serif";
+      var tw = x.measureText(label).width + 12, th = 20, tx = npClamp(px - tw / 2, g.left, g.left + g.pw - tw), ty = py - r - th - 6;
+      if (ty < 0) ty = py + r + 6;
+      x.globalAlpha = 1; x.fillStyle = line;
+      x.beginPath(); if (x.roundRect) x.roundRect(tx, ty, tw, th, th / 2); else x.rect(tx, ty, tw, th); x.fill();
+      x.fillStyle = card; x.textAlign = "center"; x.fillText(label, tx + tw / 2, ty + th / 2 + 0.5);
+      x.font = "500 9.5px 'Lexend Deca', system-ui, sans-serif";
+    }
+  });
+  x.globalAlpha = 1;
+  if (moving || eq.held >= 0) eq.raf = requestAnimationFrame(eqDraw);
+}
+
+function eqWire() {
+  nxFill($("np-eq-sheet"));
+  nxFill($("np-eq-line"));
+  $("np-eq-line").onclick = eqOpen;
+  $("np-eq-scrim").onclick = $("np-eq-done").onclick = eqClose;
+  $("np-eq-on").onclick = function () { eq.on = !eq.on; eqChanged(); };
+  $("np-eq-flat").onclick = function () { var f = eq.presets[0]; eq.preset = "flat"; eq.gains = f ? f.gains.slice() : eq.gains.map(function () { return 0; }); eqChanged(); };
+  var c = $("np-eq-c"), drag = null;
+  function nearest(e) {
+    var g = eqGeo(c), r = c.getBoundingClientRect(), mx = e.clientX - r.left, best = 0;
+    eq.bands.forEach(function (f, i) { if (Math.abs(g.x(f) - mx) < Math.abs(g.x(eq.bands[best]) - mx)) best = i; });
+    return best;
+  }
+  c.addEventListener("pointerdown", function (e) {
+    var band = nearest(e), now = Date.now();
+    // A second press on the same point soon after: back to 0.
+    if (band === eq.lastBand && now - eq.lastTap < 300) { eq.lastBand = -1; eqSetBand(band, 0); return; }
+    eq.lastTap = now; eq.lastBand = band;
+    drag = { band: band, y0: e.clientY, moved: false };
+    c.setPointerCapture(e.pointerId);
+    eq.held = band;
+    eqPaint();
+  });
+  c.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    if (!drag.moved && Math.abs(e.clientY - drag.y0) < 4) return;
+    drag.moved = true;
+    var db = eqGeo(c).db(e.clientY - c.getBoundingClientRect().top);
+    if (db !== eq.gains[drag.band]) eqSetBand(drag.band, db);
+  });
+  function up() { drag = null; eq.held = -1; eqPaint(); }
+  c.addEventListener("pointerup", up);
+  c.addEventListener("pointercancel", up);
+  window.addEventListener("resize", function () { if (!$("np-eq-sheet").hidden) eqPaint(); });
 }
 
 /** Called for every song the player shows (showPlayer). */
@@ -9341,6 +9662,7 @@ function setupFullPlayer() {
   var nl = $("npl-list");
   ["wheel", "touchmove"].forEach(function (ev) { nl.addEventListener(ev, function () { npl.userAt = performance.now(); }, { passive: true }); });
   $("np-scrim").onclick = $("np-done").onclick = npSoundClose;
+  eqWire();
   $("np-speed").addEventListener("input", function () { npSetSpeed(parseFloat(this.value)); });
   $("np-vol").addEventListener("input", function () {
     var vol = $("pl-vol");
@@ -9388,7 +9710,8 @@ function setupFullPlayer() {
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Escape" || !np.shown || !$("viewer").hidden) return;
     e.preventDefault();
-    if (!$("np-sheet").hidden) npSoundClose();
+    if (!$("np-eq-sheet").hidden) eqClose();
+    else if (!$("np-sheet").hidden) npSoundClose();
     else if (np.p > 1.5) npGo(1); else npCollapse();
   });
 }

@@ -96,6 +96,13 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
     private var wantPlay = false
     private var restored = false
 
+    /** One audio session for every player made here, so the equalizer on it carries from song to song. */
+    private val session = audio.generateAudioSessionId()
+    private val eq = EqEngine(session)
+
+    /** The equalizer's curve (EqStore), applied to the phone's music from now on. */
+    fun applyEq(s: EqState) { if (session > 0) eq.apply(s) }
+
     private val attrs = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_MEDIA)
         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -449,6 +456,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
     }
 
     private fun newPlayer() = MediaPlayer().apply {
+        if (session > 0) audioSessionId = session
         setAudioAttributes(attrs)
         setWakeMode(app, PowerManager.PARTIAL_WAKE_LOCK)
     }

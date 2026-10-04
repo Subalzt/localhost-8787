@@ -126,9 +126,8 @@ import kotlin.math.roundToInt
 /**
  * The seek bar, drawn as the song's own waveform: faint where it is still to come, nearly solid
  * where it has played. It grows up out of a flat line the moment the song's loudness is known.
- * While the song plays the rest settles into a plain bar, and the last few bars played move with
- * the music like a level meter, the bars behind them its history; paused or touched, the whole
- * song is bars again. Touch and drag to choose a place ([onScrub] says where, to show it); let go to go
+ * While the song plays the last few bars played move with the music like a level meter, the bars
+ * behind them its history, and what is to come stays in view, faint. Touch and drag to choose a place ([onScrub] says where, to show it); let go to go
  * there. Dragging up off it takes the seek back, with a tick to say so.
  */
 @Composable
@@ -246,15 +245,8 @@ internal fun WaveSeek(
                 }
                 meter[METER] = now
 
-                // Still to come: faint bars, settling into a plain bar while the song plays.
-                if (k < 0.99f) clipRect(left = playedX) { drawBars(color = track, flat = k) }
-                if (k > 0.01f && playedX < size.width) {
-                    val th = 3.dp.toPx()
-                    drawRoundRect(
-                        nc.onSurface.copy(alpha = 0.24f * k), Offset(playedX, cy - th / 2),
-                        Size(size.width - playedX, th), CornerRadius(th / 2),
-                    )
-                }
+                // Still to come: faint bars, the song's shape ahead.
+                clipRect(left = playedX) { drawBars(color = track) }
                 if (playedX <= 0f) return@drawBehind
                 // Played: the bars, the last few leaning towards the meter while the song plays.
                 val last = ((playedX - gap) / step).toInt().coerceIn(0, n - 1)
@@ -585,7 +577,7 @@ private fun wholePercent(v: Float) = "${(v * 100).roundToInt()}%"
  * the foot. Back (which it follows as it is swiped), a tap outside or Done lets it go.
  */
 @Composable
-internal fun SoundSheet(player: PhonePlayer, state: PhonePlayer.State, fade: MutableFloatState, onClose: () -> Unit) {
+internal fun SoundSheet(player: PhonePlayer, state: PhonePlayer.State, fade: MutableFloatState, onEqualizer: () -> Unit, onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
     val shown = remember { Animatable(0f) }
     var closing by remember { mutableStateOf(false) }
@@ -667,6 +659,23 @@ internal fun SoundSheet(player: PhonePlayer, state: PhonePlayer.State, fade: Mut
                 )
                 CuteSlider(state.volume, 0f, 1f, 0.01f, 0.01f, ::wholePercent) { set(volume = it) }
                 Spacer(Modifier.height(6.dp))
+                // The equalizer: what it is set to, and a tap opens it.
+                val eq by androidx.compose.ui.platform.LocalContext.current.container.eq.state.collectAsState()
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onEqualizer)
+                        .padding(start = 4.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Iconsax.Sound, null, tint = nc.secondary, modifier = Modifier.padding(horizontal = 6.dp).size(24.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Equalizer", style = Nm.large.copy(fontSize = 16.nsp), modifier = Modifier.weight(1f))
+                    Text(
+                        if (!eq.on) "Off" else dev.periy.bridge.music.EqMath.PRESETS.firstOrNull { it.id == eq.preset }?.name ?: "Custom",
+                        style = Nm.medium.copy(fontSize = 13.5.nsp), maxLines = 1,
+                    )
+                    Icon(Iconsax.Back, null, tint = nc.icon, modifier = Modifier.padding(start = 6.dp).size(16.dp).graphicsLayer { rotationZ = 180f })
+                }
+                Spacer(Modifier.height(4.dp))
             }
             // Reset all, and Done.
             Row(

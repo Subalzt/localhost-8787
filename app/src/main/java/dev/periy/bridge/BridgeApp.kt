@@ -43,6 +43,8 @@ class Container(ctx: Context) {
     val player = dev.periy.bridge.music.PhonePlayer(app, music)
     val loudness = dev.periy.bridge.music.Loudness(app, music)
     val favourites = dev.periy.bridge.music.Favourites(app)
+    /** The equalizer, the same for the phone's player and every page's. */
+    val eq = dev.periy.bridge.music.EqStore(app)
     /**
      * Lyrics: kept on the phone for the page and the phone's player alike, and looked up by the
      * phone itself (LRCLIB) a moment after each song it plays starts, when it has none yet.
@@ -51,6 +53,7 @@ class Container(ctx: Context) {
     private val background = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
     init {
+        background.launch(kotlinx.coroutines.Dispatchers.Main) { eq.state.collect { player.applyEq(it) } }
         background.launch {
             player.state.map { it.current }.distinctUntilChangedBy { it?.id }.collectLatest { t ->
                 if (t == null) return@collectLatest

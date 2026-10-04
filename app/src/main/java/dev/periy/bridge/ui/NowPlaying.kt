@@ -570,6 +570,7 @@ fun NowPlaying(
     val miniSeek = remember { mutableStateOf<Float?>(null) }
     // The sound controls, opened from the bottom row.
     var sound by remember { mutableStateOf(false) }
+    var equalizer by remember { mutableStateOf(false) }
     // How far the sound dialog is in, for the player under it to blur by.
     val soundFade = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     // What the file is, for the chip: FLAC, 1,411 kbps, 44.1 kHz.
@@ -856,7 +857,8 @@ fun NowPlaying(
                 )
             }
         }
-        if (sound) SoundSheet(player, state, soundFade, onClose = { sound = false })
+        if (sound) SoundSheet(player, state, soundFade, onEqualizer = { sound = false; equalizer = true }, onClose = { sound = false })
+        if (equalizer) EqualizerSheet(androidx.compose.ui.platform.LocalContext.current.container.eq, soundFade, onClose = { equalizer = false })
     }
     }
 }

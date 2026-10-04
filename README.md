@@ -406,12 +406,20 @@ buttons working.
 - **One continuous drag** from the mini player up to full screen and on up to the queue, and down
   again; swipe sideways for the song before or after, with a tick under the finger.
 - **The cover swells** with the song's loud moments and **the seek bar is its waveform**, live as
-  on the page: played bars with a moving front, then a plain bar; bars again when paused or
-  touched. Worked out once on the phone and kept (the page gets the same, from the phone).
+  on the page: played bars with the last few moving with the music, the rest of the song faint
+  ahead. Worked out once on the phone and kept (the page gets the same, from the phone).
 - **The song playing** stands out on a lifted card in Tracks and in its album, and its album's
   card is marked too.
 - **Sound controls**: speed, pitch and volume in Namida's Configure dialog (pitch in percent or
   semitones, a one-tap 432 Hz, speed carrying pitch if you like), kept for next time.
+- **Equalizer** (Configure, Equalizer): ten bands from 32 Hz to 16 kHz with the curve drawn as it
+  plays; drag a band's point, double-tap it for 0, or pick one of the famous curves (Harman, Loudness,
+  Bass Boost, V-Shape, Vocal, Warm, Bright, Rock, Pop, Jazz, Classical, Electronic, Hip-Hop, Acoustic
+  and more). Made the accurate way (Välimäki and Liski's cascade graphic equalizer): each filter's
+  gain is solved so the curve passes exactly through the points, under half a dB of ripple between
+  them, and the level comes down by the highest boost so nothing clips. Off, the sound is untouched.
+  One setting for the phone (Android's DynamicsProcessing, 64 bands following the curve) and the
+  page (Web Audio's own filters).
 - **The queue**: Namida's sheet, rising under the song as the cover shrinks to the top. Tap to
   play, drag by the handle to move, swipe away to take off; the broom and **Shuffle** as on the page.
 - Pull the mini player down under itself to stop and put it away. The queue is kept for next time.
