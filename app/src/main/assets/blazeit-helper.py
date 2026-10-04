@@ -2883,14 +2883,14 @@ def session_kind():
 def remote_size(kbit):
     """From afar, the picture for a rate: width and frames a second (as the Windows helper)."""
     wide = 1920 if kbit >= 4000 else 1600 if kbit >= 2400 else 1280 if kbit >= 1200 else 1024 if kbit >= 500 else 854
-    return wide, 30 if kbit >= 2400 else 20 if kbit >= 500 else 15
+    return wide, 60 if kbit >= 8000 else 30 if kbit >= 1200 else 24 if kbit >= 500 else 15
 
 
 def capture_tries(geom, w, h, fps, dest, grab=None, remote=False, kbit=700):
     """ffmpeg arguments, fastest encoder first: X11's screen grab, or the one given (macOS's).
     From afar (the phone reached through the tunnel): sized and paced for the rate the link carries
-    (remote_kbit), the refresh spread over the frames (intra refresh) so the stream stays even, and
-    each frame marked so the sender can tell frames apart and drop late ones (post_frames)."""
+    (remote_kbit), the refresh spread over the frames (intra refresh) so the stream stays even. The
+    order never depends on the rate, so post_frames can start the same encoder again at another."""
     x, y, gw, gh = geom
     if remote:
         wide, rfps = remote_size(kbit)
@@ -2909,7 +2909,7 @@ def capture_tries(geom, w, h, fps, dest, grab=None, remote=False, kbit=700):
     # otherwise leave it out, and the phone would take the picture for BT.709 and shift its colours).
     dest = ["-color_primaries", "bt470bg", "-color_trc", "smpte170m", "-colorspace", "bt470bg", "-color_range", "tv",
             "-bsf:v", "h264_metadata=video_format=5:colour_primaries=5:transfer_characteristics=6:"
-                      "matrix_coefficients=5:video_full_range_flag=0" + (":aud=insert" if remote else "")] + dest
+                      "matrix_coefficients=5:video_full_range_flag=0"] + dest
     tries = []
     if MAC:
         # The Mac's own hardware encoder.
@@ -3149,9 +3149,9 @@ def laptop_send(rid, path):
 
 
 # From afar the picture goes at what the link carries: it starts where the last time ended (700
-# kbit/s the first time), steps down when frames back up, up by half after 20 calm seconds, to 6
-# Mbit/s at most; a rate that backed up is not tried again for three minutes.
-MAX_KBIT = 6000
+# kbit/s the first time), steps down when frames back up, up by half after calm (4 s while no rate
+# has failed, 20 s after), to 10 Mbit/s at most; a rate that backed up is not tried for three minutes.
+MAX_KBIT = 10000
 remote_kbit = 700
 rate_read = False
 failed_kbit, failed_at = None, 0.0
@@ -3208,55 +3208,127 @@ def starts_afresh(f):
     return False
 
 
-def post_frames(src, addr, gen):
-    """From afar: the stream cut into frames at their delimiters and posted to the phone, no more
-    let out than the phone's word ("displayack") takes to come back plus 0.3 s, so nothing backs up
-    on the way; a frame still waiting after half a second is dropped (all but the newest), as a
-    video call does. Returns "ended", "phone", or "rate" when the rate changed (start again)."""
-    frames, lock, done = collections.deque(), threading.Condition(), [False]
+def read_n(src, n):
+    b = b""
+    while len(b) < n:
+        d = src.read(n - len(b))
+        if not d:
+            return None
+        b += d
+    return b
 
-    def read():
-        acc = b""
+
+def flv_frames(src, on_frame):
+    """ffmpeg's FLV, one video tag at a time, each made back into an H.264 picture as the phone takes
+    it (start codes, the stream's settings before the first picture and every key picture), handed to
+    on_frame the moment its tag is in: FLV says how long each tag is, so nothing waits for the next."""
+    head = read_n(src, 9)
+    if not head or head[:3] != b"FLV":
+        return
+    skip = int.from_bytes(head[5:9], "big") - 9
+    if (skip > 0 and read_n(src, skip) is None) or read_n(src, 4) is None:
+        return
+    sc, config, nal_len, first = b"\x00\x00\x00\x01", None, 4, True
+    while True:
+        th = read_n(src, 11)
+        if th is None:
+            return
+        size = int.from_bytes(th[1:4], "big")
+        data = read_n(src, size) if size else b""
+        if data is None or read_n(src, 4) is None:
+            return
+        if th[0] & 0x1F != 9 or size < 5 or data[0] & 0x0F != 7:
+            continue
+        if data[1] == 0:
+            # The decoder configuration: its SPS and PPS, as start-coded units.
+            nal_len = (data[9] & 3) + 1
+            out, q = [], 11
+
+            def units(n):
+                nonlocal q
+                for _ in range(n):
+                    if q + 2 > len(data):
+                        return
+                    ln = int.from_bytes(data[q:q + 2], "big")
+                    out.append(sc + data[q + 2:q + 2 + ln])
+                    q += 2 + ln
+            units(data[10] & 0x1F)
+            if q < len(data):
+                q += 1
+                units(data[q - 1])
+            config = b"".join(out)
+            continue
+        if data[1] != 1:
+            continue
+        parts = [config] if (first or data[0] >> 4 == 1) and config else []
+        first = False
+        q = 5
+        while q + nal_len <= len(data):
+            ln = int.from_bytes(data[q:q + nal_len], "big")
+            q += nal_len
+            if ln <= 0 or q + ln > len(data):
+                break
+            parts.append(sc + data[q:q + ln])
+            q += ln
+        on_frame(b"".join(parts))
+
+
+class FrameSource:
+    """One ffmpeg's pictures as they come, for post_frames; kbit is the rate it was started at."""
+
+    def __init__(self, proc, kbit, cond):
+        self.proc, self.kbit, self.frames, self.done, self.started = proc, kbit, collections.deque(), False, time.time()
+        threading.Thread(target=self.read, args=(cond,), daemon=True).start()
+
+    def read(self, cond):
+        def got(f):
+            with cond:
+                self.frames.append((time.time(), f))
+                cond.notify_all()
         try:
-            while True:
-                data = src.read1(1 << 16) if hasattr(src, "read1") else src.read(1 << 16)
-                if not data:
-                    break
-                acc += data
-                # Each frame starts with an access unit delimiter (NAL type 9).
-                while True:
-                    j = acc.find(b"\x00\x00\x01\x09", 4)
-                    if j < 0:
-                        break
-                    k = j - 1 if j > 0 and acc[j - 1] == 0 else j
-                    with lock:
-                        frames.append((time.time(), acc[:k]))
-                        lock.notify()
-                    acc = acc[k:]
-            if acc:
-                with lock:
-                    frames.append((time.time(), acc))
+            flv_frames(self.proc.stdout, got)
+        except (OSError, ValueError):
+            pass
         finally:
-            with lock:
-                done[0] = True
-                lock.notify()
+            with cond:
+                self.done = True
+                cond.notify_all()
 
-    threading.Thread(target=read, daemon=True).start()
+    def stop(self):
+        if self.proc.poll() is None:
+            self.proc.terminate()
+
+
+def post_frames(proc, addr, gen, respawn=None):
+    """From afar: each picture posted whole with its length, no more let out than the phone's word
+    ("displayack") takes to come back plus 0.3 s, so nothing backs up on the way; a picture still
+    waiting after half a second is dropped (all but the newest), as a video call does.
+
+    The rate follows the link, looked at every 2 s: late pictures, or the phone's word coming back
+    much slower than it can (pictures queueing on the way), ask for less; calm for more. A new rate
+    never stops the picture: respawn(kbit) starts the encoder again beside the running one, which
+    takes over on the same stream at its first picture. Returns "ended", "phone", or "rate" when the
+    encoder could not be started again that way (start again)."""
+    global stream_proc, remote_kbit
+    cond = threading.Condition()
+    src, nxt = FrameSource(proc, remote_kbit, cond), None
     sid = os.urandom(6).hex()
     host, port = via(addr)
     conn = http.client.HTTPConnection(host, port, timeout=10)
     try:
         conn.putrequest("POST", "/api/display/stream?s=" + sid)
         conn.putheader("User-Agent", user_agent())
-        conn.putheader("Content-Type", "video/h264")
+        conn.putheader("Content-Type", "video/h264-frames")
         conn.putheader("Transfer-Encoding", "chunked")
         if session:
             conn.putheader("Cookie", session)
         conn.endheaders()
         conn.sock.settimeout(None)
-        sent, began, window = 0, time.time(), time.time()
-        sent_at, rtt, least = collections.deque(), 0.7, None
-        dropped, calm = 0, 0
+        sent, began, window, short = 0, time.time(), time.time(), time.time()
+        # How long the phone's word takes to come back: the least in each 2 s, and the least it has
+        # been (rising slowly, so a new road is learnt).
+        sent_at, rtt, least, base = collections.deque(), 0.7, None, None
+        dropped, late, calm = 0, 0, 0
         while gen == screen_gen:
             room = max(24 * 1024, int(remote_kbit * 1000 / 8 * (min(rtt, 2.0) + 0.3)))
             while gen == screen_gen:
@@ -3269,37 +3341,71 @@ def post_frames(src, addr, gen):
                 if (acked < 0 and time.time() - began > 3) or sent - max(0, acked) <= room:
                     break
                 time.sleep(0.005)
-            with lock:
-                while not frames and not done[0]:
-                    lock.wait(1)
-                if not frames:
+            with cond:
+                while True:
+                    if nxt is not None and nxt.frames:
+                        # The new rate has its first picture: it goes on from here, the old one ends.
+                        src.stop()
+                        src, nxt = nxt, None
+                        stream_proc = src.proc
+                    elif nxt is not None and (nxt.done or time.time() - nxt.started > 5):
+                        nxt.stop()   # it did not start: keep the one running, at its rate
+                        remote_kbit = src.kbit
+                        nxt = None
+                    if src.frames or (src.done and nxt is None) or gen != screen_gen:
+                        break
+                    cond.wait(0.2)
+                if not src.frames or gen != screen_gen:
                     break
-                while len(frames) > 1 and time.time() - frames[0][0] > 0.5 and not starts_afresh(frames[0][1]):
-                    frames.popleft()
+                while len(src.frames) > 1 and time.time() - src.frames[0][0] > 0.5 and not starts_afresh(src.frames[0][1]):
+                    src.frames.popleft()
                     dropped += 1
-                _, f = frames.popleft()
+                    late += 1
+                _, f = src.frames.popleft()
             if not f:
                 continue
+            f = len(f).to_bytes(4, "big") + f
             conn.send(b"%x\r\n" % len(f) + f + b"\r\n")
             sent += len(f)
             sent_at.append((sent, time.time()))
             if len(sent_at) > 4000:
                 sent_at.popleft()
-            if time.time() - window < 10:
+            if time.time() - window >= 10:
+                window = time.time()
+                log("Screen far: %d kbit/s, word back in %d ms, %d late pictures dropped in 10 s" % (remote_kbit, rtt * 1000, dropped))
+                dropped = 0
+            if time.time() - short < 2:
                 continue
-            window = time.time()
+            short = time.time()
+            queued = False
             if least is not None and least < 5:
                 rtt = least
+                queued = base is not None and least > base + 0.25 and least > base * 2
+                base = least if base is None else min(least, base + 0.005)
             least = None
-            if dropped > 20 and remote_kbit > 250:
-                set_rate(max(250, remote_kbit * 6 // 10), True)
+            late_now, late = late, 0
+            if nxt is not None:
+                continue   # a new rate is starting
+            calm = calm + 2 if late_now == 0 and not queued else 0
+            want = 0
+            if (late_now > 5 or queued) and remote_kbit > 250:
+                want = max(250, remote_kbit * (6 if late_now > 5 else 8) // 10)
+                set_rate(want, True)
+            elif calm >= (4 if failed_kbit is None else 20):
+                want = next_rate()
+                if want:
+                    set_rate(want, False)
+            if not want:
+                continue
+            calm = 0
+            try:
+                np = respawn(want) if respawn else None
+            except OSError:
+                np = None
+            if np is None:
                 return "rate"
-            calm = calm + 10 if dropped == 0 else 0
-            dropped = 0
-            up = next_rate() if calm >= 20 else 0
-            if up:
-                set_rate(up, False)
-                return "rate"
+            with cond:
+                nxt = FrameSource(np, want, cond)
         conn.send(b"0\r\n\r\n")
         conn.getresponse().read()
         return "ended"
@@ -3307,6 +3413,10 @@ def post_frames(src, addr, gen):
         return "phone"
     finally:
         conn.close()
+        with cond:
+            src.stop()
+            if nxt is not None:
+                nxt.stop()
 
 
 def post_stream(src, addr, gen, path="/api/display/stream", kind="video/h264"):
@@ -3370,6 +3480,9 @@ def stream_x11(at, port, w, h, fps, gen, http_ok=False):
         read_rate()
         say("From another network: this screen goes at what the link carries (%d kbit/s to start)." % remote_kbit)
     dest = ["-f", "h264", "pipe:1"] if http_ok else ["-f", "h264", "tcp://%s:%d?tcp_nodelay=1" % (at[0], port)]
+    if remote:
+        # FLV gives each picture's size, and every one is let out the moment it is made.
+        dest = ["-flush_packets", "1", "-flvflags", "no_duration_filesize", "-f", "flv", "pipe:1"]
     tries = capture_tries(geom, w, h, fps, dest, grab, remote, remote_kbit)
     i = 0
     while i < len(tries):
@@ -3387,7 +3500,16 @@ def stream_x11(at, port, w, h, fps, gen, http_ok=False):
             errs = []
             threading.Thread(target=lambda: errs.append(p.stderr.read()), daemon=True).start()
             began = time.time()
-            why = post_frames(p.stdout, at, gen) if remote else post_stream(p.stdout, at, gen)
+
+            def respawn(kbit, way=i - 1):
+                """The same encoder again at another rate, for post_frames to change to."""
+                if gen != screen_gen:
+                    return None
+                q = subprocess.Popen([ff] + capture_tries(geom, w, h, fps, dest, grab, True, kbit)[way],
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                threading.Thread(target=q.stderr.read, daemon=True).start()
+                return q
+            why = post_frames(p, at, gen, respawn) if remote else post_stream(p.stdout, at, gen)
             if p.poll() is None:
                 p.terminate()
             p.wait()

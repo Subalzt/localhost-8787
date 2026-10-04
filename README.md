@@ -504,13 +504,17 @@ Del, and the laptop's media keys and volume.
   to 4K at 120 frames a second over the cable.
 - **From anywhere**, through the tunnel: the laptop's own main screen, so you can use it while
   away. The laptop helper reaches the phone by itself, so the laptop needs nothing opened up. The
-  picture is made to fit the link, starting where it last ended (700 kbit/s, 1024 wide at 20
+  picture is made to fit the link, starting where it last ended (700 kbit/s, 1024 wide at 24
   frames a second, the first time), its refresh spread over the frames so the stream stays even.
   The phone says what has arrived, and the laptop lets out only as much as the road takes to
   answer plus 0.3 s. As a video call does, a frame still waiting after half a second is dropped
-  rather than shown late, so the phone shows the laptop as it is now; when many are dropped it
-  steps down (to 854 wide, 15 frames a second, 250 kbit/s at the least), and after 20 calm
-  seconds it steps up by half (on Windows to 1080p at 30 frames a second and 6 Mbit/s).
+  rather than shown late, so the phone shows the laptop as it is now. Every 2 s it looks again:
+  late frames, or the phone's answers coming back much slower than they can (frames queueing
+  on the way), step it down (to 854 wide, 15 frames a second, 250 kbit/s at the least); calm
+  steps it up by half, every 4 s until a rate has failed, so it reaches what the link carries
+  within half a minute, to 1080p at 60 frames a second and 10 Mbit/s. A new rate never stops
+  the picture: the laptop starts the encoder again beside the running one, and the new one takes
+  over on the same stream at its first frame.
 - **The sound** goes with the picture: what the laptop's speakers play (Windows' own loopback, or
   the Pulse monitor on Linux), as AAC at 160 kbit/s nearby and 64 from afar, late sound dropped so
   it stays with the picture. A Mac sends the picture only.

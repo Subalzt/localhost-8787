@@ -2031,7 +2031,7 @@ public static class BlazeItPc
     static volatile string localFor = null;
 
     static int LocalCap(string at) { return at == AdbHost || UsbGateways().Contains(at) ? 100000 : 60000; }
-    const int MaxKbit = 6000;
+    const int MaxKbit = 10000;
     static int failedKbit = int.MaxValue;
     static DateTime failedAt;
     static bool rateRead;
@@ -2275,9 +2275,10 @@ public static class BlazeItPc
     }
 
     /**
-     * The command lines for the main screen from afar, best first: made smaller (1280 wide, down to
-     * 854 on a slower link), 24 frames a second (15 when slower), at "kbit" with little buffering so
-     * the picture is current; on the NVIDIA card when there is one.
+     * The command lines for the main screen from afar, best first: as sharp and smooth as "kbit"
+     * carries (1080p at 60 frames a second from 8 Mbit/s, down to 854 wide at 15 on a poor link),
+     * with little buffering so the picture is current; on the NVIDIA card when there is one. The
+     * order never depends on "kbit", so PostFrames can start the same way at another rate.
      */
     static List<string> RemoteTries(Displays.Mon target, int kbit)
     {
@@ -2285,7 +2286,7 @@ public static class BlazeItPc
         if (!Dxgi.Find(target.Device, out adapter, out output, out adapterName)) { adapter = -1; output = -1; adapterName = ""; }
         int wide = kbit >= 4000 ? 1920 : kbit >= 2400 ? 1600 : kbit >= 1200 ? 1280 : kbit >= 500 ? 1024 : 854;
         if (target.W > 0 && wide > target.W) wide = target.W & ~1;
-        int fps = kbit >= 2400 ? 30 : kbit >= 500 ? 20 : 15;
+        int fps = kbit >= 8000 ? 60 : kbit >= 1200 ? 30 : kbit >= 500 ? 24 : 15;
         string label = "setparams=color_primaries=bt470bg:color_trc=smpte170m";
         string scale = "scale=" + wide + ":-2:flags=bilinear,format=yuv420p";
         // No large picture every few seconds: the refresh is spread over the frames (intra refresh),
@@ -2302,99 +2303,14 @@ public static class BlazeItPc
         {
             string grab = "-hide_banner -loglevel error -init_hw_device d3d11va=cap:" + adapter + " -filter_hw_device cap -filter_complex \"ddagrab=output_idx=" + output +
                 ":framerate=" + fps + ":draw_mouse=1,hwdownload,format=bgra," + scale + "," + label + "[v]\" -map \"[v]\"";
-            if (nvidia) tries.Add(grab + nv + dest);
+            // NVENC handed frames from memory while the capture's Direct3D device is the filters'
+            // fails to open ("CreateInputBuffer failed"); a CUDA device of its own lets it.
+            if (nvidia) tries.Add(grab.Replace(" -filter_hw_device cap ", " -filter_hw_device cap -init_hw_device cuda=cu ") + nv + dest);
             tries.Add(grab + x264 + dest);
         }
         tries.Add("-hide_banner -loglevel error -f gdigrab -framerate " + fps + " -offset_x " + target.X + " -offset_y " + target.Y +
             " -video_size " + target.W + "x" + target.H + " -draw_mouse 1 -i desktop -vf " + scale + "," + label + ":colorspace=bt470bg:range=tv" + x264 + dest);
         return tries;
-    }
-
-    /**
-     * Posts ffmpeg's stream to the phone's page port, the way this helper reaches the phone now
-     * (the cable, Wi-Fi, the tunnel). From afar it watches what is still waiting to go: more than
-     * two seconds of picture means the link is behind, so it asks for a smaller, slower stream;
-     * after 45 s with nothing waiting, a sharper one. Returns "rate" (start again at the new
-     * rate), "phone" (the phone closed it, or could not be reached) or "ended".
-     */
-    static string PostStream(Process p, string at, bool remote)
-    {
-        var queue = new Queue<byte[]>();
-        long queued = 0;
-        bool eof = false;
-        object gate = new object();
-        var rd = new Thread(delegate ()
-        {
-            try
-            {
-                // Each picture from ffmpeg's FLV, whole, with its length before it.
-                FlvFrames(p.StandardOutput.BaseStream, delegate (byte[] f)
-                {
-                    byte[] c = Framed(f);
-                    lock (gate) { queue.Enqueue(c); queued += c.Length; System.Threading.Monitor.Pulse(gate); }
-                });
-            }
-            catch { }
-            lock (gate) { eof = true; System.Threading.Monitor.Pulse(gate); }
-        });
-        rd.IsBackground = true; rd.Start();
-        string why = "ended";
-        try
-        {
-            HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + Via(at) + ":" + PhonePort + "/api/display/stream");
-            req.Proxy = null;
-            req.Method = "POST";
-            req.UserAgent = Ua;
-            req.Headers["Cookie"] = session;
-            req.ContentType = "video/h264-frames";
-            req.SendChunked = true;
-            req.AllowWriteStreamBuffering = false;
-            // .NET's Timeout runs until the phone answers, which it does only when the stream ends, so
-            // none; a write that waits half a minute means the link is gone.
-            req.Timeout = System.Threading.Timeout.Infinite;
-            req.ReadWriteTimeout = 30000;
-            req.ServicePoint.Expect100Continue = false;
-            using (Stream o = req.GetRequestStream())
-            {
-                long behind = (long)remoteKbit * 1000 / 8 * 2;
-                DateTime calm = DateTime.UtcNow;
-                while (true)
-                {
-                    byte[] c;
-                    lock (gate)
-                    {
-                        while (queue.Count == 0 && !eof) System.Threading.Monitor.Wait(gate, 1000);
-                        if (queue.Count == 0) break;
-                        c = queue.Dequeue();
-                        queued -= c.Length;
-                    }
-                    o.Write(c, 0, c.Length);
-                    o.Flush();
-                    if (!remote) continue;
-                    long q;
-                    lock (gate) q = queued;
-                    if (q > behind && remoteKbit > 250)
-                    {
-                        remoteKbit = Math.Max(250, remoteKbit * 6 / 10);
-                        Say("The link to the phone is slower: the laptop's screen goes at " + remoteKbit + " kbit/s now.");
-                        why = "rate";
-                        break;
-                    }
-                    if (q > behind / 8) calm = DateTime.UtcNow;
-                    else if ((DateTime.UtcNow - calm).TotalSeconds > 60 && remoteKbit < 2000)
-                    {
-                        remoteKbit = Math.Min(2000, remoteKbit * 13 / 10);
-                        Say("The link to the phone keeps up: the laptop's screen goes at " + remoteKbit + " kbit/s now.");
-                        why = "rate";
-                        break;
-                    }
-                }
-            }
-            if (why == "ended") using (req.GetResponse()) { }
-        }
-        catch (Exception) { if (why == "ended") why = "phone"; }
-        try { if (!p.HasExited) p.Kill(); } catch { }
-        return why;
     }
 
     /** What the phone says it has had of the screen stream named ackSid. */
@@ -2514,42 +2430,55 @@ public static class BlazeItPc
         return false;
     }
 
-    /**
-     * From afar: ffmpeg's stream cut into frames at its delimiters and posted to the phone, newest
-     * first in mind. A frame still waiting after half a second is dropped (all but the newest),
-     * as a video call does, so the phone shows the laptop as it is now rather than falling
-     * behind; the refresh spread over the frames heals the gap within 2 s. Many drops in ten
-     * seconds ask for a smaller stream; a minute with none, a sharper one. Returns as PostStream.
-     */
-    static string PostFrames(Process p, string at)
+    /** One ffmpeg's pictures as they come, for PostFrames; Kbit is the rate it was started at. */
+    class FrameSource
     {
-        return PostFrames(p, at, true);
+        public Process P;
+        public LinkedList<KeyValuePair<DateTime, byte[]>> Frames = new LinkedList<KeyValuePair<DateTime, byte[]>>();
+        public bool Eof;
+        public DateTime Started = DateTime.UtcNow;
+        public int Kbit;
     }
 
-    /**
-     * Pictures to the phone, each whole with its length, let out only as fast as the phone says it
-     * has them (plus a moment: 0.3 s from afar, 0.1 s nearby); a picture still waiting after half
-     * a second from afar, or 150 ms nearby, is dropped (all but the newest), so the phone always
-     * shows the laptop as it is now. The rate follows: many drops ask for less, calm for more.
-     */
-    static string PostFrames(Process p, string at, bool remote)
+    static FrameSource ReadFrames(Process p, object gate, int kbit)
     {
-        var frames = new LinkedList<KeyValuePair<DateTime, byte[]>>();
-        bool eof = false;
-        object gate = new object();
+        var src = new FrameSource { P = p, Kbit = kbit };
         var rd = new Thread(delegate ()
         {
             try
             {
                 FlvFrames(p.StandardOutput.BaseStream, delegate (byte[] f)
                 {
-                    lock (gate) { frames.AddLast(new KeyValuePair<DateTime, byte[]>(DateTime.UtcNow, f)); System.Threading.Monitor.Pulse(gate); }
+                    lock (gate) { src.Frames.AddLast(new KeyValuePair<DateTime, byte[]>(DateTime.UtcNow, f)); System.Threading.Monitor.PulseAll(gate); }
                 });
             }
             catch { }
-            lock (gate) { eof = true; System.Threading.Monitor.Pulse(gate); }
+            lock (gate) { src.Eof = true; System.Threading.Monitor.PulseAll(gate); }
         });
         rd.IsBackground = true; rd.Start();
+        return src;
+    }
+
+    static void Kill(Process p) { try { if (p != null && !p.HasExited) p.Kill(); } catch { } }
+
+    /**
+     * Pictures to the phone, each whole with its length, let out only as fast as the phone says it
+     * has them (plus a moment: 0.3 s from afar, 0.1 s nearby); a picture still waiting after half
+     * a second from afar, or 150 ms nearby, is dropped (all but the newest), so the phone always
+     * shows the laptop as it is now.
+     *
+     * The rate follows the link, looked at every 2 s: late pictures, or the phone's word coming
+     * back much slower than it can (pictures queueing on the way), ask for less; calm asks for more
+     * (after 4 s while no rate has failed yet, so it climbs quickly to what the link carries; 20 s
+     * after one has). A new rate never stops the picture: [respawn] starts ffmpeg at it beside the
+     * one running, and the new one takes over on the same stream at its first picture, which the
+     * phone's decoder takes in its stride, even at another size. Returns "rate" only when ffmpeg
+     * could not be started again that way, "phone" or "ended".
+     */
+    static string PostFrames(Process p, string at, bool remote, Func<int, Process> respawn)
+    {
+        object gate = new object();
+        FrameSource src = ReadFrames(p, gate, remote ? remoteKbit : localKbit), next = null;
         string why = "ended";
         try
         {
@@ -2559,16 +2488,16 @@ public static class BlazeItPc
             string sid = Guid.NewGuid().ToString("N").Substring(0, 12);
             long sentBytes = 0;
             DateTime began = DateTime.UtcNow;
-            // How long the phone's word takes to come back (the way there, its 0.2 s between words,
-            // the way back), the least seen in each ten seconds: the picture let out is that much
-            // plus 0.3 s, or the stream could never run at its own rate across a slow road.
+            // How long the phone's word takes to come back (the way there, its 50 ms between words,
+            // the way back): the least seen in each 2 s, and the least it has been (rising slowly,
+            // so a new road is learnt). The picture let out is that much plus the moment above.
             var sentAt = new Queue<KeyValuePair<long, DateTime>>();
-            double rtt = 0.7, rttLeast = double.MaxValue;
+            double rtt = 0.7, rttShort = double.MaxValue, rttLeast = double.MaxValue, rttBase = double.MaxValue;
             HttpWebRequest req = StreamRequest(at, sid);
             using (Stream o = req.GetRequestStream())
             {
-                int dropped = 0, calm = 0;
-                DateTime window = DateTime.UtcNow;
+                int dropped = 0, droppedShort = 0, calm = 0;
+                DateTime window = DateTime.UtcNow, shortWindow = DateTime.UtcNow;
                 while (true)
                 {
                     int rateNow = remote ? remoteKbit : localKbit;
@@ -2577,78 +2506,115 @@ public static class BlazeItPc
                     {
                         long acked = AckedFor(sid);
                         while (sentAt.Count > 0 && acked >= sentAt.Peek().Key)
-                            rttLeast = Math.Min(rttLeast, (DateTime.UtcNow - sentAt.Dequeue().Value).TotalSeconds);
+                            rttShort = Math.Min(rttShort, (DateTime.UtcNow - sentAt.Dequeue().Value).TotalSeconds);
                         if (acked < 0 && (DateTime.UtcNow - began).TotalSeconds > 3) break;
                         if (sentBytes - Math.Max(0, acked) <= room) break;
                         Thread.Sleep(5);
-                        lock (gate) if (eof && frames.Count == 0) break;
+                        lock (gate) if (src.Eof && src.Frames.Count == 0) break;
                     }
-                    byte[] f;
+                    byte[] f = null;
                     lock (gate)
                     {
-                        while (frames.Count == 0 && !eof) System.Threading.Monitor.Wait(gate, 1000);
-                        if (frames.Count == 0) break;
-                        while (frames.Count > 1 && (DateTime.UtcNow - frames.First.Value.Key).TotalMilliseconds > (remote ? 500 : 150) && !StartsAfresh(frames.First.Value.Value))
+                        while (true)
                         {
-                            frames.RemoveFirst();
-                            dropped++;
+                            if (secondScreen == null) break; // stopped
+                            if (next != null && next.Frames.Count > 0)
+                            {
+                                // The new rate has its first picture: it goes on from here, the old one ends.
+                                Kill(src.P);
+                                src = next; next = null;
+                                secondScreen = src.P;
+                            }
+                            else if (next != null && (next.Eof || (DateTime.UtcNow - next.Started).TotalSeconds > 5))
+                            {
+                                // It did not start: keep the one running, at its rate.
+                                Kill(next.P);
+                                if (remote) remoteKbit = src.Kbit; else localKbit = src.Kbit;
+                                next = null;
+                            }
+                            if (src.Frames.Count > 0 || (src.Eof && next == null)) break;
+                            System.Threading.Monitor.Wait(gate, 200);
                         }
-                        f = frames.First.Value.Value;
-                        frames.RemoveFirst();
+                        if (src.Frames.Count > 0 && secondScreen != null)
+                        {
+                            while (src.Frames.Count > 1 && (DateTime.UtcNow - src.Frames.First.Value.Key).TotalMilliseconds > (remote ? 500 : 150) && !StartsAfresh(src.Frames.First.Value.Value))
+                            {
+                                src.Frames.RemoveFirst();
+                                dropped++; droppedShort++;
+                            }
+                            f = src.Frames.First.Value.Value;
+                            src.Frames.RemoveFirst();
+                        }
                     }
+                    if (f == null) break;
                     byte[] wf = Framed(f);
                     o.Write(wf, 0, wf.Length);
                     o.Flush();
                     sentBytes += wf.Length;
                     sentAt.Enqueue(new KeyValuePair<long, DateTime>(sentBytes, DateTime.UtcNow));
                     if (sentAt.Count > 4000) sentAt.Dequeue();
-                    if ((DateTime.UtcNow - window).TotalSeconds < 10) continue;
-                    window = DateTime.UtcNow;
-                    if (rttLeast < 5) rtt = rttLeast;
-                    Log("Screen " + (remote ? "far" : "near") + ": " + (remote ? remoteKbit : localKbit) + " kbit/s, word back in " + Math.Round((rttLeast < 5 ? rttLeast : rtt) * 1000) + " ms, " + dropped + " late pictures dropped in 10 s");
-                    rttLeast = double.MaxValue;
+
+                    if ((DateTime.UtcNow - window).TotalSeconds >= 10)
+                    {
+                        window = DateTime.UtcNow;
+                        Log("Screen " + (remote ? "far" : "near") + ": " + (remote ? remoteKbit : localKbit) + " kbit/s, word back in " + Math.Round((rttLeast < 5 ? rttLeast : rtt) * 1000) + " ms, " + dropped + " late pictures dropped in 10 s");
+                        dropped = 0;
+                        rttLeast = double.MaxValue;
+                    }
+                    if ((DateTime.UtcNow - shortWindow).TotalSeconds < 2) continue;
+                    shortWindow = DateTime.UtcNow;
+                    bool queued = false;
+                    if (rttShort < 5)
+                    {
+                        rtt = rttShort;
+                        rttLeast = Math.Min(rttLeast, rttShort);
+                        // The phone's word much slower than it has been: pictures are queueing somewhere.
+                        queued = rttBase < 5 && rttShort > rttBase + 0.25 && rttShort > rttBase * 2;
+                        rttBase = Math.Min(rttShort, rttBase < 5 ? rttBase + 0.005 : rttShort);
+                    }
+                    rttShort = double.MaxValue;
+                    int lateNow = droppedShort;
+                    droppedShort = 0;
+                    if (next != null) continue; // a new rate is starting
+                    int want = 0;
                     if (!remote)
                     {
                         // Nearby: down by 30% on many late pictures, up by a quarter after 20 calm seconds.
-                        if (dropped > 20 && localKbit > 8000)
-                        {
-                            localKbit = Math.Max(8000, localKbit * 7 / 10);
-                            Say("The link to the phone is busy: the screen goes at " + (localKbit / 1000) + " Mbit/s now.");
-                            why = "rate";
-                            break;
-                        }
-                        calm = dropped == 0 ? calm + 10 : 0;
-                        dropped = 0;
-                        if (calm >= 20 && localKbit < LocalCap(at))
-                        {
-                            localKbit = Math.Min(LocalCap(at), localKbit * 5 / 4);
-                            Say("The link to the phone keeps up: the screen goes at " + (localKbit / 1000) + " Mbit/s now.");
-                            why = "rate";
-                            break;
-                        }
-                        continue;
+                        calm = lateNow == 0 ? calm + 2 : 0;
+                        if (lateNow > 8 && localKbit > 8000) want = Math.Max(8000, localKbit * 7 / 10);
+                        else if (calm >= 20 && localKbit < LocalCap(at)) want = Math.Min(LocalCap(at), localKbit * 5 / 4);
+                        if (want == 0) continue;
+                        Say(want < localKbit ? "The link to the phone is busy: the screen goes at " + (want / 1000) + " Mbit/s now."
+                                             : "The link to the phone keeps up: the screen goes at " + (want / 1000) + " Mbit/s now.");
+                        localKbit = want;
                     }
-                    if (dropped > 20 && remoteKbit > 250)
+                    else
                     {
-                        SetRemoteKbit(Math.Max(250, remoteKbit * 6 / 10), true);
-                        why = "rate";
-                        break;
+                        calm = lateNow == 0 && !queued ? calm + 2 : 0;
+                        if ((lateNow > 5 || queued) && remoteKbit > 250)
+                        {
+                            want = Math.Max(250, remoteKbit * (lateNow > 5 ? 6 : 8) / 10);
+                            SetRemoteKbit(want, true);
+                        }
+                        else if (calm >= (failedKbit == int.MaxValue ? 4 : 20) && (want = NextKbit()) > 0)
+                            SetRemoteKbit(want, false);
+                        if (want == 0) continue;
                     }
-                    calm = dropped == 0 ? calm + 10 : 0;
-                    dropped = 0;
-                    int up = calm >= 20 ? NextKbit() : 0;
-                    if (up > 0)
-                    {
-                        SetRemoteKbit(up, false);
-                        why = "rate";
-                        break;
-                    }
+                    calm = 0;
+                    Process np = null;
+                    try { np = respawn != null ? respawn(want) : null; } catch { }
+                    if (np == null) { why = "rate"; break; }
+                    lock (gate) next = ReadFrames(np, gate, want);
                 }
             }
             if (why == "ended") using (req.GetResponse()) { }
         }
         catch (Exception) { if (why == "ended") why = "phone"; }
-        try { if (!p.HasExited) p.Kill(); } catch { }
+        lock (gate)
+        {
+            Kill(src.P);
+            if (next != null) Kill(next.P);
+        }
         return why;
     }
 
@@ -2667,8 +2633,11 @@ public static class BlazeItPc
             localFor = at;
             localKbit = Math.Min(LocalCap(at), Math.Min(80, Math.Max(40, 40 * StreamRate(target) / 60)) * 1000) * 3 / 4;
         }
-        foreach (string args in remote ? RemoteTries(target, remoteKbit) : CaptureTries(target, hdrWhite, dest, http ? localKbit : 0))
+        var tries = remote ? RemoteTries(target, remoteKbit) : CaptureTries(target, hdrWhite, dest, http ? localKbit : 0);
+        for (int t = 0; t < tries.Count; t++)
         {
+            string args = tries[t];
+            int way = t;
             relayout = false;
             var psi = new ProcessStartInfo(ff, args);
             psi.UseShellExecute = false; psi.CreateNoWindow = true; psi.RedirectStandardError = true;
@@ -2686,15 +2655,30 @@ public static class BlazeItPc
             Thread pump = null;
             if (http)
             {
-                pump = new Thread(delegate () { sent = PostFrames(p, at, remote); });
+                // ffmpeg started again the same way at another rate, for PostFrames to change to.
+                Func<int, Process> respawn = delegate (int kbit)
+                {
+                    if (gen != screenGen) return null;
+                    var again = remote ? RemoteTries(target, kbit) : CaptureTries(target, hdrWhite, dest, kbit);
+                    if (way >= again.Count) return null;
+                    var psi2 = new ProcessStartInfo(ff, again[way]);
+                    psi2.UseShellExecute = false; psi2.CreateNoWindow = true; psi2.RedirectStandardError = true;
+                    psi2.RedirectStandardOutput = true;
+                    psi2.WorkingDirectory = Dir;
+                    var p2 = Process.Start(psi2);
+                    var r2 = new Thread(delegate () { try { p2.StandardError.ReadToEnd(); } catch { } });
+                    r2.IsBackground = true; r2.Start();
+                    return p2;
+                };
+                pump = new Thread(delegate () { sent = PostFrames(p, at, remote, respawn); });
                 pump.IsBackground = true; pump.Start();
             }
             // Still going after a few seconds: it works. Stopped at once: try the next way.
             bool quick = p.WaitForExit(4000);
-            if (!quick) p.WaitForExit();
+            if (!quick) { if (pump != null) pump.Join(); else p.WaitForExit(); }
             reader.Join(500);
             if (pump != null) pump.Join(5000);
-            if (gen != screenGen || secondScreen != p) return "stopped";
+            if (gen != screenGen || secondScreen == null) return "stopped";
             if (relayout) return "relayout";
             if (sent == "rate") return "relayout";   // the link asked for another size: start again at it
             if (sent == "phone") return "phone";
@@ -2711,7 +2695,8 @@ public static class BlazeItPc
      */
     static void WatchScreens(int gen, Displays.Mon target, double hdrWhite, Process p, bool remote)
     {
-        while (gen == screenGen && !p.HasExited)
+        Process cur;
+        while (gen == screenGen && (cur = secondScreen) != null && !cur.HasExited)
         {
             Thread.Sleep(1500);
             try
@@ -2729,7 +2714,7 @@ public static class BlazeItPc
                 if (moved || better || main || light)
                 {
                     relayout = true;
-                    try { p.Kill(); } catch { }
+                    Kill(secondScreen);
                     return;
                 }
             }
