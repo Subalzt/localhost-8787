@@ -170,6 +170,33 @@ class BridgeServer(
         out.toByteArray()
     }
 
+    /** The page's tag: a browser that has it asks "still this?" and is told so in one round trip. */
+    private val pageTag: String by lazy { tagOf(pageGzip, "p") }
+
+    private fun tagOf(bytes: ByteArray, kind: String): String =
+        "W/\"$kind" + java.util.zip.CRC32().apply { update(bytes) }.value.toString(16) + "-" + bytes.size + "\""
+
+    /** True (and answered 304) when the browser already has what carries [tag]. */
+    private suspend fun ApplicationCall.unchanged(tag: String): Boolean {
+        response.header(HttpHeaders.ETag, tag)
+        if (request.header(HttpHeaders.IfNoneMatch)?.split(',')?.any { it.trim() == tag } != true) return false
+        respond(HttpStatusCode.NotModified)
+        return true
+    }
+
+    /** [bytes] gzipped for a browser that takes it: a song list or a listing is a sixth of the size. */
+    private suspend fun ApplicationCall.respondPacked(bytes: ByteArray, type: ContentType) {
+        response.header(HttpHeaders.Vary, HttpHeaders.AcceptEncoding)
+        if (bytes.size > 1024 && request.header(HttpHeaders.AcceptEncoding)?.contains("gzip") == true) {
+            val out = java.io.ByteArrayOutputStream(bytes.size / 4)
+            java.util.zip.GZIPOutputStream(out).use { it.write(bytes) }
+            response.header(HttpHeaders.ContentEncoding, "gzip")
+            respondBytes(out.toByteArray(), type)
+        } else {
+            respondBytes(bytes, type)
+        }
+    }
+
     /** Website sign-ins on their way to the plain address: code to device id and when it runs out. */
     private val handoffs = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
 
@@ -328,11 +355,13 @@ class BridgeServer(
     private fun io.ktor.server.routing.Route.musicRoutes() {
         get("/api/music") {
             val refresh = call.request.queryParameters["refresh"] == "1"
-            val dto = withContext(Dispatchers.IO) {
-                MusicDto(granted = music.granted(), tracks = music.tracks(refresh))
+            val bytes = withContext(Dispatchers.IO) {
+                json.encodeToString(MusicDto.serializer(), MusicDto(granted = music.granted(), tracks = music.tracks(refresh))).toByteArray()
             }
-            call.response.header(HttpHeaders.CacheControl, "no-store")
-            call.respond(dto)
+            // Asked after each time, sent again only when the songs changed; gzipped, a sixth of the size.
+            call.response.header(HttpHeaders.CacheControl, "private, no-cache")
+            if (call.unchanged(tagOf(bytes, "m"))) return@get
+            call.respondPacked(bytes, ContentType.Application.Json)
         }
 
         // Served with byte ranges, so the browser starts playing after the first few
@@ -497,13 +526,16 @@ class BridgeServer(
 
         get("/api/music/art/{albumId}") {
             val albumId = call.parameters["albumId"]?.toLongOrNull()
-            val bytes = albumId?.let { withContext(Dispatchers.IO) { music.cover(it) } }
+            // ?s=128 or 384: a small WebP for a row or a tile, a tenth of the full cover's bytes.
+            val px = call.request.queryParameters["s"]?.toIntOrNull()?.let { if (it <= 128) 128 else 384 }
+            val bytes = albumId?.let { withContext(Dispatchers.IO) { if (px != null) music.cover(it, px) else music.cover(it) } }
             if (bytes == null) {
                 call.respond(HttpStatusCode.NotFound)
                 return@get
             }
             call.response.header(HttpHeaders.CacheControl, "private, max-age=604800")
-            call.respondBytes(bytes, ContentType.Image.JPEG)
+            val webp = bytes.size > 12 && bytes[0] == 'R'.code.toByte() && bytes[8] == 'W'.code.toByte()
+            call.respondBytes(bytes, if (webp) ContentType("image", "webp") else ContentType.Image.JPEG)
         }
     }
 
@@ -1564,8 +1596,11 @@ class BridgeServer(
 
     private fun io.ktor.server.routing.Route.page() {
         get("/") {
-            call.response.header(HttpHeaders.CacheControl, "no-store")
+            // Kept by the browser and asked after each time: across the internet a visit costs one
+            // round trip instead of the whole page again; a new app's page has a new tag.
+            call.response.header(HttpHeaders.CacheControl, "no-cache")
             call.response.header(HttpHeaders.Vary, HttpHeaders.AcceptEncoding)
+            if (call.unchanged(pageTag)) return@get
             // Gzipped (lossless) for any browser that takes it: a quarter of the size, which is
             // what keeps the page from sitting blank for seconds across the internet.
             if (call.request.header(HttpHeaders.AcceptEncoding)?.contains("gzip") == true) {

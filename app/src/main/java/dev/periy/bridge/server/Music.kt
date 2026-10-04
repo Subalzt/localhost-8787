@@ -283,6 +283,29 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
         return bytes.takeIf { it.isNotEmpty() }
     }
 
+    /** Small covers for rows and tiles, with the full cover each was made from (made again when that changes). */
+    private val smallArt = LruCache<String, Pair<ByteArray, ByteArray>>(160)
+
+    /** The cover [px] across as WebP (JPEG before Android 11): for the pages' rows and tiles, a few kilobytes. */
+    fun cover(albumId: Long, px: Int): ByteArray? {
+        val full = cover(albumId) ?: return null
+        val key = "$albumId/$px"
+        smallArt.get(key)?.let { (from, small) -> if (from === full) return small }
+        val bmp = BitmapFactory.decodeByteArray(full, 0, full.size) ?: return full
+        if (bmp.width <= px) return full
+        val scaled = Bitmap.createScaledBitmap(bmp, px, (px.toLong() * bmp.height / bmp.width).toInt().coerceAtLeast(1), true)
+        val small = ByteArrayOutputStream().use { out ->
+            @Suppress("DEPRECATION")
+            val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Bitmap.CompressFormat.WEBP_LOSSY else Bitmap.CompressFormat.JPEG
+            scaled.compress(format, 80, out)
+            out.toByteArray()
+        }
+        if (scaled !== bmp) scaled.recycle()
+        bmp.recycle()
+        smallArt.put(key, full to small)
+        return small
+    }
+
     /**
      * The album's cover at about [px] across, for the phone's own player, where the index or a
      * song's embedded picture has one that large; else the cover the pages get. Not kept: the

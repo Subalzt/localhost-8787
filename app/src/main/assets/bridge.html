@@ -5711,7 +5711,22 @@ async function planFor(id) {
     np.info[id] = j;
   } catch (e) {}
 }
-function artUrl(albumId) { return "/api/music/art/" + albumId; }
+/**
+ * A cover's address; [px] (the box's width in CSS pixels) asks for a small copy when that is
+ * enough for this screen, a tenth of the full cover's bytes, which matters across the internet.
+ */
+function artUrl(albumId, px, fresh) {
+  var q = [];
+  if (px) {
+    var need = px * (window.devicePixelRatio || 1);
+    if (need <= 128) q.push("s=128"); else if (need <= 384) q.push("s=384");
+  }
+  if (fresh) q.push("v=" + Date.now());
+  return "/api/music/art/" + albumId + (q.length ? "?" + q.join("&") : "");
+}
+
+/** How wide each kind of cover box is drawn, for artUrl; the rest get the full cover. */
+var COVER_PX = { "cover": 46, "nt-art": 63, "nc-art": 230, "nml-hc": 260 };
 function formatBadge(mime) {
   mime = (mime || "").toLowerCase();
   if (mime.indexOf("flac") >= 0) return "FLAC";
@@ -5732,6 +5747,7 @@ function coverEl(cls, albumId, title) {
   var box = document.createElement("div");
   box.className = cls + " has-glyph";
   box.dataset.coverAlbum = albumId;
+  if (COVER_PX[cls]) box.dataset.coverPx = COVER_PX[cls];
   paintCover(box, albumId, title);
   return box;
 }
@@ -5763,7 +5779,7 @@ function paintCover(box, albumId, title, fresh) {
     box.style.background = "";
     Array.prototype.slice.call(box.childNodes).forEach(function (n) { if (n.nodeType === 3) box.removeChild(n); });
   };
-  img.src = artUrl(albumId) + (fresh ? "?v=" + Date.now() : "");
+  img.src = artUrl(albumId, +box.dataset.coverPx || 0, fresh);
   box.insertBefore(img, box.firstChild);
 }
 
@@ -6995,7 +7011,7 @@ function showPlayerArt(t, fresh) {
     var c = artTint(img);
     if (c) setPlayerTint(c);
   };
-  img.src = artUrl(t.albumId) + (fresh ? "?v=" + Date.now() : "");
+  img.src = artUrl(t.albumId, 0, fresh);
 }
 
 /** The cover's colour, on the bar and on the player full screen, which takes its colour from it too. */
