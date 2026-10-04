@@ -4,12 +4,12 @@ import java.security.SecureRandom
 
 /**
  * Linking two phones that have never shared a network: one shows a code, the other types it in.
- * The code stands in for a paired device's tunnel key for five minutes, so the typing phone can
- * reach the showing one through its tunnel (IPv6, or punched across IPv4) and ask to be let in
- * there, exactly as on a shared Wi-Fi. Four digits, easy to read out: too few to be a secret from
- * someone watching the meeting board at that moment, so what keeps a stranger out is that the
- * showing phone still has to allow the phone that asks, by its name, and the code is spent as soon
- * as one phone has linked.
+ * Four digits, easy to read out, open for five minutes. The code never travels: with it the typing
+ * phone gets the code's secret (32 random bytes) from the showing phone through a key exchange
+ * only a phone that knows the code can finish ([LinkPake]), and that secret stands in for a paired
+ * device's tunnel key, so the typing phone can reach the showing one through its tunnel (IPv6, or
+ * punched across IPv4) and ask to be let in there, exactly as on a shared Wi-Fi: the showing phone
+ * still allows it, by name. A guess is one try of three per code; the code is spent on the first link.
  */
 object LinkCode {
     /** The stand-in device id the tunnel answers for while a code is open. */
@@ -17,11 +17,14 @@ object LinkCode {
     const val TTL_MS = 5 * 60_000L
     const val LENGTH = 4
 
-    private val L_PSK = "L87L/1 psk".toByteArray()
-    private val L_ID = "L87L/1 id".toByteArray()
+    private val L_PSK = "L87L/2 psk".toByteArray()
+    private val L_ID = "L87L/2 id".toByteArray()
     private val rng = SecureRandom()
 
     fun new(): String = String(CharArray(LENGTH) { '0' + rng.nextInt(10) })
+
+    /** The secret a code hands over, which the tunnel's keys come from. */
+    fun newSecret(): ByteArray = ByteArray(32).also(rng::nextBytes)
 
     /** As typed: only the digits count. */
     fun normalize(typed: String): String = typed.filter { it in '0'..'9' }
@@ -31,6 +34,6 @@ object LinkCode {
     /** For showing: the digits spaced apart, as a phone shows a one-time code. */
     fun shown(code: String) = code.toList().joinToString(" ")
 
-    fun psk(code: String): ByteArray = TunnelCrypto.hmac(L_PSK, code.toByteArray())
-    fun tid(code: String): ByteArray = TunnelCrypto.hmac(psk(code), L_ID).copyOf(16)
+    fun psk(secret: ByteArray): ByteArray = TunnelCrypto.hmac(L_PSK, secret)
+    fun tid(secret: ByteArray): ByteArray = TunnelCrypto.hmac(psk(secret), L_ID).copyOf(16)
 }

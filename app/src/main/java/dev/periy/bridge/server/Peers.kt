@@ -372,13 +372,16 @@ class PeerManager(
             try {
                 if (!dev.periy.bridge.net.LinkCode.valid(code)) error("A link code is four digits")
                 setStatus(LINK_KEY, PeerStatus.Waiting(""))
+                // The code's secret, from the phone showing it, by a key exchange the code alone can finish.
+                val secret = runCatching { dev.periy.bridge.net.LinkPake.fetch(code) }
+                    .getOrElse { error(it.message ?: "Could not reach a phone with that code") }
                 // The other phone will come back to this one the same way.
                 access.ensureTunnel()
                 val page = kotlinx.coroutines.CompletableDeferred<Int>()
                 val c = runCatching {
                     dev.periy.bridge.net.TunnelClient.dialAny(
                         emptyList(), dev.periy.bridge.net.TunnelProto.PORT,
-                        dev.periy.bridge.net.LinkCode.tid(code), dev.periy.bridge.net.LinkCode.psk(code), deviceName(),
+                        dev.periy.bridge.net.LinkCode.tid(secret), dev.periy.bridge.net.LinkCode.psk(secret), deviceName(),
                         onInfo = { info -> info["page"]?.jsonPrimitive?.content?.toIntOrNull()?.let { page.complete(it) } },
                     )
                 }.getOrElse { error("Could not reach a phone with that code (${it.message})") }

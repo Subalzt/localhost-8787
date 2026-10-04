@@ -225,13 +225,24 @@ every request to the other phone goes there unchanged.
 
 Two phones that have never shared a network link with a code one of them shows (`net/LinkCode.kt`):
 
-- Four digits, shown as `4 8 2 1`, open for five minutes or until a phone links. Easy to read out,
-  but with ten thousand of them anyone watching the board could tell which topics are in use and
-  so which code is open: the code only brings a phone to the door. What lets it in is **Allow** on
-  the showing phone, which names the phone asking.
+- Four digits, shown as `4 8 2 1`, open for five minutes or until a phone links, with a secret of
+  32 random bytes made beside it. The code never travels in any form (`net/LinkPake.kt`):
+  - SPAKE2 (RFC 9382) over the 2048-bit MODP group of RFC 3526 (group 14, generator 2, working in
+    its prime-order subgroup of squares). `w = SHA-512("L87L/2 w" || code) mod q`; `M` and `N` are
+    squares of 2560-bit SHA-512 expansions of `"L87L/2 SPAKE2 M"` and `"... N"`. Exponents are 256
+    random bits.
+  - The typing phone listens on `l87-lk-<sid>` (sid: 8 random bytes, hex), then posts
+    `{"s": sid, "x": X}` on the fixed topic `l87-link-v2`, `X = g^x · M^w`. The fixed topic says
+    nothing about which code is open.
+  - The showing phone checks `X` is in the subgroup (`X^q = 1`, `1 < X < p-1`), answers on
+    `l87-lk-<sid>` with `{"s", "y": Y, "e": seal}`, `Y = g^y · N^w`, `Z = (X / M^w)^y`, and the
+    secret sealed (the board's seal) under `HMAC(SHA-256(len-prefixed "L87L/2", sid, X, Y, Z, w), "L87L/2 seal")`.
+  - The typing phone gets the same key from `Z = (Y / N^w)^x`; a seal that does not open means a
+    wrong code. A guess is one try per exchange; the showing phone answers three per code and then
+    says so.
 - While it is open the showing phone's tunnel also answers for a stand-in device, `link-code`,
-  whose keys come from the code instead of the phone's secret:
-  `psk = HMAC-SHA256("L87L/1 psk", code)`, `tid = HMAC-SHA256(psk, "L87L/1 id")[0:16]`. Its board
+  whose keys come from that secret instead of the phone's own:
+  `psk = HMAC-SHA256("L87L/2 psk", secret)`, `tid = HMAC-SHA256(psk, "L87L/2 id")[0:16]`. Its board
   topics follow from that psk as for any device, so the typing phone finds it by `where` and
   punches to it the same way.
 - The typing phone dials with those keys, learns the page's port from the tunnel's HELLO

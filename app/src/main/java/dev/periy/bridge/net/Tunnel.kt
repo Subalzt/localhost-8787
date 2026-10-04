@@ -94,19 +94,23 @@ class TunnelKeys(filesDir: File) {
             runCatching { file.writeBytes(it) }
         }
 
-    /** The link code open now ([LinkCode]), and until when. */
-    @Volatile private var code: Pair<String, Long>? = null
+    /** The link code open now ([LinkCode]), its secret, and until when. */
+    private class Open(val code: String, val secret: ByteArray, val until: Long)
+    @Volatile private var code: Open? = null
 
-    fun openCode(c: String) { code = c to System.currentTimeMillis() + LinkCode.TTL_MS }
+    fun openCode(c: String, s: ByteArray) { code = Open(c, s, System.currentTimeMillis() + LinkCode.TTL_MS) }
     fun closeCode() { code = null }
+    private fun open(): Open? = code?.takeIf { it.until > System.currentTimeMillis() }
     /** The open link code, or null when there is none or it has run out. */
-    fun openCode(): String? = code?.takeIf { it.second > System.currentTimeMillis() }?.first
+    fun openCode(): String? = open()?.code
+    /** Keys nothing has: for the code's stand-in once it has closed. */
+    private val none = ByteArray(32).also { SecureRandom().nextBytes(it) }
 
     fun psk(deviceId: String): ByteArray =
-        if (deviceId == LinkCode.ID) LinkCode.psk(openCode() ?: "")
+        if (deviceId == LinkCode.ID) LinkCode.psk(open()?.secret ?: none)
         else TunnelCrypto.hmac(secret, TunnelProto.L_PSK, deviceId.toByteArray())
     fun tid(deviceId: String): ByteArray =
-        if (deviceId == LinkCode.ID) LinkCode.tid(openCode() ?: "")
+        if (deviceId == LinkCode.ID) LinkCode.tid(open()?.secret ?: none)
         else TunnelCrypto.hmac(secret, TunnelProto.L_ID, deviceId.toByteArray()).copyOf(16)
 }
 

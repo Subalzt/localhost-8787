@@ -217,6 +217,21 @@ class MainActivity : ComponentActivity() {
             intent.getStringExtra("msgto")?.let { to -> c.messages.send(to, intent.getStringExtra("msg").orEmpty()) }
             if (intent.getBooleanExtra("linkcode", false)) android.util.Log.i("LinkCode", "Open: " + c.openLinkCode())
             intent.getStringExtra("linkwith")?.let { c.peers.linkByCode(it) }
+            // `--ez paketest true`: a code's key exchange with itself through the board, right and wrong (logged as LinkPake).
+            if (intent.getBooleanExtra("paketest", false)) Thread {
+                val code = dev.periy.bridge.net.LinkCode.new()
+                val secret = dev.periy.bridge.net.LinkCode.newSecret()
+                val door = dev.periy.bridge.net.LinkPake.Door(code, secret, System.currentTimeMillis() + 60_000) { android.util.Log.i("LinkPake", "test: tries spent") }
+                door.start()
+                Thread.sleep(2_000)
+                val t0 = System.currentTimeMillis()
+                val right = runCatching { dev.periy.bridge.net.LinkPake.fetch(code) }
+                android.util.Log.i("LinkPake", "test right: ${right.map { it.contentEquals(secret) }.getOrElse { "failed: ${it.message}" }} in ${System.currentTimeMillis() - t0} ms")
+                val wrong = code.dropLast(1) + ((code.last() - '0' + 1) % 10)
+                val bad = runCatching { dev.periy.bridge.net.LinkPake.fetch(wrong) }
+                android.util.Log.i("LinkPake", "test wrong: ${bad.exceptionOrNull()?.message ?: "GOT A SECRET"}")
+                door.stop()
+            }.start()
             // Calls: `--es callto <name>`, `--ez callanswer true`, `--ez callend true`.
             intent.getStringExtra("callto")?.let { c.calls.call(it) }
             if (intent.getBooleanExtra("callanswer", false)) c.calls.answer()
@@ -1972,9 +1987,11 @@ private fun LinkFromAnywhere(status: PeerStatus?) {
                         kotlinx.coroutines.delay(1_000)
                     }
                 }
+                val spent by c.linkTriesSpent.collectAsStateWithLifecycle()
                 Text(
-                    "On the other phone: Phones, Enter a link code. Any network, for the next ${(left + 59_999) / 60_000} min. You allow it here when it asks.",
-                    style = CaptionStyle, color = Bridge.Muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    if (spent) "This code has had its three tries. If the other phone did not link, show a new one."
+                    else "On the other phone: Phones, Enter a link code. Any network, for the next ${(left + 59_999) / 60_000} min. You allow it here when it asks.",
+                    style = CaptionStyle, color = if (spent) Bridge.Danger else Bridge.Muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
                 Spacer(Modifier.height(12.dp))
                 SoftButton("Done") { c.closeLinkCode(); mode = "" }

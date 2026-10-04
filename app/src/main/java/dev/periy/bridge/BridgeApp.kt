@@ -127,14 +127,27 @@ class Container(ctx: Context) {
      */
     fun openLinkCode(): String {
         val code = dev.periy.bridge.net.LinkCode.new()
-        tunnelKeys.openCode(code)
+        val secret = dev.periy.bridge.net.LinkCode.newSecret()
+        tunnelKeys.openCode(code, secret)
+        linkTriesSpent.value = false
+        linkDoor?.stop()
+        // Answers a phone that types the code, three tries at most (net/LinkPake.kt).
+        linkDoor = dev.periy.bridge.net.LinkPake.Door(code, secret, System.currentTimeMillis() + dev.periy.bridge.net.LinkCode.TTL_MS) {
+            linkTriesSpent.value = true
+        }.also { it.start() }
         turnOnTunnel()
         tunnel.prune()
         main.postDelayed({ if (tunnelKeys.openCode() == null) tunnel.prune() }, dev.periy.bridge.net.LinkCode.TTL_MS + 1_000)
         return code
     }
 
+    /** The open code's door to the typing phone; and whether it has had its three tries. */
+    private var linkDoor: dev.periy.bridge.net.LinkPake.Door? = null
+    val linkTriesSpent = kotlinx.coroutines.flow.MutableStateFlow(false)
+
     fun closeLinkCode() {
+        linkDoor?.stop()
+        linkDoor = null
         tunnelKeys.closeCode()
         tunnel.prune()
     }

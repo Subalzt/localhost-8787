@@ -559,11 +559,12 @@ keeps phones from seeing each other) links with a code instead, below.
 <br>
 
 *Phones → Show a link code* gives four digits, open for five minutes. On the other phone,
-anywhere in the world, *Enter a link code* and type them. The code lets that phone find this one
-through the message board and reach it through its tunnel, over IPv6 or punched across IPv4, and
-there it asks to be let in exactly as on a shared Wi-Fi: compare the 4-digit code, tap **Allow**.
-Four digits are easy to read out but no secret from someone watching the board at that moment, so
-only allow the phone you expect, by its name; the code is spent the moment one phone links. Once linked,
+anywhere in the world, *Enter a link code* and type them. The code never travels: the two phones
+use it in a key exchange (SPAKE2, as Magic Wormhole does) that hands the typing phone the code's
+real secret, 32 random bytes, and only a phone that knows the code can finish it. Watching the
+board tells nobody anything; a guess is one try, three per code. With the secret that phone finds
+this one and reaches it through its tunnel, over IPv6 or punched across IPv4, and asks to be let
+in exactly as on a shared Wi-Fi: compare the 4-digit code, tap **Allow**. Once linked,
 each phone holds the other's own tunnel keys, so the link keeps working from anywhere, and the
 code closes. Both phones turn on *From other networks*. [How it works](docs/tunnel-protocol.md#link-codes).
 
