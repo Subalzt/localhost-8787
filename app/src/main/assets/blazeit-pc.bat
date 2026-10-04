@@ -2029,8 +2029,10 @@ public static class BlazeItPc
             req.ContentType = "video/h264";
             req.SendChunked = true;
             req.AllowWriteStreamBuffering = false;
-            req.Timeout = 10000;
-            req.ReadWriteTimeout = System.Threading.Timeout.Infinite;
+            // .NET's Timeout runs until the phone answers, which it does only when the stream ends, so
+            // none; a write that waits half a minute means the link is gone.
+            req.Timeout = System.Threading.Timeout.Infinite;
+            req.ReadWriteTimeout = 30000;
             req.ServicePoint.Expect100Continue = false;
             using (Stream o = req.GetRequestStream())
             {

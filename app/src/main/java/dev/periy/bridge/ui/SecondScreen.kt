@@ -162,15 +162,27 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
     /** The stream being shown now. */
     @Volatile private var current: DisplayFeed.Feed? = null
 
+    /** What the laptop is asked to send, again whenever this view is opened again. */
+    @Volatile private var startLine = ""
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        // Opened again (from the page, or Control): the laptop starts its stream afresh.
+        if (running && startLine.isNotEmpty()) EventBus.emit("display", startLine)
+    }
+
     // -------------------------------------------------------------- the stream
 
     private fun receive(holder: SurfaceHolder) {
         try {
             DisplayFeed.drain()
             DisplayFeed.open = true
-            // An older helper connects here instead; its streams join the others.
-            val ss = ServerSocket(PORT).also { server = it }
-            Thread({
+            // An older helper connects here instead; its streams join the others. Only if the port
+            // is free: it must never keep the view from taking streams the new way.
+            val ss = runCatching { ServerSocket().apply { reuseAddress = true; bind(java.net.InetSocketAddress(PORT)) } }
+                .onFailure { Log.w(TAG, "old port busy: ${it.message}") }.getOrNull()
+            server = ss
+            if (ss != null) Thread({
                 while (running) {
                     val s = runCatching { ss.accept() }.getOrNull() ?: break
                     s.tcpNoDelay = true
@@ -185,7 +197,16 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
             // picture can come at that rate; and that it may post the stream to the page's port.
             val dm = resources.displayMetrics
             val w = maxOf(dm.widthPixels, dm.heightPixels); val h = minOf(dm.widthPixels, dm.heightPixels)
-            EventBus.emit("display", "start $PORT $w $h $hz ${decoderBlocksPerSecond()} http")
+            startLine = "start $PORT $w $h $hz ${decoderBlocksPerSecond()} http"
+            EventBus.emit("display", startLine)
+            // While nothing has come, ask again now and then: the request is lost if the laptop is
+            // just moving from one link to another (the cable, the tunnel) when it goes out.
+            Thread({
+                while (running) {
+                    Thread.sleep(ASK_AGAIN_MS)
+                    if (running && current == null && DisplayFeed.feeds.isEmpty()) EventBus.emit("display", startLine)
+                }
+            }, "second-screen-ask").apply { isDaemon = true; start() }
             // The laptop starts a new stream whenever its monitors change (the display extended,
             // moved or resized), or the link asks for another size, so after one ends, wait a
             // while for the next before giving up.
@@ -518,5 +539,7 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
         const val PORT = 8791
         /** How long to wait for the laptop's next stream after one ends. */
         private const val RECONNECT_MS = 15_000
+        /** How often to ask the laptop again while nothing has come. */
+        private const val ASK_AGAIN_MS = 8_000L
     }
 }

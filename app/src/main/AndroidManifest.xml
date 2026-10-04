@@ -156,6 +156,7 @@
         <activity
             android:name=".ui.SecondScreenActivity"
             android:exported="false"
+            android:launchMode="singleTask"
             android:label="Second screen"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
