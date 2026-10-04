@@ -42,6 +42,8 @@
     <!-- Video calls between linked phones. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <!-- Sharing the phone's screen in a call. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
@@ -255,7 +257,7 @@
         <service
             android:name=".service.CallService"
             android:exported="false"
-            android:foregroundServiceType="microphone|phoneCall|camera" />
+            android:foregroundServiceType="microphone|phoneCall|camera|mediaProjection" />
         <receiver
             android:name=".service.CallActions"
             android:exported="false" />

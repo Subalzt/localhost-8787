@@ -89,6 +89,8 @@ data class CallSignal(
     val mic: Boolean = true,
     /** With the roster: more phones than a mesh carries, so each goes through the host. */
     val relay: Boolean = false,
+    /** With media: the picture is this phone's screen, to be shown whole. */
+    val screen: Boolean = false,
 )
 
 /** A call signal as it travels, sealed like a message ([CallCrypto]). */
@@ -105,6 +107,8 @@ data class CallMember(
     val camera: Boolean = false,
     val mic: Boolean = true,
     val speaking: Boolean = false,
+    /** Their picture is their screen: shown whole, not cropped. */
+    val screen: Boolean = false,
     /** How the call reaches them: "Same network, direct", "IPv6, direct", "IPv4, punched through". */
     val path: String = "",
 )
@@ -131,6 +135,8 @@ data class CallState(
     val relay: Boolean = false,
     /** A test call: this phone, through a call and back. */
     val test: Boolean = false,
+    /** This phone's screen goes in place of its camera. */
+    val sharing: Boolean = false,
 ) {
     /** Who is in it (or being called), for a title or a notification. */
     val peer: String get() = members.filter { it.phase != "left" }.joinToString(", ") { it.name }.ifEmpty { members.firstOrNull()?.name ?: "Call" }
@@ -262,6 +268,15 @@ class Calls(
     private var textures: SurfaceTextureHelper? = null
     /** The camera is on (its track on the senders, or in the host's grid). */
     private var cameraOn = false
+
+    /** This phone's screen, while it is shared: it goes in place of the camera. */
+    private var screenCapturer: org.webrtc.ScreenCapturerAndroid? = null
+    private var screenSource: VideoSource? = null
+    private var screenTrack: VideoTrack? = null
+    private var screenTextures: SurfaceTextureHelper? = null
+
+    /** What this phone sends as its picture now: its screen while shared, else its camera while on. */
+    private fun myVideo(): VideoTrack? = screenTrack ?: if (cameraOn) videoTrack else null
 
     // ------------------------------------------------------------------ starting, answering, ending
 
@@ -455,6 +470,61 @@ class Calls(
         }
     }
 
+    /**
+     * Shares this phone's screen in the call, in place of its camera, from the permission Android
+     * gave ([data], MediaProjection's). The call's service takes on screen capture first (Android
+     * wants that before the capture starts), then the screen goes, 15 frames a second, at most
+     * 1280 on its long side.
+     */
+    fun startScreen(data: android.content.Intent) {
+        scope.launch {
+            val s = _state.value ?: return@launch
+            if (screenTrack != null) return@launch
+            show(s.copy(sharing = true))
+            delay(700)
+            if (call == null) return@launch
+            val cap = org.webrtc.ScreenCapturerAndroid(data, object : android.media.projection.MediaProjection.Callback() {
+                override fun onStop() { stopScreen() }
+            })
+            val src = factory.createVideoSource(true)
+            val tex = SurfaceTextureHelper.create("screen", egl.eglBaseContext)
+            runCatching {
+                cap.initialize(tex, app, src.capturerObserver)
+                val m = app.resources.displayMetrics
+                val k = minOf(1f, 1280f / maxOf(m.widthPixels, m.heightPixels))
+                cap.startCapture((m.widthPixels * k).toInt() and 1.inv(), (m.heightPixels * k).toInt() and 1.inv(), 15)
+            }.onFailure {
+                Log.w(TAG, "Screen share", it)
+                runCatching { cap.dispose() }; runCatching { tex.dispose() }; runCatching { src.dispose() }
+                _state.value?.let { st -> show(st.copy(sharing = false)) }
+                return@launch
+            }
+            screenCapturer = cap; screenSource = src; screenTextures = tex
+            screenTrack = factory.createVideoTrack("screen", src)
+            refreshSenders()
+            tellMedia()
+        }
+    }
+
+    fun stopScreen() {
+        scope.launch {
+            stopScreenNow()
+            _state.value?.let { show(it.copy(sharing = false)) }
+            refreshSenders()
+            tellMedia()
+        }
+    }
+
+    private fun stopScreenNow() {
+        val cap = screenCapturer ?: return
+        screenCapturer = null
+        runCatching { cap.stopCapture() }; runCatching { cap.dispose() }
+        val t = screenTrack; screenTrack = null
+        call?.legs?.values?.forEach { it.videoSender?.setTrack(null, false) }
+        runCatching { t?.dispose() }; runCatching { screenSource?.dispose() }; runCatching { screenTextures?.dispose() }
+        screenSource = null; screenTextures = null
+    }
+
     fun flipCamera() {
         val cap = capturer ?: return
         cap.switchCamera(object : CameraVideoCapturer.CameraSwitchHandler {
@@ -497,6 +567,7 @@ class Calls(
         c.levels?.cancel()
         c.legs.values.forEach { closeLeg(it) }
         c.legs.clear()
+        stopScreenNow()
         runCatching { c.echo?.close(); c.echo?.dispose() }
         c.echoGrid?.release(); c.grid?.release()
         c.echo = null; c.echoGrid = null; c.grid = null
@@ -752,7 +823,7 @@ class Calls(
         val c = call ?: run { return }
         if (!c.host || !c.relay || c.test) {
             c.legs.values.forEach { leg ->
-                leg.videoSender?.setTrack(if (cameraOn) videoTrack else null, false)
+                leg.videoSender?.setTrack(myVideo(), false)
                 if (!c.test) leg.audioSlots.forEach { it.setTrack(null, false) }
             }
             if (!c.test) { c.grid?.release(); c.grid = null }
@@ -760,8 +831,7 @@ class Calls(
         }
         val grid = c.grid ?: CallCompositor(factory).also { c.grid = it }
         grid.set(buildList {
-            val cam = videoTrack
-            if (cameraOn && cam != null) add(c.me to cam)
+            myVideo()?.let { add(c.me to it) }
             for (e in c.roster) if (e.id != c.me) c.remoteVideo[e.id]?.let { add(e.id to it) }
         })
         for ((member, leg) in c.legs) {
@@ -787,7 +857,7 @@ class Calls(
                 val ts = leg.pc.transceivers
                 ts.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.let { t ->
                     t.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV
-                    t.sender.setTrack(if (cameraOn) videoTrack else null, false)
+                    t.sender.setTrack(myVideo(), false)
                     leg.videoSender = t.sender
                 }
                 ts.filter { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO && it.sender.id() != leg.micSender?.id() }.forEach { t ->
@@ -816,7 +886,7 @@ class Calls(
                 if (leg == null) c.early.getOrPut(sig.from) { mutableListOf() }.add(cand)
                 else if (leg.remoteSet) leg.pc.addIceCandidate(cand) else synchronized(leg.pending) { leg.pending.add(cand) }
             }
-            "media" -> updateMember(sig.from) { it.copy(camera = sig.camera, mic = sig.mic) }
+            "media" -> updateMember(sig.from) { it.copy(camera = sig.camera, mic = sig.mic, screen = sig.screen) }
         }
     }
 
@@ -902,7 +972,7 @@ class Calls(
         leg.micSender = pc.addTrack(audio, listOf("call"))
         if (offerer) {
             val t = pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO, RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_RECV))
-            t.sender.setTrack(if (cameraOn) videoTrack else null, false)
+            t.sender.setTrack(myVideo(), false)
             leg.videoSender = t.sender
             // Spare voice channels, empty unless a big call's host fills them.
             if (!c.test) repeat(SLOTS) {
@@ -1051,7 +1121,7 @@ class Calls(
         val c = call ?: return
         val s = _state.value ?: return
         val to = only?.let { listOf(it) } ?: c.roster.map { it.id }.filter { it != c.me }
-        to.forEach { sendToMember(it, CallSignal(c.id, "media", camera = s.camera, mic = !s.muted)) }
+        to.forEach { sendToMember(it, CallSignal(c.id, "media", camera = s.camera || screenTrack != null, mic = !s.muted, screen = screenTrack != null)) }
     }
 
     /** A media step to another member: straight to it when it is linked here, else through the host. */

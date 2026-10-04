@@ -55,8 +55,10 @@ class CallService : Service() {
         }
         val n = ongoing(this, s)
         // The camera too while it is on, so the picture keeps going with the app in the background.
-        val camera = if (s.camera && checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED)
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0
+        val camera = (if (s.camera && checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0) or
+            // Sharing the screen: Android wants this before the capture starts.
+            (if (s.sharing && Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0)
         runCatching {
             if (Build.VERSION.SDK_INT >= 30) {
                 startForeground(ONGOING_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL or camera)
@@ -85,6 +87,7 @@ class CallService : Service() {
         /** The service is running for the call, and with the camera or not. */
         @Volatile private var started = false
         @Volatile private var startedCamera = false
+        @Volatile private var startedSharing = false
 
         /** Follows the call: rings for one coming in, runs the service for one under way, and clears up after. */
         fun update(ctx: Context, s: CallState?) {
@@ -104,9 +107,10 @@ class CallService : Service() {
             // Under way: started from the screen (calling, or answering), so it may use the microphone.
             // Started once (again when the camera goes on or off, for its standing); otherwise only
             // its notification follows the call.
-            if (!started || startedCamera != s.camera) {
+            if (!started || startedCamera != s.camera || startedSharing != s.sharing) {
                 started = true
                 startedCamera = s.camera
+                startedSharing = s.sharing
                 runCatching { app.startForegroundService(Intent(app, CallService::class.java)) }
             } else runCatching { nm.notify(ONGOING_ID, ongoing(app, s)) }
         }

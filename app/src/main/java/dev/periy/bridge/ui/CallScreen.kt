@@ -24,6 +24,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -156,8 +157,19 @@ fun CallScreen(answerNow: Boolean, onAnswered: () -> Unit) {
     val ctx = LocalContext.current
     val calls = ctx.container.calls
     val s by calls.state.collectAsState()
-    val call = s ?: return
+    // Kept while the screen sinks away after the call has gone.
+    var last by remember { mutableStateOf<CallState?>(null) }
+    if (s != null) last = s
+    val call = s ?: last ?: return
     val local by calls.localVideo.collectAsState()
+    // Sharing the screen asks Android first (MediaProjection).
+    val projection = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == android.app.Activity.RESULT_OK && r.data != null) calls.startScreen(r.data!!)
+    }
+    val toggleShare = {
+        if (call.sharing) calls.stopScreen()
+        else projection.launch(ctx.getSystemService(android.media.projection.MediaProjectionManager::class.java).createScreenCaptureIntent())
+    }
 
     // Answering asks for what it needs first: the microphone, and the camera for video.
     var answerVideo by remember { mutableStateOf(false) }
@@ -188,7 +200,7 @@ fun CallScreen(answerNow: Boolean, onAnswered: () -> Unit) {
         else -> call.why.ifEmpty { "Call ended" }
     }
     val inCall = call.members.filter { it.phase != "left" && it.phase != "invited" }
-    val pictures = call.camera || inCall.any { it.camera && it.video != null }
+    val pictures = call.camera || call.sharing || inCall.any { it.camera && it.video != null }
     var adding by remember { mutableStateOf(false) }
 
     // The background: the first person's colour, deep, down to black.
@@ -196,12 +208,25 @@ fun CallScreen(answerNow: Boolean, onAnswered: () -> Unit) {
     Box(
         Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(tone(lead, 0.45f, 0.16f), Color(0xFF07070A), Color.Black))),
     ) {
-        if (call.phase == "ringing" && !call.outgoing) {
-            Ringing(call, onDecline = { calls.hangUp() }, onAnswer = answer)
-        } else if (pictures && call.phase != "ended") {
-            VideoStage(call, local, status, calls, toggleCamera, onAdd = { adding = true })
-        } else {
-            VoiceStage(call, status, calls, toggleCamera, onAdd = { adding = true })
+        // Ringing, then voice or pictures: each stage fades and settles into the next.
+        val stage = when {
+            call.phase == "ringing" && !call.outgoing -> 0
+            pictures && call.phase != "ended" -> 2
+            else -> 1
+        }
+        androidx.compose.animation.AnimatedContent(
+            stage,
+            transitionSpec = {
+                (fadeIn(tween(320)) + androidx.compose.animation.scaleIn(tween(380, easing = FastOutSlowInEasing), initialScale = 0.94f)) togetherWith
+                    (fadeOut(tween(220)) + androidx.compose.animation.scaleOut(tween(260), targetScale = 1.04f))
+            },
+            label = "stage",
+        ) { st ->
+            when (st) {
+                0 -> Ringing(call, onDecline = { calls.hangUp() }, onAnswer = answer)
+                2 -> VideoStage(call, local, status, calls, toggleCamera, toggleShare, onAdd = { adding = true })
+                else -> VoiceStage(call, status, calls, toggleCamera, toggleShare, onAdd = { adding = true })
+            }
         }
         AnimatedVisibility(adding, enter = fadeIn(tween(200)), exit = fadeOut(tween(200))) {
             AddSheet(call, onPick = { calls.add(it); adding = false }, onClose = { adding = false })
@@ -279,7 +304,7 @@ private fun Avatar(name: String, size: Dp, speaking: Boolean = false) {
 // ---------------------------------------------------------------------- voice
 
 @Composable
-private fun VoiceStage(call: CallState, status: String, calls: Calls, toggleCamera: () -> Unit, onAdd: () -> Unit) {
+private fun VoiceStage(call: CallState, status: String, calls: Calls, toggleCamera: () -> Unit, toggleShare: () -> Unit, onAdd: () -> Unit) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val people = call.members.filter { it.phase != "left" }
@@ -327,7 +352,7 @@ private fun VoiceStage(call: CallState, status: String, calls: Calls, toggleCame
             }
         }
         Spacer(Modifier.weight(1f))
-        if (call.phase != "ended") Controls(call, calls, toggleCamera, onAdd, overVideo = false)
+        if (call.phase != "ended") Controls(call, calls, toggleCamera, toggleShare, onAdd, overVideo = false)
     }
 }
 
@@ -363,7 +388,7 @@ private fun Sealed(call: CallState) {
 // ---------------------------------------------------------------------- video
 
 @Composable
-private fun VideoStage(call: CallState, local: VideoTrack?, status: String, calls: Calls, toggleCamera: () -> Unit, onAdd: () -> Unit) {
+private fun VideoStage(call: CallState, local: VideoTrack?, status: String, calls: Calls, toggleCamera: () -> Unit, toggleShare: () -> Unit, onAdd: () -> Unit) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val others = call.members.filter { it.phase != "left" && it.phase != "invited" }
@@ -383,7 +408,7 @@ private fun VideoStage(call: CallState, local: VideoTrack?, status: String, call
         } else if (others.size <= 1) {
             val o = others.firstOrNull()
             // The other phone full screen; their avatar while their camera is off.
-            if (o != null && o.camera && o.video != null) VideoView(o.video, mirror = false, modifier = Modifier.fillMaxSize())
+            if (o != null && o.camera && o.video != null) VideoView(o.video, mirror = false, fit = o.screen, modifier = Modifier.fillMaxSize())
             else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     val name = o?.name ?: call.peer
@@ -397,11 +422,20 @@ private fun VideoStage(call: CallState, local: VideoTrack?, status: String, call
                     }
                 }
             }
-            if (local != null) SelfView(local, call.frontCamera, top, bottom)
+            if (local != null && !call.sharing) SelfView(local, call.frontCamera, top, bottom)
         } else {
             Grid(others, local, call, Modifier.fillMaxSize().padding(top = top + 64.dp, bottom = bottom + 120.dp, start = 8.dp, end = 8.dp))
         }
 
+        if (call.sharing) Row(
+            Modifier.align(Alignment.TopCenter).padding(top = top + 104.dp).clip(RoundedCornerShape(50)).background(Color(0xFFFF3B30))
+                .clickable { toggleShare() }.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(BlazeIcons.ScreenShare, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Sharing your screen · Stop", style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = Color.White)
+        }
         // Along the top: who, and the time; along the foot, the buttons. Both over a soft shade.
         AnimatedVisibility(shown || call.phase != "active", enter = fadeIn(tween(220)), exit = fadeOut(tween(300)), modifier = Modifier.align(Alignment.TopCenter)) {
             Column(
@@ -427,7 +461,7 @@ private fun VideoStage(call: CallState, local: VideoTrack?, status: String, call
                 Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))))
                     .padding(top = 30.dp, bottom = bottom + 22.dp),
                 contentAlignment = Alignment.Center,
-            ) { Controls(call, calls, toggleCamera, onAdd, overVideo = true) }
+            ) { Controls(call, calls, toggleCamera, toggleShare, onAdd, overVideo = true) }
         }
     }
 }
@@ -468,9 +502,9 @@ private fun SelfView(track: VideoTrack, front: Boolean, top: Dp, bottom: Dp) {
 /** Everyone in a group call with pictures: two stacked, three as one over two, four as two by two; this phone among them. */
 @Composable
 private fun Grid(others: List<CallMember>, local: VideoTrack?, call: CallState, modifier: Modifier) {
-    class Spec(val key: String, val name: String, val track: VideoTrack?, val mirror: Boolean, val speaking: Boolean, val muted: Boolean, val note: String)
-    val tiles = others.map { m -> Spec(m.id, m.name, if (m.camera) m.video else null, false, m.speaking, !m.mic, memberStatus(m)) } +
-        Spec("me", "You", local, call.frontCamera, call.speaking, call.muted, "")
+    class Spec(val key: String, val name: String, val track: VideoTrack?, val mirror: Boolean, val speaking: Boolean, val muted: Boolean, val note: String, val fit: Boolean)
+    val tiles = others.map { m -> Spec(m.id, m.name, if (m.camera) m.video else null, false, m.speaking, !m.mic, memberStatus(m), m.screen) } +
+        Spec("me", if (call.sharing) "Your screen" else "You", if (call.sharing) null else local, call.frontCamera, call.speaking, call.muted, if (call.sharing) "Sharing" else "", false)
     val gap = 8.dp
     Column(modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
         val rows = when (tiles.size) {
@@ -482,7 +516,7 @@ private fun Grid(others: List<CallMember>, local: VideoTrack?, call: CallState, 
         rows.forEach { row ->
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
                 row.forEach { t ->
-                    androidx.compose.runtime.key(t.key) { Tile(t.name, t.track, t.mirror, t.speaking, t.muted, t.note, Modifier.weight(1f).fillMaxHeight()) }
+                    androidx.compose.runtime.key(t.key) { Tile(t.name, t.track, t.mirror, t.speaking, t.muted, t.note, Modifier.weight(1f).fillMaxHeight(), t.fit) }
                 }
             }
         }
@@ -490,14 +524,14 @@ private fun Grid(others: List<CallMember>, local: VideoTrack?, call: CallState, 
 }
 
 @Composable
-private fun Tile(name: String, track: VideoTrack?, mirror: Boolean, speaking: Boolean, muted: Boolean, note: String, modifier: Modifier) {
+private fun Tile(name: String, track: VideoTrack?, mirror: Boolean, speaking: Boolean, muted: Boolean, note: String, modifier: Modifier, fit: Boolean = false) {
     val edge by animateColorAsState(if (speaking) Color(0xFF34C759) else Color.Transparent, tween(160), label = "edge")
     Box(
         modifier.clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(tone(name, 0.35f, 0.22f), Color(0xFF111114))))
             .border(3.dp, edge, RoundedCornerShape(22.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        if (track != null) VideoView(track, mirror = mirror, corner = 22.dp, modifier = Modifier.fillMaxSize())
+        if (track != null) VideoView(track, mirror = mirror, corner = 22.dp, fit = fit, modifier = Modifier.fillMaxSize())
         else Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(name, 72.dp, speaking = false)
             if (note.isNotEmpty()) { Spacer(Modifier.height(8.dp)); Text(note, style = TextStyle(fontSize = 12.sp), color = Color.White.copy(alpha = 0.6f)) }
@@ -550,7 +584,7 @@ private fun VideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier, ov
 // ---------------------------------------------------------------------- the buttons
 
 @Composable
-private fun Controls(call: CallState, calls: Calls, toggleCamera: () -> Unit, onAdd: () -> Unit, overVideo: Boolean) {
+private fun Controls(call: CallState, calls: Calls, toggleCamera: () -> Unit, toggleShare: () -> Unit, onAdd: () -> Unit, overVideo: Boolean) {
     val canAdd = call.host && call.members.count { it.phase != "left" } + 1 < Calls.MAX
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Row(
@@ -560,11 +594,12 @@ private fun Controls(call: CallState, calls: Calls, toggleCamera: () -> Unit, on
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ToggleButton(if (call.muted) BlazeIcons.MicOff else BlazeIcons.Mic, if (call.muted) "Unmute" else "Mute", call.muted) { calls.setMuted(!call.muted) }
-            ToggleButton(if (call.camera) BlazeIcons.Video else BlazeIcons.VideoOff, "Camera", call.camera, onClick = toggleCamera)
-            if (call.camera) ToggleButton(BlazeIcons.FlipCamera, "Flip", false) { calls.flipCamera() }
-            ToggleButton(BlazeIcons.VolumeUp, "Speaker", call.speaker) { calls.setSpeaker(!call.speaker) }
-            if (canAdd) ToggleButton(BlazeIcons.PersonAdd, "Add", false, onClick = onAdd)
+            ToggleButton(if (call.muted) BlazeIcons.MicOff else BlazeIcons.Mic, if (call.muted) "Unmute" else "Mute", call.muted, order = 0) { calls.setMuted(!call.muted) }
+            ToggleButton(if (call.camera) BlazeIcons.Video else BlazeIcons.VideoOff, "Camera", call.camera, order = 1, onClick = toggleCamera)
+            if (call.camera && !call.sharing) ToggleButton(BlazeIcons.FlipCamera, "Flip", false, order = 2) { calls.flipCamera() }
+            if (!call.test) ToggleButton(BlazeIcons.ScreenShare, "Share", call.sharing, order = 3, onClick = toggleShare)
+            ToggleButton(BlazeIcons.VolumeUp, "Speaker", call.speaker, order = 4) { calls.setSpeaker(!call.speaker) }
+            if (canAdd) ToggleButton(BlazeIcons.PersonAdd, "Add", false, order = 5, onClick = onAdd)
         }
         Spacer(Modifier.height(22.dp))
         BigButton(BlazeIcons.Call, "End", Color(0xFFFF3B30), rotate = true, small = true) { calls.hangUp() }
@@ -573,10 +608,16 @@ private fun Controls(call: CallState, calls: Calls, toggleCamera: () -> Unit, on
 
 /** A round button that is lit (white) while its thing is on. */
 @Composable
-private fun ToggleButton(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
+private fun ToggleButton(icon: ImageVector, label: String, on: Boolean, order: Int = 0, onClick: () -> Unit) {
     val bg by animateColorAsState(if (on) Color.White else Color.White.copy(alpha = 0.14f), tween(180), label = "bg")
     val fg by animateColorAsState(if (on) Color.Black else Color.White, tween(180), label = "fg")
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(62.dp)) {
+    // Each pops in a moment after the one before it.
+    val pop = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { delay(60L * order); pop.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 420f)) }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(56.dp).graphicsLayer { val k = 0.6f + 0.4f * pop.value; scaleX = k; scaleY = k; alpha = pop.value.coerceIn(0f, 1f) },
+    ) {
         Box(Modifier.size(54.dp).pressable(CircleShape, scaleTo = 0.88f, onClick = onClick).background(bg), contentAlignment = Alignment.Center) {
             Icon(icon, label, tint = fg, modifier = Modifier.size(25.dp))
         }

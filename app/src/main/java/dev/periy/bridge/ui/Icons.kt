@@ -122,6 +122,14 @@ object BlazeIcons {
         "M9.4 15.4v-1.6H11",
     )
 
+    /** A screen with an arrow rising out of it: share this screen. */
+    val ScreenShare: ImageVector = stroked(
+        "screen-share",
+        "M4.5 5.5h15a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16V7a1.5 1.5 0 0 1 1.5-1.5Z",
+        "M9 20.5h6",
+        "M12 14V9M9.8 11.2 12 9l2.2 2.2",
+    )
+
     /** A person with a plus beside them. */
     val PersonAdd: ImageVector = stroked(
         "person-add",

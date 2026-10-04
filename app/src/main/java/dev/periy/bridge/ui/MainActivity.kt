@@ -757,7 +757,12 @@ private fun BlazeItUi(vm: MainViewModel) {
         // A call, over everything.
         val call by ctx.container.calls.state.collectAsStateWithLifecycle()
         val answerNow by answerCall.collectAsStateWithLifecycle()
-        if (call != null) CallScreen(answerNow) { answerCall.value = false }
+        // It rises in from the foot and sinks away when the call is over.
+        androidx.compose.animation.AnimatedVisibility(
+            call != null,
+            enter = androidx.compose.animation.slideInVertically(tween(380, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { it / 3 } + androidx.compose.animation.fadeIn(tween(260)),
+            exit = androidx.compose.animation.slideOutVertically(tween(320)) { it / 3 } + androidx.compose.animation.fadeOut(tween(260)),
+        ) { CallScreen(answerNow) { answerCall.value = false } }
     }
 }
 
