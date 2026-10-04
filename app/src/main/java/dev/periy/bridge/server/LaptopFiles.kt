@@ -61,4 +61,31 @@ object LaptopFiles {
 
     /** The helper's word on a save: the name it was saved as, or "!" and why it was not. */
     fun saved(id: String, result: String) { saves.remove(id)?.complete(result) }
+
+    /** A file on this phone on its way to the laptop: what the helper fetches by its id. */
+    class Out(val uri: android.net.Uri, val name: String, val size: Long)
+    private val outgoing = ConcurrentHashMap<String, Out>()
+
+    fun outgoing(id: String): Out? = outgoing[id]
+
+    /**
+     * Sends a file on this phone ([uri], [name], [size]) to [folder] on the laptop: the helper is
+     * told (it reaches the phone, the phone never reaches it) and fetches it, keeping any file of
+     * the same name there. The name it was saved as, or why not.
+     */
+    suspend fun put(uri: android.net.Uri, name: String, size: Long, folder: String): Result<String> {
+        if (Control.connected.value.isEmpty()) return Result.failure(IllegalStateException("The laptop helper is not running"))
+        val id = UUID.randomUUID().toString()
+        val wait = CompletableDeferred<String>()
+        saves[id] = wait
+        outgoing[id] = Out(uri, name, size)
+        EventBus.emit("laptopfs", "put $id ${b64(folder)} ${b64(name)} $size")
+        return try {
+            val r = withTimeoutOrNull(6 * 60 * 60_000L) { wait.await() } ?: return Result.failure(IllegalStateException("It took too long"))
+            if (r.startsWith("!")) Result.failure(IllegalStateException(r.drop(1))) else Result.success(r)
+        } finally {
+            saves.remove(id)
+            outgoing.remove(id)
+        }
+    }
 }

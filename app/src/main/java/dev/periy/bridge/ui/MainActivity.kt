@@ -238,6 +238,14 @@ class MainActivity : ComponentActivity() {
             // `--ez calltest true [--ez video true]`: a test call, this phone through a call and back.
             if (intent.getBooleanExtra("calltest", false)) c.calls.testCall(intent.getBooleanExtra("video", false))
             if (intent.getBooleanExtra("callstate", false)) c.calls.logState()
+            // `--es laptopput <folder>`: a small test file from this phone into that folder on the laptop (logged).
+            intent.getStringExtra("laptopput")?.let { folder ->
+                val f = java.io.File(cacheDir, "Sent from the phone.txt").apply { writeText("Hello from the phone, sent " + java.util.Date()) }
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    val r = dev.periy.bridge.server.LaptopFiles.put(android.net.Uri.fromFile(f), f.name, f.length(), folder)
+                    android.util.Log.i("LaptopPut", r.fold({ "Saved as $it" }, { "Failed: ${it.message}" }))
+                }
+            }
             if (intent.getBooleanExtra("callanswer", false)) c.calls.answer(intent.getBooleanExtra("video", false))
             if (intent.getBooleanExtra("callend", false)) c.calls.hangUp()
             if (intent.getBooleanExtra("opencontrol", false)) debugControl.value = true

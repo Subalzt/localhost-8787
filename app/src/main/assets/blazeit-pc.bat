@@ -920,6 +920,43 @@ public static class BlazeItPc
         }
     }
 
+    /**
+     * A file the phone sends into [folder] here: fetched from the phone (nothing here listens),
+     * written beside a file of the same name rather than over it ("name (1).ext"), and only kept
+     * whole; the phone hears the name it was saved as, or why not.
+     */
+    static void LaptopReceive(string id, string folder, string name, long size)
+    {
+        string done = "/api/laptop/fs/put-done?id=" + Uri.EscapeDataString(id);
+        string part = null;
+        try
+        {
+            if (!Directory.Exists(folder)) throw new IOException("that folder is not there any more");
+            string safe = string.Join("_", name.Split(Path.GetInvalidFileNameChars())).Trim();
+            if (safe.Length == 0) safe = "file";
+            string stem = Path.GetFileNameWithoutExtension(safe), ext = Path.GetExtension(safe);
+            string target = Path.Combine(folder, safe);
+            for (int i = 1; File.Exists(target) || Directory.Exists(target); i++) target = Path.Combine(folder, stem + " (" + i + ")" + ext);
+            part = target + ".part";
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + "/api/laptop/fs/out/" + Uri.EscapeDataString(id));
+            r.Proxy = null; r.UserAgent = Ua; r.Headers["Cookie"] = session; r.Timeout = 30000; r.ReadWriteTimeout = 60000;
+            using (WebResponse resp = r.GetResponse())
+            using (Stream i = resp.GetResponseStream())
+            using (FileStream o = new FileStream(part, FileMode.Create, FileAccess.Write)) i.CopyTo(o, 256 * 1024);
+            if (size >= 0 && new FileInfo(part).Length != size) throw new IOException("only part of it came");
+            File.Move(part, target);
+            part = null;
+            Say("Saved " + Path.GetFileName(target) + " from the phone in " + folder + ".");
+            using (Http("POST", done + "&name=" + Uri.EscapeDataString(Path.GetFileName(target)), session, 10000)) { }
+        }
+        catch (Exception e)
+        {
+            if (part != null) try { File.Delete(part); } catch { }
+            Say("Could not save " + name + " from the phone: " + e.Message);
+            try { using (Http("POST", done + "&error=" + Uri.EscapeDataString("The laptop could not save it: " + e.Message), session, 10000)) { } } catch { }
+        }
+    }
+
     static string Body(HttpWebResponse r)
     {
         using (StreamReader rd = new StreamReader(r.GetResponseStream())) return rd.ReadToEnd();
@@ -1554,7 +1591,16 @@ public static class BlazeItPc
                             {
                                 // The phone asks for a folder here, or a file from it (LaptopFiles on the phone).
                                 string[] q = d.Split(' ');
-                                if (q.Length >= 3)
+                                if (q[0] == "put" && q.Length >= 5)
+                                {
+                                    // A file from the phone, into a folder here: fetched from the phone, as everything is.
+                                    string id = q[1], folder = Encoding.UTF8.GetString(Convert.FromBase64String(q[2]));
+                                    string name = Encoding.UTF8.GetString(Convert.FromBase64String(q[3]));
+                                    long size; if (!long.TryParse(q[4], out size)) size = -1;
+                                    Thread f = new Thread(delegate () { LaptopReceive(id, folder, name, size); });
+                                    f.IsBackground = true; f.Start();
+                                }
+                                else if (q.Length >= 3)
                                 {
                                     string id = q[1], path = Encoding.UTF8.GetString(Convert.FromBase64String(q[2]));
                                     bool get = q[0] == "get";

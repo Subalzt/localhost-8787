@@ -83,6 +83,24 @@ fun LaptopFilesScreen(onClose: () -> Unit) {
         }
     }
 
+    // Files from this phone into the folder open; it reloads when they are there.
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        val into = path
+        if (uris.isEmpty() || into.isEmpty()) return@rememberLauncherForActivityResult
+        uris.forEach { uri ->
+            val (name, size) = ctx.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) (c.getString(0) ?: "file") to (if (c.isNull(1)) -1L else c.getLong(1)) else null } ?: ("file" to -1L)
+            Toast.makeText(ctx, "Sending $name to $laptop", Toast.LENGTH_SHORT).show()
+            scope.launch {
+                LaptopFiles.put(uri, name, size, into)
+                    .onSuccess { Toast.makeText(ctx, "On $laptop: $it", Toast.LENGTH_SHORT).show(); seen.remove(into); reload++ }
+                    .onFailure { Toast.makeText(ctx, it.message ?: "Could not send it", Toast.LENGTH_LONG).show() }
+            }
+        }
+    }
+
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Column(Modifier.fillMaxSize().background(Bridge.Bg).padding(top = top)) {
@@ -96,6 +114,14 @@ fun LaptopFilesScreen(onClose: () -> Unit) {
                 style = TextStyle(fontSize = 17.sp), color = Bridge.Accent, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).clickable { up() },
             )
+            // Into a folder (not the list of folders and drives): files from this phone.
+            if (path.isNotEmpty() && listing != null && listing.error.isEmpty()) {
+                Text(
+                    "Send", style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Accent,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable { pick.launch(arrayOf("*/*")) }
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                )
+            }
             if (path.isNotEmpty() && listing != null && listing.error.isEmpty() && listing.entries.isNotEmpty()) {
                 Text(
                     "Save folder", style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Accent,

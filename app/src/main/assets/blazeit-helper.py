@@ -2740,7 +2740,13 @@ def events_loop():
                 elif ev == "laptopfs" and not snapshot:
                     # The phone asks for a folder here, or a file from it (LaptopFiles on the phone).
                     q = d.split(" ")
-                    if len(q) >= 3:
+                    if q[0] == "put" and len(q) >= 5:
+                        # A file from the phone, into a folder here: fetched from the phone, as everything is.
+                        folder = base64.b64decode(q[2]).decode("utf-8", "replace")
+                        name = base64.b64decode(q[3]).decode("utf-8", "replace")
+                        size = int(q[4]) if q[4].lstrip("-").isdigit() else -1
+                        threading.Thread(target=laptop_receive, args=(q[1], folder, name, size), daemon=True).start()
+                    elif len(q) >= 3:
                         path = base64.b64decode(q[2]).decode("utf-8", "replace") if q[2] else ""
                         threading.Thread(target=laptop_send if q[0] == "get" else laptop_list, args=(q[1], path), daemon=True).start()
                 elif ev == "mirror" and not snapshot:
@@ -3040,6 +3046,54 @@ def laptop_send_folder(rid, path):
         say("Could not send the folder %s to the phone: %s" % (name, e))
     finally:
         conn.close()
+
+
+def laptop_receive(rid, folder, name, size):
+    """A file the phone sends into folder here: fetched from the phone (nothing here listens), put
+    beside a file of the same name rather than over it, kept only whole; the phone hears how it went."""
+    done = "/api/laptop/fs/put-done?id=%s" % urllib.parse.quote(rid)
+    part = None
+    try:
+        if not os.path.isdir(folder):
+            raise OSError("that folder is not there any more")
+        safe = "".join("_" if ch in "/\\\0" else ch for ch in name).strip() or "file"
+        stem, ext = os.path.splitext(safe)
+        target, i = os.path.join(folder, safe), 1
+        while os.path.exists(target):
+            target, i = os.path.join(folder, "%s (%d)%s" % (stem, i, ext)), i + 1
+        part = target + ".part"
+        host, port = via(phone)
+        conn = http.client.HTTPConnection(host, port, timeout=60)
+        try:
+            conn.request("GET", "/api/laptop/fs/out/" + urllib.parse.quote(rid), headers={"User-Agent": user_agent(), "Cookie": session or ""})
+            r = conn.getresponse()
+            if r.status != 200:
+                raise OSError("the phone said %d" % r.status)
+            with open(part, "wb") as f:
+                while True:
+                    b = r.read(256 * 1024)
+                    if not b:
+                        break
+                    f.write(b)
+        finally:
+            conn.close()
+        if size >= 0 and os.path.getsize(part) != size:
+            raise OSError("only part of it came")
+        os.replace(part, target)
+        part = None
+        say("Saved %s from the phone in %s." % (os.path.basename(target), folder))
+        request("POST", done + "&name=" + urllib.parse.quote(os.path.basename(target)), timeout=10)
+    except (OSError, http.client.HTTPException) as e:
+        if part:
+            try:
+                os.remove(part)
+            except OSError:
+                pass
+        say("Could not save %s from the phone: %s" % (name, e))
+        try:
+            request("POST", done + "&error=" + urllib.parse.quote("The laptop could not save it: %s" % e), timeout=10)
+        except (OSError, http.client.HTTPException):
+            pass
 
 
 def laptop_send(rid, path):

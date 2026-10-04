@@ -1560,6 +1560,33 @@ class BridgeServer(
                 .onFailure { LaptopFiles.saved(id, "!" + (it.message ?: "It stopped part way")); Transfers.finish(tid, false) }
             call.respond(ApiResult(r.isSuccess))
         }
+        // A file this phone is sending to the laptop: the helper fetches it here.
+        get("/api/laptop/fs/out/{id}") {
+            val out = LaptopFiles.outgoing(call.parameters["id"].orEmpty())
+            if (out == null) {
+                call.respond(HttpStatusCode.NotFound, ApiResult(false, "Not on its way any more"))
+                return@get
+            }
+            val input = withContext(Dispatchers.IO) { runCatching { ctx.contentResolver.openInputStream(out.uri) }.getOrNull() }
+            if (input == null) {
+                call.respond(HttpStatusCode.Gone, ApiResult(false, "The file could not be opened"))
+                return@get
+            }
+            if (out.size > 0) call.response.header(HttpHeaders.ContentLength, out.size.toString())
+            call.respondOutputStream(ContentType.Application.OctetStream) {
+                input.use { i ->
+                    val buf = ByteArray(256 * 1024)
+                    while (true) { val n = i.read(buf); if (n < 0) break; write(buf, 0, n); Monitor.addOut(n, Lane.FILES) }
+                }
+            }
+        }
+        // The helper's word on it: the name it was saved as, or why not.
+        post("/api/laptop/fs/put-done") {
+            val id = call.request.queryParameters["id"].orEmpty()
+            val err = call.request.queryParameters["error"]
+            LaptopFiles.saved(id, if (err != null) "!$err" else call.request.queryParameters["name"].orEmpty())
+            call.respond(ApiResult(true))
+        }
         post("/api/mirror") {
             val mode = call.request.queryParameters["mode"] ?: "start"
             if (Control.connected.value.isEmpty()) {
