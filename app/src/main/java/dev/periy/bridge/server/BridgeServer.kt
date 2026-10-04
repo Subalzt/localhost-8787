@@ -129,7 +129,8 @@ class RemoteDoor(
         ).toString()
     }
 
-    fun set(on: Boolean) = if (on) tunnel.start() else tunnel.stop()
+    /** From other networks on or off; the tunnel itself keeps listening for the phone's own networks. */
+    fun set(on: Boolean) { tunnel.start(); tunnel.setFar(on) }
 }
 
 class BridgeServer(
@@ -222,6 +223,21 @@ class BridgeServer(
     private fun ApplicationCall.viaTunnel(): Boolean =
         request.local.localAddress.removePrefix("::ffff:").substringBefore('%') == dev.periy.bridge.net.TunnelProto.LOCAL_HOST
 
+    /**
+     * Came through a tunnel from one of the phone's own networks (sealed, but near): that device's
+     * tunnel, which knows the addresses at both ends; null for anything else.
+     */
+    private fun ApplicationCall.nearTunnel(): dev.periy.bridge.net.TunnelPeer? {
+        if (request.local.localAddress.removePrefix("::ffff:").substringBefore('%') != dev.periy.bridge.net.TunnelProto.LOCAL_NEAR) return null
+        val id = device()?.id
+        val near = remote?.tunnel?.peers?.value?.filter { it.near }.orEmpty()
+        return near.firstOrNull { it.deviceId == id } ?: near.singleOrNull()
+    }
+
+    /** The phone's address the request came in on: through a near tunnel, the one the tunnel came in on. */
+    private fun ApplicationCall.localAddr(): String =
+        nearTunnel()?.here?.takeIf { it.isNotEmpty() } ?: request.local.localAddress.removePrefix("::ffff:").substringBefore('%')
+
     /** The far end of this device's tunnel: "2409:…" over TCP, or "152.59.187.3 (UDP)" punched through. */
     private fun tunnelFar(deviceId: String?): String? =
         deviceId?.let { id -> remote?.tunnel?.peers?.value?.firstOrNull { it.deviceId == id }?.remote }
@@ -259,7 +275,9 @@ class BridgeServer(
         )
         server.start(wait = false)
         engine = server
-        remote?.let { if (it.enabled()) it.tunnel.start() }
+        // Always on: devices on the phone's own networks reach it sealed through it too; from the
+        // internet only with From other networks on (the tunnel checks).
+        remote?.tunnel?.start()
         site?.start()
         beacon.start()
         Monitor.start(ctx)
@@ -1275,7 +1293,7 @@ class BridgeServer(
     /** The phone's address a request came in on, and the kind of link that is: the socket's own end says. */
     /** The caller's address, with an IPv4 client on the dual-stack socket shown as plain IPv4. */
     private fun ApplicationCall.remoteIp(): String =
-        request.origin.remoteAddress.removePrefix("::ffff:").substringBefore('%')
+        nearTunnel()?.remote?.takeIf { it.isNotEmpty() } ?: request.origin.remoteAddress.removePrefix("::ffff:").substringBefore('%')
 
     /**
      * True unless the caller came in over the internet. IPv4 cannot (carrier NAT); a global IPv6
@@ -1313,7 +1331,7 @@ class BridgeServer(
             val who = clientIp()
             return Way("website", over = localOver(who, all, site?.destFor(request.origin.remotePort).orEmpty()), ip = if (':' in who) "IPv6" else "IPv4")
         }
-        val here = request.local.localAddress.removePrefix("::ffff:").substringBefore('%')
+        val here = localAddr()
         if (viaTunnel()) {
             val far = tunnelFar(deviceId)
             val udp = far?.endsWith("(UDP)") == true
@@ -1392,7 +1410,7 @@ class BridgeServer(
     private fun ApplicationCall.arrivedOn(
         all: List<dev.periy.bridge.net.Address> = dev.periy.bridge.net.NetInfo.addresses(),
     ): Pair<String, dev.periy.bridge.net.LinkKind> {
-        val here = request.local.localAddress.removePrefix("::ffff:").substringBefore('%')
+        val here = localAddr()
         return here to (all.firstOrNull { it.host == here }?.kind ?: dev.periy.bridge.net.LinkKind.OTHER)
     }
 

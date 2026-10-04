@@ -283,8 +283,12 @@ network and 60 an hour). [How it works](docs/website.md).
   which stays.
 - **The helper from the website**: its download signs itself in with a code baked into it; started
   anywhere, it finds the fastest way by itself.
-- Over the internet everything stays encrypted (HTTPS); on the phone's own links the plain address
-  is what it always was.
+- Over the internet everything stays encrypted (HTTPS, or the tunnel). **On the phone's own
+  networks too**: the laptop helper and linked phones talk to it through the same encrypted
+  tunnel on Wi-Fi, its hotspot and the cable, so someone else on a shared Wi-Fi sees nothing but
+  noise. It costs no speed: the tunnel's frames are AES-256 in the processor's own AES
+  instructions (about 700 MB/s on the laptop, more than any link here carries). A browser opened
+  at the phone's own address is still plain; the helper's `localhost:8787` is the sealed way.
 - **Quick to open on a slow link**: the page goes out compressed, 145 KB instead of 547, so a
   phone's browser across the internet shows it in a moment instead of a blank page; after that the
   browser keeps it and only asks whether it changed, one round trip instead of the whole page.

@@ -208,7 +208,7 @@ direct_ssid = None     # the phone's direct link or hotspot, while this computer
 
 def request(method, path, body=None, headers=None, timeout=5, addr=None, cookie=True):
     """One request to the phone, never through a proxy: (status, response, body bytes)."""
-    host, port = addr or phone
+    host, port = via(addr or phone)
     conn = http.client.HTTPConnection(host, port, timeout=timeout)
     try:
         h = {"User-Agent": user_agent(), "Connection": "close"}
@@ -694,7 +694,7 @@ def pair():
 
 def open_stream(path, headers=None, timeout=40):
     """A long-lived GET (the control stream, the live events); dropped when the phone moves."""
-    host, port = phone
+    host, port = via(phone)
     conn = http.client.HTTPConnection(host, port, timeout=timeout)
     h = {"User-Agent": user_agent(), "Cookie": session or ""}
     if headers:
@@ -755,7 +755,7 @@ def bridge(browser):
     with relayed_lock:
         relayed.append(r)
     try:
-        r.to_phone = socket.create_connection(r.addr, timeout=10)
+        r.to_phone = socket.create_connection(via(r.addr), timeout=10)
         r.to_phone.settimeout(None)
         for s in (browser, r.to_phone):
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -1827,6 +1827,86 @@ def tunnel_serve():
         threading.Thread(target=accept, daemon=True).start()
         return tunnel_local
     return None
+
+
+# On the phone's own networks (Wi-Fi, its hotspot, the cable) everything goes sealed too: through a
+# tunnel to the phone's address there, served here on 127.0.0.1:18799, the way the tunnel from afar
+# is on 18789. The phone treats it as the link it came over. Until this computer has the phone's
+# tunnel keys (asked for on the first visit), or with a phone whose app is older, it is plain.
+NEAR_LOCAL_PORT = 18799
+near_tunnel = None
+near_for = None
+near_tried = 0.0
+near_local = None
+near_lock = threading.Lock()
+
+
+def near_serve():
+    global near_local
+    for port in (NEAR_LOCAL_PORT, NEAR_LOCAL_PORT + 10, NEAR_LOCAL_PORT + 20):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind(("127.0.0.1", port))
+            s.listen(64)
+        except OSError:
+            s.close()
+            continue
+        near_local = ("127.0.0.1", port)
+
+        def accept():
+            while True:
+                try:
+                    c, _ = s.accept()
+                except OSError:
+                    time.sleep(0.2)
+                    continue
+                t = near_tunnel
+                if t is None or not t.alive:
+                    c.close()
+                    continue
+                c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                try:
+                    t.open_stream(c)
+                except OSError:
+                    c.close()
+
+        threading.Thread(target=accept, daemon=True).start()
+        return near_local
+    return None
+
+
+def via(addr):
+    """Where to reach the phone at addr: its sealed tunnel on that network when there is one, else addr itself."""
+    global near_tunnel, near_for, near_tried
+    if not addr or str(addr[0]).startswith("127."):
+        return addr
+    addr = tuple(addr)
+    with near_lock:
+        t = near_tunnel
+        if t and t.alive and near_for == addr:
+            return near_local
+        # Not again for 15 s at an address where it did not work.
+        if near_for == addr and time.time() - near_tried < 15:
+            return addr
+        near_for, near_tried = addr, time.time()
+        if t:
+            try:
+                t.close()
+            except OSError:
+                pass
+            near_tunnel = None
+        c = tunnel_conf()
+        if not c or not c.get("id") or not c.get("key"):
+            return addr
+        if near_local is None and near_serve() is None:
+            return addr
+        try:
+            near_tunnel = tunnel_dial(addr[0], int(c.get("port", TUNNEL_PORT)), bytes.fromhex(c["id"]), base64.b64decode(c["key"]), timeout=3)
+            log("Sealed link to the phone at %s" % addr[0])
+            return near_local
+        except (OSError, ValueError) as e:
+            log("No sealed link to the phone at %s (%s); plain until it can be." % (addr[0], e))
+            return addr
 
 
 def tunnel_path():
@@ -2926,7 +3006,7 @@ def laptop_send_folder(rid, path):
     import zipfile
     name = os.path.basename(os.path.normpath(path)) or "computer"
     q = "/api/laptop/fs/file?id=%s&name=%s" % (urllib.parse.quote(rid), urllib.parse.quote(name + ".zip"))
-    host, port = phone
+    host, port = via(phone)
     conn = http.client.HTTPConnection(host, port, timeout=60)
     files = 0
     try:
@@ -2977,7 +3057,7 @@ def laptop_send(rid, path):
         return
     with f:
         size = os.fstat(f.fileno()).st_size
-        host, port = phone
+        host, port = via(phone)
         conn = http.client.HTTPConnection(host, port, timeout=60)
         try:
             conn.putrequest("POST", q + "&size=%d" % size)
@@ -3003,7 +3083,7 @@ def laptop_send(rid, path):
 def post_stream(src, addr, gen, path="/api/display/stream", kind="video/h264"):
     """Posts ffmpeg's or wf-recorder's stream to the phone's page port, the way this helper reaches it
     (the tunnel included), until it ends: "ended", or "phone" when the phone closed it or went."""
-    host, port = addr
+    host, port = via(addr)
     conn = http.client.HTTPConnection(host, port, timeout=10)
     try:
         conn.putrequest("POST", path)

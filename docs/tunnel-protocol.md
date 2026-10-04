@@ -1,8 +1,9 @@
 # The L87 tunnel
 
-How a laptop (or another phone) reaches the phone from a different network, with the phone as
-the only server. One TCP connection, our own encryption, every connection multiplexed inside it.
-It is what [remote-plan.md](remote-plan.md) calls the remote door.
+How a laptop (or another phone) reaches the phone, with the phone as the only server: from a
+different network, and on the phone's own networks too (Wi-Fi, its hotspot, the cable), so nothing
+between the two ever goes in the clear. One TCP connection, our own encryption, every connection
+multiplexed inside it. It is what [remote-plan.md](remote-plan.md) calls the remote door.
 
 Why this shape, after [Bypass-PROXY-with-WireGuard-over-HTTP-CONNECT](https://github.com/Subalzt/Bypass-PROXY-with-WireGuard-over-HTTP-CONNECT):
 
@@ -16,11 +17,21 @@ Why this shape, after [Bypass-PROXY-with-WireGuard-over-HTTP-CONNECT](https://gi
 
 ## Where it runs
 
-- The phone listens on TCP **8789**, on every address (`::`, dual-stack). Across networks that
-  means its global IPv6: mobile data has no IPv4 anything can connect to.
-- The laptop helper dials it and serves the tunnel on `127.0.0.1:18789`, the way it uses adb's
-  port forward: every local connection there becomes a stream to the phone's page (port 8787).
-  The helper's relay, requests and event streams then work unchanged.
+- The phone listens on TCP **8789**, on every address (`::`, dual-stack), whenever it serves.
+  Across networks that means its global IPv6: mobile data has no IPv4 anything can connect to.
+  A tunnel from the internet is let in only while *From other networks* is on; one from the
+  phone's own networks (a private or link-local address, or a global IPv6 inside the /64 of one
+  of its local links) always, and the phone hands its streams to the page at `127.0.0.86`
+  instead of `127.0.0.87`, so the page treats them as the link they came over (Wi-Fi, hotspot,
+  cable) and not the internet.
+- The laptop helper dials it and serves the tunnel on a loopback address (`127.0.0.3:8787` on
+  Windows, `127.0.0.1:18789` on Linux and Mac), the way it uses adb's port forward: every local
+  connection there becomes a stream to the phone's page (port 8787). The helper's relay, requests
+  and event streams then work unchanged.
+- On the phone's own networks the helper does the same with a second tunnel to the phone's local
+  address (`127.0.0.4:8787`, or `127.0.0.1:18799`), once it has its keys (asked for on the first
+  visit). Linked phones do the same between themselves. Only the plain `GET /api/ping` that finds
+  the phone, and a browser opened at the phone's own address, stay in the clear.
 - The page's own rules still apply inside: a stream is an ordinary HTTP connection to the
   phone, with the session cookie as before.
 
@@ -44,12 +55,15 @@ Why this shape, after [Bypass-PROXY-with-WireGuard-over-HTTP-CONNECT](https://gi
 | Key agreement | X25519 (RFC 7748), a fresh key pair on both sides for every connection |
 | Key derivation | HKDF-SHA256 (RFC 5869) |
 | Handshake MACs | HMAC-SHA256, truncated to 16 bytes |
-| Stream cipher | SHAKE256 as a keyed keystream: `SHAKE256(key || counter)` |
+| Stream cipher | Version 2: AES-256-CTR. Version 1: SHAKE256 as a keyed keystream, `SHAKE256(key || counter)` |
 | Frame MAC | HMAC-SHA256 over counter, length and ciphertext, truncated to 16 bytes |
 
-Chosen so every end has them fast with nothing installed: Python's standard library has
-SHAKE256 and HMAC in C (and no AES), the phone has HMAC natively, and Keccak and X25519 are
-short to write where missing. Encrypt-then-MAC with independent keys; the keystream of each
+Chosen so every end has them fast with nothing installed. Version 2 uses AES, which the phone
+(Conscrypt) and Windows (CNG) run in the processor's AES instructions: frames seal at about
+700 MB/s on the laptop, against about 60 MB/s for version 1's hand-written Keccak, so no link here
+is held up by its encryption. Python's standard library has no AES, so the Linux and Mac helper
+speaks version 1 (SHAKE256 and HMAC, both in C there); the phone answers both. X25519 is short to
+write where missing. Encrypt-then-MAC with independent keys; the keystream of each
 frame is keyed by a counter that never repeats within a connection, and every connection has
 fresh keys.
 
@@ -58,7 +72,7 @@ fresh keys.
 Client to phone, 69 bytes:
 
 ```
-"L87T"  version=1  tid[16]  e_c[32]  mac1[16]
+"L87T"  version=2 (or 1)  tid[16]  e_c[32]  mac1[16]
 mac1 = HMAC(psk, "L87T/1 hello" || the 53 bytes before it)[0:16]
 ```
 
@@ -94,6 +108,11 @@ ks  = SHAKE256(enc_key || counter:u64be), first len bytes
 ct  = plaintext XOR ks
 tag = HMAC(mac_key, counter:u64be || len:u32be || ct)[0:16]
 ```
+
+Version 2 makes the keystream with AES-256-CTR instead: key `enc_key`, initial counter block
+`counter:u64be || 0:u64be`, so block `i` of a frame is `counter || i` (a frame is at most 4 097
+blocks). The version byte is inside `mac1` and the transcript, so it cannot be changed on the way.
+A client that gets no answer to version 2 (a phone with the older app) dials again with version 1.
 
 `counter` starts at 0 and goes up by one per frame; it is not sent. `len` is at most
 65 536 + 5. A bad tag closes the connection.

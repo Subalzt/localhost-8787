@@ -77,7 +77,8 @@ class Container(ctx: Context) {
                 SESSION_COOKIE + "=" + Session.issue(prefs.sessionKey(), PeerManager.SESSION_TTL_MS, it.id)
             }
             override fun revoke(deviceId: String) = devices.remove(deviceId)
-            override fun tunnelFor(deviceId: String): String = if (prefs.remote) door.forDevice(deviceId) else ""
+            // Always: on the phone's own networks the tunnel is how linked phones talk, sealed, even with From other networks off.
+            override fun tunnelFor(deviceId: String): String = door.forDevice(deviceId)
             override fun ensureTunnel() = turnOnTunnel()
             override fun linked() {
                 val code = tunnelKeys.openCode() ?: return
@@ -108,6 +109,7 @@ class Container(ctx: Context) {
         deviceIds = { devices.devices.value.map { it.id } + listOfNotNull(tunnelKeys.openCode()?.let { dev.periy.bridge.net.LinkCode.ID }) },
         pagePort = { prefs.port },
         info = ::tunnelInfo,
+        farAllowed = { prefs.remote },
     )
 
     /** The tunnel as the server sees it: whether it is on, and each device's details. */

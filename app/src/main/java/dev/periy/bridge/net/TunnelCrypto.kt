@@ -199,9 +199,13 @@ object TunnelCrypto {
 
 /**
  * One direction of a tunnel connection: the frame counter, the keystream and the tag. Not
- * thread-safe; the connection serialises its writes and has one reader.
+ * thread-safe; the connection serialises its writes and has one reader. With [aes] (version 2)
+ * the keystream is AES-256-CTR, the frame counter in the IV's first eight bytes, which the
+ * phone's hardware runs at gigabytes a second; otherwise SHAKE256 (version 1).
  */
-class TunnelCipher(private val enc: ByteArray, macKey: ByteArray) {
+class TunnelCipher(private val enc: ByteArray, macKey: ByteArray, private val aes: Boolean = false) {
+    private val ctr: javax.crypto.Cipher? = if (aes) javax.crypto.Cipher.getInstance("AES/CTR/NoPadding") else null
+    private val aesKey = if (aes) SecretKeySpec(enc, "AES") else null
     private val mac = Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(macKey, "HmacSHA256")) }
     private var n = 0L
     private val seed = ByteArray(enc.size + 8).also { System.arraycopy(enc, 0, it, 0, enc.size) }
@@ -209,8 +213,13 @@ class TunnelCipher(private val enc: ByteArray, macKey: ByteArray) {
     private fun counter(): ByteArray = java.nio.ByteBuffer.allocate(8).putLong(n).array()
 
     private fun keystream(buf: ByteArray, off: Int, len: Int) {
-        System.arraycopy(counter(), 0, seed, enc.size, 8)
-        TunnelCrypto.shake256(seed, buf, off, len)
+        if (ctr != null) {
+            ctr.init(javax.crypto.Cipher.ENCRYPT_MODE, aesKey, javax.crypto.spec.IvParameterSpec(counter() + ByteArray(8)))
+            ctr.doFinal(buf, off, len, buf, off)
+        } else {
+            System.arraycopy(counter(), 0, seed, enc.size, 8)
+            TunnelCrypto.shake256(seed, buf, off, len)
+        }
         n++
     }
 

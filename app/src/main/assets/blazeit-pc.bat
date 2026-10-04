@@ -740,7 +740,7 @@ public static class BlazeItPc
 
     static HttpWebResponse Http(string method, string path, string cookie, int timeoutMs)
     {
-        HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + phone + ":" + PhonePort + path);
+        HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + path);
         r.Method = method;
         r.Proxy = null;
         r.UserAgent = Ua;
@@ -829,7 +829,7 @@ public static class BlazeItPc
             ",\"entries\":[" + string.Join(",", items.ToArray()) + "]}";
         try
         {
-            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + phone + ":" + PhonePort + "/api/laptop/fs/answer?id=" + Uri.EscapeDataString(id));
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + "/api/laptop/fs/answer?id=" + Uri.EscapeDataString(id));
             r.Proxy = null; r.Method = "POST"; r.UserAgent = Ua; r.Headers["Cookie"] = session;
             r.ContentType = "application/json"; r.Timeout = 20000; r.KeepAlive = false;
             byte[] body = Encoding.UTF8.GetBytes(json);
@@ -851,7 +851,7 @@ public static class BlazeItPc
         string q = "/api/laptop/fs/file?id=" + Uri.EscapeDataString(id) + "&name=" + Uri.EscapeDataString(name + ".zip");
         try
         {
-            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + phone + ":" + PhonePort + q);
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + q);
             r.Proxy = null; r.Method = "POST"; r.UserAgent = Ua; r.Headers["Cookie"] = session;
             r.ContentType = "application/zip"; r.SendChunked = true;
             r.AllowWriteStreamBuffering = false; r.Timeout = System.Threading.Timeout.Infinite; r.ReadWriteTimeout = 60000;
@@ -905,7 +905,7 @@ public static class BlazeItPc
         {
             try
             {
-                HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + phone + ":" + PhonePort + q + "&size=" + f.Length);
+                HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + q + "&size=" + f.Length);
                 r.Proxy = null; r.Method = "POST"; r.UserAgent = Ua; r.Headers["Cookie"] = session;
                 r.ContentType = "application/octet-stream"; r.ContentLength = f.Length;
                 r.AllowWriteStreamBuffering = false; r.Timeout = System.Threading.Timeout.Infinite; r.ReadWriteTimeout = 60000;
@@ -1005,7 +1005,7 @@ public static class BlazeItPc
                         ",\"usbMbps\":" + (usbHost != null && phone == usbHost ? UsbLinkMbps(usbHost) : 0) +
                         ",\"iface\":" + Q(via != null ? via.Id : "") +
                         ",\"rxBytes\":" + rx + ",\"txBytes\":" + tx + "}";
-                    HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + phone + ":" + PhonePort + "/api/monitor/link");
+                    HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + "/api/monitor/link");
                     r.Method = "POST";
                     r.Proxy = null;
                     r.UserAgent = Ua;
@@ -1355,7 +1355,7 @@ public static class BlazeItPc
     {
         try
         {
-            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + phone + ":" + PhonePort + "/api/clipboard");
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + "/api/clipboard");
             r.Method = "POST";
             r.Proxy = null;
             r.UserAgent = Ua;
@@ -1427,7 +1427,7 @@ public static class BlazeItPc
     {
         try
         {
-            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + phone + ":" + PhonePort +
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort +
                 "/api/clipboard/blob?name=" + Uri.EscapeDataString(name));
             r.Method = "POST";
             r.Proxy = null;
@@ -1502,7 +1502,7 @@ public static class BlazeItPc
                 if (cookie == null || at == null) { Thread.Sleep(2000); continue; }
                 using (HttpWebResponse st = Http("GET", "/api/state", cookie, 5000))
                     clipSync = !Body(st).Contains("\"clipSync\":false");
-                HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + at + ":" + PhonePort + "/events");
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + Via(at) + ":" + PhonePort + "/events");
                 req.Proxy = null;
                 req.UserAgent = Ua;
                 req.Timeout = 5000;
@@ -1624,7 +1624,7 @@ public static class BlazeItPc
                 if (cookie == null) { cookie = Pair(); session = cookie; TunnelLearn(); }
                 session = cookie;
                 at = phone;
-                HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + at + ":" + PhonePort + "/api/control/stream");
+                HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(at) + ":" + PhonePort + "/api/control/stream");
                 controlReq = r;
                 r.Proxy = null;
                 r.UserAgent = Ua;
@@ -2274,7 +2274,7 @@ public static class BlazeItPc
         string why = "ended";
         try
         {
-            HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + at + ":" + PhonePort + "/api/display/stream");
+            HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + Via(at) + ":" + PhonePort + "/api/display/stream");
             req.Proxy = null;
             req.Method = "POST";
             req.UserAgent = Ua;
@@ -2340,7 +2340,7 @@ public static class BlazeItPc
     /** The phone's page-port upload for the screen, as PostStream opens it; "sid" names it for the phone's acks. */
     static HttpWebRequest StreamRequest(string at, string sid = "")
     {
-        HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + at + ":" + PhonePort + "/api/display/stream" +
+        HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + Via(at) + ":" + PhonePort + "/api/display/stream" +
             (sid.Length > 0 ? "?s=" + sid : ""));
         req.Proxy = null;
         req.Method = "POST";
@@ -2680,7 +2680,7 @@ public static class BlazeItPc
         try
         {
             // Set up as the picture's upload is (StreamRequest), to the sound's own route.
-            HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + at + ":" + PhonePort + "/api/display/audio");
+            HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + Via(at) + ":" + PhonePort + "/api/display/audio");
             req.Proxy = null; req.Method = "POST"; req.UserAgent = Ua; req.Headers["Cookie"] = session;
             req.ContentType = "audio/aac"; req.SendChunked = true; req.AllowWriteStreamBuffering = false;
             req.Timeout = System.Threading.Timeout.Infinite; req.ReadWriteTimeout = 30000;
@@ -2837,7 +2837,7 @@ public static class BlazeItPc
                 string now = "{\"level\":" + MasterVolume.Get().ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) +
                     ",\"muted\":" + (MasterVolume.Muted() ? "true" : "false") + "}";
                 if (now == last) continue;
-                HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + phone + ":" + PhonePort + "/api/control/volume");
+                HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + "/api/control/volume");
                 r.Method = "POST"; r.Proxy = null; r.UserAgent = Ua; r.Timeout = 3000; r.KeepAlive = false;
                 r.ContentType = "application/json"; r.Headers["Cookie"] = cookie;
                 byte[] body = Encoding.UTF8.GetBytes(now);
@@ -3049,7 +3049,7 @@ public static class BlazeItPc
             r.toPhone.NoDelay = true;
             browser.ReceiveBufferSize = browser.SendBufferSize = 4 << 20;
             r.toPhone.ReceiveBufferSize = r.toPhone.SendBufferSize = 4 << 20;
-            r.toPhone.Connect(r.host, PhonePort);
+            r.toPhone.Connect(Via(r.host), PhonePort);
             KeepToSelf(r.toPhone.Client);
             NetworkStream a = browser.GetStream(), b = r.toPhone.GetStream();
             Thread up = new Thread(delegate () { Pump(a, b, r.toPhone.Client, r); });
@@ -3090,6 +3090,90 @@ public static class BlazeItPc
     // the way USB debugging is at 127.0.0.2, so everything else works unchanged.
 
     const string TunnelHost = "127.0.0.3";
+
+    /**
+     * On the phone's own networks (Wi-Fi, its hotspot, the cable) everything goes sealed too:
+     * through a tunnel to the phone's address there, served here at 127.0.0.4:8787, the way the
+     * tunnel from afar is at 127.0.0.3. The phone treats it as the link it came over. Until this
+     * laptop has the phone's tunnel keys (asked for on the first visit), or with a phone whose app
+     * is older, it is plain, and says so in the log.
+     */
+    const string NearHost = "127.0.0.4";
+    static volatile Tunnel87.Conn nearTunnel;
+    static volatile string nearFor;
+    static int nearTried;
+    static bool nearServing;
+    static readonly object nearLock = new object();
+
+    /** Where to reach the phone at [host]: its sealed tunnel when there is one, else the address itself. */
+    static string Via(string host)
+    {
+        if (host == null || host.StartsWith("127.")) return host;
+        return NearPath(host) ? NearHost : host;
+    }
+
+    static bool NearPath(string host)
+    {
+        Tunnel87.Conn t = nearTunnel;
+        if (t != null && t.Alive && nearFor == host) return true;
+        lock (nearLock)
+        {
+            t = nearTunnel;
+            if (t != null && t.Alive && nearFor == host) return true;
+            // Not again for 15 s at an address where it did not work.
+            if (nearFor == host && unchecked(Environment.TickCount - nearTried) < 15000) return false;
+            nearFor = host;
+            nearTried = Environment.TickCount;
+            if (t != null) { try { t.Close("the phone is elsewhere now"); } catch { } nearTunnel = null; }
+            string conf = TunnelConf();
+            if (conf == null) return false;
+            string id = Regex.Match(conf, "\"id\"\\s*:\\s*\"([0-9a-f]+)\"").Groups[1].Value;
+            string key = Regex.Match(conf, "\"key\"\\s*:\\s*\"([^\"]+)\"").Groups[1].Value;
+            Match pm = Regex.Match(conf, "\"port\"\\s*:\\s*(\\d+)");
+            int port = pm.Success ? int.Parse(pm.Groups[1].Value) : 8789;
+            if (id.Length != 32 || key.Length == 0) return false;
+            byte[] tid = new byte[16];
+            for (int i = 0; i < 16; i++) tid[i] = Convert.ToByte(id.Substring(i * 2, 2), 16);
+            byte[] psk = Convert.FromBase64String(key);
+            if (!nearServing)
+            {
+                try
+                {
+                    TcpListener l = new TcpListener(IPAddress.Parse(NearHost), PhonePort);
+                    l.Start();
+                    KeepToSelf(l.Server);
+                    nearServing = true;
+                    Thread acc = new Thread(delegate ()
+                    {
+                        while (true)
+                        {
+                            TcpClient c;
+                            try { c = l.AcceptTcpClient(); }
+                            catch (Exception e) { Log("Taking a connection for the sealed link: " + e.Message); Thread.Sleep(200); continue; }
+                            KeepToSelf(c.Client);
+                            Tunnel87.Conn now = nearTunnel;
+                            if (now == null || !now.Alive) { c.Close(); continue; }
+                            try { now.OpenStream(c, PhonePort); } catch { c.Close(); }
+                        }
+                    });
+                    acc.IsBackground = true;
+                    acc.Start();
+                }
+                catch (Exception e) { Log("Serving the sealed link: " + e.Message); return false; }
+            }
+            try
+            {
+                nearTunnel = Tunnel87.Dial(host, port, tid, psk, Environment.MachineName, null, Log, 3000);
+                Log("Sealed link to the phone at " + host);
+                return true;
+            }
+            catch (Exception e)
+            {
+                Log("No sealed link to the phone at " + host + " (" + e.Message + "); plain until it can be.");
+                return false;
+            }
+        }
+    }
     static volatile Tunnel87.Conn tunnel;
     static bool tunnelServing;
     static readonly object tunnelLock = new object();
@@ -3425,17 +3509,33 @@ public static class Tunnel87
 
     // ---------------------------------------------------------------- frames
 
+    /**
+     * One direction's frames: the counter, the keystream and the tag. Version 2 makes the
+     * keystream with AES-256 in counter mode (the frame counter in the first half of each block,
+     * the block number in the second), in the processor's AES instructions through Windows' CNG,
+     * gigabytes a second; version 1 with SHAKE256, about 60 MB/s here.
+     */
     internal class Cipher
     {
         readonly byte[] seed;
         readonly System.Security.Cryptography.HMACSHA256 mac;
+        readonly System.Security.Cryptography.ICryptoTransform ecb;
+        byte[] blocks = new byte[0], ks = new byte[0];
         long n;
 
-        public Cipher(byte[] enc, byte[] macKey)
+        public Cipher(byte[] enc, byte[] macKey) : this(enc, macKey, false) { }
+
+        public Cipher(byte[] enc, byte[] macKey, bool aes)
         {
             seed = new byte[enc.Length + 8];
             Array.Copy(enc, seed, enc.Length);
             mac = new System.Security.Cryptography.HMACSHA256(macKey);
+            if (aes)
+            {
+                var a = new System.Security.Cryptography.AesCryptoServiceProvider();
+                a.Key = enc; a.Mode = System.Security.Cryptography.CipherMode.ECB; a.Padding = System.Security.Cryptography.PaddingMode.None;
+                ecb = a.CreateEncryptor();
+            }
         }
 
         byte[] Counter() { byte[] c = BitConverter.GetBytes(n); Array.Reverse(c); return c; }
@@ -3455,6 +3555,22 @@ public static class Tunnel87
 
         void Keystream(byte[] buf, int off, int len)
         {
+            if (ecb != null)
+            {
+                int count = (len + 15) / 16, size = count * 16;
+                if (blocks.Length < size) { blocks = new byte[size]; ks = new byte[size]; }
+                byte[] c = Counter();
+                for (int b = 0; b < count; b++)
+                {
+                    int o = b * 16;
+                    Array.Copy(c, 0, blocks, o, 8);
+                    for (int i = 0; i < 8; i++) blocks[o + 15 - i] = (byte)((ulong)b >> (8 * i));
+                }
+                ecb.TransformBlock(blocks, 0, size, ks, 0);
+                for (int i = 0; i < len; i++) buf[off + i] ^= ks[i];
+                n++;
+                return;
+            }
             Array.Copy(Counter(), 0, seed, seed.Length - 8, 8);
             Shake256Xor(seed, buf, off, len);
             n++;
@@ -3512,7 +3628,19 @@ public static class Tunnel87
             tcp.EndConnect(ar);
             tcp.NoDelay = true;
             tcp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-            return Handshake(tcp.GetStream(), tcp.Close, tid, psk, name, onAddrs, log);
+            try { return Handshake(tcp.GetStream(), tcp.Close, tid, psk, name, onAddrs, log, 2); }
+            catch (IOException e)
+            {
+                // Closed without a word: a phone with the older app, which knows version 1 only.
+                if (e.Message != "the connection closed") throw;
+                tcp = new TcpClient(AddressFamily.InterNetworkV6);
+                tcp.Client.DualMode = true;
+                IAsyncResult again = tcp.BeginConnect(IPAddress.Parse(host), port, null, null);
+                if (!again.AsyncWaitHandle.WaitOne(timeoutMs)) throw new IOException("no answer in " + (timeoutMs / 1000) + " s");
+                tcp.EndConnect(again);
+                tcp.NoDelay = true;
+                return Handshake(tcp.GetStream(), tcp.Close, tid, psk, name, onAddrs, log, 1);
+            }
         }
         catch
         {
@@ -3576,13 +3704,18 @@ public static class Tunnel87
     /** The handshake over ns (TCP, or a path punched over UDP), then the connection, running. */
     static Conn Handshake(Stream ns, Action close, byte[] tid, byte[] psk, string name, Action<List<string>> onAddrs, Action<string> log)
     {
+        return Handshake(ns, close, tid, psk, name, onAddrs, log, 2);
+    }
+
+    static Conn Handshake(Stream ns, Action close, byte[] tid, byte[] psk, string name, Action<List<string>> onAddrs, Action<string> log, int version)
+    {
         try
         {
             ns.ReadTimeout = 8000;
             byte[] priv = new byte[32];
             using (System.Security.Cryptography.RandomNumberGenerator rng = System.Security.Cryptography.RandomNumberGenerator.Create()) rng.GetBytes(priv);
             byte[] nine = new byte[32]; nine[0] = 9;
-            byte[] hello = Cat(Encoding.ASCII.GetBytes("L87T"), new byte[] { 1 }, tid, X25519(priv, nine));
+            byte[] hello = Cat(Encoding.ASCII.GetBytes("L87T"), new byte[] { (byte)version }, tid, X25519(priv, nine));
             hello = Cat(hello, Hmac16(psk, Encoding.ASCII.GetBytes("L87T/1 hello"), hello));
             ns.Write(hello, 0, hello.Length);
             byte[] resp = ReadExact(ns, 48);
@@ -3599,7 +3732,7 @@ public static class Tunnel87
             if (!Same(mac2, Hmac16(k[4], Encoding.ASCII.GetBytes("L87T/1 accept"), th)))
                 throw new IOException("the phone did not prove it knows this laptop");
             ns.ReadTimeout = Timeout.Infinite;
-            Conn c = new Conn(close, ns, new Cipher(k[0], k[1]), new Cipher(k[2], k[3]), onAddrs, log);
+            Conn c = new Conn(close, ns, new Cipher(k[0], k[1], version == 2), new Cipher(k[2], k[3], version == 2), onAddrs, log);
             c.Start();
             c.Send(HELLO, 0, Encoding.UTF8.GetBytes("{\"name\":\"" + name.Replace("\\", "").Replace("\"", "") + "\",\"v\":1}"));
             if (!c.hello.WaitOne(8000)) { c.Close("no hello"); throw new IOException("the phone did not answer the hello"); }

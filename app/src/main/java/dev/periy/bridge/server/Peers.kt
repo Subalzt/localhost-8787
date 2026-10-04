@@ -885,17 +885,13 @@ class PeerManager(
     private fun Peer.asTarget(): NearbyPhone {
         // A phone linked from afar has no local address: never this phone's own loopback.
         val local = NearbyPhone(name, host.ifEmpty { NOWHERE }, port)
-        if (tunnel.isEmpty() && far[name]?.conn?.alive != true) return local
-        val now = System.currentTimeMillis()
-        if (host.isNotEmpty()) {
-            if (now - (localAt[name] ?: 0) < 15_000) return local
-            if (answersAt(host, port)) {
-                localAt[name] = now
-                far.remove(name)?.conn?.bye("close again")
-                if (now - (tunnelAt[name] ?: 0) > 600_000) scope.launch { fetchTunnel(this@asTarget) }
-                return local
-            }
+        // Not linked through a tunnel yet (an older link): plain on the shared network, and its
+        // tunnel details asked for, so the next time is sealed.
+        if (tunnel.isEmpty() && far[name]?.conn?.alive != true) {
+            if (host.isNotEmpty()) scope.launch { fetchTunnel(this@asTarget) }
+            return local
         }
+        // Sealed always: through the other phone's tunnel, at its address on this network first when it has one.
         return viaTunnel(this)?.let { NearbyPhone(name, "127.0.0.1", it) } ?: local
     }
 
@@ -906,7 +902,8 @@ class PeerManager(
         val tid = t["id"]?.jsonPrimitive?.content?.chunked(2)?.map { it.toInt(16).toByte() }?.toByteArray() ?: return null
         val psk = t["key"]?.jsonPrimitive?.content?.let { Base64.getDecoder().decode(it) } ?: return null
         val tport = t["port"]?.jsonPrimitive?.content?.toIntOrNull() ?: dev.periy.bridge.net.TunnelProto.PORT
-        val addrs = (t["addrs"] as? kotlinx.serialization.json.JsonArray)?.map { it.jsonPrimitive.content }.orEmpty()
+        val addrs = listOfNotNull(peer.host.takeIf { it.isNotEmpty() && answersAt(it, tport) }) +
+            (t["addrs"] as? kotlinx.serialization.json.JsonArray)?.map { it.jsonPrimitive.content }.orEmpty()
         // Its known addresses, then the ones it gives through the board now, then across IPv4.
         val conn = runCatching {
             dev.periy.bridge.net.TunnelClient.dialAny(

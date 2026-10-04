@@ -32,6 +32,11 @@ object TunnelProto {
      * page can tell a request that came through the tunnel from one through adb's 127.0.0.1.
      */
     const val LOCAL_HOST = "127.0.0.87"
+    /**
+     * The same for a tunnel from the phone's own networks (Wi-Fi, its hotspot, the cable): sealed
+     * like the rest, but near, so the page treats it as the link it came over.
+     */
+    const val LOCAL_NEAR = "127.0.0.86"
     const val HELLO = 1
     const val OPEN = 2
     const val DATA = 3
@@ -52,6 +57,8 @@ object TunnelProto {
     const val HELLO_LEN = 69
 
     val MAGIC = byteArrayOf('L'.code.toByte(), '8'.code.toByte(), '7'.code.toByte(), 'T'.code.toByte(), 1)
+    /** Version 2: the same handshake, frames under AES-256-CTR (in every phone's and laptop's hardware) instead of SHAKE256. */
+    val MAGIC2 = byteArrayOf('L'.code.toByte(), '8'.code.toByte(), '7'.code.toByte(), 'T'.code.toByte(), 2)
     val L_PSK = "L87T/1 psk".toByteArray()
     val L_ID = "L87T/1 id".toByteArray()
     val L_HELLO = "L87T/1 hello".toByteArray()
@@ -126,6 +133,9 @@ class TunnelConnection(
     val peer: String,
     val remote: String,
     private val client: Boolean,
+    /** On the phone: came from one of its own networks, not the internet; and the phone's address it came in on. */
+    val near: Boolean = false,
+    val here: String = "",
     /** On the phone: a local connection for a stream the other end opens to [Int] (a port). */
     private val connectLocal: ((Int) -> Socket?)? = null,
     private val onInfo: (JsonObject) -> Unit = {},
@@ -388,7 +398,10 @@ class TunnelConnection(
 }
 
 /** A device's live tunnel, for the Devices list and Settings. */
-data class TunnelPeer(val deviceId: String, val remote: String, val since: Long, val bytesIn: Long, val bytesOut: Long)
+data class TunnelPeer(
+    val deviceId: String, val remote: String, val since: Long, val bytesIn: Long, val bytesOut: Long,
+    val near: Boolean = false, val here: String = "",
+)
 
 /**
  * The phone's end: listens on [TunnelProto.PORT] on every address, answers only a valid hello
@@ -403,6 +416,8 @@ class TunnelServer(
     private val pagePort: () -> Int,
     /** The phone's HELLO: its name, addresses and tunnel port. */
     private val info: () -> String,
+    /** From other networks is on: tunnels from the internet are let in (from the phone's own networks, always). */
+    private val farAllowed: () -> Boolean = { true },
     private val port: Int = TunnelProto.PORT,
 ) {
     private val rng = SecureRandom()
@@ -430,7 +445,7 @@ class TunnelServer(
             }
         }.onFailure { Log.w(TAG, "Could not listen on $port: ${it.message}") }.getOrNull() ?: return
         server = ss
-        punch.start()
+        if (farAllowed()) punch.start()
         TunnelConnection.thread("tunnel-accept") { acceptLoop(ss) }
         TunnelConnection.thread("tunnel-stats") { statsLoop(ss) }
         Log.i(TAG, "Tunnel listening on :$port")
@@ -444,6 +459,17 @@ class TunnelServer(
         conns.forEach { it.bye("the phone stopped") }
         conns.clear()
         publish()
+    }
+
+    /**
+     * From other networks on or off: the board is answered or not, and with it off the tunnels from
+     * the internet close. The tunnel keeps listening for the phone's own networks either way.
+     */
+    fun setFar(on: Boolean) {
+        if (on) punch.start() else {
+            punch.stop()
+            conns.filter { !it.near }.forEach { it.bye("From other networks is off on the phone") }
+        }
     }
 
     /** Closes the tunnels of devices no longer paired. */
@@ -484,21 +510,42 @@ class TunnelServer(
         val remote = s.inetAddress
         val who = (remote.hostAddress ?: "?").substringBefore('%').removePrefix("::ffff:")
         if (!allowed(remote)) { runCatching { s.close() }; return }
+        val near = isNear(remote)
+        // From the internet only while From other networks is on.
+        if (!near && !farAllowed()) { runCatching { s.close() }; return }
         runCatching { s.tcpNoDelay = true; s.keepAlive = true }
-        serve(SocketLink(s), who)
+        serve(SocketLink(s), who, near, (s.localAddress?.hostAddress ?: "").substringBefore('%').removePrefix("::ffff:"))
+    }
+
+    /**
+     * On one of the phone's own networks: a private or link-local IPv4 or IPv6 address, or a global
+     * IPv6 inside the /64 of one of the phone's local links (its hotspot and cable share the mobile
+     * /64, but a laptop there has its address on that link).
+     */
+    private fun isNear(a: InetAddress): Boolean {
+        if (a.isLoopbackAddress || a.isLinkLocalAddress || a.isSiteLocalAddress) return true
+        val b = a.address
+        if (b.size == 16 && (b[0].toInt() and 0xfe) == 0xfc) return true
+        if (b.size != 16) return false
+        val prefix = b.copyOf(8)
+        return NetInfo.addresses().any { x ->
+            x.isIpv6 && x.kind != LinkKind.CELLULAR &&
+                runCatching { InetAddress.getByName(x.host).address.copyOf(8).contentEquals(prefix) }.getOrDefault(false)
+        }
     }
 
     /**
      * A connection that has reached the phone some way (TCP, or a path punched over UDP): the
      * hello, the reply, then frames until it ends. Blocks for the connection's life.
      */
-    fun serve(link: TunnelLink, who: String) {
+    fun serve(link: TunnelLink, who: String, near: Boolean = false, here: String = "") {
         try {
             link.setReadTimeout(10_000)
             val input = DataInputStream(link.input)
             val hello = ByteArray(TunnelProto.HELLO_LEN)
             input.readFully(hello)
-            if (!hello.copyOf(5).contentEquals(TunnelProto.MAGIC)) { link.close(); return }
+            val aes = hello.copyOf(5).contentEquals(TunnelProto.MAGIC2)
+            if (!aes && !hello.copyOf(5).contentEquals(TunnelProto.MAGIC)) { link.close(); return }
             val tid = hello.copyOfRange(5, 21)
             val eC = hello.copyOfRange(21, 53)
             val mac1 = hello.copyOfRange(53, 69)
@@ -517,15 +564,16 @@ class TunnelServer(
             out.write(eS + TunnelCrypto.hmac16(k[4], TunnelProto.L_ACCEPT, th))
             out.flush()
             link.setReadTimeout(0)
+            val local = if (near) TunnelProto.LOCAL_NEAR else TunnelProto.LOCAL_HOST
             val conn = TunnelConnection(
-                link, tx = TunnelCipher(k[2], k[3]), rx = TunnelCipher(k[0], k[1]),
-                peer = id, remote = who, client = false,
-                connectLocal = { p -> if (p == pagePort()) Socket().apply { tcpNoDelay = true; connect(InetSocketAddress(TunnelProto.LOCAL_HOST, p), 5_000) } else null },
+                link, tx = TunnelCipher(k[2], k[3], aes), rx = TunnelCipher(k[0], k[1], aes),
+                peer = id, remote = who, client = false, near = near, here = here,
+                connectLocal = { p -> if (p == pagePort()) Socket().apply { tcpNoDelay = true; connect(InetSocketAddress(local, p), 5_000) } else null },
                 onClosed = { c -> conns.remove(c); totalBytes.addAndGet(c.bytesIn.get() + c.bytesOut.get()); publish() },
             )
             conns.add(conn)
             publish()
-            Log.i(TAG, "Tunnel from $who")
+            Log.i(TAG, "Tunnel from $who (${if (near) "near" else "far"}, ${if (aes) "AES" else "SHAKE"})")
             conn.send(TunnelProto.HELLO, 0, info().toByteArray())
             // Awake while it lasts: with the screen off every request would otherwise wait for the CPU.
             KeepAwake.start()
@@ -543,7 +591,7 @@ class TunnelServer(
     }
 
     private fun publish() {
-        _peers.value = conns.map { TunnelPeer(it.peer, it.remote, it.since, it.bytesIn.get(), it.bytesOut.get()) }
+        _peers.value = conns.map { TunnelPeer(it.peer, it.remote, it.since, it.bytesIn.get(), it.bytesOut.get(), it.near, it.here) }
     }
 
     /** Bytes over tunnels so far, open ones included. */
@@ -573,7 +621,15 @@ object TunnelClient {
             runCatching { s.close() }
             throw e
         }
-        return handshake(SocketLink(s), host, tid, psk, name, onInfo, onClosed, timeoutMs)
+        return try {
+            handshake(SocketLink(s), host, tid, psk, name, onInfo, onClosed, timeoutMs)
+        } catch (e: java.io.EOFException) {
+            // Closed without a word: a phone with the older app, which knows version 1 only.
+            val s1 = Socket()
+            s1.connect(InetSocketAddress(InetAddress.getByName(host), port), timeoutMs)
+            s1.tcpNoDelay = true; s1.keepAlive = true
+            handshake(SocketLink(s1), host, tid, psk, name, onInfo, onClosed, timeoutMs, version = 1)
+        }
     }
 
     /**
@@ -609,12 +665,12 @@ object TunnelClient {
     fun handshake(
         link: TunnelLink, label: String, tid: ByteArray, psk: ByteArray, name: String,
         onInfo: (JsonObject) -> Unit = {}, onClosed: (TunnelConnection) -> Unit = {},
-        timeoutMs: Int = 8_000,
+        timeoutMs: Int = 8_000, version: Int = 2,
     ): TunnelConnection {
         try {
             link.setReadTimeout(timeoutMs)
             val priv = ByteArray(32).also(SecureRandom()::nextBytes)
-            var hello = TunnelProto.MAGIC + tid + TunnelCrypto.x25519(priv, TunnelCrypto.BASE)
+            var hello = (if (version == 2) TunnelProto.MAGIC2 else TunnelProto.MAGIC) + tid + TunnelCrypto.x25519(priv, TunnelCrypto.BASE)
             hello += TunnelCrypto.hmac16(psk, TunnelProto.L_HELLO, hello)
             link.output.apply { write(hello); flush() }
             val resp = ByteArray(48)
@@ -628,7 +684,7 @@ object TunnelClient {
             }
             link.setReadTimeout(0)
             val conn = TunnelConnection(
-                link, tx = TunnelCipher(k[0], k[1]), rx = TunnelCipher(k[2], k[3]),
+                link, tx = TunnelCipher(k[0], k[1], version == 2), rx = TunnelCipher(k[2], k[3], version == 2),
                 peer = label, remote = label, client = true, onInfo = onInfo, onClosed = onClosed,
             )
             TunnelConnection.thread("tunnel-read") { conn.run() }
