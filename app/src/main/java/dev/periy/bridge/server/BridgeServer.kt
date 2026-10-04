@@ -1428,6 +1428,16 @@ class BridgeServer(
             }
             call.respond(ApiResult(true))
         }
+        // The laptop's sound with its screen, from its helper: AAC as ADTS frames, played as they come
+        // while the screen view is open (server/DisplaySound.kt).
+        post("/api/display/audio") {
+            if (!DisplayFeed.open) {
+                call.respond(HttpStatusCode.Conflict, ApiResult(false, "The screen view is not open on the phone"))
+                return@post
+            }
+            withContext(Dispatchers.IO) { DisplaySound.play(call.receiveStream()) }
+            call.respond(ApiResult(true))
+        }
         post("/api/mirror") {
             val mode = call.request.queryParameters["mode"] ?: "start"
             if (Control.connected.value.isEmpty()) {

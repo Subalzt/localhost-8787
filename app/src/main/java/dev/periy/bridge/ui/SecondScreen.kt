@@ -139,6 +139,7 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
         if (!running) return
         running = false
         DisplayFeed.open = false
+        dev.periy.bridge.server.DisplaySound.stop()
         EventBus.emit("display", "stop")
         runCatching { current?.input?.close() }
         current?.done?.complete(Unit)

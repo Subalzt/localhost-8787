@@ -2840,15 +2840,15 @@ def mac_screen_devices(text):
     return {int(m.group(2)): int(m.group(1)) for m in re.finditer(r"\[(\d+)\] Capture screen (\d+)", text)}
 
 
-def post_stream(src, addr, gen):
+def post_stream(src, addr, gen, path="/api/display/stream", kind="video/h264"):
     """Posts ffmpeg's or wf-recorder's stream to the phone's page port, the way this helper reaches it
     (the tunnel included), until it ends: "ended", or "phone" when the phone closed it or went."""
     host, port = addr
     conn = http.client.HTTPConnection(host, port, timeout=10)
     try:
-        conn.putrequest("POST", "/api/display/stream")
+        conn.putrequest("POST", path)
         conn.putheader("User-Agent", user_agent())
-        conn.putheader("Content-Type", "video/h264")
+        conn.putheader("Content-Type", kind)
         conn.putheader("Transfer-Encoding", "chunked")
         if session:
             conn.putheader("Cookie", session)
@@ -2989,10 +2989,34 @@ def stream_wlroots(at, port, w, h, fps, gen, http_ok=False):
             p.terminate()
 
 
+sound_proc = None
+
+
+def start_sound(at, gen, remote):
+    """The computer's sound with its screen: on Linux, PulseAudio's or PipeWire's monitor of the
+    speakers through ffmpeg, as AAC, posted to the phone like the picture. (A Mac has no way to
+    capture what it plays without an extra audio driver, so it sends the picture only.)"""
+    global sound_proc
+    ff = shutil.which("ffmpeg")
+    if MAC or not ff or not (have("pactl") or have("pw-cli")):
+        return
+    try:
+        p = subprocess.Popen([ff, "-hide_banner", "-loglevel", "error", "-f", "pulse", "-i", "@DEFAULT_MONITOR@",
+                              "-ac", "2", "-ar", "48000", "-c:a", "aac", "-b:a", "64k" if remote else "160k", "-f", "adts", "pipe:1"],
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    except OSError:
+        return
+    sound_proc = p
+    threading.Thread(target=lambda: (post_stream(p.stdout, at, gen, "/api/display/audio", "audio/aac"),
+                                     p.poll() is None and p.terminate()), daemon=True).start()
+
+
 def start_second_screen(at, port, w, h, fps, http_ok=False):
     global screen_gen
     stop_second_screen()
     gen = screen_gen
+    if http_ok and not WSL:
+        start_sound(at, gen, tunnel_local is not None and tuple(at) == tuple(tunnel_local))
     if WSL:
         say("The phone asked to be a second screen: under WSL the Windows helper shows it.")
         return
@@ -3012,8 +3036,11 @@ def start_second_screen(at, port, w, h, fps, http_ok=False):
 
 
 def stop_second_screen():
-    global screen_gen, stream_proc, shown
+    global screen_gen, stream_proc, shown, sound_proc
     screen_gen += 1
+    sp, sound_proc = sound_proc, None
+    if sp and sp.poll() is None:
+        sp.terminate()
     p, stream_proc, shown = stream_proc, None, None
     if p and p.poll() is None:
         p.terminate()

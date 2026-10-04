@@ -1772,6 +1772,7 @@ public static class BlazeItPc
                 return;
             }
             Displays.Mon target = remote ? MainScreen() : PrepareScreen(w, h, true);
+            if (http) StartSound(ff, at, remote);
             string said = null;
             int failures = 0;
             while (target != null && gen == screenGen)
@@ -2298,7 +2299,140 @@ public static class BlazeItPc
     {
         Interlocked.Increment(ref screenGen);
         KillStream();
+        StopSound();
         ReleaseScreen();
+    }
+
+    // ------------------------------------------------------------------ the laptop's sound with its screen
+    //
+    // What the speakers play goes to the phone with the screen: WASAPI loopback (Loopback),
+    // AAC from ffmpeg (160 kbit/s nearby, 64 from afar), posted to the page's port like the
+    // picture. From afar, sound still waiting after 400 ms is dropped, so it keeps up with the
+    // picture rather than falling behind it.
+
+    static Process soundProc;
+    static int soundGen;
+
+    static void StopSound()
+    {
+        Interlocked.Increment(ref soundGen);
+        Process p = soundProc;
+        soundProc = null;
+        try { if (p != null && !p.HasExited) p.Kill(); } catch { }
+    }
+
+    static void StartSound(string ff, string at, bool remote)
+    {
+        StopSound();
+        int gen = soundGen;
+        var t = new Thread(delegate ()
+        {
+            Loopback cap = null;
+            try
+            {
+                cap = new Loopback();
+                if (!cap.Float) { Say("The laptop's sound is not in a format this helper takes, so the phone gets the picture only."); return; }
+                string args = "-hide_banner -loglevel error -f f32le -ar " + cap.Rate + " -ac " + cap.Channels + " -i pipe:0 -ac 2 -ar 48000 -c:a aac -b:a " +
+                    (remote ? "64k" : "160k") + " -f adts pipe:1";
+                var psi = new ProcessStartInfo(ff, args);
+                psi.UseShellExecute = false; psi.CreateNoWindow = true;
+                psi.RedirectStandardInput = true; psi.RedirectStandardOutput = true; psi.RedirectStandardError = true;
+                var p = Process.Start(psi);
+                soundProc = p;
+                var errs = new Thread(delegate () { try { p.StandardError.ReadToEnd(); } catch { } });
+                errs.IsBackground = true; errs.Start();
+                // Captured sound into ffmpeg every 10 ms; silence keeps flowing as zeros once something has played.
+                var feed = new Thread(delegate ()
+                {
+                    try
+                    {
+                        Stream o = p.StandardInput.BaseStream;
+                        while (gen == soundGen && !p.HasExited)
+                        {
+                            byte[] b = cap.Read();
+                            if (b.Length > 0) { o.Write(b, 0, b.Length); o.Flush(); }
+                            Thread.Sleep(10);
+                        }
+                    }
+                    catch { }
+                });
+                feed.IsBackground = true; feed.Start();
+                PostSound(p, at, remote, gen);
+            }
+            catch (Exception e) { Say("The laptop's sound could not be captured (" + e.Message + "); the phone gets the picture only."); }
+            finally { if (cap != null) cap.Dispose(); }
+        });
+        t.IsBackground = true; t.Start();
+    }
+
+    /** ffmpeg's ADTS frames to the phone; from afar, frames older than 400 ms are let go. */
+    static void PostSound(Process p, string at, bool remote, int gen)
+    {
+        var frames = new LinkedList<KeyValuePair<DateTime, byte[]>>();
+        bool eof = false;
+        object gate = new object();
+        var rd = new Thread(delegate ()
+        {
+            try
+            {
+                Stream src = p.StandardOutput.BaseStream;
+                byte[] head = new byte[7];
+                while (true)
+                {
+                    if (!ReadFull(src, head, 0, 7)) break;
+                    if (head[0] != 0xFF || (head[1] & 0xF0) != 0xF0) { continue; }
+                    int len = ((head[3] & 3) << 11) | (head[4] << 3) | (head[5] >> 5);
+                    if (len < 7) continue;
+                    byte[] f = new byte[len];
+                    Buffer.BlockCopy(head, 0, f, 0, 7);
+                    if (!ReadFull(src, f, 7, len - 7)) break;
+                    lock (gate) { frames.AddLast(new KeyValuePair<DateTime, byte[]>(DateTime.UtcNow, f)); System.Threading.Monitor.Pulse(gate); }
+                }
+            }
+            catch { }
+            lock (gate) { eof = true; System.Threading.Monitor.Pulse(gate); }
+        });
+        rd.IsBackground = true; rd.Start();
+        try
+        {
+            // Set up as the picture's upload is (StreamRequest), to the sound's own route.
+            HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + at + ":" + PhonePort + "/api/display/audio");
+            req.Proxy = null; req.Method = "POST"; req.UserAgent = Ua; req.Headers["Cookie"] = session;
+            req.ContentType = "audio/aac"; req.SendChunked = true; req.AllowWriteStreamBuffering = false;
+            req.Timeout = System.Threading.Timeout.Infinite; req.ReadWriteTimeout = 30000;
+            req.ServicePoint.Expect100Continue = false;
+            using (Stream o = req.GetRequestStream())
+            {
+                while (gen == soundGen)
+                {
+                    byte[] f;
+                    lock (gate)
+                    {
+                        while (frames.Count == 0 && !eof) System.Threading.Monitor.Wait(gate, 1000);
+                        if (frames.Count == 0) break;
+                        if (remote)
+                            while (frames.Count > 1 && (DateTime.UtcNow - frames.First.Value.Key).TotalMilliseconds > 400) frames.RemoveFirst();
+                        f = frames.First.Value.Value;
+                        frames.RemoveFirst();
+                    }
+                    o.Write(f, 0, f.Length);
+                    o.Flush();
+                }
+            }
+        }
+        catch { }
+        try { if (!p.HasExited) p.Kill(); } catch { }
+    }
+
+    static bool ReadFull(Stream s, byte[] b, int off, int n)
+    {
+        while (n > 0)
+        {
+            int r = s.Read(b, off, n);
+            if (r <= 0) return false;
+            off += r; n -= r;
+        }
+        return true;
     }
 
     /**
@@ -4607,6 +4741,107 @@ public static class Dxgi
 }
 
 /** Windows' master volume for the default speakers, through Core Audio. */
+/**
+ * What the laptop's speakers are playing, as it plays: WASAPI's loopback capture of the default
+ * output, in the device's own mix format (32-bit float, usually 48 kHz stereo). No driver and no
+ * "Stereo Mix" needed. Read() hands on the bytes as they come; silence comes as zeros.
+ */
+public class Loopback : IDisposable
+{
+    [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IMMDeviceEnumerator
+    {
+        int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
+        int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice device);
+    }
+
+    [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IMMDevice
+    {
+        int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
+    }
+
+    [Guid("1CB9AD4C-DBFA-4c32-B178-C2F568A703B2"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioClient
+    {
+        int Initialize(int shareMode, int streamFlags, long bufferDuration, long periodicity, IntPtr format, IntPtr sessionGuid);
+        int GetBufferSize(out uint frames);
+        int GetStreamLatency(out long latency);
+        int GetCurrentPadding(out uint padding);
+        int IsFormatSupported(int shareMode, IntPtr format, out IntPtr closest);
+        int GetMixFormat(out IntPtr format);
+        int GetDevicePeriod(out long defaultPeriod, out long minimumPeriod);
+        int Start();
+        int Stop();
+        int Reset();
+        int SetEventHandle(IntPtr handle);
+        int GetService(ref Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object service);
+    }
+
+    [Guid("C8ADBD64-E71E-48a0-A4DE-185C395CD317"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioCaptureClient
+    {
+        int GetBuffer(out IntPtr data, out uint frames, out uint flags, out ulong devicePosition, out ulong qpcPosition);
+        int ReleaseBuffer(uint frames);
+        int GetNextPacketSize(out uint frames);
+    }
+
+    readonly IAudioClient client;
+    readonly IAudioCaptureClient capture;
+    public readonly int Rate, Channels, BlockAlign;
+    public readonly bool Float;
+
+    public Loopback()
+    {
+        // Made from its class id, not "new": MasterVolume declares the same COM class, and .NET hands
+        // back its wrapper type, which then cannot be cast to this one.
+        var e = (IMMDeviceEnumerator)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")));
+        IMMDevice dev;
+        Marshal.ThrowExceptionForHR(e.GetDefaultAudioEndpoint(0, 1, out dev)); // render, multimedia
+        Guid iid = typeof(IAudioClient).GUID;
+        object o;
+        Marshal.ThrowExceptionForHR(dev.Activate(ref iid, 23, IntPtr.Zero, out o));
+        client = (IAudioClient)o;
+        IntPtr fmt;
+        Marshal.ThrowExceptionForHR(client.GetMixFormat(out fmt));
+        int tag = Marshal.ReadInt16(fmt, 0) & 0xFFFF;
+        Channels = Marshal.ReadInt16(fmt, 2);
+        Rate = Marshal.ReadInt32(fmt, 4);
+        BlockAlign = Marshal.ReadInt16(fmt, 12);
+        int bits = Marshal.ReadInt16(fmt, 14);
+        // WAVE_FORMAT_IEEE_FLOAT, or EXTENSIBLE (which the mix format is) at 32 bits: float.
+        Float = tag == 3 || (tag == 0xFFFE && bits == 32);
+        // Shared, loopback, a 200 ms buffer.
+        Marshal.ThrowExceptionForHR(client.Initialize(0, 0x00020000, 2000000, 0, fmt, IntPtr.Zero));
+        Marshal.FreeCoTaskMem(fmt);
+        Guid cid = typeof(IAudioCaptureClient).GUID;
+        object c;
+        Marshal.ThrowExceptionForHR(client.GetService(ref cid, out c));
+        capture = (IAudioCaptureClient)c;
+        Marshal.ThrowExceptionForHR(client.Start());
+    }
+
+    /** What has been played since the last call (empty when nothing has). */
+    public byte[] Read()
+    {
+        var all = new MemoryStream();
+        uint next;
+        while (capture.GetNextPacketSize(out next) == 0 && next > 0)
+        {
+            IntPtr data; uint frames, flags; ulong pos, qpc;
+            if (capture.GetBuffer(out data, out frames, out flags, out pos, out qpc) != 0) break;
+            int n = (int)frames * BlockAlign;
+            byte[] b = new byte[n];
+            if ((flags & 2) == 0) Marshal.Copy(data, b, 0, n); // AUDCLNT_BUFFERFLAGS_SILENT: zeros
+            all.Write(b, 0, n);
+            capture.ReleaseBuffer(frames);
+        }
+        return all.ToArray();
+    }
+
+    public void Dispose() { try { client.Stop(); } catch { } }
+}
+
 public static class MasterVolume
 {
     [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
