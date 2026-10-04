@@ -304,7 +304,22 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
                 first = false
                 runOnUiThread { note.visibility = View.GONE }
                 try {
-                    decode(f.input, holder)
+                    // How much of it has arrived, told back to the laptop five times a second, so it
+                    // keeps only a moment of picture on its way (PostFrames there) and the phone
+                    // shows the laptop as it is now, not as it was some seconds ago.
+                    val got = java.util.concurrent.atomic.AtomicLong()
+                    val counted = object : java.io.FilterInputStream(f.input) {
+                        override fun read(b: ByteArray, off: Int, len: Int): Int = super.read(b, off, len).also { if (it > 0) got.addAndGet(it.toLong()) }
+                    }
+                    if (f.sid.isNotEmpty()) Thread({
+                        var last = -1L
+                        while (running && current === f) {
+                            val n = got.get()
+                            if (n != last) { EventBus.emit("displayack", "${f.sid} $n"); last = n }
+                            Thread.sleep(200)
+                        }
+                    }, "second-screen-ack").apply { isDaemon = true; start() }
+                    decode(counted, holder)
                 } catch (e: Exception) {
                     if (running) Log.w(TAG, "stream ended", e)
                 } finally {

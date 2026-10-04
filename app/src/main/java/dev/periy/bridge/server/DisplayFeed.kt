@@ -14,7 +14,8 @@ import java.util.concurrent.LinkedBlockingQueue
  * still listens on and hands in here the same way.
  */
 object DisplayFeed {
-    class Feed(val input: InputStream, val done: CompletableFuture<Unit>)
+    /** One stream; [sid] is the helper's name for it, echoed in "displayack" so it knows what arrived. */
+    class Feed(val input: InputStream, val done: CompletableFuture<Unit>, val sid: String = "")
 
     val feeds = LinkedBlockingQueue<Feed>()
 

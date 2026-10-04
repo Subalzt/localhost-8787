@@ -1447,7 +1447,7 @@ class BridgeServer(
             }
             val done = java.util.concurrent.CompletableFuture<Unit>()
             withContext(Dispatchers.IO) {
-                DisplayFeed.feeds.put(DisplayFeed.Feed(call.receiveStream(), done))
+                DisplayFeed.feeds.put(DisplayFeed.Feed(call.receiveStream(), done, call.request.queryParameters["s"].orEmpty()))
                 runCatching { done.get() }
             }
             call.respond(ApiResult(true))

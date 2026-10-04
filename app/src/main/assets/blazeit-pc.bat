@@ -1442,6 +1442,13 @@ public static class BlazeItPc
                                 }
                                 else StopSecondScreen();
                             }
+                            else if (ev == "displayack")
+                            {
+                                // The phone has had this much of the screen stream named so (PostFrames).
+                                string[] q = d.Split(' ');
+                                long n;
+                                if (q.Length >= 2 && long.TryParse(q[1], out n)) lock (ackLock) { ackSid = q[0]; ackBytes = n; }
+                            }
                             else if (ev == "laptopfs" && !snapshot)
                             {
                                 // The phone asks for a folder here, or a file from it (LaptopFiles on the phone).
@@ -2190,10 +2197,18 @@ public static class BlazeItPc
         return why;
     }
 
-    /** The phone's page-port upload for the screen, as PostStream opens it. */
-    static HttpWebRequest StreamRequest(string at)
+    /** What the phone says it has had of the screen stream named ackSid. */
+    static readonly object ackLock = new object();
+    static string ackSid = "";
+    static long ackBytes;
+
+    static long AckedFor(string sid) { lock (ackLock) return ackSid == sid ? ackBytes : -1; }
+
+    /** The phone's page-port upload for the screen, as PostStream opens it; "sid" names it for the phone's acks. */
+    static HttpWebRequest StreamRequest(string at, string sid = "")
     {
-        HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + at + ":" + PhonePort + "/api/display/stream");
+        HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + at + ":" + PhonePort + "/api/display/stream" +
+            (sid.Length > 0 ? "?s=" + sid : ""));
         req.Proxy = null;
         req.Method = "POST";
         req.UserAgent = Ua;
@@ -2272,13 +2287,28 @@ public static class BlazeItPc
         string why = "ended";
         try
         {
-            HttpWebRequest req = StreamRequest(at);
+            // The phone tells what it has had (displayack); no more than about 0.3 s of picture is
+            // let out beyond that, so the tunnel's and Windows' buffers never fill with old frames.
+            // A phone that never tells (an older app) gets the stream unmetered after 3 s.
+            string sid = Guid.NewGuid().ToString("N").Substring(0, 12);
+            long sentBytes = 0;
+            DateTime began = DateTime.UtcNow;
+            HttpWebRequest req = StreamRequest(at, sid);
             using (Stream o = req.GetRequestStream())
             {
                 int dropped = 0, calm = 0;
                 DateTime window = DateTime.UtcNow;
                 while (true)
                 {
+                    long room = Math.Max(24 * 1024, (long)remoteKbit * 1000 / 8 * 3 / 10);
+                    while (true)
+                    {
+                        long acked = AckedFor(sid);
+                        if (acked < 0 && (DateTime.UtcNow - began).TotalSeconds > 3) break;
+                        if (sentBytes - Math.Max(0, acked) <= room) break;
+                        Thread.Sleep(5);
+                        lock (gate) if (eof && frames.Count == 0) break;
+                    }
                     byte[] f;
                     lock (gate)
                     {
@@ -2294,6 +2324,7 @@ public static class BlazeItPc
                     }
                     o.Write(f, 0, f.Length);
                     o.Flush();
+                    sentBytes += f.Length;
                     if ((DateTime.UtcNow - window).TotalSeconds < 10) continue;
                     window = DateTime.UtcNow;
                     if (dropped > 20 && remoteKbit > 250)
