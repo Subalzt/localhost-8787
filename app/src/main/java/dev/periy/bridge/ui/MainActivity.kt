@@ -238,6 +238,9 @@ class MainActivity : ComponentActivity() {
             // `--ez calltest true [--ez video true]`: a test call, this phone through a call and back.
             if (intent.getBooleanExtra("calltest", false)) c.calls.testCall(intent.getBooleanExtra("video", false))
             if (intent.getBooleanExtra("callstate", false)) c.calls.logState()
+            // `--ez laptopscreen true`: the laptop's screen view, as Control's row opens it.
+            if (intent.getBooleanExtra("laptopscreen", false)) startActivity(android.content.Intent(this, SecondScreenActivity::class.java))
+            if (intent.getBooleanExtra("closescreen", false)) SecondScreenActivity.openView?.finish()
             // `--es laptopput <folder>`: a small test file from this phone into that folder on the laptop (logged).
             intent.getStringExtra("laptopput")?.let { folder ->
                 val f = java.io.File(cacheDir, "Sent from the phone.txt").apply { writeText("Hello from the phone, sent " + java.util.Date()) }

@@ -1526,7 +1526,8 @@ class BridgeServer(
             }
             val done = java.util.concurrent.CompletableFuture<Unit>()
             withContext(Dispatchers.IO) {
-                DisplayFeed.feeds.put(DisplayFeed.Feed(call.receiveStream(), done, call.request.queryParameters["s"].orEmpty()))
+                val framed = call.request.headers[HttpHeaders.ContentType]?.startsWith("video/h264-frames") == true
+                DisplayFeed.feeds.put(DisplayFeed.Feed(call.receiveStream(), done, call.request.queryParameters["s"].orEmpty(), framed))
                 runCatching { done.get() }
             }
             call.respond(ApiResult(true))

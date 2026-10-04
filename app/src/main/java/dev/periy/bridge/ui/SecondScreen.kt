@@ -90,7 +90,17 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
             onKey = { k -> withMods { Control.send("k $k") } })
         root.addView(keys, FrameLayout.LayoutParams(1, 1))
         root.addView(keyBar(), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+        // How it is going, on a small pill at the top, while Stats is on.
+        val d0 = resources.displayMetrics.density
+        stats = TextView(this).apply {
+            setTextColor(0xFFFFFFFF.toInt()); textSize = 12f; visibility = View.GONE
+            typeface = android.graphics.Typeface.MONOSPACE
+            setPadding((12 * d0).toInt(), (5 * d0).toInt(), (12 * d0).toInt(), (5 * d0).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 40 * d0; setColor(0x99000000.toInt()) }
+        }
+        root.addView(stats, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = (12 * d0).toInt() })
         setContentView(root)
+        openView = this
         surface.holder.addCallback(this)
         surface.setOnTouchListener { _, e -> touch(e); true }
         immersive()
@@ -131,6 +141,7 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
     override fun surfaceDestroyed(holder: SurfaceHolder) { shutdown() }
 
     override fun onDestroy() {
+        if (openView === this) openView = null
         shutdown()
         super.onDestroy()
     }
@@ -229,6 +240,7 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
         }
         key("Vol \u2212", repeat = true) { volume(-0.04f) }
         key("Vol +", repeat = true) { volume(0.04f) }
+        key("Stats") { stats?.let { it.visibility = if (it.visibility == View.VISIBLE) View.GONE else View.VISIBLE } }
         // Folded away, the bar is one button at the corner.
         val toggle = TextView(this).apply {
             text = "Keys"; textSize = 14f; gravity = Gravity.CENTER
@@ -301,10 +313,11 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
             while (running) {
                 val f = DisplayFeed.feeds.poll(if (first) 600_000L else RECONNECT_MS.toLong(), TimeUnit.MILLISECONDS) ?: break
                 current = f
+                Log.i(TAG, "Stream in (${if (f.framed) "framed" else "plain"}, sid ${f.sid.ifEmpty { "-" }})")
                 first = false
                 runOnUiThread { note.visibility = View.GONE }
                 try {
-                    // How much of it has arrived, told back to the laptop five times a second, so it
+                    // How much of it has arrived, told back to the laptop twenty times a second, so it
                     // keeps only a moment of picture on its way (PostFrames there) and the phone
                     // shows the laptop as it is now, not as it was some seconds ago.
                     val got = java.util.concurrent.atomic.AtomicLong()
@@ -316,10 +329,10 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
                         while (running && current === f) {
                             val n = got.get()
                             if (n != last) { EventBus.emit("displayack", "${f.sid} $n"); last = n }
-                            Thread.sleep(200)
+                            Thread.sleep(50)
                         }
                     }, "second-screen-ack").apply { isDaemon = true; start() }
-                    decode(counted, holder)
+                    decode(counted, holder, f.framed)
                 } catch (e: Exception) {
                     if (running) Log.w(TAG, "stream ended", e)
                 } finally {
@@ -328,6 +341,7 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
                     runCatching { f.input.close() }
                     f.done.complete(Unit)
                     current = null
+                    Log.i(TAG, "Stream over")
                 }
                 if (running) runOnUiThread { note.text = "Picking the laptop's screen up again..."; note.visibility = View.VISIBLE }
             }
@@ -357,7 +371,7 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
      * threads as it has) sends several units per picture, and a decoder given them one by one
      * shows nothing.
      */
-    private fun decode(input: InputStream, holder: SurfaceHolder) {
+    private fun decode(input: InputStream, holder: SurfaceHolder, framed: Boolean = false) {
         val c = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         codec = c
         fun format(fast: Boolean) = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, 1920, 1080).apply {
@@ -379,12 +393,38 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
         c.start()
         au.reset(); auHasPicture = false
         val info = MediaCodec.BufferInfo()
+        // Pictures go on the screen the moment the decoder has them, on a thread of their own: not
+        // when the next bytes happen to arrive (on a still desktop that can be a long while).
+        val shower = Thread({ while (running && codec === c) runCatching { drainWaiting(c, info) }.onFailure { return@Thread } }, "second-screen-show").apply { isDaemon = true; start() }
+        if (framed) {
+            // Each picture whole, its length first: decoded as soon as its last byte is in.
+            val din = java.io.DataInputStream(input)
+            var frame = ByteArray(512 * 1024)
+            try {
+                while (running) {
+                    val n = try { din.readInt() } catch (e: java.io.EOFException) { break }
+                    if (n <= 0 || n > 8 * 1024 * 1024) break
+                    if (n > frame.size) frame = ByteArray(n)
+                    din.readFully(frame, 0, n)
+                    bytesIn += n + 4
+                    var start = startCode(frame, 0, n)
+                    while (start >= 0) {
+                        val next = startCode(frame, start + 3, n)
+                        unit(c, frame, start, (if (next < 0) n else next) - start)
+                        start = next
+                    }
+                    flushAu(c)
+                }
+            } finally { runCatching { shower.join(50) } }
+            return
+        }
         val buf = ByteArray(4 * 1024 * 1024)
         var len = 0
         val chunk = ByteArray(256 * 1024)
         while (running) {
             val n = input.read(chunk)
             if (n < 0) break
+            bytesIn += n
             if (len + n > buf.size) len = 0 // a unit bigger than 4 MB is not a picture we can use
             System.arraycopy(chunk, 0, buf, len, n)
             len += n
@@ -397,7 +437,24 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
                 start = next
             }
             if (start > 0) { System.arraycopy(buf, start, buf, 0, len - start); len -= start }
-            drain(c, info)
+        }
+    }
+
+    /** Waits a moment for a decoded picture and shows it; the format and the counts on the way. */
+    private fun drainWaiting(c: MediaCodec, info: MediaCodec.BufferInfo) {
+        val out = c.dequeueOutputBuffer(info, 10_000)
+        when {
+            out >= 0 -> {
+                c.releaseOutputBuffer(out, true) // shown the moment it is ready
+                countFrame()
+                drain(c, info)
+            }
+            out == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                val of = c.outputFormat
+                val w = of.getInteger(MediaFormat.KEY_WIDTH)
+                val h = of.getInteger(MediaFormat.KEY_HEIGHT)
+                runOnUiThread { fit(w, h) }
+            }
         }
     }
 
@@ -469,7 +526,7 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
             when {
                 out >= 0 -> {
                     c.releaseOutputBuffer(out, true) // show every picture the moment it is ready
-                    if (BuildConfig.DEBUG) countFrame()
+                    countFrame()
                 }
                 out == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                     val of = c.outputFormat
@@ -484,14 +541,24 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
 
     private var frames = 0
     private var framesSince = 0L
+    @Volatile private var bytesIn = 0L
+    private var bytesBefore = 0L
+    private var stats: TextView? = null
 
-    /** Debug builds: pictures shown each second, in the log (adb logcat -s SecondScreen). */
+    /**
+     * Pictures shown each second, and what came in: on the stats pill when it is on (the key
+     * bar's "Stats"), and in debug builds in the log (adb logcat -s SecondScreen).
+     */
     private fun countFrame() {
         frames++
         val now = SystemClock.elapsedRealtime()
         if (framesSince == 0L) framesSince = now
         if (now - framesSince >= 1000) {
-            Log.d(TAG, "fps $frames at ${picW}x$picH")
+            val fps = frames * 1000 / (now - framesSince).coerceAtLeast(1)
+            val mbit = (bytesIn - bytesBefore) * 8 / 1000.0 / (now - framesSince).coerceAtLeast(1)
+            bytesBefore = bytesIn
+            if (BuildConfig.DEBUG) Log.d(TAG, "fps $fps at ${picW}x$picH, ${"%.1f".format(mbit)} Mbit/s")
+            stats?.let { v -> runOnUiThread { v.text = "$fps fps  ·  ${"%.1f".format(mbit)} Mbit/s  ·  ${picW}×$picH" } }
             frames = 0; framesSince = now
         }
     }
@@ -637,6 +704,9 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
     }
 
     companion object {
+        /** Debug builds: the open view, to close it from adb (`--ez closescreen true`). */
+        @Volatile var openView: SecondScreenActivity? = null
+
         private const val TAG = "SecondScreen"
         const val PORT = 8791
         /** How long to wait for the laptop's next stream after one ends. */

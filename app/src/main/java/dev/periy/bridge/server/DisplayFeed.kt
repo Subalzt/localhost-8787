@@ -14,8 +14,12 @@ import java.util.concurrent.LinkedBlockingQueue
  * still listens on and hands in here the same way.
  */
 object DisplayFeed {
-    /** One stream; [sid] is the helper's name for it, echoed in "displayack" so it knows what arrived. */
-    class Feed(val input: InputStream, val done: CompletableFuture<Unit>, val sid: String = "")
+    /**
+     * One stream; [sid] is the helper's name for it, echoed in "displayack" so it knows what arrived.
+     * [framed]: each picture comes whole with its length before it (u32, big-endian), so it is
+     * decoded the moment it is in, not when the next one begins.
+     */
+    class Feed(val input: InputStream, val done: CompletableFuture<Unit>, val sid: String = "", val framed: Boolean = false)
 
     val feeds = LinkedBlockingQueue<Feed>()
 

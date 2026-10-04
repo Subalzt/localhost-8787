@@ -1570,7 +1570,10 @@ public static class BlazeItPc
                                     // Newer phones add their refresh rate and decoder throughput.
                                     phoneHz = p.Length >= 5 ? Math.Max(30, int.Parse(p[4])) : 60;
                                     long budget = p.Length >= 6 ? long.Parse(p[5]) : 0;
-                                    phoneBlocks = budget > 0 ? budget : 2073600;
+                                    // No more than H.264's level 5.2 carries (2,073,600 blocks a second: 4K at 64,
+                                    // 2560x1440 at 120), whatever the decoder says: past it the encoder
+                                    // falls back to about 60 frames however fast the phone is.
+                                    phoneBlocks = Math.Min(budget > 0 ? budget : 2073600, 2073600);
                                     // Newer phones take the stream on the page's port, so it goes the way
                                     // everything else does, the tunnel included.
                                     bool http = p.Length >= 7 && p[6] == "http";
@@ -1952,6 +1955,9 @@ public static class BlazeItPc
     static int StreamRate(Displays.Mon m)
     {
         int rate = Math.Min(phoneHz, m.Hz > 1 ? m.Hz : 60);
+        // Windows draws a virtual display about 60 times a second whatever its mode says (measured:
+        // 65 from a 120 Hz one), so it is sent at 60, every bit of the rate on a real picture.
+        if (m.Virtual) rate = Math.Min(rate, 60);
         rate = (int)Math.Min(rate, phoneBlocks / Math.Max(1, Blocks(m.W, m.H)));
         return Math.Max(30, rate);
     }
@@ -2014,6 +2020,17 @@ public static class BlazeItPc
      * backed up is not tried again for three minutes.
      */
     static volatile int remoteKbit = 700;
+
+    /**
+     * Nearby (the cable, the hotspot, Wi-Fi) the picture goes at what the link carries too: it
+     * starts at three quarters of the most the link is given (100 Mbit/s on the cable, 60 on
+     * Wi-Fi), steps down by 30% when pictures arrive late and back up by a quarter after 20 calm
+     * seconds, so a busy Wi-Fi never lets pictures pile up and fall behind.
+     */
+    static volatile int localKbit = 0;
+    static volatile string localFor = null;
+
+    static int LocalCap(string at) { return at == AdbHost || UsbGateways().Contains(at) ? 100000 : 60000; }
     const int MaxKbit = 6000;
     static int failedKbit = int.MaxValue;
     static DateTime failedAt;
@@ -2211,6 +2228,11 @@ public static class BlazeItPc
     /** The ffmpeg command lines that stream a monitor to "dest", best first; the shader goes in Dir. */
     static List<string> CaptureTries(Displays.Mon target, double hdrWhite, string dest)
     {
+        return CaptureTries(target, hdrWhite, dest, 0);
+    }
+
+    static List<string> CaptureTries(Displays.Mon target, double hdrWhite, string dest, int kbit)
+    {
         int adapter, output; string adapterName;
         if (!Dxgi.Find(target.Device, out adapter, out output, out adapterName)) { adapter = -1; output = -1; adapterName = ""; }
 
@@ -2222,7 +2244,7 @@ public static class BlazeItPc
         // As many frames as the monitor, the phone's panel and its decoder all manage (120 on a
         // 120 Hz phone), with the bit rate going up with them: 40 Mbit/s at 60, 80 at 120.
         int fps = StreamRate(target);
-        int mbit = Math.Min(80, Math.Max(40, 40 * fps / 60));
+        int mbit = kbit > 0 ? Math.Max(4, kbit / 1000) : Math.Min(80, Math.Max(40, 40 * fps / 60));
         string enc = " -c:v h264_nvenc -preset p1 -tune ull -zerolatency 1 -rc cbr -b:v " + mbit + "M -maxrate " + mbit + "M -bufsize " + Math.Max(3, mbit / 13) + "M -g " + (fps * 2) + " -bf 0";
         // Frames captured on the NVIDIA card go straight to its encoder; from any other
         // adapter they are copied across first.
@@ -2274,7 +2296,7 @@ public static class BlazeItPc
         string nv = " -c:v h264_nvenc -preset p4 -tune ll -zerolatency 1 -rc cbr -intra-refresh 1" + rate;
         string x264 = " -c:v libx264 -preset veryfast -tune zerolatency -intra-refresh 1" + rate;
         bool nvidia = adapterName.IndexOf("NVIDIA", StringComparison.OrdinalIgnoreCase) >= 0;
-        string dest = " -bsf:v h264_metadata=aud=insert -f h264 pipe:1";
+        string dest = " -flush_packets 1 -flvflags no_duration_filesize -f flv pipe:1";
         var tries = new List<string>();
         if (adapter >= 0)
         {
@@ -2305,15 +2327,12 @@ public static class BlazeItPc
         {
             try
             {
-                Stream src = p.StandardOutput.BaseStream;
-                byte[] buf = new byte[64 * 1024];
-                int n;
-                while ((n = src.Read(buf, 0, buf.Length)) > 0)
+                // Each picture from ffmpeg's FLV, whole, with its length before it.
+                FlvFrames(p.StandardOutput.BaseStream, delegate (byte[] f)
                 {
-                    byte[] c = new byte[n];
-                    Buffer.BlockCopy(buf, 0, c, 0, n);
-                    lock (gate) { queue.Enqueue(c); queued += n; System.Threading.Monitor.Pulse(gate); }
-                }
+                    byte[] c = Framed(f);
+                    lock (gate) { queue.Enqueue(c); queued += c.Length; System.Threading.Monitor.Pulse(gate); }
+                });
             }
             catch { }
             lock (gate) { eof = true; System.Threading.Monitor.Pulse(gate); }
@@ -2327,7 +2346,7 @@ public static class BlazeItPc
             req.Method = "POST";
             req.UserAgent = Ua;
             req.Headers["Cookie"] = session;
-            req.ContentType = "video/h264";
+            req.ContentType = "video/h264-frames";
             req.SendChunked = true;
             req.AllowWriteStreamBuffering = false;
             // .NET's Timeout runs until the phone answers, which it does only when the stream ends, so
@@ -2394,7 +2413,7 @@ public static class BlazeItPc
         req.Method = "POST";
         req.UserAgent = Ua;
         req.Headers["Cookie"] = session;
-        req.ContentType = "video/h264";
+        req.ContentType = "video/h264-frames";
         req.SendChunked = true;
         req.AllowWriteStreamBuffering = false;
         req.Timeout = System.Threading.Timeout.Infinite;
@@ -2404,6 +2423,86 @@ public static class BlazeItPc
     }
 
     /** Whether an access unit starts the picture afresh (SPS or IDR), which is never dropped. */
+    static byte[] ReadN(Stream s, int n)
+    {
+        byte[] b = new byte[n];
+        int got = 0;
+        while (got < n)
+        {
+            int r = s.Read(b, got, n - got);
+            if (r <= 0) return null;
+            got += r;
+        }
+        return b;
+    }
+
+    /**
+     * ffmpeg's FLV, one video tag at a time, each made back into an H.264 picture as the phone takes
+     * it (start codes, the stream's settings before the first picture and every key picture), handed
+     * to [onFrame] the moment its tag is in: FLV says how long each tag is, so nothing waits for the
+     * next picture to begin.
+     */
+    static void FlvFrames(Stream s, Action<byte[]> onFrame)
+    {
+        byte[] head = ReadN(s, 9);
+        if (head == null || head[0] != 'F' || head[1] != 'L' || head[2] != 'V') return;
+        int skip = ((head[5] << 24) | (head[6] << 16) | (head[7] << 8) | head[8]) - 9;
+        if (skip > 0 && ReadN(s, skip) == null) return;
+        if (ReadN(s, 4) == null) return;
+        byte[] sc = { 0, 0, 0, 1 };
+        byte[] config = null;
+        int nalLen = 4;
+        bool first = true;
+        while (true)
+        {
+            byte[] th = ReadN(s, 11);
+            if (th == null) return;
+            int type = th[0] & 0x1F, size = (th[1] << 16) | (th[2] << 8) | th[3];
+            byte[] data = size > 0 ? ReadN(s, size) : new byte[0];
+            if (data == null || ReadN(s, 4) == null) return;
+            if (type != 9 || size < 5 || (data[0] & 0x0F) != 7) continue;
+            bool key = (data[0] >> 4) == 1;
+            if (data[1] == 0)
+            {
+                // The decoder configuration: its SPS and PPS, as start-coded units.
+                MemoryStream cfg = new MemoryStream();
+                int q = 5;
+                nalLen = (data[q + 4] & 3) + 1;
+                int nsps = data[q + 5] & 0x1F; q += 6;
+                for (int i = 0; i < nsps && q + 2 <= data.Length; i++) { int l = (data[q] << 8) | data[q + 1]; q += 2; cfg.Write(sc, 0, 4); cfg.Write(data, q, Math.Min(l, data.Length - q)); q += l; }
+                int npps = q < data.Length ? data[q++] : 0;
+                for (int i = 0; i < npps && q + 2 <= data.Length; i++) { int l = (data[q] << 8) | data[q + 1]; q += 2; cfg.Write(sc, 0, 4); cfg.Write(data, q, Math.Min(l, data.Length - q)); q += l; }
+                config = cfg.ToArray();
+                continue;
+            }
+            if (data[1] != 1) continue;
+            MemoryStream au = new MemoryStream(size + 64);
+            if ((first || key) && config != null) au.Write(config, 0, config.Length);
+            first = false;
+            int p = 5;
+            while (p + nalLen <= data.Length)
+            {
+                int l = 0;
+                for (int i = 0; i < nalLen; i++) l = (l << 8) | data[p + i];
+                p += nalLen;
+                if (l <= 0 || p + l > data.Length) break;
+                au.Write(sc, 0, 4);
+                au.Write(data, p, l);
+                p += l;
+            }
+            onFrame(au.ToArray());
+        }
+    }
+
+    /** A picture as it goes to the phone: its length (u32, big-endian), then the picture. */
+    static byte[] Framed(byte[] f)
+    {
+        byte[] o = new byte[f.Length + 4];
+        o[0] = (byte)(f.Length >> 24); o[1] = (byte)(f.Length >> 16); o[2] = (byte)(f.Length >> 8); o[3] = (byte)f.Length;
+        Buffer.BlockCopy(f, 0, o, 4, f.Length);
+        return o;
+    }
+
     static bool StartsAfresh(byte[] f)
     {
         for (int i = 0; i + 3 < f.Length; i++)
@@ -2424,6 +2523,17 @@ public static class BlazeItPc
      */
     static string PostFrames(Process p, string at)
     {
+        return PostFrames(p, at, true);
+    }
+
+    /**
+     * Pictures to the phone, each whole with its length, let out only as fast as the phone says it
+     * has them (plus a moment: 0.3 s from afar, 0.1 s nearby); a picture still waiting after half
+     * a second from afar, or 150 ms nearby, is dropped (all but the newest), so the phone always
+     * shows the laptop as it is now. The rate follows: many drops ask for less, calm for more.
+     */
+    static string PostFrames(Process p, string at, bool remote)
+    {
         var frames = new LinkedList<KeyValuePair<DateTime, byte[]>>();
         bool eof = false;
         object gate = new object();
@@ -2431,35 +2541,10 @@ public static class BlazeItPc
         {
             try
             {
-                Stream src = p.StandardOutput.BaseStream;
-                MemoryStream acc = new MemoryStream();
-                byte[] buf = new byte[64 * 1024];
-                int n, scanFrom = 1;
-                while ((n = src.Read(buf, 0, buf.Length)) > 0)
+                FlvFrames(p.StandardOutput.BaseStream, delegate (byte[] f)
                 {
-                    acc.Write(buf, 0, n);
-                    byte[] a = acc.GetBuffer();
-                    int len = (int)acc.Length, start = 0;
-                    for (int i = Math.Max(1, scanFrom); i + 3 < len; i++)
-                    {
-                        if (a[i] != 0 || a[i + 1] != 0 || a[i + 2] != 1 || (a[i + 3] & 0x1F) != 9) continue;
-                        int cut = a[i - 1] == 0 ? i - 1 : i;
-                        if (cut > start)
-                        {
-                            byte[] f = new byte[cut - start];
-                            Buffer.BlockCopy(a, start, f, 0, f.Length);
-                            lock (gate) { frames.AddLast(new KeyValuePair<DateTime, byte[]>(DateTime.UtcNow, f)); System.Threading.Monitor.Pulse(gate); }
-                        }
-                        start = cut;
-                        i = cut + 4;
-                    }
-                    MemoryStream rest = new MemoryStream();
-                    rest.Write(a, start, len - start);
-                    acc = rest;
-                    scanFrom = Math.Max(1, (int)acc.Length - 4);
-                }
-                byte[] tail = acc.ToArray();
-                if (tail.Length > 0) lock (gate) frames.AddLast(new KeyValuePair<DateTime, byte[]>(DateTime.UtcNow, tail));
+                    lock (gate) { frames.AddLast(new KeyValuePair<DateTime, byte[]>(DateTime.UtcNow, f)); System.Threading.Monitor.Pulse(gate); }
+                });
             }
             catch { }
             lock (gate) { eof = true; System.Threading.Monitor.Pulse(gate); }
@@ -2486,7 +2571,8 @@ public static class BlazeItPc
                 DateTime window = DateTime.UtcNow;
                 while (true)
                 {
-                    long room = Math.Max(24 * 1024, (long)(remoteKbit * 1000 / 8 * (Math.Min(rtt, 2.0) + 0.3)));
+                    int rateNow = remote ? remoteKbit : localKbit;
+                    long room = Math.Max(24 * 1024, (long)(rateNow * 1000L / 8 * (Math.Min(rtt, 2.0) + (remote ? 0.3 : 0.1))));
                     while (true)
                     {
                         long acked = AckedFor(sid);
@@ -2502,7 +2588,7 @@ public static class BlazeItPc
                     {
                         while (frames.Count == 0 && !eof) System.Threading.Monitor.Wait(gate, 1000);
                         if (frames.Count == 0) break;
-                        while (frames.Count > 1 && (DateTime.UtcNow - frames.First.Value.Key).TotalMilliseconds > 500 && !StartsAfresh(frames.First.Value.Value))
+                        while (frames.Count > 1 && (DateTime.UtcNow - frames.First.Value.Key).TotalMilliseconds > (remote ? 500 : 150) && !StartsAfresh(frames.First.Value.Value))
                         {
                             frames.RemoveFirst();
                             dropped++;
@@ -2510,15 +2596,38 @@ public static class BlazeItPc
                         f = frames.First.Value.Value;
                         frames.RemoveFirst();
                     }
-                    o.Write(f, 0, f.Length);
+                    byte[] wf = Framed(f);
+                    o.Write(wf, 0, wf.Length);
                     o.Flush();
-                    sentBytes += f.Length;
+                    sentBytes += wf.Length;
                     sentAt.Enqueue(new KeyValuePair<long, DateTime>(sentBytes, DateTime.UtcNow));
                     if (sentAt.Count > 4000) sentAt.Dequeue();
                     if ((DateTime.UtcNow - window).TotalSeconds < 10) continue;
                     window = DateTime.UtcNow;
                     if (rttLeast < 5) rtt = rttLeast;
+                    Log("Screen " + (remote ? "far" : "near") + ": " + (remote ? remoteKbit : localKbit) + " kbit/s, word back in " + Math.Round((rttLeast < 5 ? rttLeast : rtt) * 1000) + " ms, " + dropped + " late pictures dropped in 10 s");
                     rttLeast = double.MaxValue;
+                    if (!remote)
+                    {
+                        // Nearby: down by 30% on many late pictures, up by a quarter after 20 calm seconds.
+                        if (dropped > 20 && localKbit > 8000)
+                        {
+                            localKbit = Math.Max(8000, localKbit * 7 / 10);
+                            Say("The link to the phone is busy: the screen goes at " + (localKbit / 1000) + " Mbit/s now.");
+                            why = "rate";
+                            break;
+                        }
+                        calm = dropped == 0 ? calm + 10 : 0;
+                        dropped = 0;
+                        if (calm >= 20 && localKbit < LocalCap(at))
+                        {
+                            localKbit = Math.Min(LocalCap(at), localKbit * 5 / 4);
+                            Say("The link to the phone keeps up: the screen goes at " + (localKbit / 1000) + " Mbit/s now.");
+                            why = "rate";
+                            break;
+                        }
+                        continue;
+                    }
                     if (dropped > 20 && remoteKbit > 250)
                     {
                         SetRemoteKbit(Math.Max(250, remoteKbit * 6 / 10), true);
@@ -2549,8 +2658,16 @@ public static class BlazeItPc
         shown = target;
         double hdrWhite = remote ? 0 : HdrWhite(target);
         if (hdrWhite > 0) Say("This screen is in HDR, with ordinary white at " + Math.Round(hdrWhite) + " nits; the phone gets it turned back into an ordinary picture, so it is not too bright.");
-        string dest = http ? " -f h264 pipe:1" : " -f h264 \"tcp://" + at + ":" + port + "?tcp_nodelay=1\"";
-        foreach (string args in remote ? RemoteTries(target, remoteKbit) : CaptureTries(target, hdrWhite, dest))
+        // To the page's port: FLV, which gives each frame's size, every frame let out the moment it is
+        // made (nothing waits to fill a buffer), so each goes to the phone whole and at once.
+        string dest = http ? " -flush_packets 1 -flvflags no_duration_filesize -f flv pipe:1" : " -f h264 \"tcp://" + at + ":" + port + "?tcp_nodelay=1\"";
+        // Nearby over the page's port: at the rate the link carries (localKbit), started once per link.
+        if (!remote && http && (localKbit <= 0 || localFor != at))
+        {
+            localFor = at;
+            localKbit = Math.Min(LocalCap(at), Math.Min(80, Math.Max(40, 40 * StreamRate(target) / 60)) * 1000) * 3 / 4;
+        }
+        foreach (string args in remote ? RemoteTries(target, remoteKbit) : CaptureTries(target, hdrWhite, dest, http ? localKbit : 0))
         {
             relayout = false;
             var psi = new ProcessStartInfo(ff, args);
@@ -2569,7 +2686,7 @@ public static class BlazeItPc
             Thread pump = null;
             if (http)
             {
-                pump = new Thread(delegate () { sent = remote ? PostFrames(p, at) : PostStream(p, at, false); });
+                pump = new Thread(delegate () { sent = PostFrames(p, at, remote); });
                 pump.IsBackground = true; pump.Start();
             }
             // Still going after a few seconds: it works. Stopped at once: try the next way.
