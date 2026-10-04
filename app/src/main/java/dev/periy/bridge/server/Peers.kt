@@ -370,7 +370,7 @@ class PeerManager(
         scope.launch {
             var conn: dev.periy.bridge.net.TunnelConnection? = null
             try {
-                if (!dev.periy.bridge.net.LinkCode.valid(code)) error("A link code is ten letters and numbers")
+                if (!dev.periy.bridge.net.LinkCode.valid(code)) error("A link code is four digits")
                 setStatus(LINK_KEY, PeerStatus.Waiting(""))
                 // The other phone will come back to this one the same way.
                 access.ensureTunnel()

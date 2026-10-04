@@ -548,8 +548,8 @@ phone (section 19), says how it is reached now (*Nearby · same Wi-Fi*, *Interne
 *Phones → Add a phone* looks for other phones running Localhost 8787 on the same network (they
 announce themselves, as printers do). Tap **Link**, compare the 4-digit code, and tap **Allow** on
 the other phone. That one approval links the two **both ways**: each can now reach the other
-without asking again, for a year, renewed on its own. A phone the search cannot see (another
-network that still routes to this one) can be added with **Connect by address**.
+without asking again, for a year, renewed on its own. A phone the search cannot see (some Wi-Fi
+keeps phones from seeing each other) links with a code instead, below.
 
 </details>
 
@@ -558,11 +558,12 @@ network that still routes to this one) can be added with **Connect by address**.
 
 <br>
 
-*Phones → Show a link code* gives ten letters and numbers, open for ten minutes. On the other
-phone, anywhere in the world, *Enter a link code* and type them. The code alone lets that phone
-find this one through the message board and reach it through its tunnel, over IPv6 or punched
-across IPv4, and there it asks to be let in exactly as on a shared Wi-Fi: compare the 4-digit
-code, tap **Allow**. Guessing a code gets nobody in; it only makes the phone ask. Once linked,
+*Phones → Show a link code* gives four digits, open for five minutes. On the other phone,
+anywhere in the world, *Enter a link code* and type them. The code lets that phone find this one
+through the message board and reach it through its tunnel, over IPv6 or punched across IPv4, and
+there it asks to be let in exactly as on a shared Wi-Fi: compare the 4-digit code, tap **Allow**.
+Four digits are easy to read out but no secret from someone watching the board at that moment, so
+only allow the phone you expect, by its name; the code is spent the moment one phone links. Once linked,
 each phone holds the other's own tunnel keys, so the link keeps working from anywhere, and the
 code closes. Both phones turn on *From other networks*. [How it works](docs/tunnel-protocol.md#link-codes).
 

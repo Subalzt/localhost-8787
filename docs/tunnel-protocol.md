@@ -225,8 +225,10 @@ every request to the other phone goes there unchanged.
 
 Two phones that have never shared a network link with a code one of them shows (`net/LinkCode.kt`):
 
-- Ten characters from `23456789ABCDEFGHJKLMNPQRSTUVWXYZ` (50 bits), shown as `XXXXX-XXXXX`, open
-  for ten minutes or until a phone links.
+- Four digits, shown as `4 8 2 1`, open for five minutes or until a phone links. Easy to read out,
+  but with ten thousand of them anyone watching the board could tell which topics are in use and
+  so which code is open: the code only brings a phone to the door. What lets it in is **Allow** on
+  the showing phone, which names the phone asking.
 - While it is open the showing phone's tunnel also answers for a stand-in device, `link-code`,
   whose keys come from the code instead of the phone's secret:
   `psk = HMAC-SHA256("L87L/1 psk", code)`, `tid = HMAC-SHA256(psk, "L87L/1 id")[0:16]`. Its board

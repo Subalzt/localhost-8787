@@ -1745,8 +1745,6 @@ private fun LazyListScope.phonesTab(
         }
     }
     item { Spacer(Modifier.height(12.dp)) }
-    item { ConnectByAddress(connect) }
-    item { Spacer(Modifier.height(12.dp)) }
     item { LinkFromAnywhere(peerStatus[dev.periy.bridge.server.PeerManager.LINK_KEY]) }
 
 }
@@ -1961,11 +1959,11 @@ private fun LinkFromAnywhere(status: PeerStatus?) {
                 Spacer(Modifier.height(6.dp))
                 Text(
                     dev.periy.bridge.net.LinkCode.shown(code),
-                    style = TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp),
+                    style = TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 40.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 4.sp),
                     color = Bridge.Text,
                 )
                 Spacer(Modifier.height(8.dp))
-                // Ten minutes from when it was made, counted down.
+                // Five minutes from when it was made, counted down.
                 var left by remember { mutableStateOf(dev.periy.bridge.net.LinkCode.TTL_MS) }
                 LaunchedEffect(shownAt) {
                     while (true) {
@@ -1983,7 +1981,10 @@ private fun LinkFromAnywhere(status: PeerStatus?) {
             }
             mode == "enter" -> Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    BridgeTextField(text, { text = it }, Modifier.weight(1f), placeholder = "K7Q2M-9XDHR", minHeight = 46.dp, mono = true)
+                    BridgeTextField(
+                        text, { t -> text = dev.periy.bridge.net.LinkCode.normalize(t).take(dev.periy.bridge.net.LinkCode.LENGTH) },
+                        Modifier.weight(1f), placeholder = "4821", minHeight = 46.dp, mono = true, digits = true,
+                    )
                     Spacer(Modifier.width(8.dp))
                     BridgeButton(if (busy) "Linking" else "Link") { if (!busy) c.peers.linkByCode(text) }
                 }
@@ -2014,36 +2015,6 @@ private fun LinkFromAnywhere(status: PeerStatus?) {
         style = CaptionStyle, color = Bridge.Muted,
         modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp),
     )
-}
-
-/**
- * For networks where phones cannot see each other (some routers block discovery): type the
- * address the other phone shows on its Home screen.
- */
-@Composable
-private fun ConnectByAddress(connect: (NearbyPhone) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    var text by remember { mutableStateOf("") }
-    GroupCard {
-        if (!open) {
-            SettingRow(
-                "Connect by address", first = true, icon = BlazeIcons.Link, iconColor = Bridge.Orange, onClick = { open = true },
-            ) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
-            return@GroupCard
-        }
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            BridgeTextField(text, { text = it }, Modifier.weight(1f), placeholder = "192.168.1.20", minHeight = 46.dp, mono = true)
-            Spacer(Modifier.width(8.dp))
-            BridgeButton("Connect") {
-                val m = Regex("""(\d{1,3}(?:\.\d{1,3}){3}|localhost)(?::(\d+))?""").find(text.trim())
-                if (m != null) {
-                    val host = m.groupValues[1]
-                    connect(NearbyPhone(host, host, m.groupValues[2].toIntOrNull() ?: 8787))
-                    open = false; text = ""
-                }
-            }
-        }
-    }
 }
 
 @Composable

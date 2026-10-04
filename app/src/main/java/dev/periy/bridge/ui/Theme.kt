@@ -419,6 +419,8 @@ fun BridgeTextField(
     placeholder: String = "",
     minHeight: Dp = 96.dp,
     mono: Boolean = false,
+    /** The number pad, for a code. */
+    digits: Boolean = false,
 ) {
     val text = Bridge.Text
     Box(
@@ -437,6 +439,8 @@ fun BridgeTextField(
             singleLine = mono,
             textStyle = if (mono) MonoStyle.copy(color = text) else BodyStyle.copy(color = text, fontSize = 15.sp),
             cursorBrush = SolidColor(Bridge.Blue),
+            keyboardOptions = if (digits) androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword)
+            else androidx.compose.foundation.text.KeyboardOptions.Default,
             modifier = Modifier.fillMaxWidth(),
         )
     }

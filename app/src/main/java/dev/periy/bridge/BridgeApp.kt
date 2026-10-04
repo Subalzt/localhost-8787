@@ -122,7 +122,7 @@ class Container(ctx: Context) {
     }
 
     /**
-     * A code another phone can link with from any network, open for ten minutes or until a phone
+     * A code another phone can link with from any network, open for five minutes or until a phone
      * links (net/LinkCode.kt). From other networks goes on with it.
      */
     fun openLinkCode(): String {
