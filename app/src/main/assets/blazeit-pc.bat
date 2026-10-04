@@ -1335,7 +1335,10 @@ public static class BlazeItPc
                                     phoneHz = p.Length >= 5 ? Math.Max(30, int.Parse(p[4])) : 60;
                                     long budget = p.Length >= 6 ? long.Parse(p[5]) : 0;
                                     phoneBlocks = budget > 0 ? budget : 2073600;
-                                    Thread s = new Thread(delegate () { StartSecondScreen(at, port, w, h); });
+                                    // Newer phones take the stream on the page's port, so it goes the way
+                                    // everything else does, the tunnel included.
+                                    bool http = p.Length >= 7 && p[6] == "http";
+                                    Thread s = new Thread(delegate () { StartSecondScreen(at, port, w, h, http); });
                                     s.IsBackground = true;
                                     s.Start();
                                 }
@@ -1739,9 +1742,24 @@ public static class BlazeItPc
         return null;
     }
 
-    static void StartSecondScreen(string at, int port, int w, int h)
+    /**
+     * From another network (the phone reached through the tunnel): the laptop's own main screen,
+     * to see and use it, made smaller and sent at what the link carries. Starts at 1.5 Mbit/s,
+     * steps down when the picture backs up on its way and back up after a calm while.
+     */
+    static volatile int remoteKbit = 1500;
+
+    static Displays.Mon MainScreen()
+    {
+        var mons = Displays.Attached();
+        desk = Displays.Desktop(mons);
+        return mons.Find(m => m.Primary) ?? (mons.Count > 0 ? mons[0] : null);
+    }
+
+    static void StartSecondScreen(string at, int port, int w, int h, bool http)
     {
         int gen = Interlocked.Increment(ref screenGen);
+        bool remote = http && at == TunnelHost;
         try
         {
             KillStream();
@@ -1751,13 +1769,18 @@ public static class BlazeItPc
                 Say("The second screen needs ffmpeg on this laptop: in a terminal, run  winget install Gyan.FFmpeg  then try again.");
                 return;
             }
-            Displays.Mon target = PrepareScreen(w, h, true);
+            Displays.Mon target = remote ? MainScreen() : PrepareScreen(w, h, true);
             string said = null;
             int failures = 0;
             while (target != null && gen == screenGen)
             {
-                if (said != target.Device) { said = target.Device; SayShowing(target); }
-                string end = Capture(ff, target, at, port, gen);
+                if (said != target.Device)
+                {
+                    said = target.Device;
+                    if (remote) Say("Showing this laptop's screen on the phone, from another network: smaller, at what the link carries (" + remoteKbit + " kbit/s to start).");
+                    else SayShowing(target);
+                }
+                string end = Capture(ff, target, at, port, gen, http, remote);
                 if (gen != screenGen) return;
                 // The phone closed it, or went (unplugged, out of reach) without saying so: put
                 // the laptop's screens back rather than leave a display nobody sees.
@@ -1767,7 +1790,7 @@ public static class BlazeItPc
                 // The monitors changed, or the capture broke on a change: look again.
                 Thread.Sleep(300);
                 if (gen != screenGen) return;
-                target = PrepareScreen(w, h, false);
+                target = remote ? MainScreen() : PrepareScreen(w, h, false);
             }
         }
         catch (Exception e) { Say("Second screen: " + e.Message); }
@@ -1929,18 +1952,138 @@ public static class BlazeItPc
         return tries;
     }
 
+    /**
+     * The command lines for the main screen from afar, best first: made smaller (1280 wide, down to
+     * 854 on a slower link), 24 frames a second (15 when slower), at "kbit" with little buffering so
+     * the picture is current; on the NVIDIA card when there is one.
+     */
+    static List<string> RemoteTries(Displays.Mon target, int kbit)
+    {
+        int adapter, output; string adapterName;
+        if (!Dxgi.Find(target.Device, out adapter, out output, out adapterName)) { adapter = -1; output = -1; adapterName = ""; }
+        int wide = kbit >= 1000 ? 1280 : kbit >= 600 ? 1024 : 854;
+        int fps = kbit >= 1000 ? 24 : 15;
+        string label = "setparams=color_primaries=bt470bg:color_trc=smpte170m";
+        string scale = "scale=" + wide + ":-2:flags=bilinear,format=yuv420p";
+        string rate = " -b:v " + kbit + "k -maxrate " + kbit + "k -bufsize " + Math.Max(100, kbit / 2) + "k -g " + (fps * 4) + " -bf 0";
+        string nv = " -c:v h264_nvenc -preset p4 -tune ll -zerolatency 1 -rc cbr" + rate;
+        string x264 = " -c:v libx264 -preset veryfast -tune zerolatency" + rate;
+        bool nvidia = adapterName.IndexOf("NVIDIA", StringComparison.OrdinalIgnoreCase) >= 0;
+        string dest = " -f h264 pipe:1";
+        var tries = new List<string>();
+        if (adapter >= 0)
+        {
+            string grab = "-hide_banner -loglevel error -init_hw_device d3d11va=cap:" + adapter + " -filter_hw_device cap -filter_complex \"ddagrab=output_idx=" + output +
+                ":framerate=" + fps + ":draw_mouse=1,hwdownload,format=bgra," + scale + "," + label + "[v]\" -map \"[v]\"";
+            if (nvidia) tries.Add(grab + nv + dest);
+            tries.Add(grab + x264 + dest);
+        }
+        tries.Add("-hide_banner -loglevel error -f gdigrab -framerate " + fps + " -offset_x " + target.X + " -offset_y " + target.Y +
+            " -video_size " + target.W + "x" + target.H + " -draw_mouse 1 -i desktop -vf " + scale + "," + label + ":colorspace=bt470bg:range=tv" + x264 + dest);
+        return tries;
+    }
+
+    /**
+     * Posts ffmpeg's stream to the phone's page port, the way this helper reaches the phone now
+     * (the cable, Wi-Fi, the tunnel). From afar it watches what is still waiting to go: more than
+     * two seconds of picture means the link is behind, so it asks for a smaller, slower stream;
+     * after 45 s with nothing waiting, a sharper one. Returns "rate" (start again at the new
+     * rate), "phone" (the phone closed it, or could not be reached) or "ended".
+     */
+    static string PostStream(Process p, string at, bool remote)
+    {
+        var queue = new Queue<byte[]>();
+        long queued = 0;
+        bool eof = false;
+        object gate = new object();
+        var rd = new Thread(delegate ()
+        {
+            try
+            {
+                Stream src = p.StandardOutput.BaseStream;
+                byte[] buf = new byte[64 * 1024];
+                int n;
+                while ((n = src.Read(buf, 0, buf.Length)) > 0)
+                {
+                    byte[] c = new byte[n];
+                    Buffer.BlockCopy(buf, 0, c, 0, n);
+                    lock (gate) { queue.Enqueue(c); queued += n; System.Threading.Monitor.Pulse(gate); }
+                }
+            }
+            catch { }
+            lock (gate) { eof = true; System.Threading.Monitor.Pulse(gate); }
+        });
+        rd.IsBackground = true; rd.Start();
+        string why = "ended";
+        try
+        {
+            HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + at + ":" + PhonePort + "/api/display/stream");
+            req.Proxy = null;
+            req.Method = "POST";
+            req.UserAgent = Ua;
+            req.Headers["Cookie"] = session;
+            req.ContentType = "video/h264";
+            req.SendChunked = true;
+            req.AllowWriteStreamBuffering = false;
+            req.Timeout = 10000;
+            req.ReadWriteTimeout = System.Threading.Timeout.Infinite;
+            req.ServicePoint.Expect100Continue = false;
+            using (Stream o = req.GetRequestStream())
+            {
+                long behind = (long)remoteKbit * 1000 / 8 * 2;
+                DateTime calm = DateTime.UtcNow;
+                while (true)
+                {
+                    byte[] c;
+                    lock (gate)
+                    {
+                        while (queue.Count == 0 && !eof) System.Threading.Monitor.Wait(gate, 1000);
+                        if (queue.Count == 0) break;
+                        c = queue.Dequeue();
+                        queued -= c.Length;
+                    }
+                    o.Write(c, 0, c.Length);
+                    o.Flush();
+                    if (!remote) continue;
+                    long q;
+                    lock (gate) q = queued;
+                    if (q > behind && remoteKbit > 300)
+                    {
+                        remoteKbit = Math.Max(300, remoteKbit * 6 / 10);
+                        Say("The link to the phone is slower: the laptop's screen goes at " + remoteKbit + " kbit/s now.");
+                        why = "rate";
+                        break;
+                    }
+                    if (q > behind / 8) calm = DateTime.UtcNow;
+                    else if ((DateTime.UtcNow - calm).TotalSeconds > 45 && remoteKbit < 2500)
+                    {
+                        remoteKbit = Math.Min(2500, remoteKbit * 13 / 10);
+                        Say("The link to the phone keeps up: the laptop's screen goes at " + remoteKbit + " kbit/s now.");
+                        why = "rate";
+                        break;
+                    }
+                }
+            }
+            if (why == "ended") using (req.GetResponse()) { }
+        }
+        catch (Exception) { if (why == "ended") why = "phone"; }
+        try { if (!p.HasExited) p.Kill(); } catch { }
+        return why;
+    }
+
     /** One go at streaming a monitor: "phone" (the phone closed it), "relayout", "ended", "failed" or "stopped". */
-    static string Capture(string ff, Displays.Mon target, string at, int port, int gen)
+    static string Capture(string ff, Displays.Mon target, string at, int port, int gen, bool http, bool remote)
     {
         shown = target;
-        double hdrWhite = HdrWhite(target);
+        double hdrWhite = remote ? 0 : HdrWhite(target);
         if (hdrWhite > 0) Say("This screen is in HDR, with ordinary white at " + Math.Round(hdrWhite) + " nits; the phone gets it turned back into an ordinary picture, so it is not too bright.");
-        string dest = " -f h264 \"tcp://" + at + ":" + port + "?tcp_nodelay=1\"";
-        foreach (string args in CaptureTries(target, hdrWhite, dest))
+        string dest = http ? " -f h264 pipe:1" : " -f h264 \"tcp://" + at + ":" + port + "?tcp_nodelay=1\"";
+        foreach (string args in remote ? RemoteTries(target, remoteKbit) : CaptureTries(target, hdrWhite, dest))
         {
             relayout = false;
             var psi = new ProcessStartInfo(ff, args);
             psi.UseShellExecute = false; psi.CreateNoWindow = true; psi.RedirectStandardError = true;
+            psi.RedirectStandardOutput = http;
             psi.WorkingDirectory = Dir; // where the HDR shader is
             var p = Process.Start(psi);
             secondScreen = p;
@@ -1948,14 +2091,24 @@ public static class BlazeItPc
             string err = "";
             var reader = new Thread(delegate () { try { err = p.StandardError.ReadToEnd(); } catch { } });
             reader.IsBackground = true; reader.Start();
-            var watch = new Thread(delegate () { WatchScreens(gen, target, hdrWhite, p); });
+            var watch = new Thread(delegate () { WatchScreens(gen, target, hdrWhite, p, remote); });
             watch.IsBackground = true; watch.Start();
+            string sent = null;
+            Thread pump = null;
+            if (http)
+            {
+                pump = new Thread(delegate () { sent = PostStream(p, at, remote); });
+                pump.IsBackground = true; pump.Start();
+            }
             // Still going after a few seconds: it works. Stopped at once: try the next way.
             bool quick = p.WaitForExit(4000);
             if (!quick) p.WaitForExit();
             reader.Join(500);
+            if (pump != null) pump.Join(5000);
             if (gen != screenGen || secondScreen != p) return "stopped";
             if (relayout) return "relayout";
+            if (sent == "rate") return "relayout";   // the link asked for another size: start again at it
+            if (sent == "phone") return "phone";
             if (err.Contains("Connection refused") || err.Contains("Connection reset") || err.Contains("Broken pipe")) return "phone";
             if (!quick) return "ended";
         }
@@ -1967,7 +2120,7 @@ public static class BlazeItPc
      * main one, or taken off), or HDR or its SDR brightness is changed on the monitor shown, end
      * it so it starts again on the right monitor, at its new place, captured the right way.
      */
-    static void WatchScreens(int gen, Displays.Mon target, double hdrWhite, Process p)
+    static void WatchScreens(int gen, Displays.Mon target, double hdrWhite, Process p, bool remote)
     {
         while (gen == screenGen && !p.HasExited)
         {
@@ -1980,8 +2133,9 @@ public static class BlazeItPc
                 var now = mons.Find(m => m.Device == target.Device);
                 var best = Pick(mons);
                 bool moved = now == null || now.X != target.X || now.Y != target.Y || now.W != target.W || now.H != target.H;
-                bool better = best != null && best.Device != target.Device;
-                bool main = now != null && now.Virtual && now.Primary;
+                // From afar it is always the main screen: another monitor is no better.
+                bool better = !remote && best != null && best.Device != target.Device;
+                bool main = !remote && now != null && now.Virtual && now.Primary;
                 bool light = !moved && Math.Abs(HdrWhite(now) - hdrWhite) > 1;
                 if (moved || better || main || light)
                 {

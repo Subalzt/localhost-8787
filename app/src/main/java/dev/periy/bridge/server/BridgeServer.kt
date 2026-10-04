@@ -34,6 +34,7 @@ import io.ktor.server.request.header
 import io.ktor.server.request.path
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveChannel
+import io.ktor.server.request.receiveStream
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
@@ -1372,6 +1373,21 @@ class BridgeServer(
             }.onFailure {
                 call.respond(ApiResult(false, "Open it on the phone: Control, Second screen"))
                 return@post
+            }
+            call.respond(ApiResult(true))
+        }
+        // The laptop's screen for the phone's screen view, from its helper: H.264 as ffmpeg writes it,
+        // in one long upload, so it comes the same way as everything else from that laptop, the
+        // tunnel included (server/DisplayFeed.kt). It lasts until the stream or the view ends.
+        post("/api/display/stream") {
+            if (!DisplayFeed.open) {
+                call.respond(HttpStatusCode.Conflict, ApiResult(false, "The screen view is not open on the phone"))
+                return@post
+            }
+            val done = java.util.concurrent.CompletableFuture<Unit>()
+            withContext(Dispatchers.IO) {
+                DisplayFeed.feeds.put(DisplayFeed.Feed(call.receiveStream(), done))
+                runCatching { done.get() }
             }
             call.respond(ApiResult(true))
         }

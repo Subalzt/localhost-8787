@@ -22,7 +22,9 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import dev.periy.bridge.BuildConfig
 import dev.periy.bridge.server.Control
+import dev.periy.bridge.server.DisplayFeed
 import dev.periy.bridge.server.EventBus
+import java.util.concurrent.TimeUnit
 import java.io.InputStream
 import java.net.ServerSocket
 import java.net.Socket
@@ -31,18 +33,23 @@ import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 /**
- * This phone as a second screen for the laptop.
+ * The laptop's screen on the phone: as a second screen, or the laptop's own screen to see and
+ * use it, from the same room or from anywhere.
  *
  * The laptop helper captures a monitor (a virtual one, from a virtual-display driver, so it is a
- * real extra screen; or the laptop's own, to mirror it) and encodes it on its GPU as H.264. This
- * listens for that stream, decodes it with the phone's hardware decoder straight onto the screen,
- * and turns touches into the laptop's mouse on that monitor: tap to click, hold to right-click,
- * drag to drag, two fingers to scroll. Back ends it, and the laptop stops streaming.
+ * real extra screen; or the laptop's own, to mirror it) and encodes it on its GPU as H.264, and
+ * posts it to the phone the way it reaches the phone for everything else, the tunnel included
+ * (server/DisplayFeed.kt); from another network it sends the main screen, smaller and at a bit
+ * rate the link carries. This decodes it with the phone's hardware decoder straight onto the
+ * screen, and turns touches into the laptop's mouse on that monitor: tap to click, hold to
+ * right-click, drag to drag, two fingers to scroll, pinch to zoom in (and two fingers then move
+ * round), and the keyboard button types. Back ends it, and the laptop stops streaming.
  */
 class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
 
     private lateinit var surface: SurfaceView
     private lateinit var note: TextView
+    private lateinit var keys: KeyCatcher
     @Volatile private var running = false
     private var server: ServerSocket? = null
     private var socket: Socket? = null
@@ -77,6 +84,24 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
         }
         root.addView(surface, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
         root.addView(note, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // The phone's keyboard types into the laptop: an unseen field takes it, as on the trackpad.
+        keys = KeyCatcher(this,
+            onText = { t -> Control.send("t " + java.net.URLEncoder.encode(t, "UTF-8").replace("+", "%20")) },
+            onKey = { k -> Control.send("k $k") })
+        root.addView(keys, FrameLayout.LayoutParams(1, 1))
+        val d = resources.displayMetrics.density
+        val kb = TextView(this).apply {
+            text = "Keyboard"; textSize = 13f; setTextColor(0xFFFFFFFF.toInt()); gravity = Gravity.CENTER
+            setPadding((14 * d).toInt(), (8 * d).toInt(), (14 * d).toInt(), (8 * d).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 20 * d; setColor(0x88000000.toInt()); setStroke((1 * d).toInt(), 0x44FFFFFF) }
+            setOnClickListener {
+                keys.requestFocus()
+                getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.showSoftInput(keys, 0)
+            }
+        }
+        root.addView(kb, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
+            setMargins(0, 0, (16 * d).toInt(), (16 * d).toInt())
+        })
         setContentView(root)
         surface.holder.addCallback(this)
         surface.setOnTouchListener { _, e -> touch(e); true }
@@ -125,42 +150,63 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
     private fun shutdown() {
         if (!running) return
         running = false
+        DisplayFeed.open = false
         EventBus.emit("display", "stop")
+        runCatching { current?.input?.close() }
+        current?.done?.complete(Unit)
+        DisplayFeed.drain()
         runCatching { socket?.close() }
         runCatching { server?.close() }
     }
+
+    /** The stream being shown now. */
+    @Volatile private var current: DisplayFeed.Feed? = null
 
     // -------------------------------------------------------------- the stream
 
     private fun receive(holder: SurfaceHolder) {
         try {
+            DisplayFeed.drain()
+            DisplayFeed.open = true
+            // An older helper connects here instead; its streams join the others.
             val ss = ServerSocket(PORT).also { server = it }
+            Thread({
+                while (running) {
+                    val s = runCatching { ss.accept() }.getOrNull() ?: break
+                    s.tcpNoDelay = true
+                    socket = s
+                    val done = java.util.concurrent.CompletableFuture<Unit>()
+                    DisplayFeed.feeds.put(DisplayFeed.Feed(s.getInputStream(), done))
+                    Thread({ runCatching { done.get() }; runCatching { s.close() } }, "second-screen-old").apply { isDaemon = true; start() }
+                }
+            }, "second-screen-accept").apply { isDaemon = true; start() }
             // Tell the laptop to start, with what it has to match: this screen's size, its refresh
-            // rate, and how much the decoder can take (16x16 blocks a second), which decides how
-            // sharp a picture can come at that rate.
+            // rate, how much the decoder can take (16x16 blocks a second), which decides how sharp a
+            // picture can come at that rate; and that it may post the stream to the page's port.
             val dm = resources.displayMetrics
             val w = maxOf(dm.widthPixels, dm.heightPixels); val h = minOf(dm.widthPixels, dm.heightPixels)
-            EventBus.emit("display", "start $PORT $w $h $hz ${decoderBlocksPerSecond()}")
+            EventBus.emit("display", "start $PORT $w $h $hz ${decoderBlocksPerSecond()} http")
             // The laptop starts a new stream whenever its monitors change (the display extended,
-            // moved or resized), so after one ends, wait a while for the next before giving up.
+            // moved or resized), or the link asks for another size, so after one ends, wait a
+            // while for the next before giving up.
             var first = true
             while (running) {
-                ss.soTimeout = if (first) 0 else RECONNECT_MS
-                val s = try { ss.accept() } catch (_: java.net.SocketTimeoutException) { break }
-                socket = s
+                val f = DisplayFeed.feeds.poll(if (first) 600_000L else RECONNECT_MS.toLong(), TimeUnit.MILLISECONDS) ?: break
+                current = f
                 first = false
-                s.tcpNoDelay = true
                 runOnUiThread { note.visibility = View.GONE }
                 try {
-                    decode(s.getInputStream(), holder)
+                    decode(f.input, holder)
                 } catch (e: Exception) {
                     if (running) Log.w(TAG, "stream ended", e)
                 } finally {
                     runCatching { codec?.stop(); codec?.release() }
                     codec = null
-                    runCatching { s.close() }
+                    runCatching { f.input.close() }
+                    f.done.complete(Unit)
+                    current = null
                 }
-                if (running) runOnUiThread { note.text = "The laptop's screen changed; picking it up again..."; note.visibility = View.VISIBLE }
+                if (running) runOnUiThread { note.text = "Picking the laptop's screen up again..."; note.visibility = View.VISIBLE }
             }
         } catch (e: Exception) {
             if (running) Log.w(TAG, "second screen ended", e)
@@ -318,8 +364,62 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
         Control.send("da " + String.format(java.util.Locale.US, "%.5f %.5f", fx, fy))
     }
 
+    // Zoom: the picture scaled about its top left corner and moved, kept covering the screen.
+    private var zoom = 1f
+    private var pinching = false
+    private var startDist = 0f
+    private var startZoom = 1f
+    /** The point of the picture (in its own pixels) under the fingers when the pinch began. */
+    private var anchorX = 0f
+    private var anchorY = 0f
+
+    /** Where a finger is on the picture's frame before zooming: the screen point, less where the frame sits. */
+    private fun framePoint(e: MotionEvent, i: Int): Pair<Float, Float> {
+        val loc = IntArray(2)
+        (surface.parent as View).getLocationOnScreen(loc)
+        return (e.getRawX(i) - loc[0] - surface.left) to (e.getRawY(i) - loc[1] - surface.top)
+    }
+
+    private fun mid(e: MotionEvent): Pair<Float, Float> {
+        val a = framePoint(e, 0); val b = framePoint(e, 1)
+        return (a.first + b.first) / 2 to (a.second + b.second) / 2
+    }
+
+    private fun dist(e: MotionEvent) = hypot(e.getX(0) - e.getX(1), e.getY(0) - e.getY(1)) * zoom
+
+    private fun applyZoom(tx: Float, ty: Float) {
+        surface.pivotX = 0f; surface.pivotY = 0f
+        surface.scaleX = zoom; surface.scaleY = zoom
+        surface.translationX = tx.coerceIn(surface.width * (1 - zoom), 0f)
+        surface.translationY = ty.coerceIn(surface.height * (1 - zoom), 0f)
+    }
+
     private fun touch(e: MotionEvent) {
         val slop = 12 * resources.displayMetrics.density
+        // Two fingers apart or together: a pinch, zooming the picture on the phone (nothing on the laptop).
+        if (e.pointerCount >= 2 && e.actionMasked == MotionEvent.ACTION_MOVE) {
+            if (!pinching && abs(dist(e) - startDist) > slop * 2) {
+                pinching = true
+                scrolling = false
+                val (mx, my) = mid(e)
+                startZoom = zoom
+                anchorX = (mx - surface.translationX) / zoom
+                anchorY = (my - surface.translationY) / zoom
+                startDist = dist(e)
+            }
+            if (pinching) {
+                zoom = (startZoom * dist(e) / startDist.coerceAtLeast(1f)).coerceIn(1f, 5f)
+                val (mx, my) = mid(e)
+                applyZoom(mx - anchorX * zoom, my - anchorY * zoom)
+                return
+            }
+        }
+        if (pinching && (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL)) {
+            pinching = false
+            if (zoom < 1.05f) { zoom = 1f; applyZoom(0f, 0f) }
+            return
+        }
+        if (pinching) return
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downAt = e.eventTime; downX = e.x; downY = e.y
@@ -330,11 +430,18 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
                 surface.removeCallbacks(longPress)
                 if (dragging) { Control.send("b l u"); dragging = false }
                 scrolling = true
+                startDist = dist(e)
                 lastMidX = (e.getX(0) + e.getX(1)) / 2; lastMidY = (e.getY(0) + e.getY(1)) / 2
             }
             MotionEvent.ACTION_MOVE -> {
                 if (scrolling && e.pointerCount >= 2) {
                     val mx = (e.getX(0) + e.getX(1)) / 2; val my = (e.getY(0) + e.getY(1)) / 2
+                    if (zoom > 1f) {
+                        // Zoomed in: two fingers move round the picture rather than scroll the laptop.
+                        applyZoom(surface.translationX + (mx - lastMidX) * zoom, surface.translationY + (my - lastMidY) * zoom)
+                        lastMidX = mx; lastMidY = my
+                        return
+                    }
                     val dy = ((my - lastMidY) * 4).toInt(); val dx = ((lastMidX - mx) * 4).toInt()
                     if (abs(dy) >= 1 || abs(dx) >= 1) { Control.send("w $dy $dx"); lastMidX = mx; lastMidY = my }
                 } else if (!scrolling && !held) {

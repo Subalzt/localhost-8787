@@ -160,7 +160,7 @@ fun ControlPane(running: Boolean, onStart: () -> Unit, modifier: Modifier = Modi
             ) {
                 Icon(BlazeIcons.Laptop, null, tint = Bridge.Text, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
-                Text("Use as a second screen", style = LabelStyle, color = Bridge.Text, modifier = Modifier.weight(1f))
+                Text("The laptop's screen", style = LabelStyle, color = Bridge.Text, modifier = Modifier.weight(1f))
                 Icon(BlazeIcons.Chevron, null, tint = Bridge.Muted, modifier = Modifier.size(18.dp))
             }
         }
@@ -889,7 +889,7 @@ private fun KeyChip(label: String, modifier: Modifier = Modifier, on: Boolean = 
  * character is passed straight on, and suggestions are turned off so each key arrives as
  * it is pressed rather than as a word the keyboard rewrites later.
  */
-private class KeyCatcher(
+internal class KeyCatcher(
     ctx: Context,
     private val onText: (String) -> Unit,
     private val onKey: (String) -> Unit,
