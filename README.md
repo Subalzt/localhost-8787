@@ -285,8 +285,9 @@ network and 60 an hour). [How it works](docs/website.md).
   anywhere, it finds the fastest way by itself.
 - Over the internet everything stays encrypted (HTTPS); on the phone's own links the plain address
   is what it always was.
-- **Quick to open on a slow link**: the page goes out compressed, 142 KB instead of 536, so a
-  phone's browser across the internet shows it in a moment instead of a blank page.
+- **Quick to open on a slow link**: the page goes out compressed, 145 KB instead of 547, so a
+  phone's browser across the internet shows it in a moment instead of a blank page; after that the
+  browser keeps it and only asks whether it changed, one round trip instead of the whole page.
 
 ### 6. One clipboard for both
 
@@ -363,6 +364,9 @@ finds any song or album from anywhere on the page.
   the copy while it is still making it, so a song starts within a second (it took 8 to 10 before),
   keeps it (up to 1 GB), and makes the next song's alongside. The line
   under the waveform says what you are hearing (*AAC 128 kbps for the internet*).
+- **Light across a slow link**: the song list goes out compressed (9 KB instead of 60) and again
+  only when it changed; rows and album tiles get small WebP covers (7 KB and 34 KB instead of
+  about 140), and only the player shows the full one.
 - **The queue**: drag on up for every song in the order it will play, to play from, drag into a
   new order by its handle, or take off. The broom removes the songs before or after; **Shuffle**
   shuffles only what is left.
@@ -488,11 +492,13 @@ Del, and the laptop's media keys and volume.
   to 4K at 120 frames a second over the cable.
 - **From anywhere**, through the tunnel: the laptop's own main screen, so you can use it while
   away. The laptop helper reaches the phone by itself, so the laptop needs nothing opened up. The
-  picture is made to fit the link: 1024 wide at 20 frames a second from 700 kbit/s, its refresh
-  spread over the frames so the stream stays even. As a video call does, a frame still waiting
-  after half a second is dropped rather than shown late, so the phone shows the laptop as it is
-  now; when many are dropped it steps down (to 854 wide, 15 frames a second, 250 kbit/s at the
-  least), and after a calm minute it steps back up (to 2 Mbit/s).
+  picture is made to fit the link, starting where it last ended (700 kbit/s, 1024 wide at 20
+  frames a second, the first time), its refresh spread over the frames so the stream stays even.
+  The phone says what has arrived, and the laptop lets out only as much as the road takes to
+  answer plus 0.3 s. As a video call does, a frame still waiting after half a second is dropped
+  rather than shown late, so the phone shows the laptop as it is now; when many are dropped it
+  steps down (to 854 wide, 15 frames a second, 250 kbit/s at the least), and after 20 calm
+  seconds it steps up by half (on Windows to 1080p at 30 frames a second and 6 Mbit/s).
 - **The sound** goes with the picture: what the laptop's speakers play (Windows' own loopback, or
   the Pulse monitor on Linux), as AAC at 160 kbit/s nearby and 64 from afar, late sound dropped so
   it stays with the picture. A Mac sends the picture only.
