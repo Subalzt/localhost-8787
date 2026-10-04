@@ -338,9 +338,11 @@ class Calls(
         echo.awaitSetRemote(offer)
         c.echoRemoteSet = true
         synchronized(c.echoPending) { c.echoPending.forEach { echo.addIceCandidate(it) }; c.echoPending.clear() }
-        echo.transceivers.forEach { t -> t.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV }
-        echoAudio = echo.transceivers.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO }?.sender
-        echoVideo = echo.transceivers.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.sender
+        // Asked for once: each time the list is asked for, the one before is let go.
+        val ts = echo.transceivers
+        ts.forEach { t -> t.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV }
+        echoAudio = ts.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO }?.sender
+        echoVideo = ts.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.sender
         wire()
         val answer = echo.awaitCreate(false)
         echo.awaitSetLocal(answer)
@@ -348,6 +350,23 @@ class Calls(
         leg.remoteSet = true
         drainPending(leg)
         connectTimeout(c)
+    }
+
+    /** Debug builds: what the call is doing now, logged (who, and each connection's sound and picture in and out). */
+    fun logState() {
+        scope.launch {
+            val c = call
+            Log.i(TAG, "State: " + _state.value?.let { st -> "phase=${st.phase} relay=${st.relay} camera=${st.camera} members=" + st.members.joinToString { "${it.name}:${it.phase}:video=${it.video != null}:speaking=${it.speaking}:${it.path}" } })
+            c?.legs?.forEach { (m, leg) ->
+                leg.pc.getStats { r ->
+                    val parts = r.statsMap.values.filter { it.type == "inbound-rtp" || it.type == "outbound-rtp" }.map { st ->
+                        val k = st.members["kind"]
+                        "${st.type}/$k bytes=${st.members["bytesReceived"] ?: st.members["bytesSent"]} frames=${st.members["framesDecoded"] ?: st.members["framesEncoded"] ?: "-"} level=${st.members["audioLevel"] ?: "-"} size=${st.members["frameWidth"] ?: "-"}x${st.members["frameHeight"] ?: "-"}"
+                    }
+                    Log.i(TAG, "Leg $m: " + parts.joinToString(" | "))
+                }
+            }
+        }
     }
 
     /** The host adds [name] to the call under way. */
@@ -740,12 +759,14 @@ class Calls(
                 leg.remoteSet = true
                 // The video channel the offer brought: this phone's camera goes on it. The other voice
                 // channels are the spare ones a big call's host fills.
-                leg.pc.transceivers.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.let { t ->
+                // Asked for once: each time the list is asked for, the one before is let go.
+                val ts = leg.pc.transceivers
+                ts.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.let { t ->
                     t.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV
                     t.sender.setTrack(if (cameraOn) videoTrack else null, false)
                     leg.videoSender = t.sender
                 }
-                leg.pc.transceivers.filter { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO && it.sender.id() != leg.micSender?.id() }.forEach { t ->
+                ts.filter { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO && it.sender.id() != leg.micSender?.id() }.forEach { t ->
                     t.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV
                     leg.audioSlots += t.sender
                 }

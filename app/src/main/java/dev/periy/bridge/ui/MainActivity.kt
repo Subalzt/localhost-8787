@@ -237,6 +237,7 @@ class MainActivity : ComponentActivity() {
             intent.getStringExtra("calladd")?.let { c.calls.add(it) }
             // `--ez calltest true [--ez video true]`: a test call, this phone through a call and back.
             if (intent.getBooleanExtra("calltest", false)) c.calls.testCall(intent.getBooleanExtra("video", false))
+            if (intent.getBooleanExtra("callstate", false)) c.calls.logState()
             if (intent.getBooleanExtra("callanswer", false)) c.calls.answer(intent.getBooleanExtra("video", false))
             if (intent.getBooleanExtra("callend", false)) c.calls.hangUp()
             if (intent.getBooleanExtra("opencontrol", false)) debugControl.value = true
