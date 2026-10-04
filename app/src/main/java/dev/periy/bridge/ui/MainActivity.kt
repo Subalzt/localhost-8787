@@ -397,6 +397,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     var laptopFilesOpen by remember { mutableStateOf(false) }
     val threads by ctx.container.messages.threads.collectAsStateWithLifecycle()
     val recentCalls by ctx.container.callLog.calls.collectAsStateWithLifecycle()
+    val chatGroups by ctx.container.messages.groups.collectAsStateWithLifecycle()
     val startCall = rememberStartCall()
     var showMonitor by remember { mutableStateOf(ctx.container.prefs.showMonitor) }
     val setMonitor = { on: Boolean -> showMonitor = on; ctx.container.prefs.showMonitor = on }
@@ -608,7 +609,7 @@ private fun BlazeItUi(vm: MainViewModel) {
                                     openLaptopFiles = { laptopFilesOpen = true },
                                 )
                                 TAB_PHONES -> phonesTab(
-                                    running, nearby, paired, peerStatus, routes, threads, recentCalls,
+                                    running, nearby, paired, peerStatus, routes, threads, recentCalls, chatGroups,
                                     connect = peers::connect,
                                     sendFilesTo = { sendTarget = it; pickForPhone.launch(arrayOf("*/*")) },
                                     browse = { browsePeer = it },
@@ -1720,6 +1721,7 @@ private fun LazyListScope.phonesTab(
     routes: Map<String, String>,
     threads: Map<String, List<dev.periy.bridge.server.ChatMsg>>,
     recentCalls: List<dev.periy.bridge.server.CallRecord>,
+    chatGroups: Map<String, dev.periy.bridge.server.ChatGroup>,
     connect: (NearbyPhone) -> Unit,
     sendFilesTo: (Peer) -> Unit,
     browse: (Peer) -> Unit,
@@ -1729,6 +1731,10 @@ private fun LazyListScope.phonesTab(
     val pairedNames = paired.map { it.name }.toSet()
     val unpaired = nearby.filter { it.name !in pairedNames }
 
+    if (chatGroups.isNotEmpty() || paired.size >= 2) {
+        item { SectionBar("Groups", Modifier.padding(top = 4.dp)) }
+        item { GroupsCard(chatGroups, threads, paired, chat) }
+    }
     item { SectionBar("Linked phones", Modifier.padding(top = 4.dp)) }
     item { PhonesCard(paired, nearby, threads, routes, chat, browse, sendFilesTo) }
     if (paired.isNotEmpty()) item {
@@ -1907,9 +1913,9 @@ private fun PhonesCard(
                 p.name,
                 when {
                     last == null -> "No messages yet"
-                    last.mine && last.state == "waiting" -> "Waiting: " + last.text
-                    last.mine -> "You: " + last.text
-                    else -> last.text
+                    last.mine && last.state == "waiting" -> "Waiting: " + preview(last)
+                    last.mine -> "You: " + preview(last)
+                    else -> preview(last)
                 },
                 icon = if (here) BlazeIcons.Wifi else BlazeIcons.Phones,
                 color = Color(0xFF30D158),
@@ -1930,6 +1936,101 @@ private fun PhonesCard(
             }
         }
     }
+}
+
+/** What a message says, for a list: its words, or what it is. */
+private fun preview(m: dev.periy.bridge.server.ChatMsg): String = when (m.kind) {
+    "image" -> "Photo" + (if (m.text.isNotEmpty()) ": " + m.text else "")
+    "voice" -> "Voice note"
+    "file" -> "File: " + m.name
+    "event" -> m.text
+    else -> m.text
+}
+
+/**
+ * The group conversations, newest first, each with its last line and who wrote it; and New group,
+ * which picks linked phones and a name. This phone keeps the groups it makes and passes each
+ * message on, so only it needs to be linked with everyone in them.
+ */
+@Composable
+private fun GroupsCard(
+    groups: Map<String, dev.periy.bridge.server.ChatGroup>,
+    threads: Map<String, List<dev.periy.bridge.server.ChatMsg>>,
+    paired: List<Peer>,
+    chat: (String) -> Unit,
+) {
+    val c = LocalContext.current.container
+    var making by remember { mutableStateOf(false) }
+    GroupCard {
+        val sorted = groups.values.sortedByDescending { g -> threads[dev.periy.bridge.server.Messages.GROUP + g.id]?.lastOrNull()?.at ?: g.at }
+        sorted.forEachIndexed { i, g ->
+            val key = dev.periy.bridge.server.Messages.GROUP + g.id
+            val l = threads[key].orEmpty()
+            val last = l.lastOrNull()
+            val unread = l.count { !it.mine && it.state == "new" }
+            MediaRow(
+                g.name,
+                when {
+                    last == null -> (if (g.host.isEmpty()) g.members else g.members + g.host).distinct().joinToString(", ")
+                    last.mine -> "You: " + preview(last)
+                    last.from.isNotEmpty() -> last.from + ": " + preview(last)
+                    else -> preview(last)
+                },
+                BlazeIcons.Phones, Color(0xFF5E5CE6), first = i == 0, onClick = { chat(key) },
+            ) {
+                if (unread > 0) Box(
+                    Modifier.clip(CircleShape).background(Bridge.Text).padding(horizontal = 7.dp, vertical = 1.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text("$unread", style = LabelStyle.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Bg) }
+            }
+        }
+        if (paired.size >= 2) SettingRow("New group", first = sorted.isEmpty(), icon = BlazeIcons.Plus, iconColor = Color(0xFF5E5CE6), onClick = { making = true }) {
+            Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp))
+        }
+    }
+    if (making) NewGroupDialog(paired.map { it.name }, onDismiss = { making = false }) { name, members ->
+        making = false
+        chat(c.messages.createGroup(name, members))
+    }
+}
+
+/** A group's name and its phones, picked from the linked ones. */
+@Composable
+private fun NewGroupDialog(phones: List<String>, onDismiss: () -> Unit, onCreate: (String, List<String>) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    val picked = remember { androidx.compose.runtime.mutableStateListOf<String>() }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New group") },
+        text = {
+            Column {
+                BridgeTextField(name, { name = it.take(60) }, placeholder = "Name (optional)", minHeight = 46.dp, mono = false)
+                Spacer(Modifier.height(10.dp))
+                phones.forEach { p ->
+                    val on = p in picked
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { if (on) picked.remove(p) else picked.add(p) }.padding(vertical = 8.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ChatAvatar(p, 34.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text(p, style = BodyStyle, color = Bridge.Text, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Box(
+                            Modifier.size(24.dp).clip(CircleShape).background(if (on) Bridge.Accent else Bridge.Chip),
+                            contentAlignment = Alignment.Center,
+                        ) { if (on) Icon(BlazeIcons.Check, null, tint = Color.White, modifier = Modifier.size(16.dp)) }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(enabled = picked.size >= 2, onClick = { onCreate(name, picked.toList()) }) {
+                Text("Create", color = if (picked.size >= 2) Bridge.Accent else Bridge.Muted)
+            }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel", color = Bridge.Text) } },
+        containerColor = Bridge.Surface, titleContentColor = Bridge.Text, textContentColor = Bridge.Muted,
+    )
 }
 
 /** Over a screen opened from a tab: back to [back], and the screen's [title]. */

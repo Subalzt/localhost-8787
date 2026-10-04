@@ -869,6 +869,11 @@ class PeerManager(
         request("POST", peer.asTarget(), path, peer.cookie, body, "application/json").code in 200..299
     }.getOrDefault(false)
 
+    /** Posts raw [body] (a sealed attachment) to [path] on [peer]; true when it took it. */
+    fun deliverBytes(peer: Peer, path: String, body: ByteArray): Boolean = runCatching {
+        request("POST", peer.asTarget(), path, peer.cookie, body, "application/octet-stream").code in 200..299
+    }.getOrDefault(false)
+
     /** Keeps the other phone's tunnel details for this one, at most every ten minutes. */
     private fun fetchTunnel(peer: Peer) {
         val now = System.currentTimeMillis()

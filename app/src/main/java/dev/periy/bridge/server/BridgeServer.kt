@@ -803,6 +803,19 @@ class BridgeServer(
             if ((ctx.applicationContext as dev.periy.bridge.BridgeApp).container.messages.receive(from, me.id, w)) call.respond(ApiResult(true))
             else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That message does not open here"))
         }
+        // A message's attachment from a linked phone, sealed the same way (server/Messages.kt).
+        post("/api/peers/msg/blob") {
+            val me = call.device() ?: return@post
+            val id = call.request.queryParameters["id"].orEmpty()
+            val len = call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull() ?: -1L
+            if (peers.byDevice(me.id) == null || id.isEmpty() || len > Messages.MAX_FILE + 64) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad attachment"))
+                return@post
+            }
+            val bytes = withContext(Dispatchers.IO) { call.receiveChannel().toInputStream().readBytes() }
+            if ((ctx.applicationContext as dev.periy.bridge.BridgeApp).container.messages.receiveBlob(me.id, id, bytes)) call.respond(ApiResult(true))
+            else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That attachment does not open here"))
+        }
         post("/api/peers/call") {
             val me = call.device() ?: return@post
             val from = peers.byDevice(me.id)?.name

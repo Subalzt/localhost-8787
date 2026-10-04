@@ -86,6 +86,8 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     implementation(libs.androidx.core.ktx)
+    // Photos sent in messages are turned upright from their EXIF orientation.
+    implementation("androidx.exifinterface:exifinterface:1.3.6")
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)

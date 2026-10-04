@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The one folder Localhost 8787 shares through its FileProvider: the picture or file on the shared
-     clipboard, so other apps on the phone can paste it. Read-only, and nothing else. -->
+<!-- The folders Localhost 8787 shares through its FileProvider, read-only: the picture or file on
+     the shared clipboard, so other apps on the phone can paste it, and a message's attachment,
+     opened in the app that shows it. -->
 <paths>
     <files-path name="clip" path="clip/" />
+    <files-path name="chat" path="chat/" />
 </paths>
