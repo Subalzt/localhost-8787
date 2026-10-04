@@ -4101,6 +4101,12 @@ def take_over():
 
 
 def stop(*_):
+    # Closing on purpose: the phone does not report the laptop as gone offline.
+    try:
+        if phone and session:
+            request("POST", "/api/control/bye", timeout=2)
+    except Exception:
+        pass
     try:
         stop_second_screen()
         if hasattr(clip, "close"):

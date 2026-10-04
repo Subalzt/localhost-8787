@@ -105,6 +105,26 @@ fun hasMic(ctx: android.content.Context) =
 fun hasCamera(ctx: android.content.Context) =
     ctx.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
+/** Starts a call to a linked phone from anywhere on the screen, asking for the microphone (and the camera for video) first. */
+@Composable
+fun rememberStartCall(): (String, Boolean) -> Unit {
+    val ctx = LocalContext.current
+    val calls = ctx.container.calls
+    var pending by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    val perms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        val p = pending ?: return@rememberLauncherForActivityResult
+        if (hasMic(ctx)) calls.call(p.first, p.second && hasCamera(ctx))
+        pending = null
+    }
+    return { name, video ->
+        val need = listOfNotNull(
+            Manifest.permission.RECORD_AUDIO.takeIf { !hasMic(ctx) },
+            Manifest.permission.CAMERA.takeIf { video && !hasCamera(ctx) },
+        )
+        if (need.isEmpty()) calls.call(name, video) else { pending = name to video; perms.launch(need.toTypedArray()) }
+    }
+}
+
 /** A name's own colour, the same every time: for its avatar and the call's background. */
 private fun hueOf(name: String): Float {
     var h = 0

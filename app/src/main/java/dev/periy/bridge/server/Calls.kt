@@ -181,6 +181,9 @@ class Calls(
     /** Called when a call starts ringing here, changes, or ends: the notifications and the call service. */
     var onChange: (CallState?) -> Unit = {}
 
+    /** Where each call goes when it ends (the list of recent calls). */
+    var log: CallLog? = null
+
     /** The drawing context the screen's pictures share with the codecs. */
     val egl: EglBase by lazy { EglBase.create() }
 
@@ -214,6 +217,9 @@ class Calls(
 
     /** The call this phone is in; null when none. All of it is touched on [scope]'s thread only. */
     private class Call(val id: String, val host: Boolean, val video: Boolean) {
+        val startedAt = System.currentTimeMillis()
+        /** Everyone the call was with or meant for, for the list of recent calls. */
+        val names = LinkedHashSet<String>()
         /** This phone's id in it. */
         var me: String = newId()
         /** Not the host: the linked phone that is, and its id. */
@@ -384,6 +390,7 @@ class Calls(
         val peer = peers.find(name)
         if (peer == null) { inviteGone(name, "$name is not linked"); return }
         val s = _state.value ?: return
+        c.names += name
         if (s.members.none { it.name == name && it.phase != "left" }) show(s.copy(members = s.members + CallMember("?$name", name, "invited")))
         val sent = sendTo(name, CallSignal(c.id, "invite", from = c.me, video = c.video, members = c.roster))
         if (!sent) { inviteGone(name, "$name could not be reached"); return }
@@ -498,11 +505,27 @@ class Calls(
         audioSource?.let { runCatching { it.dispose() } }
         audioTrack = null; audioSource = null
         val s = _state.value
+        if (s != null && s.id == c.id && !c.test) runCatching { log?.add(record(c, s, why)) }
         if (s != null && s.id == c.id) show(s.copy(phase = "ended", why = why, members = s.members.map { it.copy(video = null) }))
         if (Build.VERSION.SDK_INT >= 31) runCatching { app.getSystemService(AudioManager::class.java).clearCommunicationDevice() }
         unregister()
         // The ended call stays on the screen a moment, then goes.
         scope.launch { delay(2_000); if (_state.value?.id == c.id && _state.value?.phase == "ended") show(null) }
+    }
+
+    /** The call as the list of recent calls keeps it: who, which way, how long, and how it ended. */
+    private fun record(c: Call, s: CallState, why: String): CallRecord {
+        val names = (c.names + s.members.map { it.name }).distinct()
+        val outcome = when {
+            s.since > 0 -> "answered"
+            s.outgoing -> when (why) { "No answer", "Missed call" -> "no answer"; "Declined" -> "declined"; "Busy" -> "busy"; "Call ended" -> "cancelled"; else -> "failed" }
+            why == "Declined" -> "declined"
+            else -> "missed"
+        }
+        return CallRecord(
+            c.id, names, s.outgoing, s.video || s.camera, c.startedAt,
+            if (s.since > 0) System.currentTimeMillis() - s.since else 0L, outcome, fresh = outcome == "missed",
+        )
     }
 
     // ------------------------------------------------------------------ the camera
@@ -625,6 +648,7 @@ class Calls(
             if (c != null) { sendTo(fromPeer, CallSignal(sig.call, "decline", from = "x", why = "Busy")); return }
             val n = Call(sig.call, host = false, video = sig.video)
             n.hostPeer = fromPeer; n.hostId = sig.from; n.invite = sig
+            n.names += fromPeer
             call = n
             val others = sig.members.filter { it.id != sig.from }.map { CallMember(it.id, it.name, "joining") }
             show(CallState(n.id, host = false, outgoing = false, phase = "ringing", video = sig.video, members = listOf(CallMember(sig.from, fromPeer, "joining")) + others))

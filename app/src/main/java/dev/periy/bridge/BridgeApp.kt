@@ -54,6 +54,7 @@ class Container(ctx: Context) {
 
     init {
         background.launch(kotlinx.coroutines.Dispatchers.Main) { eq.state.collect { player.applyEq(it) } }
+        background.launch { while (true) { kotlinx.coroutines.delay(15_000); runCatching { laptopWatch.check() } } }
         background.launch {
             player.state.map { it.current }.distinctUntilChangedBy { it?.id }.collectLatest { t ->
                 if (t == null) return@collectLatest
@@ -92,8 +93,14 @@ class Container(ctx: Context) {
     /** Voice calls with linked phones, straight between the two (server/Calls.kt). */
     val calls by lazy {
         dev.periy.bridge.server.Calls(app, peers) { tunnelKeys.psk(it) }
-            .also { c -> c.onChange = { s -> dev.periy.bridge.service.CallService.update(app, s) } }
+            .also { c -> c.onChange = { s -> dev.periy.bridge.service.CallService.update(app, s) }; c.log = callLog }
     }
+
+    /** The calls made and had, and missed calls said in a notification. */
+    val callLog = dev.periy.bridge.server.CallLog(app)
+
+    /** Says when the laptop with the helper drops off. */
+    private val laptopWatch = dev.periy.bridge.server.LaptopWatch(app) { prefs.laptopAlerts }
 
     /** Messages with linked phones, each phone the other's server (server/Messages.kt). */
     val messages by lazy { dev.periy.bridge.server.Messages(app, peers) { tunnelKeys.psk(it) } }

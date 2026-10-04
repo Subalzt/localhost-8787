@@ -92,6 +92,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean(K_CLIP_SYNC, true)
         set(v) = sp.edit { putBoolean(K_CLIP_SYNC, v) }
 
+    /** A notification when the laptop with the helper drops off (asleep, off the internet). */
+    var laptopAlerts: Boolean
+        get() = sp.getBoolean("laptop_alerts", true)
+        set(v) = sp.edit { putBoolean("laptop_alerts", v) }
+
     /** Paired laptops and phones may reach this phone from other networks, through the tunnel. */
     var remote: Boolean
         get() = sp.getBoolean(K_REMOTE, true)

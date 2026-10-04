@@ -686,6 +686,8 @@ fun MediaRow(
     modifier: Modifier = Modifier,
     dim: Boolean = false,
     onClick: (() -> Unit)? = null,
+    /** The title in another colour (red for a missed call); the text colour when null. */
+    titleColor: Color? = null,
     below: @Composable ColumnScope.() -> Unit = {},
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
@@ -700,7 +702,7 @@ fun MediaRow(
         Artwork(icon, tint, Modifier.size(thumb), radius = 10.dp, glyph = 22.dp, center = true)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = TextStyle(fontSize = 16.sp, letterSpacing = (-0.2).sp), color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = TextStyle(fontSize = 16.sp, letterSpacing = (-0.2).sp), color = titleColor ?: Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!subtitle.isNullOrEmpty()) Text(subtitle, style = CaptionStyle, color = Bridge.Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             below()
         }

@@ -112,6 +112,8 @@ public static class BlazeItPc
         // And closing this window does the same, rather than leave it there.
         onClose = delegate (int type)
         {
+            // Closing on purpose: the phone does not report the laptop as gone offline.
+            if (type == 0 || type == 2) { try { using (Http("POST", "/api/control/bye", session, 1500)) { } } catch { } }
             if (type == 2 || type == 5 || type == 6) { KillStream(); ReleaseScreen(); } // close, log off, shut down
             return false;
         };

@@ -39,6 +39,9 @@ object Control {
     /** One queue per connected helper; lines are fanned out to all of them. */
     private val helpers = CopyOnWriteArrayList<Channel<String>>()
 
+    /** When a helper last said it was closing on purpose (not asleep or off the internet). */
+    @Volatile var byeAt = 0L
+
     private val _connected = MutableStateFlow<List<String>>(emptyList())
     /** Names of the laptops whose helper is listening right now. */
     val connected: StateFlow<List<String>> = _connected.asStateFlow()

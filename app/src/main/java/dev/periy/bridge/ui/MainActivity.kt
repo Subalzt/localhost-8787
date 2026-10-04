@@ -388,6 +388,8 @@ private fun BlazeItUi(vm: MainViewModel) {
     // The laptop's files, open over the app.
     var laptopFilesOpen by remember { mutableStateOf(false) }
     val threads by ctx.container.messages.threads.collectAsStateWithLifecycle()
+    val recentCalls by ctx.container.callLog.calls.collectAsStateWithLifecycle()
+    val startCall = rememberStartCall()
     var showMonitor by remember { mutableStateOf(ctx.container.prefs.showMonitor) }
     val setMonitor = { on: Boolean -> showMonitor = on; ctx.container.prefs.showMonitor = on }
 
@@ -533,6 +535,8 @@ private fun BlazeItUi(vm: MainViewModel) {
     }
     val toggleServer = { if (running) BridgeService.stop(ctx) else BridgeService.start(ctx) }
 
+    // Missed calls are seen once Phones is open.
+    LaunchedEffect(tab, recentCalls.count { it.fresh }) { if (tab == TAB_PHONES) ctx.container.callLog.seen() }
     // Other phones are looked for only while the Phones tab is open.
     if (tab == TAB_PHONES) {
         DisposableEffect(Unit) {
@@ -596,11 +600,12 @@ private fun BlazeItUi(vm: MainViewModel) {
                                     openLaptopFiles = { laptopFilesOpen = true },
                                 )
                                 TAB_PHONES -> phonesTab(
-                                    running, nearby, paired, peerStatus, routes, threads,
+                                    running, nearby, paired, peerStatus, routes, threads, recentCalls,
                                     connect = peers::connect,
                                     sendFilesTo = { sendTarget = it; pickForPhone.launch(arrayOf("*/*")) },
                                     browse = { browsePeer = it },
                                     chat = { chatWith = it },
+                                    startCall = startCall,
                                 )
                                 else -> settingsTab(
                                     state, vm, theme, look, laptopLink, direct, toggleDirect,
@@ -654,8 +659,8 @@ private fun BlazeItUi(vm: MainViewModel) {
                     ) {
                         BarTabs(
                             TABS, pillOfPage(shown.toFloat()).toInt(), position = pillOfPage(pagePos),
-                            // Messages not yet read, on Phones, where the conversations are.
-                            badges = mapOf(PILL_PHONES to threads.values.sumOf { l -> l.count { !it.mine && it.state == "new" } }),
+                            // Messages not yet read and calls missed, on Phones, where the conversations are.
+                            badges = mapOf(PILL_PHONES to threads.values.sumOf { l -> l.count { !it.mine && it.state == "new" } } + recentCalls.count { it.fresh }),
                         ) { onPill(it); showOem = false }
                     }
                 }
@@ -1706,10 +1711,12 @@ private fun LazyListScope.phonesTab(
     peerStatus: Map<String, PeerStatus>,
     routes: Map<String, String>,
     threads: Map<String, List<dev.periy.bridge.server.ChatMsg>>,
+    recentCalls: List<dev.periy.bridge.server.CallRecord>,
     connect: (NearbyPhone) -> Unit,
     sendFilesTo: (Peer) -> Unit,
     browse: (Peer) -> Unit,
     chat: (String) -> Unit,
+    startCall: (String, Boolean) -> Unit,
 ) {
     val pairedNames = paired.map { it.name }.toSet()
     val unpaired = nearby.filter { it.name !in pairedNames }
@@ -1722,6 +1729,10 @@ private fun LazyListScope.phonesTab(
             style = CaptionStyle, color = Bridge.Muted,
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp),
         )
+    }
+    if (recentCalls.isNotEmpty()) {
+        item { SectionBar("Recent calls") }
+        item { RecentCalls(recentCalls.take(8), startCall) }
     }
     item { Spacer(Modifier.height(12.dp)) }
     item { TestCallRow() }
@@ -1957,6 +1968,52 @@ private fun Searching(running: Boolean, found: Int) {
             )
         }
         if (running) Box(Modifier.size(10.dp).alpha(pulse).clip(CircleShape).background(Bridge.Lit))
+    }
+}
+
+/**
+ * The last calls: who (red when missed), which way, voice or video, how long or how it ended, and
+ * when; the button on each calls back the same way.
+ */
+@Composable
+private fun RecentCalls(calls: List<dev.periy.bridge.server.CallRecord>, startCall: (String, Boolean) -> Unit) {
+    rememberNow()
+    GroupCard {
+        calls.forEachIndexed { i, r ->
+            val missed = r.outcome == "missed"
+            val way = when (r.outcome) {
+                "answered" -> (if (r.outgoing) "Outgoing" else "Incoming") + " · " + (r.durationMs / 1000).let { if (it >= 3600) "%d:%02d:%02d".format(it / 3600, it / 60 % 60, it % 60) else "%d:%02d".format(it / 60, it % 60) }
+                "missed" -> "Missed"
+                "no answer" -> "No answer"
+                "declined" -> if (r.outgoing) "Declined" else "You declined"
+                "busy" -> "Busy"
+                "cancelled" -> "Cancelled"
+                else -> "Did not connect"
+            }
+            MediaRow(
+                r.names.joinToString(", ").ifEmpty { "Call" },
+                way + " · " + ago(r.at),
+                if (r.video) BlazeIcons.Video else BlazeIcons.Call,
+                if (missed) Bridge.Danger else Color(0xFF34C759),
+                first = i == 0,
+                titleColor = if (missed) Bridge.Danger else null,
+            ) {
+                val who = r.names.firstOrNull()
+                if (who != null) IconChip(if (r.video) BlazeIcons.Video else BlazeIcons.Call, "Call ${r.names.joinToString(", ")} back", tint = Bridge.Text, size = 36.dp) {
+                    startCall(who, r.video)
+                }
+            }
+        }
+    }
+}
+
+/** Whether to be told when the laptop drops off. */
+@Composable
+private fun LaptopAlertsRow() {
+    val c = LocalContext.current.container
+    var on by remember { mutableStateOf(c.prefs.laptopAlerts) }
+    SettingRow("Tell me when the laptop goes offline", "After two minutes with nothing from its helper", icon = BlazeIcons.Laptop, iconColor = Bridge.Orange) {
+        Toggle(on) { on = it; c.prefs.laptopAlerts = it }
     }
 }
 
@@ -2259,6 +2316,7 @@ private fun LazyListScope.settingsTab(
                 Toggle(state.clipSync) { vm.setClipSync(it) }
             }
             RemoteRow(state) { vm.setRemote(it) }
+            LaptopAlertsRow()
             WebsiteRow()
             SettingRow(
                 "Notifications on the laptop",

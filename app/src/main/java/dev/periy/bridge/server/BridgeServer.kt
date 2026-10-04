@@ -1571,6 +1571,11 @@ class BridgeServer(
         }
         // The helper says what the laptop's volume is: on connecting, after each change from
         // the phone, and when it is changed on the laptop itself. The volume bar shows it.
+        // The helper closing on purpose: not a laptop gone offline.
+        post("/api/control/bye") {
+            Control.byeAt = System.currentTimeMillis()
+            call.respond(ApiResult(true))
+        }
         post("/api/control/volume") {
             runCatching { call.receive<VolumeReport>() }.getOrNull()?.let { Control.reportVolume(it.level, it.muted) }
             call.respond(ApiResult(true))
