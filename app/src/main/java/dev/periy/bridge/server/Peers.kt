@@ -101,7 +101,7 @@ sealed interface PeerStatus {
  */
 class PeerManager(
     ctx: Context,
-    private val deviceName: () -> String,
+    val deviceName: () -> String,
     private val streams: () -> Int,
     private val direct: dev.periy.bridge.net.DirectLink,
     /** Whether sends to another phone set up a direct link between the two first. */

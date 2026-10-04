@@ -90,12 +90,21 @@ fun ChatScreen(name: String, onClose: () -> Unit) {
                 Text(name, style = TitleStyle, color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("Phone to phone, sealed", style = CaptionStyle, color = Bridge.Muted, maxLines = 1)
             }
-            val mic = androidx.activity.compose.rememberLauncherForActivityResult(
-                androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-            ) { ok -> if (ok) c.calls.call(name) }
-            IconChip(BlazeIcons.Call, "Call $name", tint = Bridge.Text, size = 40.dp) {
-                if (hasMic(ctx)) c.calls.call(name) else mic.launch(android.Manifest.permission.RECORD_AUDIO)
+            // A voice call, or a video call: each asks for what it needs first.
+            var wantVideo by remember { mutableStateOf(false) }
+            val perms = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+            ) { if (hasMic(ctx)) c.calls.call(name, wantVideo && hasCamera(ctx)) }
+            val start = { video: Boolean ->
+                wantVideo = video
+                val need = listOfNotNull(
+                    android.Manifest.permission.RECORD_AUDIO.takeIf { !hasMic(ctx) },
+                    android.Manifest.permission.CAMERA.takeIf { video && !hasCamera(ctx) },
+                )
+                if (need.isEmpty()) c.calls.call(name, video) else perms.launch(need.toTypedArray())
             }
+            IconChip(BlazeIcons.Video, "Video call $name", tint = Bridge.Text, size = 40.dp) { start(true) }
+            IconChip(BlazeIcons.Call, "Call $name", tint = Bridge.Text, size = 40.dp) { start(false) }
             Text(
                 "Unlink", style = TextStyle(fontSize = 15.sp), color = Bridge.Danger,
                 modifier = Modifier.clip(RoundedCornerShape(50)).clickable { unlinking = true }.padding(horizontal = 10.dp, vertical = 8.dp),

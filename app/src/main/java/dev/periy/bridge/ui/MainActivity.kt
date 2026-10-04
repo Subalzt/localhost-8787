@@ -233,8 +233,9 @@ class MainActivity : ComponentActivity() {
                 door.stop()
             }.start()
             // Calls: `--es callto <name>`, `--ez callanswer true`, `--ez callend true`.
-            intent.getStringExtra("callto")?.let { c.calls.call(it) }
-            if (intent.getBooleanExtra("callanswer", false)) c.calls.answer()
+            intent.getStringExtra("callto")?.let { c.calls.call(it, intent.getBooleanExtra("video", false)) }
+            intent.getStringExtra("calladd")?.let { c.calls.add(it) }
+            if (intent.getBooleanExtra("callanswer", false)) c.calls.answer(intent.getBooleanExtra("video", false))
             if (intent.getBooleanExtra("callend", false)) c.calls.hangUp()
             if (intent.getBooleanExtra("opencontrol", false)) debugControl.value = true
             // `--es forgetpeer <name>` unlinks just that phone (and a test link to itself, its own way in).

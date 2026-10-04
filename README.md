@@ -638,16 +638,28 @@ IPv4, and nothing else ever holds it. No account, no number, no company.
 
 *In the pictures the phone is linked with itself: each message shows once sent and once received, and the call is to itself.*
 
-**Calls.** The handset in a conversation's header calls that phone. The sound goes straight
-between the two phones (WebRTC: Opus, with the phone's own echo cancelling and noise suppression),
-on the same Wi-Fi, over IPv6, or punched across IPv4, and the call is set up over the same sealed
-channel as messages, so its keys are known to the two phones only. There is no relay server: when
-the two networks cannot reach each other at all, the call says so instead of going through
-anyone. An incoming call rings full screen, over the lock screen, with **Answer** and **Decline**;
-under way it has **Mute**, **Speaker** and **End**, says how the sound goes (*Same network,
-direct*, *IPv6, direct*, *IPv4, punched through*), and keeps going with the app in the background.
-It is registered with Android as a call, so Bluetooth headsets and car kits carry it and can hang
-it up.
+**Calls, voice and video.** The handset in a conversation's header calls that phone; the camera
+beside it makes a video call. Sound and picture go straight between the phones (WebRTC: Opus with
+the phone's own echo cancelling and noise suppression, video in the phone's hardware codec), on the
+same Wi-Fi, over IPv6, or punched across IPv4, and every call is set up over the same sealed channel
+as messages, so its keys are known to the phones in it only. There is no relay server: when two
+networks cannot reach each other at all, the call says so instead of going through anyone.
+
+- **Ringing**: full screen, over the lock screen, the caller's avatar in its own colour with rings
+  going out; **Decline** and **Answer**, or **Voice** and **Video** for a video call.
+- **Under way**: **Mute**, **Camera** (on and off at any time, in a voice call too), **Flip**,
+  **Speaker**, **Add** and **End**, how it goes (*Same network, direct*, *IPv6, direct*, *IPv4,
+  punched through*) and that it is end-to-end encrypted. With pictures, the other phone fills the
+  screen and yours sits in a corner you can drag to any other; the buttons fade after a moment and
+  come back at a touch.
+- **Group calls**: **Add** brings in another linked phone, up to four in a call, voice or video.
+  Each phone connects straight to each other one (a mesh: no server, which is what about four phones
+  can carry, each sending its picture to the others); the phone that started the call passes the
+  setting-up steps on between phones that are not linked with each other, so only it needs to be
+  linked with everyone. Everyone shows in a grid (two stacked, one over two, two by two), lit green
+  while they talk, with a mark when muted.
+- Registered with Android as a call, so Bluetooth headsets and car kits carry it and can hang it
+  up, and it keeps going with the app in the background (camera too).
 
 ### 20. Laptop and laptop
 
@@ -795,10 +807,13 @@ For hotspot mode, checked on 26 September 2026:
   port (`POST /api/display/stream`), so it goes the way the helper reaches the phone, tunnel
   included; the phone decodes it with MediaCodec straight onto the screen.
 - **Calls**: WebRTC (`io.github.webrtc-sdk:android`) with the hardware echo canceller and noise
-  suppressor, STUN only to learn the phone's own public address, no TURN; the offer, answer and
-  late candidates go as sealed `POST /api/peers/call` (AES-256-GCM under `HMAC(psk, "L87C/1 call")`).
-  Registered with Android through Jetpack Core-Telecom, with a `phoneCall`/`microphone` foreground
-  service while under way.
+  suppressor, hardware video codecs and Camera2 capture (720p30), STUN only to learn the phone's own
+  public address, no TURN. Every connection carries a video transceiver from the start, so the camera
+  is a `setTrack` with no renegotiation. Group calls are a mesh of up to four, each pair's offer made
+  by the member with the lower id, video capped per sender (1.8, 1.0, 0.7 Mbit/s for one, two, three
+  others); the host keeps the roster and relays steps between members it links. Steps go as sealed
+  `POST /api/peers/call` (AES-256-GCM under `HMAC(psk, "L87C/1 call")`). Registered with Android
+  through Jetpack Core-Telecom, with a `phoneCall`/`microphone`/`camera` foreground service while under way.
 - **Music across the internet**: the phone decodes with MediaCodec, halves 88.2/96 kHz with a
   half-band filter, dithers to 16-bit (TPDF) and writes its own FLAC, or encodes AAC; the page
   picks the step from a measured link with 25% to spare. The page itself goes out gzipped.

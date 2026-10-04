@@ -28,13 +28,32 @@ class CallService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onDestroy() {
+        started = false
+        super.onDestroy()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val s = container.calls.state.value
-        if (s == null || s.phase == "ended" || s.phase == "ringing") { stopSelf(); return START_NOT_STICKY }
+        if (s == null || s.phase == "ended" || s.phase == "ringing") {
+            // Asked to start as the call ended: in the foreground first all the same, as Android
+            // requires of a service started that way, then gone.
+            runCatching {
+                val n = NotificationCompat.Builder(this, ONGOING_CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle("Call ended").build()
+                if (Build.VERSION.SDK_INT >= 30) startForeground(ONGOING_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE) else startForeground(ONGOING_ID, n)
+            }
+            started = false
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         val n = ongoing(this, s)
+        // The camera too while it is on, so the picture keeps going with the app in the background.
+        val camera = if (s.camera && checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0
         runCatching {
             if (Build.VERSION.SDK_INT >= 30) {
-                startForeground(ONGOING_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
+                startForeground(ONGOING_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL or camera)
             } else startForeground(ONGOING_ID, n)
         }.recoverCatching {
             // Without call standing the microphone alone still keeps it going.
@@ -51,6 +70,10 @@ class CallService : Service() {
         const val ACTION_DECLINE = "dev.periy.bridge.CALL_DECLINE"
         const val ACTION_HANG_UP = "dev.periy.bridge.CALL_HANG_UP"
 
+        /** The service is running for the call, and with the camera or not. */
+        @Volatile private var started = false
+        @Volatile private var startedCamera = false
+
         /** Follows the call: rings for one coming in, runs the service for one under way, and clears up after. */
         fun update(ctx: Context, s: CallState?) {
             val app = ctx.applicationContext
@@ -58,7 +81,8 @@ class CallService : Service() {
             channels(nm)
             if (s == null || s.phase == "ended") {
                 nm.cancel(RING_ID)
-                app.stopService(Intent(app, CallService::class.java))
+                if (started) app.stopService(Intent(app, CallService::class.java))
+                started = false
                 return
             }
             if (s.phase == "ringing" && !s.outgoing) {
@@ -67,7 +91,13 @@ class CallService : Service() {
             }
             nm.cancel(RING_ID)
             // Under way: started from the screen (calling, or answering), so it may use the microphone.
-            runCatching { app.startForegroundService(Intent(app, CallService::class.java)) }
+            // Started once (again when the camera goes on or off, for its standing); otherwise only
+            // its notification follows the call.
+            if (!started || startedCamera != s.camera) {
+                started = true
+                startedCamera = s.camera
+                runCatching { app.startForegroundService(Intent(app, CallService::class.java)) }
+            } else runCatching { nm.notify(ONGOING_ID, ongoing(app, s)) }
         }
 
         private fun channels(nm: NotificationManager) {
@@ -104,8 +134,11 @@ class CallService : Service() {
 
         private fun ringing(app: Context, s: CallState) = NotificationCompat.Builder(app, RING_CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(s.peer)
-            .setContentText("Calling, phone to phone")
+            .setContentTitle(s.members.firstOrNull()?.name ?: s.peer)
+            .setContentText(
+                (if (s.video) "Video call" else "Voice call") +
+                    (s.members.drop(1).takeIf { it.isNotEmpty() }?.joinToString(", ", " with ") { it.name } ?: ", phone to phone"),
+            )
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
@@ -117,7 +150,7 @@ class CallService : Service() {
         private fun ongoing(app: Context, s: CallState) = NotificationCompat.Builder(app, ONGOING_CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(s.peer)
-            .setContentText(if (s.phase == "active") "On a call" else "Calling")
+            .setContentText(if (s.phase == "active") (if (s.camera) "On a video call" else "On a call") else "Calling")
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setOngoing(true)
             .setUsesChronometer(s.phase == "active")

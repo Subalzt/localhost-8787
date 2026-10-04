@@ -96,6 +96,58 @@ object BlazeIcons {
         "M8.2 3.5h-2a2 2 0 0 0-2 2.2c.9 7.6 6.5 13.2 14.1 14.1a2 2 0 0 0 2.2-2v-2a1.5 1.5 0 0 0-1.2-1.5l-3-.7a1.5 1.5 0 0 0-1.5.5l-1.1 1.3a11 11 0 0 1-5.4-5.4l1.3-1.1a1.5 1.5 0 0 0 .5-1.5l-.7-3a1.5 1.5 0 0 0-1.5-1.2Z",
     )
 
+    /** A video camera: a rounded body and its lens hood. */
+    val Video: ImageVector = stroked(
+        "video",
+        "M5.5 6.5h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z",
+        "M15.5 10.5l4.2-2.6a.5.5 0 0 1 .8.4v7.4a.5.5 0 0 1-.8.4l-4.2-2.6",
+    )
+
+    /** The video camera, struck through. */
+    val VideoOff: ImageVector = stroked(
+        "video-off",
+        "M9.5 6.5h4a2 2 0 0 1 2 2v4",
+        "M15.5 10.5l4.2-2.6a.5.5 0 0 1 .8.4v7.4a.5.5 0 0 1-.8.4l-3.2-2",
+        "M13.8 17.5H5.5a2 2 0 0 1-2-2v-7a2 2 0 0 1 1.4-1.9",
+        "M3.5 3.5l17 17",
+    )
+
+    /** A camera with arrows turning round it: the other camera. */
+    val FlipCamera: ImageVector = stroked(
+        "flip-camera",
+        "M4.5 8.5a2 2 0 0 1 2-2h1.8l1.2-1.6a1 1 0 0 1 .8-.4h3.4a1 1 0 0 1 .8.4l1.2 1.6h1.8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2Z",
+        "M14.6 11.2a2.9 2.9 0 0 0-5 .3",
+        "M9.4 13.8a2.9 2.9 0 0 0 5-.3",
+        "M14.6 9.6v1.6H13",
+        "M9.4 15.4v-1.6H11",
+    )
+
+    /** A person with a plus beside them. */
+    val PersonAdd: ImageVector = stroked(
+        "person-add",
+        "M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
+        "M3.5 20a6.5 6.5 0 0 1 11.6-4",
+        "M18.5 14v6M15.5 17h6",
+    )
+
+    /** A microphone. */
+    val Mic: ImageVector = stroked(
+        "mic",
+        "M12 3.5a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0v-5a3 3 0 0 1 3-3Z",
+        "M6 11a6 6 0 0 0 12 0",
+        "M12 17v3.5",
+    )
+
+    /** The microphone, struck through. */
+    val MicOff: ImageVector = stroked(
+        "mic-off",
+        "M15 10V6.5a3 3 0 0 0-5.6-1.5",
+        "M9 9v2.5a3 3 0 0 0 4.6 2.5",
+        "M6 11a6 6 0 0 0 9.4 4.9M18 11a6 6 0 0 1-.6 2.6",
+        "M12 17v3.5",
+        "M3.5 3.5l17 17",
+    )
+
     /** A crescent. */
     val Moon: ImageVector = stroked("moon", "M19.5 14.5A8 8 0 1 1 9.5 4.5a6.5 6.5 0 0 0 10 10Z")
 
