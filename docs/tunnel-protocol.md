@@ -255,6 +255,21 @@ sealed on its own, so it is unreadable on a plain local link too:
 - A message waits on the sending phone until the other takes it, retried every 20 s. Read marks
   go back as `POST /api/peers/msg/read {"upTo": at}`, in the sender's own clock.
 
+### Calls
+
+Voice calls between linked phones (`server/Calls.kt`) are WebRTC, straight between the two:
+
+- Setting up goes over the same channel as messages, `POST /api/peers/call`, each step sealed
+  like a message under `HMAC(psk, "L87C/1 call")` with the call's id as associated data:
+  `offer` and `answer` (each with its session description, sent once it holds the phone's own
+  addresses and STUN's answer, or after a second), late `ice` candidates, `ringing`, and `end`
+  with a reason (*Declined*, *Busy*, *No answer*).
+- ICE uses public STUN (Cloudflare's, Google's) only to learn each phone's own public address,
+  as the punching does, and no TURN: the sound never goes through anything but the two phones.
+  Candidates are the phones' local addresses, their global IPv6, and IPv4 punched through.
+- The sound is Opus over SRTP with DTLS keys, which the sealed setup makes known to the two
+  phones only.
+
 ## Laptop to laptop
 
 Two laptops reaching the same phone, one through the tunnel and one on the phone's network (or

@@ -15,6 +15,9 @@ android {
         // that the storage layer would need a second implementation.
         minSdk = 29
         targetSdk = 36
+        // WebRTC carries native code for each kind of processor; only 64-bit ARM, which every
+        // phone this app is for has, keeps the app about 10 MB larger instead of 40.
+        ndk { abiFilters += listOf("arm64-v8a") }
         versionCode = 18
         versionName = "2.1.0"
 
@@ -111,6 +114,8 @@ dependencies {
     implementation(libs.ktor.serialization.json)
 
     implementation(libs.zxing.core)
+    implementation(libs.webrtc)
+    implementation(libs.androidx.core.telecom)
     // Ktor logs through SLF4J. Without a binding every request logs a "no provider"
     // warning; slf4j-simple writes to System.err, which Android routes into logcat.
     implementation(libs.slf4j.simple)

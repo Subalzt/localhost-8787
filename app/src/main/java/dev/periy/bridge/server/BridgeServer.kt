@@ -699,6 +699,17 @@ class BridgeServer(
             if ((ctx.applicationContext as dev.periy.bridge.BridgeApp).container.messages.receive(from, me.id, w)) call.respond(ApiResult(true))
             else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That message does not open here"))
         }
+        post("/api/peers/call") {
+            val me = call.device() ?: return@post
+            val from = peers.byDevice(me.id)?.name
+            val w = runCatching { call.receive<CallWire>() }.getOrNull()
+            if (from == null || w == null || w.c.length > 64_000) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad call signal"))
+                return@post
+            }
+            if ((ctx.applicationContext as dev.periy.bridge.BridgeApp).container.calls.receive(from, me.id, w)) call.respond(ApiResult(true))
+            else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That signal does not open here"))
+        }
         post("/api/peers/msg/read") {
             val me = call.device() ?: return@post
             val from = peers.byDevice(me.id)?.name

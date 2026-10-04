@@ -90,6 +90,12 @@ object BlazeIcons {
         "M5.3 5.3l1.4 1.4", "M17.3 17.3l1.4 1.4", "M5.3 18.7l1.4-1.4", "M17.3 6.7l1.4-1.4",
     )
 
+    /** A handset: calling a linked phone (turned 135 degrees, hanging up). */
+    val Call: ImageVector = stroked(
+        "call",
+        "M8.2 3.5h-2a2 2 0 0 0-2 2.2c.9 7.6 6.5 13.2 14.1 14.1a2 2 0 0 0 2.2-2v-2a1.5 1.5 0 0 0-1.2-1.5l-3-.7a1.5 1.5 0 0 0-1.5.5l-1.1 1.3a11 11 0 0 1-5.4-5.4l1.3-1.1a1.5 1.5 0 0 0 .5-1.5l-.7-3a1.5 1.5 0 0 0-1.5-1.2Z",
+    )
+
     /** A crescent. */
     val Moon: ImageVector = stroked("moon", "M19.5 14.5A8 8 0 1 1 9.5 4.5a6.5 6.5 0 0 0 10 10Z")
 

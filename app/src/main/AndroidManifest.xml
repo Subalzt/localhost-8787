@@ -32,6 +32,14 @@
     <!-- API 33+. Requested at runtime; the persistent notification is the only way to
          see the address, and where connection requests arrive. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Calls between linked phones (server/Calls.kt): the microphone, the call registered with
+         Android as the app's own (Core-Telecom), its foreground service, and ringing full screen. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- Music streaming reads the audio library only. READ_MEDIA_AUDIO covers audio and
          nothing else on Android 13+; older versions need the broader storage read. -->
@@ -239,6 +247,14 @@
 
         <!-- Music playing on the phone from the Music tab: the notification, the lock screen and a
              headset's buttons, with the app in the background. Only while there is a queue. -->
+        <service
+            android:name=".service.CallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|phoneCall" />
+        <receiver
+            android:name=".service.CallActions"
+            android:exported="false" />
+
         <service
             android:name=".music.MusicService"
             android:exported="false"

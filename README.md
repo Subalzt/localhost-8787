@@ -42,7 +42,7 @@
 16 [Monitor](#16-a-live-monitor) ·
 17 [Measure](#17-measure-the-connection) ·
 18 [Phone and phone](#18-phone-and-phone) ·
-19 [Messages](#19-messages-phone-to-phone) ·
+19 [Messages and calls](#19-messages-and-calls-phone-to-phone) ·
 20 [Laptop and laptop](#20-laptop-and-laptop) ·
 21 [Back](#21-back-works-as-in-an-app) ·
 22 [Any browser](#22-any-browser-any-computer) ·
@@ -575,7 +575,7 @@ phone's received-files folder.
 
 </details>
 
-### 19. Messages, phone to phone
+### 19. Messages and calls, phone to phone
 
 Tap a linked phone in *Devices* and write to it. **Each phone is the other's server**: a message
 goes straight from one to the other, over the same Wi-Fi, through the tunnel, or punched across
@@ -593,6 +593,17 @@ IPv4, and nothing else ever holds it. No account, no number, no company.
 <img src="docs/images/phone-chat.png" width="240" alt="A conversation">
 
 *In the picture the phone is linked with itself, so each message shows once sent and once received.*
+
+**Calls.** The handset in a conversation's header calls that phone. The sound goes straight
+between the two phones (WebRTC: Opus, with the phone's own echo cancelling and noise suppression),
+on the same Wi-Fi, over IPv6, or punched across IPv4, and the call is set up over the same sealed
+channel as messages, so its keys are known to the two phones only. There is no relay server: when
+the two networks cannot reach each other at all, the call says so instead of going through
+anyone. An incoming call rings full screen, over the lock screen, with **Answer** and **Decline**;
+under way it has **Mute**, **Speaker** and **End**, says how the sound goes (*Same network,
+direct*, *IPv6, direct*, *IPv4, punched through*), and keeps going with the app in the background.
+It is registered with Android as a call, so Bluetooth headsets and car kits carry it and can hang
+it up.
 
 ### 20. Laptop and laptop
 
@@ -735,6 +746,11 @@ For hotspot mode, checked on 26 September 2026:
 - **Messages** go phone to phone over the same routes, each sealed with AES-256-GCM under
   `HMAC(psk, "L87M/1 msg")`, the tunnel key the receiving phone made for the sender, with the
   message's id and time bound in ([messages](docs/tunnel-protocol.md#messages)).
+- **Calls**: WebRTC (`io.github.webrtc-sdk:android`) with the hardware echo canceller and noise
+  suppressor, STUN only to learn the phone's own public address, no TURN; the offer, answer and
+  late candidates go as sealed `POST /api/peers/call` (AES-256-GCM under `HMAC(psk, "L87C/1 call")`).
+  Registered with Android through Jetpack Core-Telecom, with a `phoneCall`/`microphone` foreground
+  service while under way.
 - **Music across the internet**: the phone decodes with MediaCodec, halves 88.2/96 kHz with a
   half-band filter, dithers to 16-bit (TPDF) and writes its own FLAC, or encodes AAC; the page
   picks the step from a measured link with 25% to spare. The page itself goes out gzipped.
@@ -796,5 +812,8 @@ player, `net/` for addresses, the direct link, STUN, the tunnel, hole punching a
 - A free dynv6 name stays active only while the account is used.
 - Messages are text only so far, between the phones' apps; the page does not show them yet. A
   message goes only while both phones are on; until then it waits on the sending phone.
+- Calls are voice only for now, between linked phones. With no relay, a call needs the two phones
+  to reach each other directly: on a network that allows only a web proxy (no IPv6, UDP only to a
+  few ports) neither calls nor the tunnel get through.
 - Linking from anywhere needs one of the two to have IPv6, or the NATs to allow punching (not both
   of the hard kind).

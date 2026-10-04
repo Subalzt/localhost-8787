@@ -129,6 +129,8 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** A message notification was tapped: the conversation with this phone opens. */
         const val EXTRA_CHAT = "chat"
+        /** A call notification: "answer" answers it, anything else shows it. */
+        const val EXTRA_CALL = "call"
     }
 
     private val vm: MainViewModel by viewModels()
@@ -179,6 +181,12 @@ class MainActivity : ComponentActivity() {
         if (intent.action == dev.periy.bridge.music.MusicService.ACTION_OPEN_PLAYER) { openPlayer.value = true; intent.action = null; return }
         // Tapping a message opens its conversation.
         intent.getStringExtra(EXTRA_CHAT)?.let { openChat.value = it; intent.removeExtra(EXTRA_CHAT) }
+        // A call: shown over the lock screen too, and answered when that was the button pressed.
+        intent.getStringExtra(EXTRA_CALL)?.let { what ->
+            setShowWhenLocked(true); setTurnScreenOn(true)
+            if (what == "answer") answerCall.value = true
+            intent.removeExtra(EXTRA_CALL)
+        }
         // Debug builds: `adb shell am start ... --ez serve true` starts the server for testing.
         if (dev.periy.bridge.BuildConfig.DEBUG && intent.getBooleanExtra("serve", false)) BridgeService.start(this)
         // Debug builds: `--es style theatre` and `--es accent blue` switch the look, for screenshots.
@@ -209,6 +217,10 @@ class MainActivity : ComponentActivity() {
             intent.getStringExtra("msgto")?.let { to -> c.messages.send(to, intent.getStringExtra("msg").orEmpty()) }
             if (intent.getBooleanExtra("linkcode", false)) android.util.Log.i("LinkCode", "Open: " + c.openLinkCode())
             intent.getStringExtra("linkwith")?.let { c.peers.linkByCode(it) }
+            // Calls: `--es callto <name>`, `--ez callanswer true`, `--ez callend true`.
+            intent.getStringExtra("callto")?.let { c.calls.call(it) }
+            if (intent.getBooleanExtra("callanswer", false)) c.calls.answer()
+            if (intent.getBooleanExtra("callend", false)) c.calls.hangUp()
             if (intent.getBooleanExtra("opencontrol", false)) debugControl.value = true
             // `--es forgetpeer <name>` unlinks just that phone (and a test link to itself, its own way in).
             intent.getStringExtra("forgetpeer")?.let { n ->
@@ -274,6 +286,9 @@ private val debugControl = kotlinx.coroutines.flow.MutableStateFlow(false)
 
 /** A message notification was tapped: that phone's conversation opens. */
 private val openChat = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
+/** Answer was pressed on a call's notification: the call screen answers it. */
+private val answerCall = kotlinx.coroutines.flow.MutableStateFlow(false)
 
 /** Debug builds: a linked phone whose files to open (`--es peerbrowse <name>`). */
 private val debugBrowse = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
@@ -687,6 +702,11 @@ private fun BlazeItUi(vm: MainViewModel) {
         }
 
         if (showMonitor) MonitorOverlay(monitor, running) { setMonitor(false) }
+
+        // A call, over everything.
+        val call by ctx.container.calls.state.collectAsStateWithLifecycle()
+        val answerNow by answerCall.collectAsStateWithLifecycle()
+        if (call != null) CallScreen(answerNow) { answerCall.value = false }
     }
 }
 

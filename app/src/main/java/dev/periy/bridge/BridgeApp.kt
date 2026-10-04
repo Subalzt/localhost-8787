@@ -85,6 +85,12 @@ class Container(ctx: Context) {
         storage = storage, index = index, clipboard = clipboard, clipSync = { prefs.clipSync },
     )
 
+    /** Voice calls with linked phones, straight between the two (server/Calls.kt). */
+    val calls by lazy {
+        dev.periy.bridge.server.Calls(app, peers) { tunnelKeys.psk(it) }
+            .also { c -> c.onChange = { s -> dev.periy.bridge.service.CallService.update(app, s) } }
+    }
+
     /** Messages with linked phones, each phone the other's server (server/Messages.kt). */
     val messages by lazy { dev.periy.bridge.server.Messages(app, peers) { tunnelKeys.psk(it) } }
 

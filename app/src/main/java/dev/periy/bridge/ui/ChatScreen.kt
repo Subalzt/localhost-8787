@@ -63,7 +63,8 @@ import java.util.Locale
  */
 @Composable
 fun ChatScreen(name: String, onClose: () -> Unit) {
-    val c = LocalContext.current.container
+    val ctx = LocalContext.current
+    val c = ctx.container
     val messages = c.messages
     val threads by messages.threads.collectAsState()
     val list = threads[name].orEmpty()
@@ -88,6 +89,12 @@ fun ChatScreen(name: String, onClose: () -> Unit) {
             Column(Modifier.weight(1f).padding(start = 4.dp)) {
                 Text(name, style = TitleStyle, color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("Phone to phone, sealed", style = CaptionStyle, color = Bridge.Muted, maxLines = 1)
+            }
+            val mic = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+            ) { ok -> if (ok) c.calls.call(name) }
+            IconChip(BlazeIcons.Call, "Call $name", tint = Bridge.Text, size = 40.dp) {
+                if (hasMic(ctx)) c.calls.call(name) else mic.launch(android.Manifest.permission.RECORD_AUDIO)
             }
             Text(
                 "Unlink", style = TextStyle(fontSize = 15.sp), color = Bridge.Danger,
