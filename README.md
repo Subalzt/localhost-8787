@@ -656,12 +656,20 @@ networks cannot reach each other at all, the call says so instead of going throu
   punched through*) and that it is end-to-end encrypted. With pictures, the other phone fills the
   screen and yours sits in a corner you can drag to any other; the buttons fade after a moment and
   come back at a touch.
-- **Group calls**: **Add** brings in another linked phone, up to four in a call, voice or video.
-  Each phone connects straight to each other one (a mesh: no server, which is what about four phones
-  can carry, each sending its picture to the others); the phone that started the call passes the
-  setting-up steps on between phones that are not linked with each other, so only it needs to be
-  linked with everyone. Everyone shows in a grid (two stacked, one over two, two by two), lit green
-  while they talk, with a mark when muted.
+- **Group calls**: **Add** brings in another linked phone, up to eight in a call, voice or video.
+  Up to four, each phone connects straight to each other one (a mesh, best quality: each sends its
+  picture to the others, which is what about four phones carry); the phone that started the call
+  passes the setting-up steps on between phones that are not linked with each other, so only it
+  needs to be linked with everyone. Everyone shows in a grid, lit green while they talk, with a mark
+  when muted.
+- **Bigger calls, five to eight**: past four, every phone sends its picture and voice only to the
+  phone that started the call, and that phone sends each one back everyone's voice and one picture
+  of everyone in a grid, the one talking framed in green. Each phone then sends once and receives
+  once however many are in the call; the host does the work, so it is best on a phone with a good
+  connection.
+- **Test call** (*Phones*, voice or video): your own voice and picture through a whole call and
+  back, through a second connection on the same phone, as an echo test does: you hear yourself a
+  moment later and see yourself after two trips through the codecs and the host's grid.
 - Registered with Android as a call, so Bluetooth headsets and car kits carry it and can hang it
   up, and it keeps going with the app in the background (camera too).
 
@@ -815,7 +823,10 @@ For hotspot mode, checked on 26 September 2026:
   public address, no TURN. Every connection carries a video transceiver from the start, so the camera
   is a `setTrack` with no renegotiation. Group calls are a mesh of up to four, each pair's offer made
   by the member with the lower id, video capped per sender (1.8, 1.0, 0.7 Mbit/s for one, two, three
-  others); the host keeps the roster and relays steps between members it links. Steps go as sealed
+  others); the host keeps the roster and relays steps between members it links. From five to eight
+  the host forwards: every connection carries six spare audio transceivers, which the host fills
+  with the other members' received tracks, and its video sender carries a 1280x720 grid it draws at
+  15 fps from everyone's latest frames (libyuv crop, scale and rotate into one I420 frame). Steps go as sealed
   `POST /api/peers/call` (AES-256-GCM under `HMAC(psk, "L87C/1 call")`). Registered with Android
   through Jetpack Core-Telecom, with a `phoneCall`/`microphone`/`camera` foreground service while under way.
 - **Music across the internet**: the phone decodes with MediaCodec, halves 88.2/96 kHz with a

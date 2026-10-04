@@ -235,6 +235,8 @@ class MainActivity : ComponentActivity() {
             // Calls: `--es callto <name>`, `--ez callanswer true`, `--ez callend true`.
             intent.getStringExtra("callto")?.let { c.calls.call(it, intent.getBooleanExtra("video", false)) }
             intent.getStringExtra("calladd")?.let { c.calls.add(it) }
+            // `--ez calltest true [--ez video true]`: a test call, this phone through a call and back.
+            if (intent.getBooleanExtra("calltest", false)) c.calls.testCall(intent.getBooleanExtra("video", false))
             if (intent.getBooleanExtra("callanswer", false)) c.calls.answer(intent.getBooleanExtra("video", false))
             if (intent.getBooleanExtra("callend", false)) c.calls.hangUp()
             if (intent.getBooleanExtra("opencontrol", false)) debugControl.value = true
@@ -1720,6 +1722,8 @@ private fun LazyListScope.phonesTab(
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp),
         )
     }
+    item { Spacer(Modifier.height(12.dp)) }
+    item { TestCallRow() }
 
     item { SectionBar("Add a phone") }
     item { Searching(running, found = unpaired.size) }
@@ -1952,6 +1956,35 @@ private fun Searching(running: Boolean, found: Int) {
             )
         }
         if (running) Box(Modifier.size(10.dp).alpha(pulse).clip(CircleShape).background(Bridge.Lit))
+    }
+}
+
+/**
+ * A test call: this phone's voice and picture through a whole call and back, to hear and see how a
+ * call sounds and looks with nobody on the other end. Voice, or video.
+ */
+@Composable
+private fun TestCallRow() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val calls = ctx.container.calls
+    var wantVideo by remember { mutableStateOf(false) }
+    val perms = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) { if (hasMic(ctx)) calls.testCall(wantVideo && hasCamera(ctx)) }
+    val start = { video: Boolean ->
+        wantVideo = video
+        val need = listOfNotNull(
+            android.Manifest.permission.RECORD_AUDIO.takeIf { !hasMic(ctx) },
+            android.Manifest.permission.CAMERA.takeIf { video && !hasCamera(ctx) },
+        )
+        if (need.isEmpty()) calls.testCall(video) else perms.launch(need.toTypedArray())
+    }
+    GroupCard {
+        MediaRow("Test call", "Your own voice and picture, through a call and back", BlazeIcons.Call, Color(0xFF34C759), first = true) {
+            IconChip(BlazeIcons.Call, "Voice test call", tint = Bridge.Text, size = 36.dp) { start(false) }
+            Spacer(Modifier.width(6.dp))
+            IconChip(BlazeIcons.Video, "Video test call", tint = Bridge.Text, size = 36.dp) { start(true) }
+        }
     }
 }
 

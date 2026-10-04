@@ -163,7 +163,7 @@ fun CallScreen(answerNow: Boolean, onAnswered: () -> Unit) {
     val status = when (call.phase) {
         "calling" -> if (call.why == "Ringing") "Ringing…" else "Calling…"
         "ringing" -> if (call.video) "Video call" else "Voice call"
-        "connecting" -> "Connecting…"
+        "connecting" -> if (call.test) "Starting the test…" else "Connecting…"
         "active" -> ((now - call.since).coerceAtLeast(0) / 1000).let { if (it >= 3600) "%d:%02d:%02d".format(it / 3600, it / 60 % 60, it % 60) else "%d:%02d".format(it / 60, it % 60) }
         else -> call.why.ifEmpty { "Call ended" }
     }
@@ -333,7 +333,8 @@ private fun Sealed(call: CallState) {
         Icon(BlazeIcons.Lock, null, tint = Color.White.copy(alpha = 0.45f), modifier = Modifier.size(12.dp))
         Spacer(Modifier.width(5.dp))
         Text(
-            (if (call.path.isNotEmpty()) call.path + " · " else "") + "end-to-end encrypted",
+            if (call.test) "What you hear and see came back through the call"
+            else (if (call.path.isNotEmpty()) call.path + " · " else "") + (if (call.relay) "through ${if (call.host) "this phone" else call.members.firstOrNull()?.name ?: "the host"} · " else "") + "end-to-end encrypted",
             style = TextStyle(fontSize = 12.sp), color = Color.White.copy(alpha = 0.45f),
         )
     }
@@ -354,7 +355,12 @@ private fun VideoStage(call: CallState, local: VideoTrack?, status: String, call
     Box(
         Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { shown = !shown; touched = System.currentTimeMillis() } },
     ) {
-        if (others.size <= 1) {
+        val hostPicture = if (call.relay && !call.host) others.firstOrNull()?.video else null
+        if (hostPicture != null) {
+            // A big call: everyone in the one picture the host sends, shown whole.
+            VideoView(hostPicture, mirror = false, fit = true, modifier = Modifier.fillMaxSize())
+            if (local != null) SelfView(local, call.frontCamera, top, bottom)
+        } else if (others.size <= 1) {
             val o = others.firstOrNull()
             // The other phone full screen; their avatar while their camera is off.
             if (o != null && o.camera && o.video != null) VideoView(o.video, mirror = false, modifier = Modifier.fillMaxSize())
@@ -447,7 +453,12 @@ private fun Grid(others: List<CallMember>, local: VideoTrack?, call: CallState, 
         Spec("me", "You", local, call.frontCamera, call.speaking, call.muted, "")
     val gap = 8.dp
     Column(modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
-        val rows = when (tiles.size) { 1, 2 -> tiles.map { listOf(it) }; 3 -> listOf(listOf(tiles[0]), tiles.drop(1)); else -> tiles.chunked(2) }
+        val rows = when (tiles.size) {
+            1, 2 -> tiles.map { listOf(it) }
+            3 -> listOf(listOf(tiles[0]), tiles.drop(1))
+            in 4..6 -> tiles.chunked(2)
+            else -> tiles.chunked(3)
+        }
         rows.forEach { row ->
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
                 row.forEach { t ->
@@ -485,7 +496,7 @@ private fun Tile(name: String, track: VideoTrack?, mirror: Boolean, speaking: Bo
 
 /** A picture from a call: WebRTC's renderer, on the call's drawing context, rounded when asked. */
 @Composable
-private fun VideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier, overlay: Boolean = false, corner: Dp = 0.dp) {
+private fun VideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier, overlay: Boolean = false, corner: Dp = 0.dp, fit: Boolean = false) {
     val calls = LocalContext.current.container.calls
     val radius = with(LocalDensity.current) { corner.toPx() }
     var view by remember { mutableStateOf<SurfaceViewRenderer?>(null) }
@@ -493,7 +504,7 @@ private fun VideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier, ov
         factory = { c ->
             SurfaceViewRenderer(c).apply {
                 init(calls.egl.eglBaseContext, null)
-                setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+                setScalingType(if (fit) RendererCommon.ScalingType.SCALE_ASPECT_FIT else RendererCommon.ScalingType.SCALE_ASPECT_FILL)
                 setEnableHardwareScaler(true)
                 if (overlay) setZOrderMediaOverlay(true)
                 if (radius > 0f) {

@@ -87,6 +87,8 @@ data class CallSignal(
     val members: List<RosterEntry> = emptyList(),
     val camera: Boolean = false,
     val mic: Boolean = true,
+    /** With the roster: more phones than a mesh carries, so each goes through the host. */
+    val relay: Boolean = false,
 )
 
 /** A call signal as it travels, sealed like a message ([CallCrypto]). */
@@ -125,6 +127,10 @@ data class CallState(
     val speaking: Boolean = false,
     val members: List<CallMember> = emptyList(),
     val why: String = "",
+    /** More phones than a mesh carries: each sends to the host, which sends everyone back one picture. */
+    val relay: Boolean = false,
+    /** A test call: this phone, through a call and back. */
+    val test: Boolean = false,
 ) {
     /** Who is in it (or being called), for a title or a notification. */
     val peer: String get() = members.filter { it.phase != "left" }.joinToString(", ") { it.name }.ifEmpty { members.firstOrNull()?.name ?: "Call" }
@@ -135,7 +141,10 @@ data class CallState(
 
 /**
  * Calls between linked phones, voice and video, two phones or up to [MAX] at once, each phone the
- * others' server, with nothing in between.
+ * others' server, with nothing in between. Past [MESH] phones the call goes through the phone that
+ * started it: each phone sends it its picture and voice once, and it sends each one back everyone's
+ * voice and one picture of everyone in a grid ([CallCompositor]). A test call ([testCall]) runs a
+ * whole call on this one phone, its own voice and picture through a second connection and back.
  *
  * Every call is WebRTC: Opus voice with the phone's own echo cancelling and noise suppression, and
  * video (H.264 or VP8, in the phone's hardware) from the camera, over SRTP straight between phones,
@@ -196,6 +205,10 @@ class Calls(
         @Volatile var gatheredAll = false
         val pending = mutableListOf<IceCandidate>()
         var videoSender: RtpSender? = null
+        /** This phone's microphone on it; the other phone's comes back on the same channel. */
+        var micSender: RtpSender? = null
+        /** Spare voice channels, which the host of a big call fills with the other phones' voices. */
+        val audioSlots = mutableListOf<RtpSender>()
         var timeout: Job? = null
     }
 
@@ -218,6 +231,19 @@ class Calls(
         /** Candidates that came before their offer. */
         val early = HashMap<String, MutableList<IceCandidate>>()
         var levels: Job? = null
+        /** Past MESH phones: everything through the host. */
+        var relay = false
+        /** Each member's voice and picture as they come in, for the host to pass on. */
+        val remoteAudio = HashMap<String, AudioTrack>()
+        val remoteVideo = HashMap<String, VideoTrack>()
+        /** The host of a big call: the grid it sends everyone. */
+        var grid: CallCompositor? = null
+        /** A test call: the far end on this same phone, and its own grid. */
+        var test = false
+        var echo: PeerConnection? = null
+        var echoGrid: CallCompositor? = null
+        val echoPending = mutableListOf<IceCandidate>()
+        var echoRemoteSet = false
     }
 
     private var call: Call? = null
@@ -228,6 +254,8 @@ class Calls(
     private var videoTrack: VideoTrack? = null
     private var capturer: CameraVideoCapturer? = null
     private var textures: SurfaceTextureHelper? = null
+    /** The camera is on (its track on the senders, or in the host's grid). */
+    private var cameraOn = false
 
     // ------------------------------------------------------------------ starting, answering, ending
 
@@ -246,12 +274,88 @@ class Calls(
         }
     }
 
+    /**
+     * A test call: this phone's voice and picture through a whole call and back. The far end is a
+     * second connection on this same phone, which sends back what it gets: the voice (heard after
+     * a moment, as an echo test does) and the picture through the host's grid, so the camera, the
+     * codecs, the connection, passing tracks on and the grid are all in it.
+     */
+    fun testCall(video: Boolean) {
+        scope.launch {
+            if (call != null) return@launch
+            val c = Call(UUID.randomUUID().toString(), host = true, video = video)
+            c.test = true
+            c.roster = listOf(RosterEntry(c.me, peers.deviceName()), RosterEntry(ECHO, ECHO_NAME))
+            call = c
+            show(CallState(c.id, host = true, outgoing = true, phase = "connecting", video = video, camera = video, test = true,
+                members = listOf(CallMember(ECHO, ECHO_NAME, "joining"))))
+            if (video) setCameraNow(true)
+            register()
+            runCatching { startEcho(c) }.onFailure { Log.w(TAG, "Test call", it); endHere("The test could not start: ${it.message}") }
+        }
+    }
+
+    private suspend fun startEcho(c: Call) {
+        val leg = newLeg(ECHO, offerer = true)
+        lateinit var echo: PeerConnection
+        var echoAudio: RtpSender? = null
+        var echoVideo: RtpSender? = null
+        var gotAudio: AudioTrack? = null
+        var gotVideo: VideoTrack? = null
+        fun wire() {
+            echoAudio?.setTrack(gotAudio, false)
+            val v = gotVideo ?: return
+            val g = c.echoGrid ?: CallCompositor(factory).also { c.echoGrid = it }
+            g.set(listOf("back" to v))
+            echoVideo?.setTrack(g.track, false)
+        }
+        echo = factory.createPeerConnection(rtcConfig(), object : PeerConnection.Observer {
+            override fun onIceCandidate(cand: IceCandidate) {
+                scope.launch { if (call === c) { if (leg.remoteSet) leg.pc.addIceCandidate(cand) else synchronized(leg.pending) { leg.pending.add(cand) } } }
+            }
+            override fun onTrack(t: RtpTransceiver) {
+                when (val track = t.receiver.track()) {
+                    // Not played here: only what comes back is heard.
+                    is AudioTrack -> scope.launch { if (gotAudio == null) { track.setVolume(0.0); gotAudio = track; wire() } }
+                    is VideoTrack -> scope.launch { gotVideo = track; wire() }
+                }
+            }
+            override fun onIceConnectionChange(s: PeerConnection.IceConnectionState) {}
+            override fun onIceGatheringChange(s: PeerConnection.IceGatheringState) {}
+            override fun onSignalingChange(s: PeerConnection.SignalingState) {}
+            override fun onIceConnectionReceivingChange(b: Boolean) {}
+            override fun onIceCandidatesRemoved(cs: Array<out IceCandidate>) {}
+            override fun onAddStream(s: MediaStream) {}
+            override fun onRemoveStream(s: MediaStream) {}
+            override fun onDataChannel(d: DataChannel) {}
+            override fun onRenegotiationNeeded() {}
+            override fun onAddTrack(r: RtpReceiver, s: Array<out MediaStream>) {}
+        }) ?: error("Could not start the far end")
+        c.echo = echo
+        val offer = leg.pc.awaitCreate(true)
+        leg.pc.awaitSetLocal(offer)
+        leg.sentDescription = true
+        echo.awaitSetRemote(offer)
+        c.echoRemoteSet = true
+        synchronized(c.echoPending) { c.echoPending.forEach { echo.addIceCandidate(it) }; c.echoPending.clear() }
+        echo.transceivers.forEach { t -> t.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV }
+        echoAudio = echo.transceivers.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO }?.sender
+        echoVideo = echo.transceivers.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.sender
+        wire()
+        val answer = echo.awaitCreate(false)
+        echo.awaitSetLocal(answer)
+        leg.pc.awaitSetRemote(answer)
+        leg.remoteSet = true
+        drainPending(leg)
+        connectTimeout(c)
+    }
+
     /** The host adds [name] to the call under way. */
     fun add(name: String) {
         scope.launch {
             val c = call ?: return@launch
             if (!c.host || name in c.invited || c.linkOf.values.contains(name)) return@launch
-            if (c.roster.size + c.invited.size >= MAX) return@launch
+            if (c.test || c.roster.size + c.invited.size >= MAX) return@launch
             invite(name)
         }
     }
@@ -367,6 +471,9 @@ class Calls(
         c.levels?.cancel()
         c.legs.values.forEach { closeLeg(it) }
         c.legs.clear()
+        runCatching { c.echo?.close(); c.echo?.dispose() }
+        c.echoGrid?.release(); c.grid?.release()
+        c.echo = null; c.echoGrid = null; c.grid = null
         setCameraNow(false)
         audioTrack?.let { runCatching { it.setEnabled(false); it.dispose() } }
         audioSource?.let { runCatching { it.dispose() } }
@@ -395,10 +502,12 @@ class Calls(
             }
             runCatching { capturer?.startCapture(1280, 720, 30) }
             videoTrack?.setEnabled(true)
-            call?.legs?.values?.forEach { it.videoSender?.setTrack(videoTrack, false) }
+            cameraOn = true
+            refreshSenders()
             _local.value = videoTrack
         } else {
-            call?.legs?.values?.forEach { it.videoSender?.setTrack(null, false) }
+            cameraOn = false
+            refreshSenders()
             _local.value = null
             runCatching { capturer?.stopCapture() }
             if (call == null) {
@@ -533,7 +642,7 @@ class Calls(
         } else {
             if (fromPeer != c.hostPeer) return
             when (sig.kind) {
-                "members" -> applyRoster(sig.members)
+                "members" -> applyRoster(sig.members, sig.relay)
                 "end" -> endHere(sig.why.ifEmpty { "Call ended" })
                 else -> media(sig)
             }
@@ -549,8 +658,10 @@ class Calls(
     private suspend fun setRoster(r: List<RosterEntry>) {
         val c = call ?: return
         c.roster = r
-        c.linkOf.values.forEach { sendTo(it, CallSignal(c.id, "members", from = c.me, members = r)) }
-        applyRoster(r)
+        // Past a mesh's worth, everything goes through this phone.
+        c.relay = r.size > MESH
+        c.linkOf.values.forEach { sendTo(it, CallSignal(c.id, "members", from = c.me, members = r, relay = c.relay)) }
+        applyRoster(r, c.relay)
     }
 
     private suspend fun memberLeft(id: String, why: String) {
@@ -563,22 +674,58 @@ class Calls(
     }
 
     /** Everyone in the call now: new ones connected to (each pair once), gone ones let go. */
-    private suspend fun applyRoster(r: List<RosterEntry>) {
+    private suspend fun applyRoster(r: List<RosterEntry>, relay: Boolean = false) {
         val c = call ?: return
         c.roster = r
+        c.relay = relay
         val ids = r.map { it.id }.toSet()
         if (c.me !in ids && !c.host) return
-        c.legs.keys.filter { it !in ids }.forEach { id -> c.legs.remove(id)?.let { closeLeg(it) } }
+        // Through the host: no connections between members.
+        val keep = if (relay && !c.host) setOf(c.hostId) else ids
+        c.legs.keys.filter { it !in ids || it !in keep }.forEach { id -> c.legs.remove(id)?.let { closeLeg(it) } }
+        c.remoteAudio.keys.retainAll(ids); c.remoteVideo.keys.retainAll(ids)
         val s = _state.value ?: return
         val known = s.members.associateBy { it.id }
         val members = r.filter { it.id != c.me }.map { e ->
             known[e.id] ?: CallMember(e.id, if (e.id == c.hostId) c.hostPeer else e.name, "joining")
         } + s.members.filter { it.phase == "invited" } +
             s.members.filter { it.id !in ids && it.phase != "invited" && !it.id.startsWith("?") }.map { it.copy(phase = "left", video = null, speaking = false) }
-        show(s.copy(members = members.distinctBy { it.id }))
+        // Through the host, the others are there as long as the host is.
+        val hostPhase = members.firstOrNull { it.id == c.hostId }?.phase
+        val shown = if (relay && !c.host && hostPhase != null) members.map { if (it.id != c.hostId && it.phase == "joining") it.copy(phase = hostPhase) else it } else members
+        show(s.copy(members = shown.distinctBy { it.id }, relay = relay))
         if (!c.host && r.none { it.id != c.me && it.id != c.hostId } && r.size <= 1) { endHere("Call ended"); return }
+        refreshSenders()
         setBitrates()
-        for (e in r) if (e.id != c.me && e.id !in c.legs && c.me < e.id) startLeg(e.id)
+        for (e in r) if (e.id != c.me && e.id !in c.legs && c.me < e.id && e.id in keep) startLeg(e.id)
+    }
+
+    /**
+     * What each connection sends: in a mesh, this phone's camera (and nothing on the spare voice
+     * channels); as the host of a big call, the grid of everyone, and on each phone's spare
+     * channels the other phones' voices.
+     */
+    private fun refreshSenders() {
+        val c = call ?: run { return }
+        if (!c.host || !c.relay || c.test) {
+            c.legs.values.forEach { leg ->
+                leg.videoSender?.setTrack(if (cameraOn) videoTrack else null, false)
+                if (!c.test) leg.audioSlots.forEach { it.setTrack(null, false) }
+            }
+            if (!c.test) { c.grid?.release(); c.grid = null }
+            return
+        }
+        val grid = c.grid ?: CallCompositor(factory).also { c.grid = it }
+        grid.set(buildList {
+            val cam = videoTrack
+            if (cameraOn && cam != null) add(c.me to cam)
+            for (e in c.roster) if (e.id != c.me) c.remoteVideo[e.id]?.let { add(e.id to it) }
+        })
+        for ((member, leg) in c.legs) {
+            leg.videoSender?.setTrack(grid.track, false)
+            val others = c.roster.map { it.id }.filter { it != member && it != c.me }.mapNotNull { c.remoteAudio[it] }
+            leg.audioSlots.forEachIndexed { i, sender -> sender.setTrack(others.getOrNull(i), false) }
+        }
     }
 
     /** Media steps between two phones in the call. */
@@ -591,12 +738,18 @@ class Calls(
                 c.early.remove(sig.from)?.let { synchronized(leg.pending) { leg.pending.addAll(it) } }
                 leg.pc.awaitSetRemote(SessionDescription(SessionDescription.Type.OFFER, sig.sdp))
                 leg.remoteSet = true
-                // The video channel the offer brought: this phone's camera goes on it.
+                // The video channel the offer brought: this phone's camera goes on it. The other voice
+                // channels are the spare ones a big call's host fills.
                 leg.pc.transceivers.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.let { t ->
                     t.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV
-                    t.sender.setTrack(if (_state.value?.camera == true) videoTrack else null, false)
+                    t.sender.setTrack(if (cameraOn) videoTrack else null, false)
                     leg.videoSender = t.sender
                 }
+                leg.pc.transceivers.filter { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO && it.sender.id() != leg.micSender?.id() }.forEach { t ->
+                    t.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV
+                    leg.audioSlots += t.sender
+                }
+                refreshSenders()
                 setBitrates()
                 drainPending(leg)
                 val answer = leg.pc.awaitCreate(false)
@@ -633,9 +786,7 @@ class Calls(
         sendToMember(member, CallSignal(c.id, "offer", sdp = sdp))
     }
 
-    private fun newLeg(member: String, offerer: Boolean): Leg {
-        val c = call ?: error("No call")
-        val rtc = PeerConnection.RTCConfiguration(
+    private fun rtcConfig() = PeerConnection.RTCConfiguration(
             // Only to learn this phone's own public addresses, as the tunnel's punching does; the
             // call itself never goes through them, and there is no relay.
             listOf(
@@ -649,6 +800,10 @@ class Calls(
             // Wi-Fi to mobile data and back mid-call: ICE keeps looking and finds the new way.
             continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
         }
+
+    private fun newLeg(member: String, offerer: Boolean): Leg {
+        val c = call ?: error("No call")
+        val rtc = rtcConfig()
         lateinit var leg: Leg
         val id = c.id
         val pc = factory.createPeerConnection(rtc, object : PeerConnection.Observer {
@@ -672,7 +827,14 @@ class Calls(
             }
             override fun onTrack(t: RtpTransceiver) {
                 val track = t.receiver.track()
-                if (track is VideoTrack) scope.launch { updateMember(member) { it.copy(video = track) } }
+                scope.launch {
+                    val cc = call ?: return@launch
+                    when (track) {
+                        is VideoTrack -> { cc.remoteVideo[member] = track; updateMember(member) { it.copy(video = track) }; refreshSenders() }
+                        // The other phone's own voice is on the channel this phone's mic is on; the rest are voices passed on.
+                        is AudioTrack -> if (t.sender.id() == leg.micSender?.id()) { cc.remoteAudio[member] = track; refreshSenders() }
+                    }
+                }
             }
             override fun onSignalingChange(s: PeerConnection.SignalingState) {}
             override fun onIceConnectionReceivingChange(b: Boolean) {}
@@ -691,12 +853,16 @@ class Calls(
                 audioTrack = it
             }
         }
-        pc.addTrack(audio, listOf("call"))
         leg = Leg(member, pc, offerer)
+        leg.micSender = pc.addTrack(audio, listOf("call"))
         if (offerer) {
             val t = pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO, RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_RECV))
-            t.sender.setTrack(if (_state.value?.camera == true) videoTrack else null, false)
+            t.sender.setTrack(if (cameraOn) videoTrack else null, false)
             leg.videoSender = t.sender
+            // Spare voice channels, empty unless a big call's host fills them.
+            if (!c.test) repeat(SLOTS) {
+                leg.audioSlots += pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO, RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_RECV)).sender
+            }
         }
         c.legs[member] = leg
         return leg
@@ -724,7 +890,14 @@ class Calls(
     private fun setBitrates() {
         val c = call ?: return
         val others = c.legs.size.coerceAtLeast(1)
-        val bps = when (others) { 1 -> 1_800_000; 2 -> 1_000_000; else -> 700_000 }
+        val bps = when {
+            // A big call: the host's grid to each phone, and each phone's picture to the host.
+            c.relay && c.host -> 2_500_000
+            c.relay -> 1_000_000
+            others == 1 -> 1_800_000
+            others == 2 -> 1_000_000
+            else -> 700_000
+        }
         c.legs.values.forEach { leg ->
             val sender = leg.videoSender ?: return@forEach
             runCatching {
@@ -754,6 +927,9 @@ class Calls(
             if (c.levels == null) c.levels = scope.launch { listen(c) }
         }
         updateMember(leg.member) { it.copy(phase = "connected") }
+        if (c.relay && !c.host && leg.member == c.hostId) _state.value?.let { st ->
+            show(st.copy(members = st.members.map { if (it.phase == "joining") it.copy(phase = "connected") else it }))
+        }
         // How it goes: the pair of candidates in use, as a person would say it.
         leg.pc.getStats { report ->
             val pair = report.statsMap.values.firstOrNull { it.type == "candidate-pair" && it.members["state"] == "succeeded" && it.members["nominated"] == true }
@@ -801,6 +977,7 @@ class Calls(
                     }
                 }
                 updateMember(leg.member) { if (it.speaking == (level > SPEAKING)) it else it.copy(speaking = level > SPEAKING) }
+                c.grid?.speaking(leg.member, level > SPEAKING)
             }
             val mine = c.legs.values.firstOrNull()?.let { leg ->
                 suspendCancellableCoroutine<Double> { k ->
@@ -811,6 +988,7 @@ class Calls(
                 }
             } ?: 0.0
             _state.value?.let { s -> val now = mine > SPEAKING && !s.muted; if (s.speaking != now) show(s.copy(speaking = now)) }
+            c.grid?.speaking(c.me, (_state.value?.speaking) == true)
         }
     }
 
@@ -834,6 +1012,15 @@ class Calls(
     /** A media step to another member: straight to it when it is linked here, else through the host. */
     private suspend fun sendToMember(member: String, sig: CallSignal): Boolean {
         val c = call ?: return false
+        if (c.test) {
+            // The far end is on this phone: its candidates are handed over here.
+            if (sig.kind == "ice") {
+                val cand = IceCandidate(sig.mid, sig.line, sig.cand)
+                val e = c.echo
+                if (e != null && c.echoRemoteSet) e.addIceCandidate(cand) else synchronized(c.echoPending) { c.echoPending.add(cand) }
+            }
+            return true
+        }
         val s = sig.copy(from = c.me, to = member)
         return when {
             c.host -> c.linkOf[member]?.let { sendWire(it, s) } ?: false
@@ -883,8 +1070,14 @@ class Calls(
 
     companion object {
         private const val TAG = "Calls"
-        /** Phones in one call, this one too: what a mesh carries on phones' own links. */
-        const val MAX = 4
+        /** Phones in one call, this one too: up to [MESH] each straight to each other, past that through the host. */
+        const val MAX = 8
+        /** What a mesh carries on phones' own links: each phone sends its picture to each other one. */
+        const val MESH = 4
+        /** Spare voice channels on each connection, for the others' voices in a big call. */
+        private const val SLOTS = MAX - 2
+        private const val ECHO = "echo"
+        const val ECHO_NAME = "Test call"
         private const val RING_MS = 45_000L
         private const val CONNECT_MS = 25_000L
         private const val GATHER_MS = 1_000L
