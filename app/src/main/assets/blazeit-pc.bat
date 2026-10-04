@@ -1744,10 +1744,11 @@ public static class BlazeItPc
 
     /**
      * From another network (the phone reached through the tunnel): the laptop's own main screen,
-     * to see and use it, made smaller and sent at what the link carries. Starts at 1.5 Mbit/s,
-     * steps down when the picture backs up on its way and back up after a calm while.
+     * to see and use it, made smaller and sent at what the link carries. Starts at 800 kbit/s (an
+     * Airtel-to-Jio road carries 1 to 1.8 Mbit/s, often less), steps down when the picture backs
+     * up on its way and back up after a calm minute, to 2 Mbit/s at most.
      */
-    static volatile int remoteKbit = 1500;
+    static volatile int remoteKbit = 800;
 
     static Displays.Mon MainScreen()
     {
@@ -1759,7 +1760,8 @@ public static class BlazeItPc
     static void StartSecondScreen(string at, int port, int w, int h, bool http)
     {
         int gen = Interlocked.Increment(ref screenGen);
-        bool remote = http && at == TunnelHost;
+        // A file "screen-far.txt" beside the helper sends the far picture on any link, for trying it out.
+        bool remote = http && (at == TunnelHost || File.Exists(Path.Combine(Dir, "screen-far.txt")));
         try
         {
             KillStream();
@@ -1961,13 +1963,15 @@ public static class BlazeItPc
     {
         int adapter, output; string adapterName;
         if (!Dxgi.Find(target.Device, out adapter, out output, out adapterName)) { adapter = -1; output = -1; adapterName = ""; }
-        int wide = kbit >= 1000 ? 1280 : kbit >= 600 ? 1024 : 854;
-        int fps = kbit >= 1000 ? 24 : 15;
+        int wide = kbit >= 1000 ? 1280 : kbit >= 500 ? 1024 : 854;
+        int fps = kbit >= 600 ? 20 : 15;
         string label = "setparams=color_primaries=bt470bg:color_trc=smpte170m";
         string scale = "scale=" + wide + ":-2:flags=bilinear,format=yuv420p";
-        string rate = " -b:v " + kbit + "k -maxrate " + kbit + "k -bufsize " + Math.Max(100, kbit / 2) + "k -g " + (fps * 4) + " -bf 0";
-        string nv = " -c:v h264_nvenc -preset p4 -tune ll -zerolatency 1 -rc cbr" + rate;
-        string x264 = " -c:v libx264 -preset veryfast -tune zerolatency" + rate;
+        // No large picture every few seconds: the refresh is spread over the frames (intra refresh),
+        // so the stream stays as even as the link, and a lost moment heals within a second.
+        string rate = " -b:v " + kbit + "k -maxrate " + kbit + "k -bufsize " + Math.Max(100, kbit / 2) + "k -g " + (fps * 10) + " -bf 0";
+        string nv = " -c:v h264_nvenc -preset p4 -tune ll -zerolatency 1 -rc cbr -intra-refresh 1" + rate;
+        string x264 = " -c:v libx264 -preset veryfast -tune zerolatency -intra-refresh 1" + rate;
         bool nvidia = adapterName.IndexOf("NVIDIA", StringComparison.OrdinalIgnoreCase) >= 0;
         string dest = " -f h264 pipe:1";
         var tries = new List<string>();
@@ -2047,17 +2051,17 @@ public static class BlazeItPc
                     if (!remote) continue;
                     long q;
                     lock (gate) q = queued;
-                    if (q > behind && remoteKbit > 300)
+                    if (q > behind && remoteKbit > 250)
                     {
-                        remoteKbit = Math.Max(300, remoteKbit * 6 / 10);
+                        remoteKbit = Math.Max(250, remoteKbit * 6 / 10);
                         Say("The link to the phone is slower: the laptop's screen goes at " + remoteKbit + " kbit/s now.");
                         why = "rate";
                         break;
                     }
                     if (q > behind / 8) calm = DateTime.UtcNow;
-                    else if ((DateTime.UtcNow - calm).TotalSeconds > 45 && remoteKbit < 2500)
+                    else if ((DateTime.UtcNow - calm).TotalSeconds > 60 && remoteKbit < 2000)
                     {
-                        remoteKbit = Math.Min(2500, remoteKbit * 13 / 10);
+                        remoteKbit = Math.Min(2000, remoteKbit * 13 / 10);
                         Say("The link to the phone keeps up: the laptop's screen goes at " + remoteKbit + " kbit/s now.");
                         why = "rate";
                         break;

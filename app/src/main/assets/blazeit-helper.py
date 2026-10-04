@@ -2784,10 +2784,11 @@ def session_kind():
 
 def capture_tries(geom, w, h, fps, dest, grab=None, remote=False):
     """ffmpeg arguments, fastest encoder first: X11's screen grab, or the one given (macOS's).
-    From afar (the phone reached through the tunnel): 1280 wide, 24 frames a second, 1.5 Mbit/s."""
+    From afar (the phone reached through the tunnel): 1024 wide, 20 frames a second, 900 kbit/s, the
+    refresh spread over the frames (intra refresh) so the stream stays even."""
     x, y, gw, gh = geom
     if remote:
-        fps, w, h = min(fps, 24), 1280, 800
+        fps, w, h = min(fps, 20), 1024, 640
     grab = grab or ["-f", "x11grab", "-framerate", str(fps), "-video_size", "%dx%d" % (gw, gh), "-draw_mouse", "1",
                     "-i", "%s+%d,%d" % (os.environ.get("DISPLAY", ":0"), x, y)]
     # Fitted to the phone's screen; labelled BT.601 in full, as the phone decodes it.
@@ -2796,7 +2797,7 @@ def capture_tries(geom, w, h, fps, dest, grab=None, remote=False):
     mbit = min(80, max(40, 40 * fps // 60))
     rate = ["-b:v", "%dM" % mbit, "-maxrate", "%dM" % mbit, "-bufsize", "%dM" % max(3, mbit // 13), "-g", str(fps * 2), "-bf", "0"]
     if remote:
-        rate = ["-b:v", "1500k", "-maxrate", "1500k", "-bufsize", "750k", "-g", str(fps * 4), "-bf", "0"]
+        rate = ["-b:v", "900k", "-maxrate", "900k", "-bufsize", "450k", "-g", str(fps * 10), "-bf", "0", "-intra-refresh", "1"]
     base = ["-hide_banner", "-loglevel", "error"]
     # And written into the stream's own header, which every encoder then carries (OpenH264 would
     # otherwise leave it out, and the phone would take the picture for BT.709 and shift its colours).
@@ -2897,7 +2898,7 @@ def stream_x11(at, port, w, h, fps, gen, http_ok=False):
     say("Showing this computer's %s on the phone (%dx%d)." % ("extra monitor" if len(monitors()) > 1 else "screen, mirrored,", geom[2], geom[3]))
     remote = http_ok and tunnel_local is not None and tuple(at) == tuple(tunnel_local)
     if remote:
-        say("From another network: this screen goes smaller, at 1.5 Mbit/s, so the link keeps up.")
+        say("From another network: this screen goes smaller, at 900 kbit/s, so the link keeps up.")
     dest = ["-f", "h264", "pipe:1"] if http_ok else ["-f", "h264", "tcp://%s:%d?tcp_nodelay=1" % (at[0], port)]
     for args in capture_tries(geom, w, h, fps, dest, grab, remote):
         if gen != screen_gen:

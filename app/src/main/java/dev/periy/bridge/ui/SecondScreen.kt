@@ -228,7 +228,12 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
         (caps.getSupportedFrameRatesFor(3840, 2160).upper * 240 * 135).toLong()
     }.getOrDefault(0L)
 
-    /** Splits the H.264 byte stream at its start codes and feeds each unit to the decoder. */
+    /**
+     * Splits the H.264 byte stream at its start codes and feeds the decoder one picture at a time:
+     * an encoder that cuts each picture into slices (x264 tuned for low delay does, on as many
+     * threads as it has) sends several units per picture, and a decoder given them one by one
+     * shows nothing.
+     */
     private fun decode(input: InputStream, holder: SurfaceHolder) {
         val c = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         codec = c
@@ -249,6 +254,7 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
             c.configure(format(false), holder.surface, null, 0)
         }
         c.start()
+        au.reset(); auHasPicture = false
         val info = MediaCodec.BufferInfo()
         val buf = ByteArray(4 * 1024 * 1024)
         var len = 0
@@ -264,7 +270,7 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
             while (start >= 0) {
                 val next = startCode(buf, start + 3, len)
                 if (next < 0) break
-                queue(c, buf, start, next - start)
+                unit(c, buf, start, next - start)
                 start = next
             }
             if (start > 0) { System.arraycopy(buf, start, buf, 0, len - start); len -= start }
@@ -284,15 +290,53 @@ class SecondScreenActivity : Activity(), SurfaceHolder.Callback {
         return -1
     }
 
-    private fun queue(c: MediaCodec, b: ByteArray, off: Int, n: Int) {
+    /** The picture being put together: its units, start codes and all, waiting for the next picture to begin. */
+    private val au = java.io.ByteArrayOutputStream(512 * 1024)
+    private var auHasPicture = false
+
+    /**
+     * One unit of the stream. A new picture begins with its first slice (first_mb_in_slice 0, the
+     * header's first bit set) or with what comes before a picture (SPS, PPS, SEI, an access unit
+     * delimiter) once the current one has a slice: then the picture so far goes to the decoder.
+     */
+    private fun unit(c: MediaCodec, b: ByteArray, off: Int, n: Int) {
+        val head = if (b[off + 2].toInt() == 1) off + 3 else off + 4
+        if (head >= off + n) return
+        val type = b[head].toInt() and 0x1F
+        val slice = type == 1 || type == 5
+        val firstSlice = slice && head + 1 < off + n && (b[head + 1].toInt() and 0x80) != 0
+        val beforePicture = type == 6 || type == 7 || type == 8 || type == 9
+        if (auHasPicture && (firstSlice || beforePicture)) flushAu(c)
+        au.write(b, off, n)
+        if (slice) auHasPicture = true
+    }
+
+    private fun flushAu(c: MediaCodec) {
+        if (au.size() > 0) {
+            val bytes = au.toByteArray()
+            // The stream's settings (SPS, PPS) go in as such, then the picture.
+            var cut = 0
+            var i = startCode(bytes, 0, bytes.size)
+            while (i >= 0) {
+                val h = if (bytes[i + 2].toInt() == 1) i + 3 else i + 4
+                val t = if (h < bytes.size) bytes[h].toInt() and 0x1F else 0
+                if (t != 7 && t != 8) { cut = i; break }
+                i = startCode(bytes, i + 3, bytes.size)
+                if (i < 0) cut = bytes.size
+            }
+            if (cut > 0) queue(c, bytes, 0, cut, MediaCodec.BUFFER_FLAG_CODEC_CONFIG)
+            if (cut < bytes.size) queue(c, bytes, cut, bytes.size - cut, 0)
+        }
+        au.reset()
+        auHasPicture = false
+    }
+
+    private fun queue(c: MediaCodec, b: ByteArray, off: Int, n: Int, flags: Int) {
         val idx = c.dequeueInputBuffer(20_000)
         if (idx < 0) return
         val ib = c.getInputBuffer(idx) ?: return
         ib.clear()
         ib.put(b, off, minOf(n, ib.capacity()))
-        val head = if (b[off + 2].toInt() == 1) off + 3 else off + 4
-        val type = b[head].toInt() and 0x1F
-        val flags = if (type == 7 || type == 8) MediaCodec.BUFFER_FLAG_CODEC_CONFIG else 0
         c.queueInputBuffer(idx, 0, minOf(n, ib.capacity()), SystemClock.elapsedRealtimeNanos() / 1000, flags)
     }
 
