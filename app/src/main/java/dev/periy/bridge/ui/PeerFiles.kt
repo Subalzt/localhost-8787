@@ -164,7 +164,7 @@ fun PeerFilesScreen(peer: Peer, onClose: () -> Unit) {
 }
 
 @Composable
-private fun Note(text: String, action: String? = null, onAction: () -> Unit = {}) {
+internal fun Note(text: String, action: String? = null, onAction: () -> Unit = {}) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 36.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text, style = BodyStyle.copy(fontSize = 15.sp), color = Bridge.Muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         if (action != null) {
@@ -177,6 +177,18 @@ private fun Note(text: String, action: String? = null, onAction: () -> Unit = {}
 /** One row: a folder opens; a file saves with a tap on it or on its download button. */
 @Composable
 private fun EntryRow(peer: Peer, dir: String, e: FsEntry, first: Boolean, onOpen: () -> Unit, onSave: () -> Unit) {
+    val media = !e.dir && (e.mime.startsWith("image/") || e.mime.startsWith("video/"))
+    val pic = if (media) peerThumb(peer, if (dir.isEmpty()) e.name else "$dir/${e.name}") else null
+    FileEntryRow(e, first, pic, onOpen = onOpen, onSave = onSave)
+}
+
+/**
+ * A row in a file screen (a linked phone's, the laptop's): its icon or picture, its name, what it
+ * is (items and date, or size and date; [caption] in place of that when given), a chevron for a
+ * folder and a download for a file.
+ */
+@Composable
+internal fun FileEntryRow(e: FsEntry, first: Boolean, pic: ImageBitmap?, caption: String? = null, onOpen: () -> Unit, onSave: () -> Unit) {
     val thumb = 44.dp
     if (!first) Box(Modifier.fillMaxWidth().padding(start = 16.dp + thumb + 12.dp).height(0.5.dp).background(Bridge.Outline))
     Row(
@@ -184,8 +196,6 @@ private fun EntryRow(peer: Peer, dir: String, e: FsEntry, first: Boolean, onOpen
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(thumb), contentAlignment = Alignment.Center) {
-            val media = !e.dir && (e.mime.startsWith("image/") || e.mime.startsWith("video/"))
-            val pic = if (media) peerThumb(peer, if (dir.isEmpty()) e.name else "$dir/${e.name}") else null
             if (pic != null) Image(pic, null, contentScale = ContentScale.Crop, modifier = Modifier.size(thumb).clip(RoundedCornerShape(9.dp)))
             else {
                 val (icon, color) = kindOf(e)
@@ -196,8 +206,8 @@ private fun EntryRow(peer: Peer, dir: String, e: FsEntry, first: Boolean, onOpen
         Column(Modifier.weight(1f)) {
             Text(e.name, style = TextStyle(fontSize = 16.sp, letterSpacing = (-0.2).sp), color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                (if (e.dir) (if (e.items < 0) "Folder" else "${e.items} item${if (e.items == 1) "" else "s"}") else formatBytes(e.size)) +
-                    " · " + java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(e.modified)),
+                caption ?: ((if (e.dir) (if (e.items < 0) "Folder" else "${e.items} item${if (e.items == 1) "" else "s"}") else formatBytes(e.size)) +
+                    (if (e.modified > 0) " · " + java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(e.modified)) else "")),
                 style = CaptionStyle, color = Bridge.Muted, maxLines = 1,
             )
         }
@@ -218,7 +228,7 @@ private fun peerThumb(peer: Peer, path: String): ImageBitmap? {
 
 /** What a row's icon says: a folder, a picture, a film, music, a document, an archive, or a file. */
 @Composable
-private fun kindOf(e: FsEntry): Pair<androidx.compose.ui.graphics.vector.ImageVector, Color> {
+internal fun kindOf(e: FsEntry): Pair<androidx.compose.ui.graphics.vector.ImageVector, Color> {
     if (e.dir) return BlazeIcons.Folder to Bridge.Blue
     val ext = e.name.substringAfterLast('.', "").lowercase()
     return when {

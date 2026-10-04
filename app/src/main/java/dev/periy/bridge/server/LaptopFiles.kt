@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** One thing in a folder on the laptop: [path] is what to ask for to open or save it. */
 @Serializable
-data class LaptopEntry(val name: String, val path: String, val dir: Boolean, val size: Long = 0, val modified: Long = 0)
+data class LaptopEntry(val name: String, val path: String, val dir: Boolean, val size: Long = 0, val modified: Long = 0, val items: Int = -1)
 
 /** A folder on the laptop as its helper read it; [path] empty is the top: its usual folders and drives. */
 @Serializable

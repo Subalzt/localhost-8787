@@ -729,10 +729,22 @@ public static class BlazeItPc
 
     static long Millis(DateTime t) { return (long)(t.ToUniversalTime() - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds; }
 
-    static string Entry(string name, string path, bool dir, long size, long modified)
+    static string Entry(string name, string path, bool dir, long size, long modified, int items = -1)
     {
         return "{\"name\":" + Json(name) + ",\"path\":" + Json(path) + ",\"dir\":" + (dir ? "true" : "false") +
-            ",\"size\":" + size + ",\"modified\":" + modified + "}";
+            ",\"size\":" + size + ",\"modified\":" + modified + ",\"items\":" + items + "}";
+    }
+
+    /** How many things a folder holds (up to 9999), or -1 when it cannot be read. */
+    static int Items(string dir)
+    {
+        try
+        {
+            int n = 0;
+            foreach (string e in Directory.EnumerateFileSystemEntries(dir)) { if (++n >= 9999) break; }
+            return n;
+        }
+        catch { return -1; }
     }
 
     static void LaptopList(string id, string path)
@@ -751,7 +763,7 @@ public static class BlazeItPc
                     new string[] { "Pictures", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures) },
                     new string[] { "Music", Environment.GetFolderPath(Environment.SpecialFolder.MyMusic) },
                     new string[] { "Videos", Environment.GetFolderPath(Environment.SpecialFolder.MyVideos) } })
-                    if (Directory.Exists(f[1])) items.Add(Entry(f[0], f[1], true, 0, 0));
+                    if (Directory.Exists(f[1])) items.Add(Entry(f[0], f[1], true, 0, Millis(Directory.GetLastWriteTime(f[1])), Items(f[1])));
                 foreach (DriveInfo dr in DriveInfo.GetDrives())
                 {
                     if (!dr.IsReady || (dr.DriveType != DriveType.Fixed && dr.DriveType != DriveType.Removable)) continue;
@@ -765,7 +777,7 @@ public static class BlazeItPc
                 foreach (DirectoryInfo sub in di.GetDirectories())
                 {
                     if ((sub.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0) continue;
-                    items.Add(Entry(sub.Name, sub.FullName, true, 0, Millis(sub.LastWriteTime)));
+                    items.Add(Entry(sub.Name, sub.FullName, true, 0, Millis(sub.LastWriteTime), Items(sub.FullName)));
                     if (items.Count >= 3000) break;
                 }
                 foreach (FileInfo fi in di.GetFiles())

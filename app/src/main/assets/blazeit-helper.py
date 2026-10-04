@@ -2852,6 +2852,20 @@ def mac_screen_devices(text):
 # then any folder's folders and files; a file is sent to the phone, which keeps it with what it has
 # received. Answered on the page's port, so it works through the tunnel too.
 
+def count_items(path):
+    """How many things a folder holds (up to 9999), or -1 when it cannot be read."""
+    try:
+        n = 0
+        with os.scandir(path) as it:
+            for _ in it:
+                n += 1
+                if n >= 9999:
+                    break
+        return n
+    except OSError:
+        return -1
+
+
 def laptop_list(rid, path):
     entries, error = [], ""
     try:
@@ -2860,9 +2874,10 @@ def laptop_list(rid, path):
             for name in ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos", "Movies"):
                 full = os.path.join(home, name)
                 if os.path.isdir(full):
-                    entries.append({"name": name, "path": full, "dir": True})
-            entries.append({"name": "Home", "path": home, "dir": True})
-            entries.append({"name": "This computer", "path": "/", "dir": True})
+                    entries.append({"name": name, "path": full, "dir": True, "items": count_items(full),
+                                    "modified": int(os.path.getmtime(full) * 1000)})
+            entries.append({"name": "Home", "path": home, "dir": True, "items": count_items(home)})
+            entries.append({"name": "This computer", "path": "/", "dir": True, "items": count_items("/")})
         else:
             with os.scandir(path) as it:
                 items = sorted(it, key=lambda e: (not e.is_dir(follow_symlinks=False), e.name.lower()))
@@ -2875,7 +2890,7 @@ def laptop_list(rid, path):
                     continue
                 is_dir = e.is_dir(follow_symlinks=False)
                 entries.append({"name": e.name, "path": e.path, "dir": is_dir, "size": 0 if is_dir else st.st_size,
-                                "modified": int(st.st_mtime * 1000)})
+                                "modified": int(st.st_mtime * 1000), "items": count_items(e.path) if is_dir else -1})
                 if len(entries) >= 3000:
                     break
     except OSError as e:
