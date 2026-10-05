@@ -2750,6 +2750,8 @@ def events_loop():
                 d = "\n".join(data)
                 if ev == "clipsync":
                     clip_sync = d == "on"
+                elif ev == "call":
+                    call_event(d)
                 elif ev == "display":
                     # "start PORT W H [HZ BLOCKS [http]]" when the phone opens its screen view; anything else
                     # stops it. "http": the phone takes the stream on the page's port, the way this helper
@@ -2903,6 +2905,41 @@ def session_kind():
     if os.environ.get("WAYLAND_DISPLAY") or os.environ.get("XDG_SESSION_TYPE") == "wayland":
         return "wayland"
     return "x11" if os.environ.get("DISPLAY") else ""
+
+
+# ------------------------------------------------------------------ calls ringing on this computer
+#
+# A call ringing on the phone rings here too, the page open or not: a notification (notify-send on
+# Linux, the Notification Centre on a Mac) saying who, to answer on the page at localhost (Phones).
+
+ringing_call = None
+
+
+def call_event(d):
+    """The call as the phone tells it ("call", the page's view of it): a word for one coming in."""
+    global ringing_call
+    try:
+        c = json.loads(d) if d and d != "null" else None
+    except ValueError:
+        return
+    if c and c.get("phase") == "ringing" and not c.get("outgoing"):
+        if ringing_call == c.get("id"):
+            return
+        ringing_call = c.get("id")
+        who = ", ".join(m.get("name", "") for m in c.get("members", [])) or "A phone"
+        body = ("Video call" if c.get("video") else "Voice call") + " on the phone. Answer on this computer: http://localhost:%d/#phones" % PHONE_PORT
+        try:
+            if MAC:
+                subprocess.Popen(["osascript", "-e", 'display notification %s with title %s sound name "Glass"' %
+                                  (json.dumps(body), json.dumps(who + " is calling"))], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            elif shutil.which("notify-send"):
+                subprocess.Popen(["notify-send", "-a", "Localhost 8787", "-u", "critical", "-i", "call-start", "-t", "45000",
+                                  who + " is calling", body], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
+        log("Ringing on this computer: " + who)
+    else:
+        ringing_call = None
 
 
 def remote_size(kbit):

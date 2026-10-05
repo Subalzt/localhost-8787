@@ -1589,6 +1589,7 @@ public static class BlazeItPc
                         {
                             string d = data.ToString();
                             if (ev == "clipsync") clipSync = d == "on";
+                            else if (ev == "call") CallEvent(d);
                             else if (ev == "display")
                             {
                                 string[] p = d.Split(' ');
@@ -2370,6 +2371,72 @@ public static class BlazeItPc
     }
 
     /** Whether an access unit starts the picture afresh (SPS or IDR), which is never dropped. */
+    // ------------------------------------------------------------------ calls ringing on the laptop
+    //
+    // A call ringing on the phone rings here too, the page open or not: a Windows call notification,
+    // which stays with a ringtone until the call stops ringing, and opens the page's Phones to answer
+    // on this laptop. Shown through PowerShell, which reaches Windows' notifications; under its own
+    // name ("Localhost 8787", kept in the user's registry, as Windows asks of an app without a shortcut).
+
+    static string ringingCall = null;
+    const string ToastApp = "Localhost8787.Calls";
+
+    static string CallField(string json, string name)
+    {
+        var m = Regex.Match(json, "\"" + name + "\":\"((?:[^\"\\\\]|\\\\.)*)\"");
+        return m.Success ? Regex.Unescape(m.Groups[1].Value) : "";
+    }
+
+    /** The call as the phone tells it ("call", the page's view of it): ring for one coming in, stop after. */
+    static void CallEvent(string d)
+    {
+        bool incoming = CallField(d, "phase") == "ringing" && d.IndexOf("\"outgoing\":false", StringComparison.Ordinal) >= 0;
+        string id = CallField(d, "id");
+        if (incoming)
+        {
+            if (ringingCall == id) return;
+            ringingCall = id;
+            var names = new List<string>();
+            foreach (Match m in Regex.Matches(d, "\"name\":\"((?:[^\"\\\\]|\\\\.)*)\"")) names.Add(Regex.Unescape(m.Groups[1].Value));
+            string who = names.Count > 0 ? string.Join(", ", names.ToArray()) : "A phone";
+            bool video = d.IndexOf("\"video\":true", StringComparison.Ordinal) >= 0;
+            string url = "http://localhost:" + PhonePort + "/#phones";
+            string e1 = System.Security.SecurityElement.Escape(who + " is calling");
+            string e2 = System.Security.SecurityElement.Escape((video ? "Video call" : "Voice call") + " on the phone \u00b7 answer on this laptop");
+            string xml = "<toast scenario=\"incomingCall\" activationType=\"protocol\" launch=\"" + url + "\">" +
+                "<visual><binding template=\"ToastGeneric\"><text>" + e1 + "</text><text>" + e2 + "</text></binding></visual>" +
+                "<actions><action content=\"Answer on the laptop\" activationType=\"protocol\" arguments=\"" + url + "\"/></actions>" +
+                "<audio src=\"ms-winsoundevent:Notification.Looping.Call\" loop=\"true\"/></toast>";
+            Toasts("$x = New-Object Windows.Data.Xml.Dom.XmlDocument; $x.LoadXml('" + xml.Replace("'", "''") + "'); " +
+                "$t = [Windows.UI.Notifications.ToastNotification]::new($x); $t.Tag = 'call'; $t.Group = 'calls'; " +
+                "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('" + ToastApp + "').Show($t)");
+            Log("Ringing on this laptop: " + who);
+        }
+        else if (ringingCall != null)
+        {
+            ringingCall = null;
+            Toasts("[Windows.UI.Notifications.ToastNotificationManager]::History.Remove('call', 'calls', '" + ToastApp + "')");
+        }
+    }
+
+    /** A few lines of PowerShell with Windows' notifications at hand, run apart (this helper does not wait). */
+    static void Toasts(string script)
+    {
+        string full = "$ErrorActionPreference = 'SilentlyContinue'; " +
+            "$k = 'HKCU:\\Software\\Classes\\AppUserModelId\\" + ToastApp + "'; " +
+            "if (-not (Test-Path $k)) { New-Item $k -Force | Out-Null; Set-ItemProperty $k DisplayName 'Localhost 8787' }; " +
+            "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null; " +
+            "[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime] | Out-Null; " + script;
+        try
+        {
+            var psi = new ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " +
+                Convert.ToBase64String(Encoding.Unicode.GetBytes(full)));
+            psi.UseShellExecute = false; psi.CreateNoWindow = true;
+            Process.Start(psi);
+        }
+        catch (Exception e) { Log("Could not ring here: " + e.Message); }
+    }
+
     static byte[] ReadN(Stream s, int n)
     {
         byte[] b = new byte[n];
