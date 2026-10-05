@@ -2857,7 +2857,11 @@ def events_loop():
                         folder = base64.b64decode(q[2]).decode("utf-8", "replace")
                         name = base64.b64decode(q[3]).decode("utf-8", "replace")
                         size = int(q[4]) if q[4].lstrip("-").isdigit() else -1
-                        threading.Thread(target=laptop_receive, args=(q[1], folder, name, size), daemon=True).start()
+                        # Dropped on this computer's screen from another's page: into Downloads, and shown there.
+                        drop = folder == ":drop"
+                        if drop:
+                            folder = downloads_dir()
+                        threading.Thread(target=laptop_receive, args=(q[1], folder, name, size, drop), daemon=True).start()
                     elif len(q) >= 3:
                         path = base64.b64decode(q[2]).decode("utf-8", "replace") if q[2] else ""
                         threading.Thread(target=laptop_send if q[0] == "get" else laptop_list, args=(q[1], path), daemon=True).start()
@@ -3288,7 +3292,18 @@ def laptop_send_folder(rid, path):
         conn.close()
 
 
-def laptop_receive(rid, folder, name, size):
+def downloads_dir():
+    """This computer's Downloads folder (the desktop's own name for it on Linux)."""
+    if not MAC and have("xdg-user-dir"):
+        d = (run_text(["xdg-user-dir", "DOWNLOAD"]) or "").strip()
+        if d and os.path.isdir(d) and d != os.path.expanduser("~"):
+            return d
+    d = os.path.expanduser("~/Downloads")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def laptop_receive(rid, folder, name, size, show=False):
     """A file the phone sends into folder here: fetched from the phone (nothing here listens), put
     beside a file of the same name rather than over it, kept only whole; the phone hears how it went."""
     done = "/api/laptop/fs/put-done?id=%s" % urllib.parse.quote(rid)
@@ -3321,7 +3336,12 @@ def laptop_receive(rid, folder, name, size):
             raise OSError("only part of it came")
         os.replace(part, target)
         part = None
-        say("Saved %s from the phone in %s." % (os.path.basename(target), folder))
+        say("Saved %s%s in %s." % (os.path.basename(target), ", dropped from another computer," if show else " from the phone", folder))
+        if show:
+            try:
+                subprocess.Popen(["open", "-R", target] if MAC else ["xdg-open", folder], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except OSError:
+                pass
         request("POST", done + "&name=" + urllib.parse.quote(os.path.basename(target)), timeout=10)
     except (OSError, http.client.HTTPException) as e:
         if part:
@@ -3823,7 +3843,7 @@ def stream_wlroots(at, port, w, h, fps, gen, http_ok=False):
 sound_proc = None
 
 
-def start_sound(at, gen, remote):
+def start_sound(at, gen, remote, view=None):
     """The computer's sound with its screen: on Linux, PulseAudio's or PipeWire's monitor of the
     speakers through ffmpeg, as AAC, posted to the phone like the picture. (A Mac has no way to
     capture what it plays without an extra audio driver, so it sends the picture only.)"""
@@ -3838,7 +3858,8 @@ def start_sound(at, gen, remote):
     except OSError:
         return
     sound_proc = p
-    threading.Thread(target=lambda: (post_stream(p.stdout, at, gen, "/api/display/audio", "audio/aac"),
+    path = "/api/display/audio" + ("?v=" + urllib.parse.quote(view) if view else "")
+    threading.Thread(target=lambda: (post_stream(p.stdout, at, gen, path, "audio/aac"),
                                      p.poll() is None and p.terminate()), daemon=True).start()
 
 
@@ -3846,8 +3867,9 @@ def start_second_screen(at, port, w, h, fps, http_ok=False):
     global screen_gen
     stop_second_screen()
     gen = screen_gen
-    if http_ok and not WSL and not screen_view:
-        start_sound(at, gen, tunnel_local is not None and tuple(at) == tuple(tunnel_local))
+    if http_ok and not WSL:
+        # The sound goes too: to the phone's screen view, or into the stream of the page watching.
+        start_sound(at, gen, bool(screen_view) or (tunnel_local is not None and tuple(at) == tuple(tunnel_local)), screen_view)
     if WSL:
         say("The phone asked to be a second screen: under WSL the Windows helper shows it.")
         return

@@ -32,6 +32,9 @@ object DisplayFeed {
      */
     val views = java.util.concurrent.ConcurrentHashMap<String, LinkedBlockingQueue<Feed>>()
 
+    /** The same laptop's sound for that page: AAC frames (ADTS), the oldest let go when the page falls behind. */
+    val viewSound = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.channels.Channel<ByteArray>>()
+
     /** Every stream waiting, let go: the view has closed. */
     fun drain() {
         while (true) {

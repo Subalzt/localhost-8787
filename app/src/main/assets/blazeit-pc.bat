@@ -1186,7 +1186,7 @@ public static class BlazeItPc
      * written beside a file of the same name rather than over it ("name (1).ext"), and only kept
      * whole; the phone hears the name it was saved as, or why not.
      */
-    static void LaptopReceive(string id, string folder, string name, long size)
+    static void LaptopReceive(string id, string folder, string name, long size, bool show = false)
     {
         string done = "/api/laptop/fs/put-done?id=" + Uri.EscapeDataString(id);
         string part = null;
@@ -1207,7 +1207,8 @@ public static class BlazeItPc
             if (size >= 0 && new FileInfo(part).Length != size) throw new IOException("only part of it came");
             File.Move(part, target);
             part = null;
-            Say("Saved " + Path.GetFileName(target) + " from the phone in " + folder + ".");
+            Say("Saved " + Path.GetFileName(target) + (show ? ", dropped from another laptop," : " from the phone") + " in " + folder + ".");
+            if (show) try { Process.Start("explorer.exe", "/select,\"" + target + "\""); } catch { }
             using (Http("POST", done + "&name=" + Uri.EscapeDataString(Path.GetFileName(target)), session, 10000)) { }
         }
         catch (Exception e)
@@ -1879,7 +1880,10 @@ public static class BlazeItPc
                                     string id = q[1], folder = Encoding.UTF8.GetString(Convert.FromBase64String(q[2]));
                                     string name = Encoding.UTF8.GetString(Convert.FromBase64String(q[3]));
                                     long size; if (!long.TryParse(q[4], out size)) size = -1;
-                                    Thread f = new Thread(delegate () { LaptopReceive(id, folder, name, size); });
+                                    // Dropped on this laptop's screen from another's page: into Downloads, and shown there.
+                                    bool drop = folder == ":drop";
+                                    if (drop) folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+                                    Thread f = new Thread(delegate () { LaptopReceive(id, folder, name, size, drop); });
                                     f.IsBackground = true; f.Start();
                                 }
                                 else if (q.Length >= 3)
@@ -2378,7 +2382,8 @@ public static class BlazeItPc
                 int saved;
                 try { if (int.TryParse(File.ReadAllText(RateFile).Trim(), out saved)) remoteKbit = Math.Max(250, Math.Min(MaxKbit, saved * 85 / 100)); } catch { }
             }
-            if (http && screenView == null) StartSound(ff, at, remote);
+            // The sound goes too: to the phone's screen view, or into the stream of the page watching.
+            if (http) StartSound(ff, at, remote, screenView);
             string said = null;
             int failures = 0;
             while (target != null && gen == screenGen)
@@ -3116,7 +3121,7 @@ public static class BlazeItPc
         try { if (p != null && !p.HasExited) p.Kill(); } catch { }
     }
 
-    static void StartSound(string ff, string at, bool remote)
+    static void StartSound(string ff, string at, bool remote, string view)
     {
         StopSound();
         int gen = soundGen;
@@ -3152,7 +3157,7 @@ public static class BlazeItPc
                     catch { }
                 });
                 feed.IsBackground = true; feed.Start();
-                PostSound(p, at, remote, gen);
+                PostSound(p, at, remote || view != null, gen, view);
             }
             catch (Exception e) { Say("The laptop's sound could not be captured (" + e.Message + "); the phone gets the picture only."); }
             finally { if (cap != null) cap.Dispose(); }
@@ -3161,7 +3166,7 @@ public static class BlazeItPc
     }
 
     /** ffmpeg's ADTS frames to the phone; from afar, frames older than 400 ms are let go. */
-    static void PostSound(Process p, string at, bool remote, int gen)
+    static void PostSound(Process p, string at, bool remote, int gen, string view)
     {
         var frames = new LinkedList<KeyValuePair<DateTime, byte[]>>();
         bool eof = false;
@@ -3191,7 +3196,8 @@ public static class BlazeItPc
         try
         {
             // Set up as the picture's upload is (StreamRequest), to the sound's own route.
-            HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + Via(at) + ":" + PhonePort + "/api/display/audio");
+            HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + Via(at) + ":" + PhonePort + "/api/display/audio" +
+                (view != null ? "?v=" + Uri.EscapeDataString(view) : ""));
             req.Proxy = null; req.Method = "POST"; req.UserAgent = Ua; req.Headers["Cookie"] = session;
             req.ContentType = "audio/aac"; req.SendChunked = true; req.AllowWriteStreamBuffering = false;
             req.Timeout = System.Threading.Timeout.Infinite; req.ReadWriteTimeout = 30000;

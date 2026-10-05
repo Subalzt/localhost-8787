@@ -745,6 +745,10 @@ picture whole, as for the phone's screen view) and passed on by the phone, decod
 shortcuts, F-keys; in full screen in Chrome and Edge, Esc and Win too). Near or far it goes the way
 everything else does: the cable, Wi-Fi, or the tunnel, the picture made for the internet when this
 page is far away. Linux and Mac laptops can be driven the same way.
+Its **sound** comes too, in the same stream (AAC from its helper, decoded in the browser, kept
+within a third of a second of the picture; **Sound on/off** in the bar). **Drop files** on its screen
+to send them there: they go through the phone into its Downloads, which opens on it with the file
+picked out, and the foot of the screen says when each is in.
 
 
 <details>

@@ -2582,6 +2582,11 @@
   .lap-view .lv-note { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,.7); font-size: 14px; margin: 0; text-align: center; max-width: 80%; }
   .lap-view:fullscreen .lv-bar { position: absolute; top: 0; left: 0; right: 0; opacity: 0; transition: opacity .2s; z-index: 1; }
   .lap-view:fullscreen .lv-bar:hover { opacity: 1; }
+  .lv-btn.off { background: rgba(255,255,255,.06); color: rgba(255,255,255,.55); }
+  .lv-drop { position: absolute; inset: 52px 14px 14px; border: 2px dashed rgba(255,255,255,.7); border-radius: 16px; background: rgba(0,0,0,.45);
+    display: grid; place-items: center; color: #fff; font-size: 16px; font-weight: 600; pointer-events: none; }
+  .lv-sends { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
+  .lv-sends div { padding: 8px 14px; border-radius: 12px; background: rgba(30,30,32,.92); color: #fff; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
 </style>
 </head>
 <body>
@@ -3050,11 +3055,14 @@
 <div class="lap-view" id="lap-view" hidden>
   <div class="lv-bar">
     <b id="lv-name"></b><span id="lv-stats"></span><span class="grow"></span>
+    <button class="lv-btn" type="button" id="lv-sound" title="The other laptop's sound, here">Sound on</button>
     <button class="lv-btn" type="button" id="lv-full">Full screen</button>
     <button class="lv-btn close" type="button" id="lv-close">Close</button>
   </div>
   <canvas id="lv-canvas" tabindex="0"></canvas>
   <p class="lv-note" id="lv-note"></p>
+  <div class="lv-drop" id="lv-drop" hidden></div>
+  <div class="lv-sends" id="lv-sends"></div>
 </div>
 
 <!-- A call: ringing here, under way on the phone, or on this laptop (see "calls, on this laptop"). -->
@@ -11020,6 +11028,9 @@ async function lapOpen(l) {
   lapClose();
   var v = lapView = { id: l.id, name: l.name, ctrl: new AbortController(), dec: null, codec: "", ts: 0, frames: 0, bytes: 0, dropped: 0,
     lines: [], sending: false, held: {}, last: "" };
+  // Made now, while this is a click, so the browser lets it play.
+  try { v.ac = new AudioContext({ latencyHint: "interactive", sampleRate: 48000 }); v.gain = v.ac.createGain(); v.gain.connect(v.ac.destination); } catch (e) { v.ac = null; }
+  lapSoundButton();
   $("lv-name").textContent = l.name;
   $("lv-stats").textContent = "";
   $("lv-note").textContent = "Asking " + l.name + " for its screen…";
@@ -11046,8 +11057,12 @@ async function lapOpen(l) {
       var at = 0;
       while (buf.length - at >= 4) {
         var n = ((buf[at] << 24) | (buf[at + 1] << 16) | (buf[at + 2] << 8) | buf[at + 3]) >>> 0;
+        // The top bit set: the laptop's sound (an AAC frame), not a picture.
+        var sound = n >= 0x80000000;
+        if (sound) n -= 0x80000000;
         if (buf.length - at < 4 + n) break;
-        lapPicture(v, buf.subarray(at + 4, at + 4 + n), canvas, ctx);
+        if (sound) lapSound(v, buf.slice(at + 4, at + 4 + n));
+        else lapPicture(v, buf.subarray(at + 4, at + 4 + n), canvas, ctx);
         v.bytes += 4 + n;
         at += 4 + n;
       }
@@ -11090,6 +11105,80 @@ function lapPicture(v, au, canvas, ctx) {
   if (!key && v.dec.decodeQueueSize > 6) { v.dropped++; return; }
   v.ts += 16667;
   v.dec.decode(new EncodedVideoChunk({ type: key ? "key" : "delta", timestamp: v.ts, data: au }));
+}
+
+/**
+ * The other laptop's sound: AAC frames as its helper makes them, decoded here (WebCodecs) and played
+ * a moment behind, so small gaps in the link do not break it up; a frame that would play more than
+ * 0.3 s late is let go, to stay with the picture.
+ */
+function lapSound(v, adts) {
+  if (!v.ac || !window.AudioDecoder || v.soundBroken) return;
+  if (!v.adec) {
+    try {
+      v.adec = new AudioDecoder({
+        output: function (data) {
+          var ac = v.ac;
+          if (!ac || ac.state === "closed") { data.close(); return; }
+          var ch = data.numberOfChannels, len = data.numberOfFrames;
+          var b = ac.createBuffer(ch, len, data.sampleRate);
+          for (var i = 0; i < ch; i++) {
+            var plane = new Float32Array(len);
+            data.copyTo(plane, { planeIndex: i, format: "f32-planar" });
+            b.copyToChannel(plane, i);
+          }
+          data.close();
+          var now = ac.currentTime;
+          // Too far ahead (a burst after a stall): this frame is let go, so the sound stays with the picture.
+          if (v.playAt > now + 0.3) return;
+          if (!v.playAt || v.playAt < now + 0.02) v.playAt = now + 0.12;
+          var src = ac.createBufferSource();
+          src.buffer = b;
+          src.connect(v.gain);
+          src.start(v.playAt);
+          v.playAt += b.duration;
+        },
+        error: function () { v.soundBroken = true; }
+      });
+      // No description: the frames carry their own (ADTS) headers.
+      v.adec.configure({ codec: "mp4a.40.2", sampleRate: 48000, numberOfChannels: 2 });
+    } catch (e) { v.soundBroken = true; return; }
+  }
+  if (v.adec.state !== "configured") return;
+  if (v.ac.state === "suspended") v.ac.resume().catch(function () {});
+  v.ats = (v.ats || 0) + 21333;
+  try { v.adec.decode(new EncodedAudioChunk({ type: "key", timestamp: v.ats, data: adts })); } catch (e) {}
+}
+
+/** Sound on or off, for every laptop viewed from here (kept). */
+function lapSoundOn() { try { return localStorage.getItem("lapSound") !== "off"; } catch (e) { return true; } }
+function lapSoundButton() {
+  var on = lapSoundOn(), b = $("lv-sound");
+  if (b) { b.textContent = on ? "Sound on" : "Sound off"; b.classList.toggle("off", !on); }
+  if (lapView && lapView.gain) lapView.gain.gain.value = on ? 1 : 0;
+}
+
+/**
+ * Files dropped on the other laptop's screen go to it: through the phone, into its Downloads, which
+ * opens there to show them. Each says how it went, at the foot of the screen.
+ */
+async function lapDrop(files) {
+  var v = lapView;
+  if (!v) return;
+  Array.prototype.forEach.call(files, async function (f) {
+    var line = document.createElement("div");
+    line.textContent = "Sending " + f.name + " to " + v.name + "…";
+    $("lv-sends").appendChild(line);
+    var said = "";
+    try {
+      var r = await api("/api/laptops/drop?id=" + encodeURIComponent(v.id) + "&name=" + encodeURIComponent(f.name) + "&size=" + f.size,
+        { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: f });
+      var d = await r.json().catch(function () { return {}; });
+      said = r.ok ? (d.message || f.name) + " is in Downloads on " + v.name + "." : d.message || "Could not send " + f.name + ".";
+    } catch (e) { said = "Could not send " + f.name + "."; }
+    line.textContent = said;
+    setTimeout(function () { line.remove(); }, 5000);
+  });
 }
 
 /** Lines for the other laptop's helper, sent together a few times a second. */
@@ -11145,7 +11234,10 @@ function lapClose() {
   Object.keys(v.held).forEach(function (k) { lapSendNow(v, "ku " + k); });
   try { v.ctrl.abort(); } catch (e) {}
   if (v.dec) try { v.dec.close(); } catch (e) {}
+  if (v.adec) try { v.adec.close(); } catch (e) {}
+  if (v.ac) try { v.ac.close(); } catch (e) {}
   clearInterval(v.tick);
+  $("lv-drop").hidden = true;
   if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
   $("lap-view").hidden = true;
 }
@@ -11183,6 +11275,29 @@ function lapSetup() {
   c.addEventListener("keyup", function (e) { lapKey(e, false); });
   c.addEventListener("blur", function () { var v = lapView; if (!v) return; Object.keys(v.held).forEach(function (k) { lapSend("ku " + k); }); v.held = {}; });
   $("lv-close").addEventListener("click", lapClose);
+  $("lv-sound").addEventListener("click", function () {
+    try { localStorage.setItem("lapSound", lapSoundOn() ? "off" : "on"); } catch (e) {}
+    lapSoundButton();
+    c.focus();
+  });
+  // Files dragged over the other laptop's screen: dropped there, they go to it.
+  var lv = $("lap-view"), depth = 0;
+  var files = function (e) { return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, "Files") >= 0; };
+  lv.addEventListener("dragenter", function (e) {
+    if (!lapView || !files(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    depth++;
+    $("lv-drop").textContent = "Drop to send to " + lapView.name;
+    $("lv-drop").hidden = false;
+  });
+  lv.addEventListener("dragover", function (e) { if (lapView && files(e)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; } });
+  lv.addEventListener("dragleave", function (e) { if (files(e) && --depth <= 0) { depth = 0; $("lv-drop").hidden = true; } });
+  lv.addEventListener("drop", function (e) {
+    if (!lapView || !files(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    depth = 0; $("lv-drop").hidden = true;
+    if (e.dataTransfer.files.length) lapDrop(e.dataTransfer.files);
+  });
   $("lv-full").addEventListener("click", function () {
     var el = $("lap-view");
     if (document.fullscreenElement) document.exitFullscreen().catch(function () {});

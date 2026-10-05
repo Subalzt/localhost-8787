@@ -68,6 +68,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
@@ -908,6 +909,8 @@ class BridgeServer(
             val vid = java.util.UUID.randomUUID().toString().take(12)
             val queue = java.util.concurrent.LinkedBlockingQueue<DisplayFeed.Feed>()
             DisplayFeed.views[vid] = queue
+            val sound = kotlinx.coroutines.channels.Channel<ByteArray>(64, kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
+            DisplayFeed.viewSound[vid] = sound
             call.response.header(HttpHeaders.CacheControl, "no-store")
             call.respondBytesWriter(ContentType("application", "x-l87-frames")) {
                 EventBus.emitTo(id, "display", "start 0 $w $h 60 0 http view=$vid mirror" + (if (far) " far" else ""))
@@ -923,6 +926,17 @@ class BridgeServer(
                         if (n != last && ackSid.get().isNotEmpty()) { EventBus.emitTo(id, "displayack", "${ackSid.get()} $n"); last = n }
                     }
                 }
+                // The sound goes between whole pictures: its length with the top bit set, then an AAC frame.
+                val gate = kotlinx.coroutines.sync.Mutex()
+                val out = this
+                val sounder = kotlinx.coroutines.CoroutineScope(Dispatchers.Default).launch {
+                    val head = ByteArray(4)
+                    for (f in sound) gate.withLock {
+                        val n = f.size or Int.MIN_VALUE
+                        head[0] = (n ushr 24).toByte(); head[1] = (n ushr 16).toByte(); head[2] = (n ushr 8).toByte(); head[3] = n.toByte()
+                        out.writeFully(head, 0, 4); out.writeFully(f, 0, f.size); out.flush()
+                    }
+                }
                 try {
                     var first = true
                     while (true) {
@@ -931,14 +945,17 @@ class BridgeServer(
                         first = false
                         var sent = 0L
                         ackSid.set(feed.sid); ackBytes.set(0)
-                        val buf = ByteArray(64 * 1024)
+                        val head = ByteArray(4)
                         try {
+                            // Each picture whole (its length, then it), so the sound can go between them.
                             while (true) {
-                                val n = withContext(Dispatchers.IO) { feed.input.read(buf) }
-                                if (n < 0) break
-                                writeFully(buf, 0, n)
-                                flush()
-                                sent += n
+                                if (!withContext(Dispatchers.IO) { readAll(feed.input, head, 4) }) break
+                                val n = ((head[0].toInt() and 0xFF) shl 24) or ((head[1].toInt() and 0xFF) shl 16) or ((head[2].toInt() and 0xFF) shl 8) or (head[3].toInt() and 0xFF)
+                                if (n < 0 || n > 64 * 1024 * 1024) break
+                                val au = ByteArray(n)
+                                if (!withContext(Dispatchers.IO) { readAll(feed.input, au, n) }) break
+                                gate.withLock { writeFully(head, 0, 4); writeFully(au, 0, n); flush() }
+                                sent += 4 + n
                                 ackBytes.set(sent)
                             }
                         } finally {
@@ -949,9 +966,31 @@ class BridgeServer(
                 } catch (_: Throwable) {
                 } finally {
                     acker.cancel()
+                    sounder.cancel()
+                    DisplayFeed.viewSound.remove(vid)?.close()
                     DisplayFeed.views.remove(vid)?.let { q -> while (true) { val f = q.poll() ?: break; runCatching { f.input.close() }; f.done.complete(Unit) } }
                     EventBus.emitTo(id, "display", "stop")
                 }
+            }
+        }
+        // A file dropped on another laptop's screen: kept here while that laptop's helper fetches it
+        // into its Downloads and shows it there (server/LaptopFiles.kt). The name it was saved as, or why not.
+        post("/api/laptops/drop") {
+            call.device() ?: return@post
+            val q = call.request.queryParameters
+            val id = q["id"].orEmpty()
+            val name = q["name"].orEmpty().ifEmpty { "file" }.replace(Regex("""[\\/:*?"<>|]"""), "_").take(200)
+            val size = q["size"]?.toLongOrNull() ?: -1L
+            if (id !in Control.online()) { call.respond(HttpStatusCode.NotFound, ApiResult(false, "That laptop's helper is not running")); return@post }
+            val tmp = java.io.File(ctx.cacheDir, "drop-" + java.util.UUID.randomUUID())
+            try {
+                val got = withContext(Dispatchers.IO) { call.receiveStream().use { i -> tmp.outputStream().use { o -> i.copyTo(o, 256 * 1024) } } }
+                if (size >= 0 && got != size) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Only part of $name came")); return@post }
+                val r = LaptopFiles.put(android.net.Uri.fromFile(tmp), name, got, LaptopFiles.DROP, id)
+                r.onSuccess { call.respond(ApiResult(true, it)) }
+                    .onFailure { call.respond(HttpStatusCode.BadGateway, ApiResult(false, it.message ?: "The laptop did not take it")) }
+            } finally {
+                tmp.delete()
             }
         }
         post("/api/laptops/input") {
@@ -1690,6 +1729,14 @@ class BridgeServer(
     private fun where() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.where
     private fun findMe() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.findMe
 
+    /** Reads exactly [n] bytes into [b] (from [off]); false when the stream ends first. */
+    private fun readAll(input: java.io.InputStream, b: ByteArray, n: Int, off: Int = 0): Boolean {
+        var at = off
+        val end = off + n
+        while (at < end) { val r = input.read(b, at, end - at); if (r < 0) return false; at += r }
+        return true
+    }
+
     /** A message as one line, for the list of conversations. */
     private fun chatLine(x: ChatMsg): String = when (x.kind) {
         "image" -> if (x.text.isNotEmpty()) "Photo: " + x.text else "Photo"
@@ -1970,6 +2017,27 @@ class BridgeServer(
         // The laptop's sound with its screen, from its helper: AAC as ADTS frames, played as they come
         // while the screen view is open (server/DisplaySound.kt).
         post("/api/display/audio") {
+            // For another laptop's page: its frames go into that page's view stream.
+            val v = call.request.queryParameters["v"].orEmpty()
+            val toPage = DisplayFeed.viewSound[v]
+            if (toPage != null) {
+                withContext(Dispatchers.IO) {
+                    val input = call.receiveStream()
+                    val head = ByteArray(7)
+                    while (DisplayFeed.viewSound[v] === toPage) {
+                        if (!readAll(input, head, 7)) break
+                        if (head[0].toInt() and 0xFF != 0xFF || head[1].toInt() and 0xF0 != 0xF0) continue
+                        val len = ((head[3].toInt() and 3) shl 11) or ((head[4].toInt() and 0xFF) shl 3) or ((head[5].toInt() and 0xFF) ushr 5)
+                        if (len <= 7) continue
+                        val f = ByteArray(len)
+                        System.arraycopy(head, 0, f, 0, 7)
+                        if (!readAll(input, f, len - 7, 7)) break
+                        toPage.trySend(f)
+                    }
+                }
+                call.respond(ApiResult(true))
+                return@post
+            }
             if (!DisplayFeed.open) {
                 call.respond(HttpStatusCode.Conflict, ApiResult(false, "The screen view is not open on the phone"))
                 return@post

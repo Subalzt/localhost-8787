@@ -43,6 +43,9 @@ object LaptopFiles {
 
     fun answer(id: String, listing: LaptopListing) { listings.remove(id)?.complete(listing) }
 
+    /** The folder a file dropped on a laptop's screen goes to: its Downloads, opened there to show it. */
+    const val DROP = ":drop"
+
     /** Saves the file at [path] on the laptop into this phone's folder for received files: its name there, or why not. */
     suspend fun save(path: String): Result<String> {
         if (Control.connected.value.isEmpty()) return Result.failure(IllegalStateException("The laptop helper is not running"))
@@ -71,15 +74,17 @@ object LaptopFiles {
     /**
      * Sends a file on this phone ([uri], [name], [size]) to [folder] on the laptop: the helper is
      * told (it reaches the phone, the phone never reaches it) and fetches it, keeping any file of
-     * the same name there. The name it was saved as, or why not.
+     * the same name there. The name it was saved as, or why not. [to]: one laptop's helper (its
+     * device id), else whichever is running; [folder] [DROP]: its Downloads, shown there once in.
      */
-    suspend fun put(uri: android.net.Uri, name: String, size: Long, folder: String): Result<String> {
+    suspend fun put(uri: android.net.Uri, name: String, size: Long, folder: String, to: String? = null): Result<String> {
         if (Control.connected.value.isEmpty()) return Result.failure(IllegalStateException("The laptop helper is not running"))
         val id = UUID.randomUUID().toString()
         val wait = CompletableDeferred<String>()
         saves[id] = wait
         outgoing[id] = Out(uri, name, size)
-        EventBus.emit("laptopfs", "put $id ${b64(folder)} ${b64(name)} $size")
+        val line = "put $id ${b64(folder)} ${b64(name)} $size"
+        if (to != null) EventBus.emitTo(to, "laptopfs", line) else EventBus.emit("laptopfs", line)
         return try {
             val r = withTimeoutOrNull(6 * 60 * 60_000L) { wait.await() } ?: return Result.failure(IllegalStateException("It took too long"))
             if (r.startsWith("!")) Result.failure(IllegalStateException(r.drop(1))) else Result.success(r)
