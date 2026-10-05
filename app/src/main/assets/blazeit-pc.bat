@@ -250,13 +250,16 @@ public static class BlazeItPc
     // look only learns the list, as the songs already there were done by hand.
 
     static string LyricsSeenFile { get { return Path.Combine(Dir, "lyrics-seen.txt"); } }
+    static string lyricsSaid;
 
     static void LyricsLoop()
     {
         Thread.Sleep(120000);
         while (true)
         {
-            try { LyricsOnce(); } catch (Exception e) { Log("New songs' lyrics: " + e.Message); }
+            // Said once, not every 10 minutes while the phone is away.
+            try { LyricsOnce(); lyricsSaid = null; }
+            catch (Exception e) { if (lyricsSaid != e.Message) Log("New songs' lyrics: " + e.Message + " (tried again every 10 minutes)"); lyricsSaid = e.Message; }
             Thread.Sleep(600000);
         }
     }
@@ -3617,6 +3620,23 @@ public static class BlazeItPc
         if (now != conf) try { File.WriteAllText(TunnelFile, now); } catch { }
     }
 
+    /**
+     * After a try from afar that found no way in, the next waits: 15 s, doubling to 10 minutes (and
+     * 10 minutes at once when the board says it is asked too often), so a phone that is off or
+     * unreachable for hours does not have this laptop asking ntfy.sh every few seconds. Nearby ways
+     * (the cable, Wi-Fi) are still looked for every few seconds meanwhile.
+     */
+    static int farFails;
+    static DateTime farNext = DateTime.MinValue;
+
+    static void FarFailed(string why)
+    {
+        farFails++;
+        int wait = why != null && why.Contains("429") ? 600 : Math.Min(600, 15 << Math.Min(farFails - 1, 6));
+        farNext = DateTime.UtcNow.AddSeconds(wait);
+        Log("From afar: trying again in " + (wait >= 60 ? (wait / 60) + " min" : wait + " s") + ".");
+    }
+
     /** The last way in, from another network. The tunnel's address here, or null when it cannot. */
     static string TunnelPath()
     {
@@ -3625,7 +3645,8 @@ public static class BlazeItPc
         lock (tunnelLock)
         {
             Tunnel87.Conn t = tunnel;
-            if (t != null && t.Alive) return TunnelHost;
+            if (t != null && t.Alive) { farFails = 0; return TunnelHost; }
+            if (DateTime.UtcNow < farNext) return null;
             if (!tunnelServing)
             {
                 try
@@ -3685,18 +3706,20 @@ public static class BlazeItPc
             asking.IsBackground = true;
             asking.Start();
             tunnel = race.Wait(20000);
-            if (tunnel != null) return TunnelHost;
+            if (tunnel != null) { farFails = 0; return TunnelHost; }
             // No IPv6 way to it: across IPv4, punched through both NATs.
             try
             {
                 tunnel = Tunnel87.DialPunched(tid, psk, Environment.MachineName, TunnelSaveAddrs, Log);
                 Log("Tunnel to the phone over UDP, punched through");
+                farFails = 0;
                 return TunnelHost;
             }
             catch (Exception e)
             {
                 string why = "Could not reach the phone across IPv4 (" + e.Message + ").";
                 lock (tunnelSaid) if (tunnelSaid.Add(why)) Say(why);
+                FarFailed(e.Message);
             }
         }
         return null;

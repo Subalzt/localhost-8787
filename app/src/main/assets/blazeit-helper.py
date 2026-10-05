@@ -1934,15 +1934,32 @@ def via(addr):
             return addr
 
 
+# After a try from afar that found no way in, the next waits: 15 s, doubling to 10 minutes (10 at
+# once when the board says it is asked too often), so a phone that is off for hours does not have
+# this computer asking ntfy.sh every few seconds. Nearby ways are still looked for meanwhile.
+far_fails, far_next = 0, 0.0
+
+
+def far_failed(why):
+    global far_fails, far_next
+    far_fails += 1
+    wait = 600 if "429" in str(why) else min(600, 15 << min(far_fails - 1, 6))
+    far_next = time.time() + wait
+    log("From afar: trying again in %s." % ("%d min" % (wait // 60) if wait >= 60 else "%d s" % wait))
+
+
 def tunnel_path():
     """The last way in, from another network: dials the phone's saved addresses. None when it cannot."""
-    global tunnel
+    global tunnel, far_fails
     c = tunnel_conf()
     if not c:
         return None
     with tunnel_lock:
         if tunnel and tunnel.alive:
+            far_fails = 0
             return tunnel_local
+        if time.time() < far_next:
+            return None
         if tunnel_local is None and tunnel_serve() is None:
             return None
         tid, psk = bytes.fromhex(c["id"]), base64.b64decode(c["key"])
@@ -1967,15 +1984,18 @@ def tunnel_path():
         threading.Thread(target=ask, daemon=True).start()
         tunnel = race.wait(20)
         if tunnel:
+            far_fails = 0
             return tunnel_local
         # No IPv6 way to it: across IPv4, punched through both NATs.
         try:
             carrier, addr = punch_dial(c)
             tunnel = tunnel_start(carrier, tid, psk, addr)
             log("Tunnel to %s:%d over UDP, punched through" % addr)
+            far_fails = 0
             return tunnel_local
         except OSError as e:
             say_once("punch-" + str(e), "Could not reach the phone across IPv4 (%s)." % e)
+            far_failed(e)
     return None
 
 
