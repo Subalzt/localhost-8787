@@ -29,7 +29,7 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--txt);
     font: 15px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Lexend", sans-serif; -webkit-font-smoothing: antialiased; }
-  #map { position: absolute; inset: 0; background: var(--chip); }
+  #map { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; background: var(--chip); }
   .leaflet-control-attribution { font-size: 10px; background: var(--sheet) !important; color: var(--sub); }
   .leaflet-control-attribution a { color: var(--sub); }
   .leaflet-control-zoom { display: none; }
@@ -206,6 +206,10 @@ if (/[?&]api=1/.test(location.search)) {
   window.addEventListener("message", function (e) { if (e.data === "where") load(); });
 }
 setInterval(function () { if (places.length) list_(); }, 30000);
+// Sized again when the window is (the app's view settling, a phone turned round, the frame shown).
+window.addEventListener("resize", function () { map.invalidateSize(); });
+document.addEventListener("visibilitychange", function () { if (!document.hidden) setTimeout(function () { map.invalidateSize(); }, 50); });
+setTimeout(function () { map.invalidateSize(); if (places.length && !fitted) fit(); }, 300);
 </script>
 </body>
 </html>

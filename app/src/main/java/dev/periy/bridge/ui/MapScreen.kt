@@ -95,6 +95,9 @@ fun MapScreen(onClose: () -> Unit) {
         AndroidView(
             factory = { c ->
                 WebView(c).apply {
+                    // Filling the screen, said outright: a WebView left to wrap its content lays the
+                    // page out as tall as its content, and a map 100% tall is then nothing at all.
+                    layoutParams = android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     webViewClient = object : WebViewClient() {
