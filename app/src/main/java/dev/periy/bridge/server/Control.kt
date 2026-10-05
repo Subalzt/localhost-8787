@@ -46,6 +46,8 @@ object Control {
     /** Names of the laptops whose helper is listening right now. */
     val connected: StateFlow<List<String>> = _connected.asStateFlow()
     private val names = CopyOnWriteArrayList<Pair<Channel<String>, String>>()
+    /** Each helper's queue by its device id, for lines meant for one laptop (another laptop's page driving it). */
+    private val byDevice = java.util.concurrent.ConcurrentHashMap<Channel<String>, String>()
 
     /**
      * True while the Control tab is on screen. Otherwise nothing will be sent, so the
@@ -65,12 +67,21 @@ object Control {
         for (h in helpers) h.trySend(line)
     }
 
-    fun attach(name: String): Channel<String> {
+    /** One laptop only: [deviceId] is its helper's. */
+    fun sendTo(deviceId: String, line: String) {
+        for ((ch, id) in byDevice) if (id == deviceId) ch.trySend(line)
+    }
+
+    /** The helpers listening now, by device id. */
+    fun online(): Set<String> = byDevice.values.toSet()
+
+    fun attach(name: String, deviceId: String? = null): Channel<String> {
         // Unlimited: a stalled laptop must never block the touch thread. The writer
         // drains whatever has piled up in one go, so a backlog clears in one flush.
         val ch = Channel<String>(Channel.UNLIMITED)
         helpers += ch
         names += ch to name
+        if (deviceId != null) byDevice[ch] = deviceId
         publish()
         return ch
     }
@@ -78,12 +89,15 @@ object Control {
     fun detach(ch: Channel<String>) {
         helpers -= ch
         names.removeAll { it.first === ch }
+        byDevice.remove(ch)
         ch.close()
         publish()
     }
 
     private fun publish() {
         _connected.value = names.map { it.second }
+        // Pages list the laptops they can see and drive (BridgeServer's /api/laptops).
+        EventBus.emit("laptops", "")
     }
 
     // ------------------------------------------------------------------ discovery

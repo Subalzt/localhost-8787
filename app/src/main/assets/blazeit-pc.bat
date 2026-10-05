@@ -1756,6 +1756,16 @@ public static class BlazeItPc
                                     // Newer phones take the stream on the page's port, so it goes the way
                                     // everything else does, the tunnel included.
                                     bool http = p.Length >= 7 && p[6] == "http";
+                                    // Another laptop's page watching this one: "view=ID" (its stream goes back
+                                    // tagged so), "mirror" (this laptop's own screen, no extra display), "far".
+                                    string viewTag = null; bool mirrorTag = false, farTag = false;
+                                    for (int q = 7; q < p.Length; q++)
+                                    {
+                                        if (p[q].StartsWith("view=")) viewTag = p[q].Substring(5);
+                                        else if (p[q] == "mirror") mirrorTag = true;
+                                        else if (p[q] == "far") farTag = true;
+                                    }
+                                    screenView = viewTag; screenMirror = mirrorTag; screenFar = farTag;
                                     Thread s = new Thread(delegate () { StartSecondScreen(at, port, w, h, http); });
                                     s.IsBackground = true;
                                     s.Start();
@@ -2246,11 +2256,21 @@ public static class BlazeItPc
         return mons.Find(m => m.Primary) ?? (mons.Count > 0 ? mons[0] : null);
     }
 
+    /**
+     * Set with each "start": another laptop's page is watching ([screenView], its id, sent back with
+     * the stream), so this laptop's own main screen goes ([screenMirror], no virtual display), at the
+     * internet's size when that page is far away ([screenFar]), and without the sound.
+     */
+    static volatile string screenView;
+    static volatile bool screenMirror, screenFar;
+
     static void StartSecondScreen(string at, int port, int w, int h, bool http)
     {
         int gen = Interlocked.Increment(ref screenGen);
         // A file "screen-far.txt" beside the helper sends the far picture on any link, for trying it out.
-        bool remote = http && (at == TunnelHost || File.Exists(Path.Combine(Dir, "screen-far.txt")));
+        bool remote = http && (at == TunnelHost || screenFar || File.Exists(Path.Combine(Dir, "screen-far.txt")));
+        bool mirror = screenMirror;
+        if (screenView != null) Say("Another laptop is viewing and driving this one, through the phone.");
         try
         {
             KillStream();
@@ -2260,7 +2280,7 @@ public static class BlazeItPc
                 Say("The second screen needs ffmpeg on this laptop: in a terminal, run  winget install Gyan.FFmpeg  then try again.");
                 return;
             }
-            Displays.Mon target = remote ? MainScreen() : PrepareScreen(w, h, true);
+            Displays.Mon target = remote || mirror ? MainScreen() : PrepareScreen(w, h, true);
             if (remote && !rateRead)
             {
                 // Where the last time ended, a little under it, rather than climbing from the bottom again.
@@ -2268,7 +2288,7 @@ public static class BlazeItPc
                 int saved;
                 try { if (int.TryParse(File.ReadAllText(RateFile).Trim(), out saved)) remoteKbit = Math.Max(250, Math.Min(MaxKbit, saved * 85 / 100)); } catch { }
             }
-            if (http) StartSound(ff, at, remote);
+            if (http && screenView == null) StartSound(ff, at, remote);
             string said = null;
             int failures = 0;
             while (target != null && gen == screenGen)
@@ -2276,7 +2296,8 @@ public static class BlazeItPc
                 if (said != target.Device)
                 {
                     said = target.Device;
-                    if (remote) Say("Showing this laptop's screen on the phone, from another network: smaller, at what the link carries (" + remoteKbit + " kbit/s to start).");
+                    if (screenView != null) { }
+                    else if (remote) Say("Showing this laptop's screen on the phone, from another network: smaller, at what the link carries (" + remoteKbit + " kbit/s to start).");
                     else SayShowing(target);
                 }
                 string end = Capture(ff, target, at, port, gen, http, remote);
@@ -2289,7 +2310,7 @@ public static class BlazeItPc
                 // The monitors changed, or the capture broke on a change: look again.
                 Thread.Sleep(300);
                 if (gen != screenGen) return;
-                target = remote ? MainScreen() : PrepareScreen(w, h, false);
+                target = remote || mirror ? MainScreen() : PrepareScreen(w, h, false);
             }
         }
         catch (Exception e) { Say("Second screen: " + e.Message); }
@@ -2505,8 +2526,9 @@ public static class BlazeItPc
     /** The phone's page-port upload for the screen, as PostStream opens it; "sid" names it for the phone's acks. */
     static HttpWebRequest StreamRequest(string at, string sid = "")
     {
+        string view = screenView;
         HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + Via(at) + ":" + PhonePort + "/api/display/stream" +
-            (sid.Length > 0 ? "?s=" + sid : ""));
+            (sid.Length > 0 ? "?s=" + sid : "") + (view != null ? (sid.Length > 0 ? "&v=" : "?v=") + Uri.EscapeDataString(view) : ""));
         req.Proxy = null;
         req.Method = "POST";
         req.UserAgent = Ua;
@@ -2956,8 +2978,9 @@ public static class BlazeItPc
                 var best = Pick(mons);
                 bool moved = now == null || now.X != target.X || now.Y != target.Y || now.W != target.W || now.H != target.H;
                 // From afar it is always the main screen: another monitor is no better.
-                bool better = !remote && best != null && best.Device != target.Device;
-                bool main = !remote && now != null && now.Virtual && now.Primary;
+                bool mirror = screenMirror;
+                bool better = !remote && !mirror && best != null && best.Device != target.Device;
+                bool main = !remote && !mirror && now != null && now.Virtual && now.Primary;
                 bool light = !moved && Math.Abs(HdrWhite(now) - hdrWhite) > 1;
                 if (moved || better || main || light)
                 {

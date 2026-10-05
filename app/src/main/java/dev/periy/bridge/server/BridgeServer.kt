@@ -835,6 +835,74 @@ class BridgeServer(
             if ((ctx.applicationContext as dev.periy.bridge.BridgeApp).container.calls.receive(from, me.id, w)) call.respond(ApiResult(true))
             else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That signal does not open here"))
         }
+        // ---- Another laptop, seen and driven from this page: its screen as its helper streams it
+        // (passed on here as it comes, each picture with its length), and this page's mouse and keys
+        // sent to its helper as the phone's Control tab sends them.
+        get("/api/laptops") {
+            val me = call.device() ?: return@get
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            val all = devices.devices.value
+            val online = Control.online()
+            // Debug builds: "?self=1" lists this page's own laptop too, to try it all on one machine.
+            val self = call.request.queryParameters["self"] == "1" && dev.periy.bridge.BuildConfig.DEBUG
+            call.respond(all.filter { it.id in online && it.name.startsWith(HELPER_PREFIX) && (self || !sameMachine(it, me, all)) }
+                .map { LaptopDto(it.id, helperMachine(it.name)) }.distinctBy { it.name })
+        }
+        get("/api/laptops/view") {
+            val me = call.device() ?: return@get
+            val id = call.request.queryParameters["id"].orEmpty()
+            if (id !in Control.online()) { call.respond(HttpStatusCode.NotFound, ApiResult(false, "That laptop's helper is not running")); return@get }
+            val w = call.request.queryParameters["w"]?.toIntOrNull()?.coerceIn(320, 7680) ?: 1920
+            val h = call.request.queryParameters["h"]?.toIntOrNull()?.coerceIn(240, 4320) ?: 1080
+            // A page from afar (the tunnel, the website): the picture made for the internet, whatever way the laptop has.
+            val far = call.viaTunnel() || call.viaSite()
+            val vid = java.util.UUID.randomUUID().toString().take(12)
+            val queue = java.util.concurrent.LinkedBlockingQueue<DisplayFeed.Feed>()
+            DisplayFeed.views[vid] = queue
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respondBytesWriter(ContentType("application", "x-l87-frames")) {
+                EventBus.emitTo(id, "display", "start 0 $w $h 60 0 http view=$vid mirror" + (if (far) " far" else ""))
+                try {
+                    var first = true
+                    while (true) {
+                        // The first stream once the helper has started; another after it starts again (a monitor changed).
+                        val feed = withContext(Dispatchers.IO) { queue.poll(if (first) 30L else 15L, java.util.concurrent.TimeUnit.SECONDS) } ?: break
+                        first = false
+                        var sent = 0L
+                        var told = 0L
+                        val buf = ByteArray(64 * 1024)
+                        try {
+                            while (true) {
+                                val n = withContext(Dispatchers.IO) { feed.input.read(buf) }
+                                if (n < 0) break
+                                writeFully(buf, 0, n)
+                                flush()
+                                sent += n
+                                // What has reached this page, told back to the helper, as the phone's own view does.
+                                val now = System.currentTimeMillis()
+                                if (now - told >= 50) { EventBus.emitTo(id, "displayack", "${feed.sid} $sent"); told = now }
+                            }
+                        } finally {
+                            runCatching { feed.input.close() }
+                            feed.done.complete(Unit)
+                        }
+                    }
+                } catch (_: Throwable) {
+                } finally {
+                    DisplayFeed.views.remove(vid)?.let { q -> while (true) { val f = q.poll() ?: break; runCatching { f.input.close() }; f.done.complete(Unit) } }
+                    EventBus.emitTo(id, "display", "stop")
+                }
+            }
+        }
+        post("/api/laptops/input") {
+            call.device() ?: return@post
+            val id = call.request.queryParameters["id"].orEmpty()
+            val body = call.receiveText()
+            if (id !in Control.online() || body.length > 64_000) { call.respond(HttpStatusCode.NotFound, ApiResult(false, "That laptop's helper is not running")); return@post }
+            body.lineSequence().map { it.trim() }.filter { it.isNotEmpty() && it.length < 4_000 }.forEach { Control.sendTo(id, it) }
+            call.respond(ApiResult(true))
+        }
+
         // ---- Messages on a laptop's page, as WhatsApp's: the phone's conversations (server/Messages.kt),
         // read and written there; the phone sends them on as it does its own. "messages" says one changed.
         get("/api/chats") {
@@ -1763,6 +1831,17 @@ class BridgeServer(
         // in one long upload, so it comes the same way as everything else from that laptop, the
         // tunnel included (server/DisplayFeed.kt). It lasts until the stream or the view ends.
         post("/api/display/stream") {
+            // For another laptop's page (laptopRoutes): handed to its request, not the phone's view.
+            val view = call.request.queryParameters["v"]?.let { DisplayFeed.views[it] }
+            if (view != null) {
+                val done = java.util.concurrent.CompletableFuture<Unit>()
+                withContext(Dispatchers.IO) {
+                    view.put(DisplayFeed.Feed(call.receiveStream(), done, call.request.queryParameters["s"].orEmpty(), true))
+                    runCatching { done.get() }
+                }
+                call.respond(ApiResult(true))
+                return@post
+            }
             if (!DisplayFeed.open) {
                 call.respond(HttpStatusCode.Conflict, ApiResult(false, "The screen view is not open on the phone"))
                 return@post
@@ -1881,7 +1960,7 @@ class BridgeServer(
             val slowOk = call.request.headers["Bridge-Heartbeat"] == "slow"
             call.response.header(HttpHeaders.CacheControl, "no-store")
             call.respondBytesWriter(ContentType.Text.Plain) {
-                val ch = Control.attach(name)
+                val ch = Control.attach(name, me?.id)
                 try {
                     writeStringUtf8("p\n")
                     flush()

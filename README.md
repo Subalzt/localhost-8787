@@ -715,6 +715,15 @@ networks cannot reach each other at all, the call says so instead of going throu
 
 ### 20. Laptop and laptop
 
+**See and drive another laptop.** Home on the page lists the other laptops whose helper is running;
+**View and control** opens one full window: its main screen, streamed by its helper (H.264, each
+picture whole, as for the phone's screen view) and passed on by the phone, decoded in the browser
+(WebCodecs: Chrome, Edge, Firefox 130+), and this laptop's mouse, wheel and keys sent to it (typing,
+shortcuts, F-keys; in full screen in Chrome and Edge, Esc and Win too). Near or far it goes the way
+everything else does: the cable, Wi-Fi, or the tunnel, the picture made for the internet when this
+page is far away. Linux and Mac laptops can be driven the same way.
+
+
 <details>
 <summary><b>Through one phone.</b> Two laptops on the same phone: the file streams through it, kept nowhere.</summary>
 

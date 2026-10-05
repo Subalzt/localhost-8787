@@ -223,4 +223,6 @@ data class DirectDto(
 @Serializable data class ChatThread(val key: String, val title: String, val group: Boolean, val members: List<String>, val messages: List<ChatItem>)
 @Serializable data class ChatSend(val key: String = "", val text: String = "")
 @Serializable data class ChatKey(val key: String = "")
+/** Another laptop whose helper is running, for this page to see and drive. */
+@Serializable data class LaptopDto(val id: String, val name: String)
 @Serializable data class ChatNewGroup(val name: String = "", val members: List<String> = emptyList())

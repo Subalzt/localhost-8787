@@ -2824,6 +2824,9 @@ def events_loop():
                     if p and p[0] == "start" and len(p) >= 4:
                         fps = max(30, min(120, int(p[4]))) if len(p) >= 5 else 60
                         http_ok = len(p) >= 7 and p[6] == "http"
+                        # Another computer's page watching this one: "view=ID" (its stream goes back tagged so).
+                        global screen_view
+                        screen_view = next((x[5:] for x in p[7:] if x.startswith("view=")), None)
                         threading.Thread(target=start_second_screen, args=(at, int(p[1]), int(p[2]), int(p[3]), fps, http_ok),
                                          daemon=True).start()
                     else:
@@ -3134,15 +3137,21 @@ def capture_tries(geom, w, h, fps, dest, grab=None, remote=False, kbit=700):
     return tries
 
 
-def pick_screen():
-    """An extra monitor if there is one, else the main one, mirrored."""
+# Set with each "start": another computer's page is watching (its id, sent back with the stream), so
+# this computer's own main screen goes, made for the internet's way (FLV, each picture whole, the rate
+# following the link), and without the sound.
+screen_view = None
+
+
+def pick_screen(main_only=False):
+    """An extra monitor if there is one, else the main one, mirrored; with main_only, the main one."""
     mons = monitors()
     if not mons:
         size = desktop_size()
         return (0, 0) + size if size else None
     main = next((m for m in mons if m[5]), mons[0])   # the one marked primary, else the first
     extra = [m for m in mons if m is not main]
-    m = extra[0] if extra else main
+    m = extra[0] if extra and not main_only else main
     return m[1], m[2], m[3], m[4]
 
 
@@ -3521,7 +3530,7 @@ def post_frames(proc, addr, gen, respawn=None):
     host, port = via(addr)
     conn = http.client.HTTPConnection(host, port, timeout=10)
     try:
-        conn.putrequest("POST", "/api/display/stream?s=" + sid)
+        conn.putrequest("POST", "/api/display/stream?s=" + sid + ("&v=" + urllib.parse.quote(screen_view) if screen_view else ""))
         conn.putheader("User-Agent", user_agent())
         conn.putheader("Content-Type", "video/h264-frames")
         conn.putheader("Transfer-Encoding", "chunked")
@@ -3658,7 +3667,8 @@ def stream_x11(at, port, w, h, fps, gen, http_ok=False):
     if not ff:
         say("The second screen needs ffmpeg on this computer (%s)." % install_hint("ffmpeg"))
         return
-    geom = pick_screen()
+    view = screen_view
+    geom = pick_screen(main_only=view is not None)
     if not geom:
         say("Could not tell this screen's size (xrandr is missing).")
         return
@@ -3679,8 +3689,11 @@ def stream_x11(at, port, w, h, fps, gen, http_ok=False):
                 "-i", "%d:none" % device]
         say_once("mac-screen-rec", "If the phone shows only the wallpaper or a black screen, allow Screen Recording for "
                  "the app this helper runs in (System Settings, Privacy & Security, Screen Recording), and start it again.")
-    say("Showing this computer's %s on the phone (%dx%d)." % ("extra monitor" if len(monitors()) > 1 else "screen, mirrored,", geom[2], geom[3]))
-    remote = http_ok and tunnel_local is not None and tuple(at) == tuple(tunnel_local)
+    if view:
+        say("Another computer is viewing and driving this one, through the phone.")
+    else:
+        say("Showing this computer's %s on the phone (%dx%d)." % ("extra monitor" if len(monitors()) > 1 else "screen, mirrored,", geom[2], geom[3]))
+    remote = http_ok and ((tunnel_local is not None and tuple(at) == tuple(tunnel_local)) or view is not None)
     if remote:
         read_rate()
         say("From another network: this screen goes at what the link carries (%d kbit/s to start)." % remote_kbit)
@@ -3821,7 +3834,7 @@ def start_second_screen(at, port, w, h, fps, http_ok=False):
     global screen_gen
     stop_second_screen()
     gen = screen_gen
-    if http_ok and not WSL:
+    if http_ok and not WSL and not screen_view:
         start_sound(at, gen, tunnel_local is not None and tuple(at) == tuple(tunnel_local))
     if WSL:
         say("The phone asked to be a second screen: under WSL the Windows helper shows it.")

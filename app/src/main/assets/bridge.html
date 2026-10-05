@@ -2526,6 +2526,22 @@
   .rc-row .rc-who svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   .rc-row time { font-size: 12.5px; color: var(--sub); }
   .chat-wrap { height: calc(100vh - 205px - var(--player-h, 0px)); }
+  /* ------------------------------------------------------------ another laptop, from this one */
+  .lap-list { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; }
+  .lap-item { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 12px; border-radius: 14px; background: var(--bg); }
+  .lap-item svg { width: 22px; height: 22px; fill: none; stroke: var(--sub); stroke-width: 1.7; stroke-linejoin: round; }
+  .lap-item b { font-size: 14.5px; font-weight: 600; }
+  .lap-view { position: fixed; inset: 0; z-index: 970; background: #000; display: flex; flex-direction: column; animation: fade-in .2s both; }
+  .lv-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #111114; color: #fff; font-size: 13px; }
+  .lv-bar b { font-size: 14px; font-weight: 650; }
+  .lv-bar #lv-stats { color: rgba(255,255,255,.55); font-variant-numeric: tabular-nums; }
+  .lv-btn { border: 0; border-radius: 8px; background: rgba(255,255,255,.12); color: #fff; font: inherit; font-size: 12.5px; padding: 6px 12px; cursor: pointer; }
+  .lv-btn:hover { background: rgba(255,255,255,.2); }
+  .lv-btn.close { background: #FF3B30; }
+  .lap-view canvas { flex: 1; min-height: 0; width: 100%; object-fit: contain; outline: none; cursor: default; background: #000; }
+  .lap-view .lv-note { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,.7); font-size: 14px; margin: 0; text-align: center; max-width: 80%; }
+  .lap-view:fullscreen .lv-bar { position: absolute; top: 0; left: 0; right: 0; opacity: 0; transition: opacity .2s; z-index: 1; }
+  .lap-view:fullscreen .lv-bar:hover { opacity: 1; }
 </style>
 </head>
 <body>
@@ -2626,6 +2642,12 @@
     <input id="folder-input" type="file" webkitdirectory multiple hidden>
     <!-- Files dragged over the page: it blurs, and says where they go. -->
     <div class="drop-veil" id="drop" hidden><div><span class="send-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span><b>Drop to send</b><span id="drop-to">to the phone</span></div></div>
+
+    <!-- Other laptops whose helper is running: seen and driven from here, through the phone. -->
+    <div id="lap-section" hidden>
+      <div class="bar">Laptops</div>
+      <div class="card lap-list" id="lap-list"></div>
+    </div>
 
     <div class="bar">On the phone</div>
     <div class="card" id="files"><p class="empty">Nothing yet</p></div>
@@ -2974,6 +2996,17 @@
   </div>
   <p class="viewer-note" id="viewer-note" hidden></p>
   <span class="viewer-count" id="viewer-count" hidden></span>
+</div>
+
+<!-- Another laptop, seen and driven from this one (see "another laptop, from this one"). -->
+<div class="lap-view" id="lap-view" hidden>
+  <div class="lv-bar">
+    <b id="lv-name"></b><span id="lv-stats"></span><span class="grow"></span>
+    <button class="lv-btn" type="button" id="lv-full">Full screen</button>
+    <button class="lv-btn close" type="button" id="lv-close">Close</button>
+  </div>
+  <canvas id="lv-canvas" tabindex="0"></canvas>
+  <p class="lv-note" id="lv-note"></p>
 </div>
 
 <!-- A call: ringing here, under way on the phone, or on this laptop (see "calls, on this laptop"). -->
@@ -5574,6 +5607,7 @@ function connectEvents() {
   events.addEventListener("targets", loadTargetsSoon);
   callsWatch(events);
   chatsWatch(events);
+  lapsWatch(events);
   events.addEventListener("incoming", function (e) {
     try { showIncoming(JSON.parse(e.data)); } catch (err) {}
   });
@@ -10737,6 +10771,240 @@ function renderRecent() {
 
 function phonesSetup() {
   document.querySelectorAll("#phones-seg button").forEach(function (b) { b.addEventListener("click", function () { phonesSegment(b.dataset.seg); }); });
+}
+
+// ------------------------------------------------------------------ another laptop, from this one
+//
+// Another laptop whose helper is running is seen and driven from here, through the phone: its
+// helper streams its main screen to the phone (H.264, each picture whole with its length, as for the
+// phone's own screen view) and the phone passes it on to this page, which decodes it in the browser
+// (WebCodecs); the mouse and keys here go to that helper as the phone's Control tab's do. Near or
+// far, it goes the way everything else does: the cable, Wi-Fi, or the tunnel.
+
+var laps = [];
+var lapView = null;
+
+function lapsWatch(es) {
+  es.addEventListener("laptops", lapsLoad);
+  lapsLoad();
+  lapSetup();
+}
+
+async function lapsLoad() {
+  try {
+    var r = await api("/api/laptops" + (window.lapSelf ? "?self=1" : ""), { cache: "no-store" });
+    if (!r.ok) return;
+    laps = await r.json();
+    renderLaps();
+  } catch (e) {}
+}
+
+function renderLaps() {
+  var sec = $("lap-section"), host = $("lap-list");
+  if (!sec) return;
+  sec.hidden = !laps.length;
+  host.innerHTML = laps.map(function (l) {
+    return '<div class="lap-item"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4.5" width="16" height="11" rx="1.5"/><path d="M2 19.5h20"/></svg><b>' + esc(l.name) +
+      '</b><button class="btn sm" type="button" data-id="' + esc(l.id) + '">View and control</button></div>';
+  }).join("");
+  host.querySelectorAll("button[data-id]").forEach(function (b) {
+    b.addEventListener("click", function () { lapOpen(laps.filter(function (l) { return l.id === b.dataset.id; })[0]); });
+  });
+}
+
+/** The codec string of an H.264 stream from its SPS (avc1.PPCCLL: profile, constraints, level). */
+function lapCodec(sps) {
+  var h = function (n) { return ("0" + n.toString(16)).slice(-2); };
+  return "avc1." + h(sps[1]) + h(sps[2]) + h(sps[3]);
+}
+
+/** One picture's units: where each starts (after its start code), and its type. */
+function lapUnits(au) {
+  var out = [];
+  for (var i = 0; i + 3 < au.length; i++) {
+    if (au[i] === 0 && au[i + 1] === 0 && au[i + 2] === 1) { out.push(i + 3); i += 2; }
+  }
+  return out;
+}
+
+async function lapOpen(l) {
+  if (!l) return;
+  if (!window.VideoDecoder) { alert("This browser cannot show another laptop's screen: it needs WebCodecs (Chrome, Edge, or Firefox 130 and later)."); return; }
+  lapClose();
+  var v = lapView = { id: l.id, name: l.name, ctrl: new AbortController(), dec: null, codec: "", ts: 0, frames: 0, bytes: 0, dropped: 0,
+    lines: [], sending: false, held: {}, last: "" };
+  $("lv-name").textContent = l.name;
+  $("lv-stats").textContent = "";
+  $("lv-note").textContent = "Asking " + l.name + " for its screen…";
+  $("lap-view").hidden = false;
+  var canvas = $("lv-canvas"), ctx = canvas.getContext("2d");
+  canvas.focus();
+  v.tick = setInterval(function () {
+    $("lv-stats").textContent = v.frames ? v.frames + " fps · " + (v.bytes * 8 / 1e6).toFixed(1) + " Mbit/s · " + canvas.width + "×" + canvas.height : "";
+    v.frames = 0; v.bytes = 0;
+  }, 1000);
+  var dpr = window.devicePixelRatio || 1;
+  try {
+    var res = await fetch("/api/laptops/view?id=" + encodeURIComponent(l.id) + "&w=" + Math.round(screen.width * dpr) + "&h=" + Math.round(screen.height * dpr),
+      { signal: v.ctrl.signal, cache: "no-store", credentials: "same-origin" });
+    if (!res.ok) { var d = await res.json().catch(function () { return {}; }); $("lv-note").textContent = d.message || "Could not see " + l.name + "."; return; }
+    var reader = res.body.getReader();
+    var buf = new Uint8Array(0);
+    while (lapView === v) {
+      var part = await reader.read();
+      if (part.done) break;
+      var joined = new Uint8Array(buf.length + part.value.length);
+      joined.set(buf); joined.set(part.value, buf.length);
+      buf = joined;
+      var at = 0;
+      while (buf.length - at >= 4) {
+        var n = ((buf[at] << 24) | (buf[at + 1] << 16) | (buf[at + 2] << 8) | buf[at + 3]) >>> 0;
+        if (buf.length - at < 4 + n) break;
+        lapPicture(v, buf.subarray(at + 4, at + 4 + n), canvas, ctx);
+        v.bytes += 4 + n;
+        at += 4 + n;
+      }
+      buf = buf.slice(at);
+    }
+    if (lapView === v) $("lv-note").textContent = l.name + " stopped sending its screen.";
+  } catch (e) {
+    if (lapView === v && e.name !== "AbortError") $("lv-note").textContent = "Lost " + l.name + "'s screen.";
+  }
+}
+
+function lapPicture(v, au, canvas, ctx) {
+  var key = false, sps = null;
+  lapUnits(au).forEach(function (s) {
+    var t = au[s] & 0x1f;
+    if (t === 5) key = true;
+    if (t === 7) { key = true; sps = au.subarray(s, s + 4); }
+  });
+  if (sps) {
+    var codec = lapCodec(sps);
+    if (!v.dec || codec !== v.codec) {
+      if (v.dec) try { v.dec.close(); } catch (e) {}
+      v.codec = codec;
+      v.dec = new VideoDecoder({
+        output: function (frame) {
+          if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) { canvas.width = frame.displayWidth; canvas.height = frame.displayHeight; }
+          ctx.drawImage(frame, 0, 0);
+          frame.close();
+          v.frames++;
+          $("lv-note").textContent = "";
+        },
+        error: function (e) { $("lv-note").textContent = "Could not decode the picture (" + e.message + ")."; }
+      });
+      // Annex B (start codes, the settings in the stream): no description.
+      v.dec.configure({ codec: codec, optimizeForLatency: true, hardwareAcceleration: "prefer-hardware" });
+    }
+  }
+  if (!v.dec || v.dec.state !== "configured") return;
+  // Falling behind (a slow decoder): what piles up is not worth showing late.
+  if (!key && v.dec.decodeQueueSize > 6) { v.dropped++; return; }
+  v.ts += 16667;
+  v.dec.decode(new EncodedVideoChunk({ type: key ? "key" : "delta", timestamp: v.ts, data: au }));
+}
+
+/** Lines for the other laptop's helper, sent together a few times a second. */
+function lapSend(line) {
+  var v = lapView;
+  if (!v) return;
+  v.lines.push(line);
+  if (v.sending) return;
+  v.sending = true;
+  setTimeout(async function () {
+    var body = v.lines.join("\n");
+    v.lines = [];
+    try { await api("/api/laptops/input?id=" + encodeURIComponent(v.id), { method: "POST", headers: { "Content-Type": "text/plain" }, body: body }); } catch (e) {}
+    v.sending = false;
+    if (v.lines.length) lapSend(v.lines.pop());
+  }, 16);
+}
+
+/** Where on the other laptop's screen a point on the canvas is, as fractions (the picture is letterboxed). */
+function lapAt(e) {
+  var c = $("lv-canvas"), r = c.getBoundingClientRect();
+  if (!c.width || !c.height) return null;
+  var k = Math.min(r.width / c.width, r.height / c.height), w = c.width * k, h = c.height * k;
+  var x = (e.clientX - r.left - (r.width - w) / 2) / w, y = (e.clientY - r.top - (r.height - h) / 2) / h;
+  if (x < 0 || y < 0 || x > 1 || y > 1) return null;
+  return x.toFixed(4) + " " + y.toFixed(4);
+}
+
+var LAP_KEYS = { Enter: "enter", Backspace: "back", Tab: "tab", Escape: "esc", " ": "space", ArrowLeft: "left", ArrowUp: "up", ArrowRight: "right", ArrowDown: "down",
+  Delete: "del", Insert: "insert", Home: "home", End: "end", PageUp: "pgup", PageDown: "pgdn", Control: "ctrl", Alt: "alt", Shift: "shift", Meta: "win", OS: "win" };
+
+function lapKey(e, down) {
+  if (!lapView) return;
+  var name = LAP_KEYS[e.key] || (/^F([1-9]|1[0-2])$/.test(e.key) ? e.key.toLowerCase() : null);
+  if (name) {
+    e.preventDefault();
+    if (down) lapView.held[name] = true; else delete lapView.held[name];
+    lapSend((down ? "kd " : "ku ") + name);
+    return;
+  }
+  if (e.key.length !== 1) return;
+  e.preventDefault();
+  // With Ctrl, Alt or Win held: the key itself (shortcuts such as Ctrl+C); else the character, typed.
+  if (e.ctrlKey || e.altKey || e.metaKey) {
+    if (/^[a-z0-9]$/i.test(e.key)) lapSend((down ? "kd " : "ku ") + e.key.toLowerCase());
+  } else if (down) lapSend("t " + encodeURIComponent(e.key));
+}
+
+function lapClose() {
+  var v = lapView;
+  lapView = null;
+  if (!v) return;
+  Object.keys(v.held).forEach(function (k) { lapSendNow(v, "ku " + k); });
+  try { v.ctrl.abort(); } catch (e) {}
+  if (v.dec) try { v.dec.close(); } catch (e) {}
+  clearInterval(v.tick);
+  if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+  $("lap-view").hidden = true;
+}
+
+function lapSendNow(v, line) {
+  api("/api/laptops/input?id=" + encodeURIComponent(v.id), { method: "POST", headers: { "Content-Type": "text/plain" }, body: line }).catch(function () {});
+}
+
+function lapSetup() {
+  if (lapSetup.done) return;
+  lapSetup.done = true;
+  var c = $("lv-canvas"), moved = null;
+  c.addEventListener("pointermove", function (e) {
+    var at = lapAt(e);
+    if (!at || at === (lapView && lapView.last)) return;
+    if (!moved) requestAnimationFrame(function () { if (lapView && moved) { lapView.last = moved; lapSend("da " + moved); } moved = null; });
+    moved = at;
+  });
+  c.addEventListener("pointerdown", function (e) {
+    c.focus();
+    var at = lapAt(e);
+    if (at) lapSend("da " + at);
+    lapSend("b " + (e.button === 2 ? "r" : e.button === 1 ? "m" : "l") + " d");
+    try { c.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  });
+  c.addEventListener("pointerup", function (e) { lapSend("b " + (e.button === 2 ? "r" : e.button === 1 ? "m" : "l") + " u"); });
+  c.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  c.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var k = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;
+    lapSend("w " + Math.round(-e.deltaY * k * 1.2) + " " + Math.round(e.deltaX * k * 1.2));
+  }, { passive: false });
+  c.addEventListener("keydown", function (e) { lapKey(e, true); });
+  c.addEventListener("keyup", function (e) { lapKey(e, false); });
+  c.addEventListener("blur", function () { var v = lapView; if (!v) return; Object.keys(v.held).forEach(function (k) { lapSend("ku " + k); }); v.held = {}; });
+  $("lv-close").addEventListener("click", lapClose);
+  $("lv-full").addEventListener("click", function () {
+    var el = $("lap-view");
+    if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+    else el.requestFullscreen().then(function () {
+      // Chrome and Edge, in full screen: Esc, Win and the like go to the other laptop too.
+      if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(function () {});
+      c.focus();
+    }).catch(function () {});
+  });
 }
 
 // ------------------------------------------------------------------ calls, on this laptop

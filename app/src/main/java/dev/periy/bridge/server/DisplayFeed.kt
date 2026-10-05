@@ -26,6 +26,12 @@ object DisplayFeed {
     /** True while the screen view is open and taking streams. */
     @Volatile var open = false
 
+    /**
+     * Another laptop's page watching this laptop: the streams its helper sends for it (posted with
+     * `v=` the view's id) wait here, one queue per view, for the page's own request to carry them on.
+     */
+    val views = java.util.concurrent.ConcurrentHashMap<String, LinkedBlockingQueue<Feed>>()
+
     /** Every stream waiting, let go: the view has closed. */
     fun drain() {
         while (true) {
