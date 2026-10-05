@@ -846,7 +846,7 @@ class BridgeServer(
             // Debug builds: "?self=1" lists this page's own laptop too, to try it all on one machine.
             val self = call.request.queryParameters["self"] == "1" && dev.periy.bridge.BuildConfig.DEBUG
             call.respond(all.filter { it.id in online && it.name.startsWith(HELPER_PREFIX) && (self || !sameMachine(it, me, all)) }
-                .map { LaptopDto(it.id, helperMachine(it.name)) }.distinctBy { it.name })
+                .map { LaptopDto(it.id, helperMachine(it.name).removeSuffix(" (website)")) }.distinctBy { it.name })
         }
         get("/api/laptops/view") {
             val me = call.device() ?: return@get
@@ -862,6 +862,18 @@ class BridgeServer(
             call.response.header(HttpHeaders.CacheControl, "no-store")
             call.respondBytesWriter(ContentType("application", "x-l87-frames")) {
                 EventBus.emitTo(id, "display", "start 0 $w $h 60 0 http view=$vid mirror" + (if (far) " far" else ""))
+                // What has reached this page, told back to the helper every 50 ms, as the phone's own view
+                // does: on a clock, not only as more comes (the helper waits for word before sending more).
+                val ackSid = java.util.concurrent.atomic.AtomicReference("")
+                val ackBytes = java.util.concurrent.atomic.AtomicLong(0)
+                val acker = kotlinx.coroutines.CoroutineScope(Dispatchers.Default).launch {
+                    var last = -1L
+                    while (true) {
+                        kotlinx.coroutines.delay(50)
+                        val n = ackBytes.get()
+                        if (n != last && ackSid.get().isNotEmpty()) { EventBus.emitTo(id, "displayack", "${ackSid.get()} $n"); last = n }
+                    }
+                }
                 try {
                     var first = true
                     while (true) {
@@ -869,7 +881,7 @@ class BridgeServer(
                         val feed = withContext(Dispatchers.IO) { queue.poll(if (first) 30L else 15L, java.util.concurrent.TimeUnit.SECONDS) } ?: break
                         first = false
                         var sent = 0L
-                        var told = 0L
+                        ackSid.set(feed.sid); ackBytes.set(0)
                         val buf = ByteArray(64 * 1024)
                         try {
                             while (true) {
@@ -878,9 +890,7 @@ class BridgeServer(
                                 writeFully(buf, 0, n)
                                 flush()
                                 sent += n
-                                // What has reached this page, told back to the helper, as the phone's own view does.
-                                val now = System.currentTimeMillis()
-                                if (now - told >= 50) { EventBus.emitTo(id, "displayack", "${feed.sid} $sent"); told = now }
+                                ackBytes.set(sent)
                             }
                         } finally {
                             runCatching { feed.input.close() }
@@ -889,6 +899,7 @@ class BridgeServer(
                     }
                 } catch (_: Throwable) {
                 } finally {
+                    acker.cancel()
                     DisplayFeed.views.remove(vid)?.let { q -> while (true) { val f = q.poll() ?: break; runCatching { f.input.close() }; f.done.complete(Unit) } }
                     EventBus.emitTo(id, "display", "stop")
                 }
