@@ -20,3 +20,4 @@ __pycache__/
 /tools/lyrics-align/venv/
 /tools/lyrics-align/backup/
 /tools/lyrics-align/cache/
+/tools/lyrics-align/verify.json

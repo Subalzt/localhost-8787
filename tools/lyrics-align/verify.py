@@ -211,6 +211,7 @@ def main():
     ap.add_argument("--words", action="store_true", help="then time them word by word (align.py)")
     ap.add_argument("--out", default=os.path.join(align.HERE, "verify.json"))
     args = ap.parse_args()
+    align.remember_where()
     phone = Phone(args.phone)
     tracks = phone.tracks()
     if args.ids:

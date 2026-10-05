@@ -159,7 +159,75 @@ public static class BlazeItPc
         awake.IsBackground = true;
         awake.Start();
 
+        Thread lyrics = new Thread(LyricsLoop);
+        lyrics.IsBackground = true;
+        lyrics.Start();
+
         ControlLoop();
+    }
+
+    // ------------------------------------------------------------------ new songs' lyrics, word by word
+    //
+    // With the lyrics aligner set up on this laptop (tools\lyrics-align: it writes where it is to
+    // lyrics-align.txt here whenever it runs), songs added to the phone are checked against their
+    // singing and timed word by word by themselves: every 10 minutes the phone's list is looked at,
+    // and the songs not seen before go to verify.py, at low priority, on the graphics card. The first
+    // look only learns the list, as the songs already there were done by hand.
+
+    static string LyricsSeenFile { get { return Path.Combine(Dir, "lyrics-seen.txt"); } }
+
+    static void LyricsLoop()
+    {
+        Thread.Sleep(120000);
+        while (true)
+        {
+            try { LyricsOnce(); } catch (Exception e) { Log("New songs' lyrics: " + e.Message); }
+            Thread.Sleep(600000);
+        }
+    }
+
+    static void LyricsOnce()
+    {
+        string where = Path.Combine(Dir, "lyrics-align.txt");
+        if (phone == null || session == null || !File.Exists(where)) return;
+        string folder = File.ReadAllText(where).Trim();
+        string py = Path.Combine(folder, "venv\\Scripts\\python.exe"), script = Path.Combine(folder, "verify.py");
+        if (!File.Exists(py) || !File.Exists(script)) return;
+        string body;
+        using (var res = Http("GET", "/api/music", session, 30000))
+        {
+            if ((int)res.StatusCode != 200) return;
+            using (var rd = new StreamReader(res.GetResponseStream(), Encoding.UTF8)) body = rd.ReadToEnd();
+        }
+        var ids = new List<string>();
+        foreach (Match m in Regex.Matches(body, "\"id\":(\\d+)")) ids.Add(m.Groups[1].Value);
+        if (ids.Count == 0) return;
+        if (!File.Exists(LyricsSeenFile)) { File.WriteAllLines(LyricsSeenFile, ids.ToArray()); return; }
+        var seen = new HashSet<string>(File.ReadAllLines(LyricsSeenFile));
+        var fresh = new List<string>();
+        foreach (string id in ids) if (!seen.Contains(id)) fresh.Add(id);
+        if (fresh.Count == 0) return;
+        Say("Checking the lyrics of " + fresh.Count + (fresh.Count == 1 ? " new song" : " new songs") +
+            " on the phone against the singing, and timing them word by word, on this laptop's graphics card.");
+        var psi = new ProcessStartInfo(py, "-W ignore -u \"" + script + "\" --phone " + Via(phone) + ":" + PhonePort +
+            " --ids " + string.Join(",", fresh.ToArray()) + " --fix --words");
+        psi.WorkingDirectory = folder;
+        psi.UseShellExecute = false; psi.CreateNoWindow = true; psi.RedirectStandardOutput = true;
+        psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+        var p = Process.Start(psi);
+        try { p.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
+        int fixedN = 0, timed = 0;
+        string line;
+        while ((line = p.StandardOutput.ReadLine()) != null)
+        {
+            if (line.StartsWith("[") || line.Contains("given the phone") || line.Contains("by the word")) Log("Lyrics: " + line.Trim());
+            if (line.Contains("given the phone")) fixedN++;
+            if (line.Contains("lines by the word") && !line.Trim().StartsWith("0/")) timed++;
+        }
+        p.WaitForExit();
+        foreach (string id in fresh) seen.Add(id);
+        File.WriteAllLines(LyricsSeenFile, new List<string>(seen).ToArray());
+        Say("New songs' lyrics: " + timed + " of " + fresh.Count + " timed word by word" + (fixedN > 0 ? ", " + fixedN + " given better lyrics" : "") + ".");
     }
 
     [DllImport("kernel32.dll")] static extern uint SetThreadExecutionState(uint flags);

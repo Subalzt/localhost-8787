@@ -32,6 +32,17 @@ CACHE = os.path.join(HERE, "cache")
 
 # ---------------------------------------------------------------- the phone
 
+def remember_where():
+    """Tells the laptop helper where this is (lyrics-align.txt beside its session), so it can time
+    the words of songs added to the phone by itself (its LyricsLoop)."""
+    try:
+        d = os.path.join(os.environ["APPDATA"], "Xoosh")
+        if os.path.isdir(d):
+            with open(os.path.join(d, "lyrics-align.txt"), "w", encoding="utf-8") as f:
+                f.write(HERE)
+    except (OSError, KeyError):
+        pass
+
 def session_cookie():
     raw = open(os.path.join(os.environ["APPDATA"], "Xoosh", "session.txt"), encoding="utf-8").read().strip()
     return raw if raw.startswith("xoosh_session=") else "xoosh_session=" + raw
@@ -298,6 +309,7 @@ def main():
     ap.add_argument("--mix", action="store_true", help="align against the whole mix, without pulling the vocals out first (faster, less exact)")
     args = ap.parse_args()
     PAD_MS, MIN_SCORE = args.pad, args.min
+    remember_where()
     phone = Phone(args.phone)
     tracks = phone.tracks()
     if args.ids:
