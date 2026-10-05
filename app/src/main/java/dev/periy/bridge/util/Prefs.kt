@@ -93,6 +93,11 @@ class Prefs(ctx: Context) {
         set(v) = sp.edit { putBoolean(K_CLIP_SYNC, v) }
 
     /** A notification when the laptop with the helper drops off (asleep, off the internet). */
+    /** Location was asked for once, on the first start (the map, server/Where.kt). */
+    var locationAsked: Boolean
+        get() = sp.getBoolean("location_asked", false)
+        set(v) = sp.edit { putBoolean("location_asked", v) }
+
     var laptopAlerts: Boolean
         get() = sp.getBoolean("laptop_alerts", true)
         set(v) = sp.edit { putBoolean("laptop_alerts", v) }

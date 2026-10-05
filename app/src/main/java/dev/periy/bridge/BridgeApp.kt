@@ -105,6 +105,9 @@ class Container(ctx: Context) {
     /** Says when the laptop with the helper drops off. */
     private val laptopWatch = dev.periy.bridge.server.LaptopWatch(app) { prefs.laptopAlerts }
 
+    /** Where your phones and laptops are (server/Where.kt). */
+    val where by lazy { dev.periy.bridge.server.Where(app, peers) { tunnelKeys.psk(it) } }
+
     /** Messages with linked phones, each phone the other's server (server/Messages.kt). */
     val messages by lazy { dev.periy.bridge.server.Messages(app, peers) { tunnelKeys.psk(it) } }
 

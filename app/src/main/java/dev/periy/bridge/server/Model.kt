@@ -223,6 +223,11 @@ data class DirectDto(
 @Serializable data class ChatThread(val key: String, val title: String, val group: Boolean, val members: List<String>, val messages: List<ChatItem>)
 @Serializable data class ChatSend(val key: String = "", val text: String = "")
 @Serializable data class ChatKey(val key: String = "")
+/** Where your phones and laptops are, for the map (server/Where.kt). */
+@Serializable data class WhereDto(val places: List<Place>, val allowed: Boolean, val always: Boolean)
+/** A laptop's position, from its helper. */
+@Serializable data class LaptopFix(val lat: Double = 0.0, val lon: Double = 0.0, val acc: Float = 0f, val at: Long = 0, val battery: Int = -1)
+
 /** Another laptop whose helper is running, for this page to see and drive. */
 @Serializable data class LaptopDto(val id: String, val name: String)
 @Serializable data class ChatNewGroup(val name: String = "", val members: List<String> = emptyList())

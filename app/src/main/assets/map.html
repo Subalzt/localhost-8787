@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Where</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<!--
+  Where your phones and laptops are (server/Where.kt), one map for the app (ui/MapScreen.kt, which
+  hands it the places with setPlaces) and the page (its Map tab, which shows this in a frame; with
+  ?api=1 it asks /api/where itself). The map's pictures are OpenStreetMap's (Esri's for satellite);
+  the positions themselves never leave your devices.
+-->
+<style>
+  :root {
+    --bg: #FFFFFF; --sheet: rgba(255,255,255,.92); --txt: #000; --sub: #86868B; --line: rgba(60,60,67,.14); --chip: #F2F2F7;
+    --blue: #007AFF; --good: #34C759; --bad: #FF3B30; --shadow: 0 10px 40px rgba(0,0,0,.16), 0 1px 3px rgba(0,0,0,.08);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #000; --sheet: rgba(28,28,30,.92); --txt: #fff; --sub: #8D8D93; --line: rgba(255,255,255,.1); --chip: #2C2C2E;
+      --blue: #0A84FF; --good: #30D158; --bad: #FF453A; --shadow: 0 0 0 1px rgba(255,255,255,.08), 0 18px 50px rgba(0,0,0,.6);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] { --bg: #000; --sheet: rgba(28,28,30,.92); --txt: #fff; --sub: #8D8D93; --line: rgba(255,255,255,.1); --chip: #2C2C2E; --blue: #0A84FF; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--txt);
+    font: 15px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Lexend", sans-serif; -webkit-font-smoothing: antialiased; }
+  #map { position: absolute; inset: 0; background: var(--chip); }
+  .leaflet-control-attribution { font-size: 10px; background: var(--sheet) !important; color: var(--sub); }
+  .leaflet-control-attribution a { color: var(--sub); }
+  .leaflet-control-zoom { display: none; }
+  /* OpenStreetMap has no dark map: in the dark, its colours turned round (water stays blue, roads light). */
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .streets { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88); } }
+
+  .pin { position: relative; width: 46px; height: 46px; }
+  .pin .face { position: absolute; inset: 3px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 17px;
+    border: 3px solid #fff; box-shadow: 0 4px 14px rgba(0,0,0,.28); transition: transform .25s cubic-bezier(.2,.9,.25,1.2); }
+  .pin.on .face { transform: scale(1.18); }
+  .pin .kind { position: absolute; right: -2px; bottom: -2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; display: grid; place-items: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  .pin .kind svg { width: 12px; height: 12px; fill: none; stroke: #1C1C1E; stroke-width: 2; stroke-linejoin: round; }
+  .pin.stale .face { filter: grayscale(.7); opacity: .75; }
+  .pin.self .face::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; border: 2px solid currentColor; opacity: 0; animation: ping 2.4s infinite; }
+  @keyframes ping { 0% { transform: scale(.7); opacity: .6; } 100% { transform: scale(1.5); opacity: 0; } }
+
+  .sheet { position: absolute; left: 12px; right: 12px; bottom: 12px; max-height: 46%; overflow-y: auto; border-radius: 20px; background: var(--sheet);
+    backdrop-filter: saturate(1.6) blur(24px); -webkit-backdrop-filter: saturate(1.6) blur(24px); box-shadow: var(--shadow); z-index: 500; padding: 6px; }
+  @media (min-width: 760px) { .sheet { left: 16px; right: auto; top: 16px; bottom: auto; width: 340px; max-height: calc(100% - 32px); } }
+  .sheet h1 { font-size: 20px; font-weight: 750; letter-spacing: -.3px; margin: 10px 12px 4px; }
+  .sheet .hint { margin: 0 12px 8px; font-size: 13px; color: var(--sub); }
+  .row { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 14px; cursor: pointer; transition: background .15s; }
+  .row:hover, .row.on { background: color-mix(in srgb, var(--txt) 7%, transparent); }
+  .row .av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; flex: 0 0 auto; }
+  .row .who { flex: 1; min-width: 0; }
+  .row b { display: block; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row span { display: block; font-size: 12.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .dist { text-align: right; font-size: 13px; color: var(--sub); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+  .detail { padding: 4px 12px 12px; display: none; }
+  .row.on + .detail { display: block; }
+  .detail .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13px; margin: 2px 0 10px; }
+  .detail .facts dt { color: var(--sub); }
+  .detail .facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .detail .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { border: 0; border-radius: 10px; background: var(--chip); color: var(--txt); font: inherit; font-size: 13.5px; font-weight: 600; padding: 8px 14px; cursor: pointer; text-decoration: none; }
+  .btn.blue { background: var(--blue); color: #fff; }
+  .empty { padding: 14px 12px; color: var(--sub); font-size: 13.5px; }
+  .fab { position: absolute; right: 14px; top: 14px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
+  .fab button { width: 44px; height: 44px; border-radius: 12px; border: 0; background: var(--sheet); color: var(--txt); box-shadow: var(--shadow);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); display: grid; place-items: center; cursor: pointer; }
+  .fab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="fab">
+  <button type="button" id="fit" title="Show everything"><svg viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/></svg></button>
+  <button type="button" id="layer" title="Satellite"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg></button>
+</div>
+<div class="sheet" id="sheet"><h1>Devices</h1><p class="hint" id="hint"></p><div id="list"></div></div>
+<script>
+var map = L.map("map", { zoomControl: false, attributionControl: true, worldCopyJump: true }).setView([20, 78], 4);
+var dark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+var STREETS = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, className: "streets", attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' });
+var SATELLITE = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  maxZoom: 19, attribution: "Imagery &copy; Esri" });
+STREETS.addTo(map);
+var sat = false;
+document.getElementById("layer").onclick = function () {
+  sat = !sat;
+  map.removeLayer(sat ? STREETS : SATELLITE); (sat ? SATELLITE : STREETS).addTo(map);
+  this.title = sat ? "Streets" : "Satellite";
+};
+
+var places = [], marks = {}, circles = {}, trail = null, chosen = null, fitted = false;
+var ICON = {
+  phone: '<path d="M8 2.5h8A1.5 1.5 0 0 1 17.5 4v16a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V4A1.5 1.5 0 0 1 8 2.5Z"/>',
+  laptop: '<rect x="4" y="5" width="16" height="10" rx="1.5"/><path d="M2 19h20"/>'
+};
+function hue(name) { var h = 0; for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360; return h; }
+function face(name) { var h = hue(name); return "linear-gradient(160deg,hsl(" + h + " 70% 58%),hsl(" + ((h + 30) % 360) + " 70% 42%))"; }
+function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); }
+function ago(at) {
+  var s = Math.max(0, Math.round((Date.now() - at) / 1000));
+  if (s < 45) return "Now";
+  if (s < 3600) return Math.round(s / 60) + " min ago";
+  if (s < 86400) return Math.round(s / 3600) + " h ago";
+  return new Date(at).toLocaleDateString([], { day: "numeric", month: "short" });
+}
+function metres(a, b) {
+  var r = 6371000, p1 = a.lat * Math.PI / 180, p2 = b.lat * Math.PI / 180, dp = p2 - p1, dl = (b.lon - a.lon) * Math.PI / 180;
+  var h = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+  return 2 * r * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+function far(m) { return m < 1000 ? Math.round(m) + " m" : m < 10000 ? (m / 1000).toFixed(1) + " km" : Math.round(m / 1000) + " km"; }
+
+/** The places, as the app or /api/where gives them: drawn, and listed. */
+function setPlaces(list, allowed, always) {
+  places = (list || []).filter(function (p) { return p.fix; });
+  var hint = document.getElementById("hint");
+  hint.textContent = allowed === false ? "Allow location for Localhost 8787 on the phone to show it here."
+    : always === false ? "Allow location all the time on the phone, so it keeps being found with the app closed." : "";
+  var seen = {};
+  places.forEach(function (p) {
+    seen[p.id] = true;
+    var f = p.fix, ll = [f.lat, f.lon], stale = Date.now() - f.at > 15 * 60000;
+    var html = '<div class="pin' + (p.self ? " self" : "") + (stale ? " stale" : "") + (chosen === p.id ? " on" : "") + '" style="color:hsl(' + hue(p.name) + ' 70% 50%)">' +
+      '<div class="face" style="background:' + face(p.name) + '">' + esc(p.name.trim().charAt(0).toUpperCase()) + '</div>' +
+      '<div class="kind"><svg viewBox="0 0 24 24">' + (ICON[p.kind] || ICON.phone) + '</svg></div></div>';
+    var icon = L.divIcon({ html: html, className: "", iconSize: [46, 46], iconAnchor: [23, 23] });
+    if (!marks[p.id]) {
+      marks[p.id] = L.marker(ll, { icon: icon, zIndexOffset: p.self ? 1000 : 0 }).addTo(map).on("click", function () { choose(p.id, true); });
+      circles[p.id] = L.circle(ll, { radius: f.acc, weight: 1, color: "hsl(" + hue(p.name) + " 70% 50%)", fillOpacity: .12, opacity: .5, interactive: false }).addTo(map);
+    } else {
+      marks[p.id].setLatLng(ll).setIcon(icon);
+      circles[p.id].setLatLng(ll).setRadius(f.acc);
+    }
+  });
+  Object.keys(marks).forEach(function (id) {
+    if (!seen[id]) { map.removeLayer(marks[id]); map.removeLayer(circles[id]); delete marks[id]; delete circles[id]; }
+  });
+  if (!fitted && places.length) { fit(); fitted = true; }
+  if (chosen) drawTrail();
+  list_();
+}
+
+function fit() {
+  if (!places.length) return;
+  if (places.length === 1) { map.setView([places[0].fix.lat, places[0].fix.lon], 17); return; }
+  map.fitBounds(L.latLngBounds(places.map(function (p) { return [p.fix.lat, p.fix.lon]; })), { padding: [70, 70], maxZoom: 17 });
+}
+document.getElementById("fit").onclick = function () { chosen = null; drawTrail(); list_(); fit(); };
+
+function list_() {
+  var me = places.filter(function (p) { return p.self; })[0];
+  var host = document.getElementById("list");
+  if (!places.length) { host.innerHTML = '<div class="empty">No positions yet. They come in as each phone and laptop reports where it is.</div>'; return; }
+  host.innerHTML = places.map(function (p) {
+    var f = p.fix, d = me && !p.self ? far(metres(me.fix, f)) : p.self ? "This phone" : "";
+    var bat = f.battery >= 0 ? " · " + f.battery + "%" : "";
+    return '<div class="row' + (chosen === p.id ? " on" : "") + '" data-id="' + esc(p.id) + '"><div class="av" style="background:' + face(p.name) + '">' +
+      esc(p.name.trim().charAt(0).toUpperCase()) + '</div><div class="who"><b>' + esc(p.name) + '</b><span>' + esc(ago(f.at) + " · ±" + Math.round(f.acc) + " m" + bat +
+      (p.via ? " · via " + p.via : "")) + '</span></div><div class="dist">' + esc(d) + '</div></div>' +
+      '<div class="detail"><dl class="facts"><dt>Where</dt><dd>' + f.lat.toFixed(6) + ", " + f.lon.toFixed(6) + '</dd><dt>Within</dt><dd>' + Math.round(f.acc) + ' m</dd>' +
+      (f.alt != null ? '<dt>Height</dt><dd>' + Math.round(f.alt) + ' m</dd>' : "") + (f.speed != null && f.speed > 0.5 ? '<dt>Moving</dt><dd>' + Math.round(f.speed * 3.6) + ' km/h</dd>' : "") +
+      '<dt>Seen</dt><dd>' + esc(new Date(f.at).toLocaleString()) + '</dd><dt>From</dt><dd>' + esc(f.src || "") + '</dd></dl>' +
+      '<div class="acts"><a class="btn blue" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=' + f.lat + "," + f.lon + '">Directions</a>' +
+      '<button class="btn" type="button" data-trail="' + esc(p.id) + '">' + ((p.trail || []).length > 1 ? "Trail (" + p.trail.length + ")" : "No trail yet") + '</button></div></div>';
+  }).join("");
+  host.querySelectorAll(".row").forEach(function (r) { r.onclick = function () { choose(r.dataset.id === chosen ? null : r.dataset.id, true); }; });
+  host.querySelectorAll("[data-trail]").forEach(function (b) { b.onclick = function () { showTrail = !showTrail; drawTrail(); }; });
+}
+
+var showTrail = false;
+function choose(id, fly) {
+  chosen = id;
+  showTrail = false;
+  var p = places.filter(function (x) { return x.id === id; })[0];
+  if (p && fly) map.flyTo([p.fix.lat, p.fix.lon], Math.max(map.getZoom(), 17), { duration: .8 });
+  setPlaces(places.length ? placesRaw : [], lastAllowed, lastAlways);
+}
+function drawTrail() {
+  if (trail) { map.removeLayer(trail); trail = null; }
+  var p = places.filter(function (x) { return x.id === chosen; })[0];
+  if (!p || !showTrail || !p.trail || p.trail.length < 2) return;
+  trail = L.polyline(p.trail.map(function (f) { return [f.lat, f.lon]; }), { color: "hsl(" + hue(p.name) + " 70% 50%)", weight: 4, opacity: .8, lineJoin: "round" }).addTo(map);
+  map.fitBounds(trail.getBounds(), { padding: [60, 60], maxZoom: 18 });
+}
+
+var placesRaw = [], lastAllowed, lastAlways;
+var setPlacesOuter = setPlaces;
+setPlaces = function (list, allowed, always) { placesRaw = list || []; lastAllowed = allowed; lastAlways = always; setPlacesOuter(placesRaw, allowed, always); };
+
+// The page: its own requests to /api/where, on each word from the page that something moved, and each 20 s.
+if (/[?&]api=1/.test(location.search)) {
+  var load = function () {
+    fetch("/api/where", { credentials: "same-origin", cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d) setPlaces(d.places, d.allowed, d.always); }).catch(function () {});
+  };
+  load();
+  setInterval(load, 20000);
+  window.addEventListener("message", function (e) { if (e.data === "where") load(); });
+}
+setInterval(function () { if (places.length) list_(); }, 30000);
+</script>
+</body>
+</html>

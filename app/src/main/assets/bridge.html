@@ -2511,6 +2511,8 @@
   }
   @media (prefers-reduced-motion: reduce) { .bub.fresh { animation: none; } }
   .phones-top { display: flex; align-items: center; margin: 0 0 16px; }
+  .map-frame { display: block; width: 100%; height: calc(100vh - 150px - var(--player-h, 0px)); min-height: 440px; border: 0;
+    border-radius: var(--r-card); background: var(--surface); box-shadow: var(--card-shadow); }
   .seg .seg-count { font-style: normal; margin-left: 7px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--blue); color: #fff;
     font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; vertical-align: 1px; }
   .seg .seg-count.bad { background: var(--bad); }
@@ -2691,6 +2693,12 @@
       </div>
     </div>
     <div class="chat-viewer" id="chat-viewer" hidden><img id="chat-viewer-img" alt=""></div>
+  </section>
+
+  <!-- ---------------------------------------------------------- where your phones and laptops are -->
+  <!-- The map the app shows too (assets/map.html), asking /api/where itself; told when something moved. -->
+  <section data-panel="map" hidden>
+    <iframe class="map-frame" id="map-frame" src="about:blank" title="Where your phones and laptops are"></iframe>
   </section>
 
   <!-- ---------------------------------------------------------- phone storage -->
@@ -3046,6 +3054,7 @@ var ticker = null;
 var TABS = [
   { id: "home", label: "Home", icon: "<path d=\"M3.5 10.5 12 3.5l8.5 7\"/><path d=\"M5.5 9v10a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9\"/><path d=\"M10 20.5V15a2 2 0 0 1 4 0v5.5\"/>" },
   { id: "phones", label: "Phones", icon: "<path d=\"M9 2.5h6A2.5 2.5 0 0 1 17.5 5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 19V5A2.5 2.5 0 0 1 9 2.5Z\"/><path d=\"M11 18.5h2\"/>" },
+  { id: "map", label: "Map", icon: "<path d=\"M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z\"/><circle cx=\"12\" cy=\"10\" r=\"2.5\"/>" },
   { id: "phone", label: "Files", icon: "<path d=\"M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17Z\"/>" },
   { id: "music", label: "Music", icon: "<path d=\"M9 18V5.5l11-2V16\"/><circle cx=\"6.5\" cy=\"18\" r=\"2.5\"/><circle cx=\"17.5\" cy=\"16\" r=\"2.5\"/>" },
   { id: "alerts", label: "Alerts", icon: "<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z\"/><path d=\"M10 20.5a2 2 0 0 0 4 0\"/>" },
@@ -3425,6 +3434,7 @@ function selectTab(id, fromHistory) {
   if (id === "phone" && !fs.loaded) fsOpen("");
   if (id === "alerts") { alertsSeen = true; renderAlertCount(); }
   if (id === "phones") phonesShown();
+  if (id === "map" && $("map-frame").getAttribute("src") === "about:blank") $("map-frame").src = "/map.html?api=1";
 }
 
 
@@ -3436,7 +3446,7 @@ function selectTab(id, fromHistory) {
 // so a reload or a bookmark opens that tab.
 
 var navReady = false;
-var NAV_TABS = ["home", "phones", "phone", "music", "alerts", "settings"];
+var NAV_TABS = ["home", "phones", "map", "phone", "music", "alerts", "settings"];
 
 function navState() { return history.state || {}; }
 
@@ -5608,6 +5618,7 @@ function connectEvents() {
   callsWatch(events);
   chatsWatch(events);
   lapsWatch(events);
+  events.addEventListener("where", function () { var f = $("map-frame"); if (f && f.contentWindow && f.getAttribute("src") !== "about:blank") f.contentWindow.postMessage("where", "*"); });
   events.addEventListener("incoming", function (e) {
     try { showIncoming(JSON.parse(e.data)); } catch (err) {}
   });

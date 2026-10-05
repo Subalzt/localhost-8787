@@ -835,6 +835,29 @@ class BridgeServer(
             if ((ctx.applicationContext as dev.periy.bridge.BridgeApp).container.calls.receive(from, me.id, w)) call.respond(ApiResult(true))
             else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That signal does not open here"))
         }
+        // ---- Where your phones and laptops are (server/Where.kt): for the page's map; laptops' helpers
+        // say where they are, linked phones where they and their laptops are.
+        get("/api/where") {
+            call.device() ?: return@get
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            val w = where()
+            call.respond(WhereDto(w.places(), w.allowed(), w.allowedAlways()))
+        }
+        post("/api/where/laptop") {
+            val me = call.device() ?: return@post
+            val f = runCatching { call.receive<LaptopFix>() }.getOrNull()
+            if (f == null || f.lat !in -90.0..90.0 || f.lon !in -180.0..180.0 || f.acc <= 0f) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad position")); return@post }
+            where().laptop(me.id, helperMachine(me.name).removeSuffix(" (website)"),
+                Fix(f.lat, f.lon, f.acc, if (f.at > 0) f.at else System.currentTimeMillis(), src = "wifi", battery = f.battery))
+            call.respond(ApiResult(true))
+        }
+        post("/api/where/forget") {
+            call.device() ?: return@post
+            val id = runCatching { call.receive<ChatKey>() }.getOrNull()?.key.orEmpty()
+            if (id.isNotEmpty()) where().forget(id)
+            call.respond(ApiResult(true))
+        }
+
         // ---- Another laptop, seen and driven from this page: its screen as its helper streams it
         // (passed on here as it comes, each picture with its length), and this page's mouse and keys
         // sent to its helper as the phone's Control tab sends them.
@@ -1122,6 +1145,15 @@ class BridgeServer(
             call.device() ?: return@post
             calls().pageLeave()
             call.respond(ApiResult(true))
+        }
+        // Where a linked phone and its laptops are, sealed with the two phones' key (server/Where.kt).
+        post("/api/peers/where") {
+            val me = call.device() ?: return@post
+            val from = peers.byDevice(me.id)?.name
+            val w = runCatching { call.receive<CallWire>() }.getOrNull()
+            if (from == null || w == null || w.c.length > 512_000) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad position")); return@post }
+            if (where().receive(from, me.id, w)) call.respond(ApiResult(true))
+            else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That does not open here"))
         }
         post("/api/peers/msg/read") {
             val me = call.device() ?: return@post
@@ -1588,6 +1620,7 @@ class BridgeServer(
 
     private fun calls() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.calls
     private fun messages() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.messages
+    private fun where() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.where
 
     /** A message as one line, for the list of conversations. */
     private fun chatLine(x: ChatMsg): String = when (x.kind) {
@@ -2015,6 +2048,11 @@ class BridgeServer(
     // ------------------------------------------------------------------ page + auth
 
     private fun io.ktor.server.routing.Route.page() {
+        // The map of your phones and laptops (assets/map.html), for the app's map and the page's Map tab.
+        get("/map.html") {
+            call.response.header(HttpHeaders.CacheControl, "no-cache")
+            call.respondBytes(ctx.assets.open("map.html").use { it.readBytes() }, ContentType.Text.Html.withCharset(Charsets.UTF_8))
+        }
         get("/") {
             // Kept by the browser and asked after each time: across the internet a visit costs one
             // round trip instead of the whole page again; a new app's page has a new tag.
@@ -2800,7 +2838,8 @@ class BridgeServer(
         /** Cap on a single throughput probe, so a stray query cannot run forever. */
         const val BENCH_MAX = 4L * 1024 * 1024 * 1024
 
-        val PUBLIC_PATHS = setOf("/", "/api/ping", "/favicon.ico")
+        // map.html holds no positions: the app hands them in, the page asks /api/where (paired) for them.
+        val PUBLIC_PATHS = setOf("/", "/api/ping", "/favicon.ico", "/map.html")
 
         /** The page's font files: Lexend Deca, by script subset and weight. */
         val FONT_FILE = Regex("""lexend-deca-(latin|latin-ext)-(400|500|600|700)-normal\.woff2""")

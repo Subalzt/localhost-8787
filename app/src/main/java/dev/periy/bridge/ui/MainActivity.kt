@@ -398,6 +398,27 @@ private fun BlazeItUi(vm: MainViewModel) {
     var controlOpen by remember { mutableStateOf(false) }
     // The laptop's files, open over the app.
     var laptopFilesOpen by remember { mutableStateOf(false) }
+    // Where your phones and laptops are, on a map, open over the app.
+    var mapOpen by remember { mutableStateOf(false) }
+    // Location, asked for once on the first start (then all the time, as Android has it asked
+    // separately), so this phone is on the map from the beginning.
+    val askAlways = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        ctx.container.where.start(); runCatching { dev.periy.bridge.service.BridgeService.start(ctx) }
+    }
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { got ->
+        if (got.values.any { it }) {
+            ctx.container.where.start()
+            runCatching { dev.periy.bridge.service.BridgeService.start(ctx) }
+            if (Build.VERSION.SDK_INT >= 29 && !ctx.container.where.allowedAlways()) askAlways.launch(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        }
+    }
+    LaunchedEffect(Unit) {
+        val prefs = ctx.container.prefs
+        if (!prefs.locationAsked && !ctx.container.where.allowed()) {
+            prefs.locationAsked = true
+            askLocation.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
     val threads by ctx.container.messages.threads.collectAsStateWithLifecycle()
     val recentCalls by ctx.container.callLog.calls.collectAsStateWithLifecycle()
     val chatGroups by ctx.container.messages.groups.collectAsStateWithLifecycle()
@@ -415,7 +436,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     // lyrics do the same in their own screens.)
     val oemSwipe = rememberBackSwipe(enabled = showOem) { showOem = false }
     // A tab goes back to Home: the pages slide towards it with the swipe, a little under half way.
-    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && tab != TAB_HOME && !shelf.showing) { events ->
+    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !mapOpen && tab != TAB_HOME && !shelf.showing) { events ->
         val from = pager.currentPage
         val toward = if (from > TAB_HOME) -1 else 1
         try {
@@ -427,14 +448,14 @@ private fun BlazeItUi(vm: MainViewModel) {
     }
     // At Home, from Android 12 on the system takes back itself (and, from 14, shows it coming):
     // the app goes to the background, as it does below 12 here.
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !mapOpen && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
         (ctx as? android.app.Activity)?.moveTaskToBack(true)
     }
     // Music, open: a search closes, then an album (in Music's own screen), then Music itself, back
     // to the app, following the finger. The player, open over it, goes back down a step first.
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && shelf.showing) { shelf.back() }
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !mapOpen && shelf.showing) { shelf.back() }
     val musicSwipe = rememberBackSwipe(
-        enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
+        enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !mapOpen && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
     ) { shelf.showing = false }
     // A linked phone's files, at their top folder (a folder inside goes up a folder first, in its screen).
     val peerSwipe = rememberBackSwipe(enabled = browsePeer != null) { browsePeer = null }
@@ -610,6 +631,7 @@ private fun BlazeItUi(vm: MainViewModel) {
                                     running, transfers, paired, devices, live, vm,
                                     openControl = { controlOpen = true },
                                     openLaptopFiles = { laptopFilesOpen = true },
+                                    openMap = { mapOpen = true },
                                 )
                                 TAB_PHONES -> phonesTab(
                                     running, nearby, paired, peerStatus, routes, threads, recentCalls, chatGroups,
@@ -745,6 +767,15 @@ private fun BlazeItUi(vm: MainViewModel) {
             exit = androidx.compose.animation.slideOutHorizontally(tween(260)) { it } + androidx.compose.animation.fadeOut(tween(200)),
         ) {
             LaptopFilesScreen { laptopFilesOpen = false }
+        }
+
+        // The map of your phones and laptops rises in over the app.
+        androidx.compose.animation.AnimatedVisibility(
+            mapOpen,
+            enter = androidx.compose.animation.slideInVertically(tween(320)) { it / 3 } + androidx.compose.animation.fadeIn(tween(220)),
+            exit = androidx.compose.animation.slideOutVertically(tween(260)) { it / 3 } + androidx.compose.animation.fadeOut(tween(200)),
+        ) {
+            MapScreen { mapOpen = false }
         }
 
         // A conversation slides in over the app, as a linked phone's files do.
@@ -1690,14 +1721,21 @@ private fun LazyListScope.devicesTab(
     vm: MainViewModel,
     openControl: () -> Unit,
     openLaptopFiles: () -> Unit,
+    openMap: () -> Unit,
 ) {
     // Linked phones are on Phones: their ways in here (the one each was let in by, and the one it
     // asked with) are not shown as computers.
     val linkedIds = paired.map { it.deviceId }.filter { it.isNotEmpty() }.toSet()
     val computers = devices.filter { it.id !in linkedIds && !it.name.startsWith(dev.periy.bridge.server.PHONE_PREFIX) }
 
+    // Where your phones and laptops are (server/Where.kt), on a map.
     item {
-        SectionBar("Computers", Modifier.padding(top = 4.dp)) {
+        GroupCard(Modifier.padding(top = 4.dp)) {
+            SettingRow("Where they are", "Your phones and laptops on a map, precisely", first = true, icon = BlazeIcons.Pin, onClick = openMap)
+        }
+    }
+    item {
+        SectionBar("Computers") {
             val n = computers.count { (live[it.id] ?: 0) > 0 }
             if (n > 0) Text("$n live", style = LabelStyle.copy(fontWeight = FontWeight.SemiBold), color = Bridge.Lit)
         }

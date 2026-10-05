@@ -167,7 +167,87 @@ public static class BlazeItPc
         callRelay.IsBackground = true;
         callRelay.Start();
 
+        Thread whereAt = new Thread(WhereLoop);
+        whereAt.IsBackground = true;
+        whereAt.Start();
+
         ControlLoop();
+    }
+
+    // ------------------------------------------------------------------ where this laptop is
+    //
+    // For the map of your phones and laptops (the phone's server/Where.kt): Windows' own position
+    // (Wi-Fi, and GPS where the laptop has one), told to the phone when it moves 10 m, and every 10
+    // minutes when it does not. Needs Location on in Windows' settings, with "Let desktop apps access
+    // your location"; said once when it is off.
+
+    static void WhereLoop()
+    {
+        Thread.Sleep(15000);
+        System.Device.Location.GeoCoordinateWatcher w = null;
+        bool told = false;
+        System.Device.Location.GeoCoordinate last = null;
+        DateTime lastSent = DateTime.MinValue;
+        while (true)
+        {
+            try
+            {
+                if (w == null)
+                {
+                    w = new System.Device.Location.GeoCoordinateWatcher(System.Device.Location.GeoPositionAccuracy.High);
+                    w.MovementThreshold = 5;
+                    w.TryStart(true, TimeSpan.FromSeconds(30));
+                }
+                if (w.Status == System.Device.Location.GeoPositionStatus.Disabled || w.Permission == System.Device.Location.GeoPositionPermission.Denied)
+                {
+                    if (!told) Say("To show this laptop on the map, turn on Location in Windows' Settings (Privacy & security, Location), with \"Let desktop apps access your location\".");
+                    told = true;
+                }
+                else
+                {
+                    var pos = w.Position;
+                    var c = pos.Location;
+                    if (!c.IsUnknown && phone != null && session != null &&
+                        (last == null || c.GetDistanceTo(last) > 10 || (DateTime.UtcNow - lastSent).TotalMinutes >= 10) && PostWhere(c, pos.Timestamp))
+                    {
+                        last = c; lastSent = DateTime.UtcNow; told = false;
+                    }
+                }
+            }
+            catch (Exception e) { Log("Where this laptop is: " + e.Message); w = null; }
+            Thread.Sleep(60000);
+        }
+    }
+
+    static bool PostWhere(System.Device.Location.GeoCoordinate c, DateTimeOffset at)
+    {
+        int bat = -1;
+        try
+        {
+            var ps = System.Windows.Forms.SystemInformation.PowerStatus;
+            if (ps.BatteryChargeStatus != System.Windows.Forms.BatteryChargeStatus.NoSystemBattery) bat = (int)Math.Round(ps.BatteryLifePercent * 100);
+        }
+        catch { }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        string body = "{\"lat\":" + c.Latitude.ToString("R", inv) + ",\"lon\":" + c.Longitude.ToString("R", inv) +
+            ",\"acc\":" + Math.Max(1, double.IsNaN(c.HorizontalAccuracy) ? 100 : c.HorizontalAccuracy).ToString("0.#", inv) +
+            ",\"at\":" + at.ToUnixTimeMilliseconds() + ",\"battery\":" + bat + "}";
+        try
+        {
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + "/api/where/laptop");
+            r.Method = "POST";
+            r.Proxy = null;
+            r.UserAgent = Ua;
+            r.Timeout = 15000;
+            r.ContentType = "application/json";
+            r.Headers["Cookie"] = session;
+            byte[] b = Encoding.UTF8.GetBytes(body);
+            r.ContentLength = b.Length;
+            using (Stream o = r.GetRequestStream()) o.Write(b, 0, b.Length);
+            using (r.GetResponse()) { }
+            return true;
+        }
+        catch (Exception e) { Log("Where this laptop is, to the phone: " + e.Message); return false; }
     }
 
     // ------------------------------------------------------------------ calls on the page, from afar
@@ -5806,5 +5886,5 @@ public static class MasterVolume
 
 '@
 
-Add-Type -TypeDefinition $source -Language CSharp -ReferencedAssemblies System.Windows.Forms, System.Drawing, System.IO.Compression, System.IO.Compression.FileSystem, System.Numerics
+Add-Type -TypeDefinition $source -Language CSharp -ReferencedAssemblies System.Windows.Forms, System.Drawing, System.IO.Compression, System.IO.Compression.FileSystem, System.Numerics, System.Device
 [BlazeItPc]::Run($f)

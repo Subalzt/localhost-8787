@@ -713,6 +713,23 @@ networks cannot reach each other at all, the call says so instead of going throu
   the phone. Needs the page at `localhost:8787` (through the helper) or the website, where a
   browser lets a page use the microphone.
 
+### Where your phones and laptops are
+
+**Devices → Where they are** on the phone, and **Map** on the page: every phone and laptop on a map,
+each with a circle as wide as its position is sure, how long ago it was seen, its battery, and its
+trail over the last two days; tap one for its exact position, height and speed, directions, and the
+trail. Satellite at a tap.
+
+- **This phone**: Android's own fused location (GPS, Wi-Fi and cells together, no Google services),
+  high accuracy, every 20 s or 5 m while it moves, kept going in the background by the app's service
+  once location is allowed all the time (asked on the first start).
+- **Laptops**: their helper tells the phone Windows' own position (Wi-Fi, and GPS where there is one)
+  when it moves 10 m and every 10 minutes; Location must be on in Windows, with "Let desktop apps
+  access your location".
+- **Linked phones**: each tells the others where it and its laptops are, sealed with the two phones'
+  key, as messages are, so every phone and every laptop's page sees everything.
+- The positions stay on your devices. The map's pictures come from OpenStreetMap (Esri for satellite).
+
 ### 20. Laptop and laptop
 
 **See and drive another laptop.** Home on the page lists the other laptops whose helper is running;

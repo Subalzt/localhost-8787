@@ -111,6 +111,7 @@ class BridgeService : Service() {
         }
 
         startForegroundCompat(buildNotification())
+        container.where.start()
 
         if (container.server?.isRunning != true) {
             scope.launch {
@@ -190,11 +191,14 @@ class BridgeService : Service() {
         // against the dataSync budget even though the manifest declares both types.
         // Below 34 there are no FGS timeouts at all, so dataSync is free to use and is
         // the value those platform versions actually understand.
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        val base = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         } else {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         }
+        // With location allowed, location too: the phone's position keeps coming, precisely, with the
+        // app in the background (server/Where.kt).
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && container.where.allowed()) base or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else base
         runCatching {
             ServiceCompat.startForeground(this, NOTIF_ID, notification, type)
         }.onFailure {
