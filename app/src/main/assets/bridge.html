@@ -3741,7 +3741,9 @@ function namesInLine(names) {
 var clipWith = [];
 
 function renderClipWith() {
-  var line = "Shared with " + namesInLine([state.device || "the phone"].concat(clipWith));
+  // Each name once: the phone first, then the others as the phone counts them.
+  var names = [state.device || "the phone"].concat(clipWith).filter(function (n, i, all) { return n && all.indexOf(n) === i; });
+  var line = "Shared with " + namesInLine(names);
   $("clip-with").textContent = line;
   $("clip-with").title = line;
 }
@@ -3749,7 +3751,8 @@ function renderClipWith() {
 async function loadTargets() {
   try {
     var d = await (await api("/api/targets")).json();
-    sendTargets = d.targets || [];
+    // Each place once (the phone leaves out this page's own laptop and the phone itself).
+    sendTargets = (d.targets || []).filter(function (t, i, all) { return all.findIndex(function (o) { return o.id === t.id; }) === i; });
     clipWith = d.clipWith || [];
   } catch (e) { return; }
   renderClipWith();

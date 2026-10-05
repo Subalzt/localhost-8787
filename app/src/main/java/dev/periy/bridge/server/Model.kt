@@ -81,10 +81,11 @@ class ServerConfig(
 /**
  * Unauthenticated probe the page calls before showing anything, to decide between the
  * pairing screen and the main UI. Deliberately reveals nothing but whether this browser is
- * already paired and what device it is talking to.
+ * already paired and what device it is talking to. [id] is the phone's own id (Session.phoneId),
+ * so a phone asking to link can see it is talking to itself.
  */
 @Serializable
-data class PingDto(val ok: Boolean, val paired: Boolean, val device: String)
+data class PingDto(val ok: Boolean, val paired: Boolean, val device: String, val id: String = "")
 
 /** One offset window of a parallel upload, as handed to the browser. */
 @Serializable

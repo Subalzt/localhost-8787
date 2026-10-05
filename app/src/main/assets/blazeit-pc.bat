@@ -330,6 +330,34 @@ public static class BlazeItPc
         return null;
     }
 
+    /**
+     * Every address this laptop has, for the phone: a page on this laptop is then known as this
+     * laptop wherever it comes from (localhost, or the phone's address over another link than this
+     * helper's), and is not offered itself as somewhere to send. Without zones; at most 32.
+     */
+    static string OwnAddrs()
+    {
+        List<string> all = new List<string>();
+        try
+        {
+            foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus != OperationalStatus.Up || ni.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+                foreach (UnicastIPAddressInformation a in ni.GetIPProperties().UnicastAddresses)
+                {
+                    if (a.Address.AddressFamily != AddressFamily.InterNetwork && a.Address.AddressFamily != AddressFamily.InterNetworkV6) continue;
+                    if (IPAddress.IsLoopback(a.Address)) continue;
+                    string s = a.Address.ToString();
+                    int pct = s.IndexOf('%');
+                    if (pct >= 0) s = s.Substring(0, pct);
+                    if (!all.Contains(s) && all.Count < 32) all.Add(s);
+                }
+            }
+        }
+        catch { }
+        return string.Join(",", all.ToArray());
+    }
+
     /** Says once per cable when it has come up at USB 2 speed, which no software can fix. */
     static string warnedSlowCable;
 
@@ -1685,6 +1713,9 @@ public static class BlazeItPc
                 // means it is gone.
                 r.ReadWriteTimeout = 40000;
                 r.Headers["Bridge-Heartbeat"] = "slow";
+                // This laptop's addresses, so the phone knows a page from any of them is on this laptop.
+                string addrs = OwnAddrs();
+                if (addrs.Length > 0) r.Headers["Bridge-Addrs"] = addrs;
                 r.Headers["Cookie"] = cookie;
                 HttpWebResponse resp;
                 try { resp = (HttpWebResponse)r.GetResponse(); }

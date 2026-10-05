@@ -31,6 +31,11 @@ data class PairedDevice(
     val pairedAt: Long,
     val lastSeenAt: Long,
     val lastIp: String,
+    /**
+     * A laptop helper's own addresses, as it gives them: a page from any of them is on the
+     * helper's machine, even when it comes over another link than the helper (Wi-Fi and the cable).
+     */
+    val addrs: List<String> = emptyList(),
 )
 
 /** A linked phone in the device list: this, then its name. */
@@ -57,19 +62,55 @@ fun helperSystem(name: String): String = when {
  * for "Firefox on Linux"). A browser in WSL or a virtual machine reaches the phone from the same
  * address as Windows but is another system, so it is "Linux", not the Windows machine.
  */
-fun shownName(d: PairedDevice, all: Collection<PairedDevice>): String {
-    if (d.name.startsWith(PHONE_PREFIX)) return d.name.removePrefix(PHONE_PREFIX)
+fun shownName(d: PairedDevice, all: Collection<PairedDevice>): String =
+    if (d.name.startsWith(PHONE_PREFIX)) d.name.removePrefix(PHONE_PREFIX)
+    else machineOf(d, all) ?: d.name.substringAfterLast(" on ", d.name)
+
+/**
+ * The laptop a device is on, by its helper's machine name: the helper itself, or a page on the
+ * same machine as a helper of the same system. Null for a phone, and for a page on a computer
+ * with no helper (it is then known only by its system).
+ */
+fun machineOf(d: PairedDevice, all: Collection<PairedDevice>): String? {
+    if (d.name.startsWith(PHONE_PREFIX)) return null
     if (d.name.startsWith(HELPER_PREFIX)) return helperMachine(d.name)
     val system = d.name.substringAfterLast(" on ", d.name)
-    if (system != "Windows" && system != "Linux" && system != "Mac") return system
+    if (system != "Windows" && system != "Linux" && system != "Mac") return null
     // The helper of the same system: a Windows page and the Windows helper, a Linux page and
     // the Linux one (even when WSL puts both on one address), a Mac page and the Mac one.
     val helpers = all.filter { it.name.startsWith(HELPER_PREFIX) && helperSystem(it.name) == system }
-    // A page that came in over the cable's USB debugging arrives from the phone's own loopback,
-    // through the helper's adb forward: it is on the helper's machine.
-    val machine = helpers.firstOrNull { it.lastIp == d.lastIp }
+    // From the address the helper itself comes from, or any other the helper says the laptop has
+    // (the page on the phone's address over Wi-Fi while the helper is on the cable). A page that
+    // came in over the cable's USB debugging arrives from the phone's own loopback, through the
+    // helper's adb forward: it is on the helper's machine.
+    val ip = plainIp(d.lastIp)
+    val machine = helpers.firstOrNull { plainIp(it.lastIp) == ip }
+        ?: helpers.firstOrNull { ip in it.addrs }
         ?: helpers.takeIf { d.lastIp.startsWith("127.") }?.maxByOrNull { it.lastSeenAt }
-    return machine?.let { helperMachine(it.name) } ?: system
+    return machine?.let { helperMachine(it.name) }
+}
+
+/**
+ * Whether two devices are on one computer: the same entry, or two on one laptop (its helper and
+ * its pages, or two browsers on it). A page is not sent files from its own machine.
+ */
+fun sameMachine(a: PairedDevice, b: PairedDevice, all: Collection<PairedDevice>): Boolean {
+    if (a.id == b.id) return true
+    if (a.name.startsWith(PHONE_PREFIX) || b.name.startsWith(PHONE_PREFIX)) return false
+    val m = machineOf(a, all) ?: return false
+    return m == machineOf(b, all)
+}
+
+/**
+ * An address as the phone's server writes it: IPv6 in its one long form, with no zone, so the
+ * same address from a helper (written however its system writes it) and from a socket compare equal.
+ * Anything that is not an address literal stays as it is; nothing is looked up.
+ */
+fun plainIp(ip: String): String {
+    val s = ip.trim().removePrefix("[").removeSuffix("]").substringBefore('%').removePrefix("::ffff:")
+    if (s.isEmpty() || s.any { !(it.isDigit() || it in 'a'..'f' || it in 'A'..'F' || it == ':' || it == '.') }) return ip
+    if (':' !in s) return s
+    return runCatching { java.net.InetAddress.getByName(s).hostAddress?.substringBefore('%') }.getOrNull() ?: ip
 }
 
 /**
@@ -137,6 +178,15 @@ class DeviceRegistry(ctx: Context) {
         if (now - cur.lastSeenAt < 5_000 && cur.lastIp == ip) return@synchronized
         _devices.value = _devices.value.map { if (it.id == id) it.copy(lastSeenAt = now, lastIp = ip) else it }
         if (now - lastPersistAt > 60_000) persist()
+    }
+
+    /** A laptop helper's own addresses (see [PairedDevice.addrs]); pages may now be known by its machine. */
+    fun setAddrs(id: String, addrs: List<String>) = synchronized(lock) {
+        val cur = _devices.value.firstOrNull { it.id == id } ?: return@synchronized
+        if (cur.addrs == addrs) return@synchronized
+        _devices.value = _devices.value.map { if (it.id == id) it.copy(addrs = addrs) else it }
+        persist()
+        EventBus.emit("targets", "")
     }
 
     fun remove(id: String) = synchronized(lock) {

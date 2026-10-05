@@ -202,8 +202,8 @@ class MainActivity : ComponentActivity() {
             if (intent.hasExtra("directtest")) (application as dev.periy.bridge.BridgeApp).container.direct.let {
                 if (intent.getBooleanExtra("directtest", false)) it.start(8787, laptop = false) else it.stop()
             }
-            // Phone to phone without touching the screen: `--es peerconnect 127.0.0.1` links (this phone
-            // to itself, for a test), `--ez approvepairs true` says Allow to every request waiting,
+            // Phone to phone without touching the screen: `--es peerconnect <address>` links with the phone
+            // there (never with this one itself: that is refused), `--ez approvepairs true` says Allow to every request waiting,
             // `--es peerbrowse <name>` opens that phone's files, `--ez forgetpeers true` unlinks them all.
             val c = (application as dev.periy.bridge.BridgeApp).container
             intent.getStringExtra("peerconnect")?.let { a ->
@@ -671,8 +671,10 @@ private fun BlazeItUi(vm: MainViewModel) {
                     ) {
                         BarTabs(
                             TABS, pillOfPage(shown.toFloat()).toInt(), position = pillOfPage(pagePos),
-                            // Messages not yet read and calls missed, on Phones, where the conversations are.
-                            badges = mapOf(PILL_PHONES to threads.values.sumOf { l -> l.count { !it.mine && it.state == "new" } } + recentCalls.count { it.fresh }),
+                            // Messages not yet read and calls missed, on Phones, where the conversations are: only
+                            // those it lists (a linked phone's, a group's), never one nobody can open to read.
+                            badges = mapOf(PILL_PHONES to threads.filterKeys { k -> k.startsWith(dev.periy.bridge.server.Messages.GROUP) || paired.any { it.name == k } }
+                                .values.sumOf { l -> l.count { !it.mine && it.state == "new" } } + recentCalls.count { it.fresh }),
                         ) { onPill(it); showOem = false }
                     }
                 }
@@ -1979,7 +1981,7 @@ private fun GroupsCard(
             MediaRow(
                 g.name,
                 when {
-                    last == null -> (if (g.host.isEmpty()) g.members else g.members + g.host).distinct().joinToString(", ")
+                    last == null -> c.messages.others(g).joinToString(", ")
                     last.mine -> "You: " + preview(last)
                     last.from.isNotEmpty() -> last.from + ": " + preview(last)
                     else -> preview(last)

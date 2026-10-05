@@ -72,6 +72,12 @@ data class PeerHello(val name: String, val port: Int, val cookie: String, val tu
 @Serializable
 data class PeerClip(val text: String, val at: Long)
 
+/**
+ * The header carrying a phone's own id (Session.phoneId) on every request it makes to another
+ * phone, so a phone asked to link by itself can say no before anyone is asked to approve.
+ */
+const val PHONE_ID_HEADER = "Bridge-Phone"
+
 /** A linked phone, as the page sees it. */
 @Serializable
 data class PeerDto(val name: String, val mutual: Boolean, val nearby: Boolean)
@@ -130,6 +136,15 @@ class PeerManager(
         fun ensureTunnel()
         /** A phone has just linked with this one: the link code, if one is open, has done its job. */
         fun linked()
+        /** This phone's own id (Session.phoneId), as /api/ping gives it. */
+        val selfId: String
+        /**
+         * The entry a session is for when this phone signed it (Session.signedHere), else null: a
+         * "linked phone" whose session is one of these is this phone itself.
+         */
+        fun signedHere(cookie: String): String?
+        /** The link code this phone shows right now, if any: typing it here would link with itself. */
+        fun ownCode(): String?
     }
 
     private val app = ctx.applicationContext
@@ -156,6 +171,13 @@ class PeerManager(
     private var ownName: String? = null
     private var discovery: NsdManager.DiscoveryListener? = null
     private val found = ConcurrentHashMap<String, NearbyPhone>()
+
+    /**
+     * Whether [p] is this phone itself: its session there was signed here. A link to oneself (a test
+     * against its own address or its own code once made one) is refused at every step, and one kept
+     * from before is dropped, so the phone never shows up as a phone of its own.
+     */
+    private fun isSelf(p: Peer): Boolean = access.signedHere(p.cookie) != null
 
     fun find(name: String): Peer? = _peers.value.firstOrNull { it.name == name }
 
@@ -331,10 +353,10 @@ class PeerManager(
      */
     private suspend fun pairWith(phone: NearbyPhone, key: String): Pair<String, String> {
         // A phone added by address is known only by its address until it says its name.
-        val name = runCatching {
-            json.parseToJsonElement(request("GET", phone, "/api/ping", null, null).body)
-                .jsonObject["device"]!!.jsonPrimitive.content
-        }.getOrDefault(phone.name)
+        val ping = runCatching { json.parseToJsonElement(request("GET", phone, "/api/ping", null, null).body).jsonObject }.getOrNull()
+        val name = ping?.get("device")?.jsonPrimitive?.content ?: phone.name
+        // Its own address, or its own code: this phone, not another one.
+        if (ping?.get("id")?.jsonPrimitive?.content == access.selfId) error("That is this phone")
         val start = request("POST", phone, "/api/pair", null, null)
         if (start.code !in 200..299) {
             Log.w(TAG, "Pair request to ${phone.host} answered ${start.code}: ${start.body.take(300)}")
@@ -351,7 +373,12 @@ class PeerManager(
                 json.parseToJsonElement(poll.body).jsonObject["state"]!!.jsonPrimitive.content
             }.getOrDefault("")
             when (state) {
-                "APPROVED" -> return name to (poll.setCookie ?: error("Approved, but no session came back"))
+                "APPROVED" -> {
+                    val cookie = poll.setCookie ?: error("Approved, but no session came back")
+                    // Signed here: it was this phone that said yes. Its way in for itself goes again.
+                    access.signedHere(cookie)?.let { access.revoke(it); error("That is this phone") }
+                    return name to cookie
+                }
                 "DENIED" -> error("The other phone said no")
                 "EXPIRED" -> error("Nobody answered on the other phone")
             }
@@ -371,6 +398,7 @@ class PeerManager(
             var conn: dev.periy.bridge.net.TunnelConnection? = null
             try {
                 if (!dev.periy.bridge.net.LinkCode.valid(code)) error("A link code is four digits")
+                if (code == access.ownCode()) error("That is this phone's own code. Type it on the other phone")
                 setStatus(LINK_KEY, PeerStatus.Waiting(""))
                 // The code's secret, from the phone showing it, by a key exchange the code alone can finish.
                 val secret = runCatching { dev.periy.bridge.net.LinkPake.fetch(code) }
@@ -426,9 +454,16 @@ class PeerManager(
 
     /**
      * The other half of [linkBack], on the phone that approved: the phone it let in says how to
-     * come into it. [from] is the entry that phone came in on here.
+     * come into it. [from] is the entry that phone came in on here. False, and nothing linked, when
+     * the greeting is this phone's own (the way in it gives was signed here).
      */
-    fun hello(h: PeerHello, ip: String, from: String) {
+    fun hello(h: PeerHello, ip: String, from: String): Boolean {
+        access.signedHere(h.cookie)?.let { mine ->
+            Log.w(TAG, "A greeting from this phone itself; not linked")
+            access.revoke(from)
+            access.revoke(mine)
+            return false
+        }
         val old = _peers.value.firstOrNull { it.deviceId == from || it.name == h.name }
         val kept = _peers.value.filterNot { it.deviceId == from || it.name == h.name }
         // Through a tunnel the greeting comes from loopback: the phone's local address stays as it
@@ -439,6 +474,7 @@ class PeerManager(
         setPeers(kept + peer)
         access.linked()
         scope.launch { fetchTunnel(peer) }
+        return true
     }
 
     /** Unlinks both ways: this phone forgets the other and shuts it out, and asks it to do the same. */
@@ -464,7 +500,7 @@ class PeerManager(
     }
 
     private fun setPeers(list: List<Peer>) {
-        _peers.value = list
+        _peers.value = list.filterNot(::isSelf)
         save()
         EventBus.emit("peers", json.encodeToString(dto()))
     }
@@ -945,6 +981,7 @@ class PeerManager(
         conn.readTimeout = 60_000
         conn.useCaches = false
         conn.setRequestProperty("User-Agent", "BlazeItPhone/1 (${deviceName()})")
+        conn.setRequestProperty(PHONE_ID_HEADER, access.selfId)
         cookie?.let { conn.setRequestProperty("Cookie", it) }
         return conn
     }
@@ -983,9 +1020,24 @@ class PeerManager(
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
 
-    private fun load(): List<Peer> = runCatching {
-        if (file.exists()) json.decodeFromString<List<Peer>>(file.readText()) else emptyList()
-    }.getOrDefault(emptyList())
+    /**
+     * The linked phones kept. A link this phone once made with itself is dropped here, with the
+     * ways in it left behind for itself (the one it was let in by, and the one it asked with).
+     */
+    private fun load(): List<Peer> {
+        val all = runCatching {
+            if (file.exists()) json.decodeFromString<List<Peer>>(file.readText()) else emptyList()
+        }.getOrDefault(emptyList())
+        val (self, others) = all.partition(::isSelf)
+        if (self.isEmpty()) return all
+        self.forEach { p ->
+            Log.i(TAG, "Dropped a link with this phone itself (${p.name})")
+            if (p.deviceId.isNotEmpty()) access.revoke(p.deviceId)
+            access.signedHere(p.cookie)?.let(access::revoke)
+        }
+        runCatching { file.writeText(json.encodeToString(others)) }
+        return others
+    }
 
     private fun save() = runCatching { file.writeText(json.encodeToString(_peers.value)) }
 

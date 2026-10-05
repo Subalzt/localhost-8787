@@ -229,6 +229,7 @@ class BridgeServer(
      */
     private fun ApplicationCall.nearTunnel(): dev.periy.bridge.net.TunnelPeer? {
         if (request.local.localAddress.removePrefix("::ffff:").substringBefore('%') != dev.periy.bridge.net.TunnelProto.LOCAL_NEAR) return null
+        remote?.tunnel?.byPort(request.origin.remotePort)?.let { return it }
         val id = device()?.id
         val near = remote?.tunnel?.peers?.value?.filter { it.near }.orEmpty()
         return near.firstOrNull { it.deviceId == id } ?: near.singleOrNull()
@@ -245,7 +246,9 @@ class BridgeServer(
     /** Who is really there: through the website, the browser's own address; through the tunnel, the laptop's. */
     private fun ApplicationCall.clientIp(): String = when {
         viaSite() -> site?.clientFor(request.origin.remotePort) ?: "?"
-        viaTunnel() -> tunnelFar(device()?.id)?.removeSuffix(" (UDP)") ?: "the tunnel"
+        // The tunnel this very request came through (a page a helper passes on comes through the
+        // helper's), so the page's address is its laptop's, as the helper's is.
+        viaTunnel() -> (remote?.tunnel?.byPort(request.origin.remotePort)?.remote ?: tunnelFar(device()?.id))?.removeSuffix(" (UDP)") ?: "the tunnel"
         else -> remoteIp()
     }
 
@@ -635,7 +638,7 @@ class BridgeServer(
                 .distinct().map { if (':' in it) "[$it]:$stunPort" else "$it:$stunPort" }
             // Through the tunnel: this device's tunnel says how it came (IPv6 over TCP, or IPv4
             // punched through over UDP). Otherwise the phone's address that answered says it.
-            val far = if (tunnelled) tunnelFar(call.device()?.id) else null
+            val far = if (tunnelled) remote?.tunnel?.byPort(call.request.origin.remotePort)?.remote ?: tunnelFar(call.device()?.id) else null
             val punched = far?.endsWith("(UDP)") == true
             val ip = when {
                 tunnelled -> if (punched || far == null || ':' !in far) "IPv4" else "IPv6"
@@ -783,7 +786,11 @@ class BridgeServer(
                 call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad greeting"))
                 return@post
             }
-            peers.hello(h, call.remoteIp(), me.id)
+            // A greeting from this phone itself (its own session in it) links nothing.
+            if (!peers.hello(h, call.remoteIp(), me.id)) {
+                call.respond(HttpStatusCode.Conflict, ApiResult(false, "That is this phone"))
+                return@post
+            }
             call.respond(ApiResult(true, config.deviceName))
         }
         post("/api/peers/bye") {
@@ -945,12 +952,16 @@ class BridgeServer(
         get("/api/targets") {
             val me = call.device() ?: return@get
             call.response.header(HttpHeaders.CacheControl, "no-store")
-            val local = localTargets(except = me.id)
+            val local = localTargets(except = me)
+            // The laptops already here by name (this page's own among them): one open on a linked
+            // phone too is not offered again through it, and this page's own laptop never.
+            val all = devices.devices.value
+            val known = (local.mapNotNull { t -> devices.get(t.id.removePrefix("dev:"))?.let { machineOf(it, all) } } + listOfNotNull(machineOf(me, all))).toSet()
             val remote = if (call.request.queryParameters["local"] == "1") emptyList() else coroutineScope {
                 peers.peers.value.map { p ->
                     async {
                         listOf(TargetDto("peer:${p.name}/phone", p.name, "phone")) +
-                            peers.remoteTargets(p).map { t -> t.copy(id = "peer:${p.name}/${t.id}", via = p.name) }
+                            peers.remoteTargets(p).filter { t -> t.name !in known }.map { t -> t.copy(id = "peer:${p.name}/${t.id}", via = p.name) }
                     }
                 }.awaitAll().flatten()
             }
@@ -1261,11 +1272,22 @@ class BridgeServer(
         is Pipes.Sink.Relay -> s.peer.name
     }
 
-    /** Computers with the page open here right now (not their helpers, not phones), by name. */
-    private fun localTargets(except: String): List<TargetDto> {
+    /**
+     * Computers with the page open here right now (not their helpers, not phones), by name. Not
+     * [except]'s own machine (another browser on the same laptop is not somewhere else to send),
+     * and not a browser on this phone itself: the phone is a place to send already.
+     */
+    private fun localTargets(except: PairedDevice): List<TargetDto> {
         val live = devices.live.value
-        return devices.devices.value
-            .filter { (live[it.id] ?: 0) > 0 && it.id != except && !it.name.startsWith(PHONE_PREFIX) && !it.name.startsWith(HELPER_PREFIX) }
+        val all = devices.devices.value
+        val own = dev.periy.bridge.net.NetInfo.addresses().map { plainIp(it.host) }.toSet()
+        return all
+            .filter { (live[it.id] ?: 0) > 0 && !it.name.startsWith(PHONE_PREFIX) && !it.name.startsWith(HELPER_PREFIX) }
+            .filterNot { sameMachine(it, except, all) }
+            .filterNot { it.name.endsWith(" on Android") && (it.lastIp.startsWith("127.") || it.lastIp == "::1" || plainIp(it.lastIp) in own) }
+            // A laptop with the page open in two browsers is one place to send: the one used last.
+            .sortedByDescending { it.lastSeenAt }
+            .distinctBy { machineOf(it, all) ?: it.id }
             .map { TargetDto("dev:${it.id}", displayName(it), "computer") }
     }
 
@@ -1625,7 +1647,14 @@ class BridgeServer(
         // that piled up while the socket was busy go out together in one flush, so a
         // slow moment costs one late batch rather than a growing delay.
         get("/api/control/stream") {
-            val name = call.device()?.name ?: "Laptop"
+            val me = call.device()
+            val name = me?.name ?: "Laptop"
+            // The helper says every address its laptop has, so a page on that laptop is known as
+            // it wherever it comes from (see machineOf), and is not offered itself as somewhere to send.
+            val addrs = call.request.headers["Bridge-Addrs"]
+            if (me != null && addrs != null && me.name.startsWith(HELPER_PREFIX)) {
+                devices.setAddrs(me.id, addrs.split(',').map { it.trim() }.filter { it.isNotEmpty() && it.length <= 64 }.take(32).map(::plainIp).distinct())
+            }
             // Helpers from this version on accept a slow keep-alive while the Control tab is
             // closed; older ones time out after ten seconds of silence, so they keep the fast one.
             val slowOk = call.request.headers["Bridge-Heartbeat"] == "slow"
@@ -1738,7 +1767,7 @@ class BridgeServer(
 
     private fun io.ktor.server.routing.Route.auth() {
         get("/api/ping") {
-            call.respond(PingDto(ok = true, paired = call.device() != null, device = config.deviceName))
+            call.respond(PingDto(ok = true, paired = call.device() != null, device = config.deviceName, id = Session.phoneId(config.sessionKey())))
         }
 
         // What a paired device needs to come back from another network: its keys for the tunnel,
@@ -1755,6 +1784,11 @@ class BridgeServer(
 
         // A computer asks to be let in. The phone shows who is asking and a code.
         post("/api/pair") {
+            // This phone asking itself (a link to its own address, or its own code): never.
+            if (call.request.header(PHONE_ID_HEADER) == Session.phoneId(config.sessionKey())) {
+                call.respond(HttpStatusCode.Conflict, ApiResult(false, "That is this phone"))
+                return@post
+            }
             val ip = call.clientIp()
             var name = describeUserAgent(call.request.header(HttpHeaders.UserAgent))
             if (call.viaSite()) {

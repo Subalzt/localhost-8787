@@ -142,11 +142,17 @@ class Messages(
     /** Who a conversation is with, as the screen shows it: the phone's name, or the group's. */
     fun title(key: String): String = group(key)?.name ?: key
 
-    /** The phones a conversation's messages go to from this phone. */
+    /** The phones a conversation's messages go to from this phone (never itself). */
     private fun recipients(key: String): List<String> {
         val g = group(key) ?: return listOf(key)
-        return if (g.host.isEmpty()) g.members else listOf(g.host)
+        return if (g.host.isEmpty()) g.members - peers.deviceName() else listOf(g.host)
     }
+
+    /**
+     * Everyone else in group [g], for the screen and its calls: its members and the phone that keeps
+     * it, once each, without this phone (the phone keeping it lists this one among its members).
+     */
+    fun others(g: ChatGroup): List<String> = ((if (g.host.isEmpty()) g.members else g.members + g.host).distinct() - peers.deviceName())
 
     // ------------------------------------------------------------------ writing
 
@@ -217,7 +223,8 @@ class Messages(
 
     /** A new group with [members] (linked phones), kept on this phone; they hear of it with its first line. */
     fun createGroup(name: String, members: List<String>): String {
-        val g = ChatGroup(UUID.randomUUID().toString(), name.trim().ifEmpty { members.joinToString(", ") }.take(60), "", members.distinct(), System.currentTimeMillis())
+        val people = members.distinct() - peers.deviceName()
+        val g = ChatGroup(UUID.randomUUID().toString(), name.trim().ifEmpty { people.joinToString(", ") }.take(60), "", people, System.currentTimeMillis())
         _groups.value = _groups.value + (g.id to g)
         saveGroups()
         val key = GROUP + g.id

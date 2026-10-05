@@ -50,6 +50,28 @@ object Session {
         return parts[1].takeIf { it.isNotEmpty() }
     }
 
+    /**
+     * The device a cookie was issued to when this phone signed it, expired or not; null when it
+     * is not one of this phone's own. A "linked phone" holding one of these is this phone itself.
+     */
+    fun signedHere(key: ByteArray, token: String?): String? {
+        val t = token?.substringAfter('=')?.takeIf { it.isNotEmpty() } ?: return null
+        val dot = t.indexOf('.')
+        if (dot <= 0 || dot == t.length - 1) return null
+        val payload = runCatching { Base64.decode(t.substring(0, dot), B64) }.getOrNull() ?: return null
+        val sig = runCatching { Base64.decode(t.substring(dot + 1), B64) }.getOrNull() ?: return null
+        if (!constantTimeEquals(sig, hmac(key, payload))) return null
+        return String(payload).split(':').getOrNull(1)?.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * This phone's own id, given in /api/ping and with every request it makes to another phone,
+     * so it can tell itself from another phone and never link with itself. Taken from the session
+     * key, so it says nothing about the key and changes with it (Sign out all devices).
+     */
+    fun phoneId(key: ByteArray): String =
+        hmac(key, "Localhost 8787 phone id".toByteArray()).copyOf(12).joinToString("") { "%02x".format(it) }
+
     private fun hmac(key: ByteArray, data: ByteArray): ByteArray =
         Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(key, "HmacSHA256")) }.doFinal(data)
 

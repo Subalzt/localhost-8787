@@ -289,6 +289,31 @@ def if_addrs():
     return out
 
 
+def own_addrs():
+    """Every address this computer has, for the phone: a page on this computer is then known as
+    this computer wherever it comes from (localhost, or the phone's address over another link than
+    this helper's), and is not offered itself as somewhere to send. Without zones; at most 32."""
+    out = []
+    try:
+        out = [ip for _, ip, _ in if_addrs() if not ip.startswith("127.")]
+        if MAC:
+            text = run_text(["ifconfig"]) or ""
+            out += [m.group(1) for m in re.finditer(r"\sinet6 ([0-9a-fA-F:]+)(?:%\S+)?\s", text)]
+        else:
+            with open("/proc/net/if_inet6") as f:
+                for line in f:
+                    p = line.split()
+                    if len(p) >= 6 and p[5] != "lo" and len(p[0]) == 32:
+                        out.append(socket.inet_ntop(socket.AF_INET6, bytes.fromhex(p[0])))
+    except (OSError, ValueError):
+        pass
+    seen = []
+    for ip in out:
+        if ip != "::1" and ip not in seen and len(seen) < 32:
+            seen.append(ip)
+    return ",".join(seen)
+
+
 def gateways():
     """{interface: [gateway, ...]} from the kernel's routing table."""
     if MAC:
@@ -4391,7 +4416,12 @@ def control_loop(no_browser):
                 tunnel_learn()    # new pairing, new keys: the old ones stop working at once
             session = cookie
             at = phone
-            conn, r = open_stream("/api/control/stream", headers={"Bridge-Heartbeat": "slow"})
+            # This computer's addresses too, so the phone knows a page from any of them is on it.
+            heads = {"Bridge-Heartbeat": "slow"}
+            addrs = own_addrs()
+            if addrs:
+                heads["Bridge-Addrs"] = addrs
+            conn, r = open_stream("/api/control/stream", headers=heads)
             if r.status == 401:
                 say("The phone no longer knows this computer; asking again.")
                 cookie = None

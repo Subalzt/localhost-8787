@@ -197,7 +197,7 @@ fun ChatScreen(name: String, onClose: () -> Unit) {
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
                     Text(title, style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        if (group != null) (listOf("You") + group.members.let { m -> if (group.host.isEmpty()) m else m + group.host }).distinct().joinToString(", ")
+                        if (group != null) (listOf("You") + messages.others(group)).joinToString(", ")
                         else "End-to-end encrypted",
                         style = CaptionStyle.copy(fontSize = 12.sp), color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )

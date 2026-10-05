@@ -86,6 +86,9 @@ class Container(ctx: Context) {
                 // A moment more, so the phone that just linked is done with the way the code opened.
                 main.postDelayed({ if (tunnelKeys.openCode() == code) closeLinkCode() }, 30_000)
             }
+            override val selfId: String get() = Session.phoneId(prefs.sessionKey())
+            override fun signedHere(cookie: String): String? = Session.signedHere(prefs.sessionKey(), cookie)
+            override fun ownCode(): String? = tunnelKeys.openCode()
         },
         storage = storage, index = index, clipboard = clipboard, clipSync = { prefs.clipSync },
     )

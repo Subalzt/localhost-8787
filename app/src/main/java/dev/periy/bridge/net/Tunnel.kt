@@ -430,6 +430,16 @@ class TunnelServer(
     private val _peers = MutableStateFlow<List<TunnelPeer>>(emptyList())
     val peers: StateFlow<List<TunnelPeer>> = _peers
 
+    /**
+     * Which tunnel each stream came through, by the port its connection to the page goes out
+     * from here: the page's server sees that port as the caller's, so a request knows its tunnel
+     * (a page a laptop helper passes on comes through the helper's tunnel, not one of its own).
+     */
+    private val streams = ConcurrentHashMap<Int, TunnelConnection>()
+
+    /** The tunnel a request to the page came through, by the caller's port as the page's server sees it. */
+    fun byPort(port: Int): TunnelPeer? = streams[port]?.let { TunnelPeer(it.peer, it.remote, it.since, 0, 0, it.near, it.here) }
+
     /** Bytes both ways over every tunnel since the server started. */
     val totalBytes = AtomicLong()
 
@@ -565,12 +575,25 @@ class TunnelServer(
             out.flush()
             link.setReadTimeout(0)
             val local = if (near) TunnelProto.LOCAL_NEAR else TunnelProto.LOCAL_HOST
+            var self: TunnelConnection? = null
             val conn = TunnelConnection(
                 link, tx = TunnelCipher(k[2], k[3], aes), rx = TunnelCipher(k[0], k[1], aes),
                 peer = id, remote = who, client = false, near = near, here = here,
-                connectLocal = { p -> if (p == pagePort()) Socket().apply { tcpNoDelay = true; connect(InetSocketAddress(local, p), 5_000) } else null },
-                onClosed = { c -> conns.remove(c); totalBytes.addAndGet(c.bytesIn.get() + c.bytesOut.get()); publish() },
+                connectLocal = { p ->
+                    if (p == pagePort()) Socket().apply {
+                        tcpNoDelay = true
+                        connect(InetSocketAddress(local, p), 5_000)
+                        self?.let { streams[localPort] = it }
+                    } else null
+                },
+                onClosed = { c ->
+                    conns.remove(c)
+                    streams.values.removeAll { it === c }
+                    totalBytes.addAndGet(c.bytesIn.get() + c.bytesOut.get())
+                    publish()
+                },
             )
+            self = conn
             conns.add(conn)
             publish()
             Log.i(TAG, "Tunnel from $who (${if (near) "near" else "far"}, ${if (aes) "AES" else "SHAKE"})")
