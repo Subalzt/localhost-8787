@@ -42,6 +42,8 @@ object Control {
     /** When a helper last said it was closing on purpose (not asleep or off the internet). */
     @Volatile var byeAt = 0L
 
+    @Volatile private var beacon: Beacon? = null
+
     private val _connected = MutableStateFlow<List<String>>(emptyList())
     /** Names of the laptops whose helper is listening right now. */
     val connected: StateFlow<List<String>> = _connected.asStateFlow()
@@ -98,6 +100,8 @@ object Control {
         _connected.value = names.map { it.second }
         // Pages list the laptops they can see and drive (BridgeServer's /api/laptops).
         EventBus.emit("laptops", "")
+        // Broadcasts let through only while no laptop has found the phone (see Beacon).
+        beacon?.wanted(names.isEmpty())
     }
 
     // ------------------------------------------------------------------ discovery
@@ -108,9 +112,16 @@ object Control {
      */
     class Beacon(private val ctx: Context, private val httpPort: Int, private val deviceName: String) {
         @Volatile private var socket: DatagramSocket? = null
-        // Many phones filter broadcast packets out in the Wi-Fi chip to save power; this
-        // lock asks for them to be let through while the server is running.
+        // Many phones filter broadcast packets out in the Wi-Fi chip to save power; this lock asks
+        // for them to be let through, but only while no laptop helper is connected: one that is
+        // has found the phone, and the lock keeps Wi-Fi from its power saving all day.
         private var multicast: WifiManager.MulticastLock? = null
+
+        @Synchronized
+        fun wanted(on: Boolean) {
+            val m = multicast ?: return
+            runCatching { if (on && !m.isHeld) m.acquire() else if (!on && m.isHeld) m.release() }
+        }
 
         fun start() {
             if (socket != null) return
@@ -127,8 +138,10 @@ object Control {
             socket = s
             multicast = runCatching {
                 ctx.applicationContext.getSystemService(WifiManager::class.java)
-                    ?.createMulticastLock("xoosh-discovery")?.apply { setReferenceCounted(false); acquire() }
+                    ?.createMulticastLock("xoosh-discovery")?.apply { setReferenceCounted(false) }
             }.getOrNull()
+            beacon = this
+            wanted(names.isEmpty())
             Thread({
                 val buf = ByteArray(64)
                 while (!s.isClosed) {

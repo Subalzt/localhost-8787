@@ -2362,12 +2362,17 @@ def leave_direct(quiet=False):
         find_phone(False)
 
 
+# The phone said its direct link changed: asked at once (direct_loop).
+direct_poked = [True]
+
+
 def direct_loop():
     global usb_host, gave_up_on, direct_ssid, added_conn
     rec = read_file(os.path.join(CONF, "direct-wifi.txt")).split("\n")
     if rec[0]:
         direct_ssid, added_conn = rec[0], len(rec) > 1 and rec[1] == "added"
     misses = usb_misses = 0
+    polled = 0.0
     while True:
         time.sleep(2.5)
         try:
@@ -2390,6 +2395,11 @@ def direct_loop():
                     usb_host = None
                     find_phone(False)
                     continue
+            # Asked when the phone says its direct link changed, each 2.5 s only while on the link,
+            # else once a minute, so an idle phone sleeps.
+            if not direct_poked[0] and not direct_ssid and time.time() - polled < 60:
+                continue
+            direct_poked[0], polled = False, time.time()
             try:
                 status, _, body = request("GET", "/api/direct", timeout=3)
                 d = json.loads(body) if status == 200 else None
@@ -2837,6 +2847,8 @@ def events_loop():
                     if len(q) >= 2 and q[1].isdigit():
                         with ack_lock:
                             ack["sid"], ack["bytes"] = q[0], int(q[1])
+                elif ev == "direct":
+                    direct_poked[0] = True
                 elif ev == "laptopfs" and not snapshot:
                     # The phone asks for a folder here, or a file from it (LaptopFiles on the phone).
                     q = d.split(" ")

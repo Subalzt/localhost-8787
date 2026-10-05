@@ -598,9 +598,8 @@ class TunnelServer(
             publish()
             Log.i(TAG, "Tunnel from $who (${if (near) "near" else "far"}, ${if (aes) "AES" else "SHAKE"})")
             conn.send(TunnelProto.HELLO, 0, info().toByteArray())
-            // Awake while it lasts: with the screen off every request would otherwise wait for the CPU.
-            KeepAwake.start()
-            try { conn.run() } finally { KeepAwake.end() }
+            // Not kept awake for being open: the requests through it are, as they are served (KeepAwake).
+            conn.run()
         } catch (e: Exception) {
             runCatching { link.close() }
         }

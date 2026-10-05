@@ -321,7 +321,12 @@ class BridgeServer(
             val path = call.request.path()
             if (path == "/events" || path == "/api/control/stream") return@intercept
             Monitor.requestStarted()
-            try { proceed() } finally { Monitor.requestEnded() }
+            // Awake while it is answered, and a moment after (net/KeepAwake.kt).
+            dev.periy.bridge.net.KeepAwake.start(path)
+            // A laptop helper's own requests (status, its laptop's position) keep the phone awake
+            // only while answered; a page's, a while after too, for the next click.
+            val helper = call.request.headers[HttpHeaders.UserAgent]?.startsWith("BlazeItPC") == true || path == "/api/ping"
+            try { proceed() } finally { Monitor.requestEnded(); dev.periy.bridge.net.KeepAwake.end(path, linger = !helper) }
         }
 
         intercept(ApplicationCallPipeline.Plugins) {

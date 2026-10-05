@@ -330,6 +330,8 @@ public static class BlazeItPc
     // look only learns the list, as the songs already there were done by hand.
 
     static string LyricsSeenFile { get { return Path.Combine(Dir, "lyrics-seen.txt"); } }
+    /** The phone said its direct link changed: ask it now (DirectLoop). */
+    static volatile bool directPoked = true;
     static string lyricsSaid;
 
     static void LyricsLoop()
@@ -460,6 +462,7 @@ public static class BlazeItPc
         {
             HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + host + ":" + PhonePort + "/api/ping");
             r.Proxy = null;
+            r.UserAgent = Ua;
             r.Timeout = 1500;
             r.ReadWriteTimeout = 1500;
             r.KeepAlive = false;
@@ -1402,6 +1405,7 @@ public static class BlazeItPc
             addedProfile = rec.Length >= 2 && rec[1].Trim() == "added";
         }
         int misses = 0, usbMisses = 0;
+        DateTime directPolled = DateTime.MinValue;
         while (true)
         {
             Thread.Sleep(2500);
@@ -1435,6 +1439,11 @@ public static class BlazeItPc
                     FindPhone(false);
                     continue;
                 }
+                // The phone says when its direct link changes ("direct"): asked on that, each 2.5 s only
+                // while on the link (to notice it stopping), else once a minute, so an idle phone sleeps.
+                if (!directPoked && directSsid == null && (DateTime.UtcNow - directPolled).TotalSeconds < 60) continue;
+                directPoked = false;
+                directPolled = DateTime.UtcNow;
                 string body = null;
                 try { using (HttpWebResponse r = Http("GET", "/api/direct", cookie, 3000)) body = Body(r); } catch { }
                 if (body == null)
@@ -1859,6 +1868,7 @@ public static class BlazeItPc
                                 long n;
                                 if (q.Length >= 2 && long.TryParse(q[1], out n)) lock (ackLock) { ackSid = q[0]; ackBytes = n; }
                             }
+                            else if (ev == "direct") directPoked = true;
                             else if (ev == "laptopfs" && !snapshot)
                             {
                                 // The phone asks for a folder here, or a file from it (LaptopFiles on the phone).

@@ -433,7 +433,6 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         if (recent.size > 1000) recent.clear()
         if (!ok) { runCatching { s.close() }; return }
         var page: Socket? = null
-        KeepAwake.start()
         try {
             // Small answers (a ping, the song list) go out at once, not held back to fill a packet.
             s.tcpNoDelay = true
@@ -456,7 +455,6 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         } finally {
             page?.let { clients.remove(it.localPort); dests.remove(it.localPort); runCatching { it.close() } }
             runCatching { s.close() }
-            KeepAwake.end()
         }
     }
 

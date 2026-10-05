@@ -96,6 +96,14 @@ class Where(
     val others: StateFlow<Map<String, Place>> = _others.asStateFlow()
 
     private var listening = false
+    /**
+     * Moving: high accuracy, every 20 s or 5 m. Still (3 minutes within 25 m): balanced power (Wi-Fi
+     * and cells, mostly no GPS), every 2 minutes, so all-the-time location costs little; back to
+     * moving the moment a position is 40 m from where it stood, or comes with a walking speed.
+     */
+    private var still = false
+    private var stillSince = 0L
+    private var anchor: Fix? = null
     private var lastShared = 0L
     private var lastSharedFix: Fix? = null
 
@@ -109,27 +117,53 @@ class Where(
     private val listener = LocationListener { took(it) }
 
     /** Starts listening, once location is allowed; called again when it is. */
-    @Suppress("MissingPermission")
     fun start() {
         if (listening || !allowed()) return
         val lm = app.getSystemService(LocationManager::class.java) ?: return
         runCatching {
-            if (Build.VERSION.SDK_INT >= 31 && lm.hasProvider(LocationManager.FUSED_PROVIDER)) {
-                val req = android.location.LocationRequest.Builder(INTERVAL_MS)
-                    .setQuality(android.location.LocationRequest.QUALITY_HIGH_ACCURACY)
-                    .setMinUpdateDistanceMeters(MIN_METRES)
-                    .build()
-                lm.requestLocationUpdates(LocationManager.FUSED_PROVIDER, req, app.mainExecutor, listener)
-            } else {
-                // Without Android's own fusion: GPS for precision, the network for a quick first fix indoors.
-                for (p in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) if (lm.isProviderEnabled(p))
-                    lm.requestLocationUpdates(p, INTERVAL_MS, MIN_METRES, listener, Looper.getMainLooper())
-            }
+            request(lm)
             // Something to show at once: the last known position, while a fresh one comes.
+            @Suppress("MissingPermission")
             for (p in lm.allProviders) runCatching { lm.getLastKnownLocation(p)?.let(::took) }
             listening = true
             Log.i(TAG, "Listening for this phone's position")
         }.onFailure { Log.w(TAG, "Location", it) }
+    }
+
+    /** Asks for positions as the phone is now: precisely while it moves, gently while it is still. */
+    @Suppress("MissingPermission")
+    private fun request(lm: LocationManager) {
+        runCatching { lm.removeUpdates(listener) }
+        val every = if (still) STILL_MS else INTERVAL_MS
+        val metres = if (still) STILL_METRES else MIN_METRES
+        if (Build.VERSION.SDK_INT >= 31 && lm.hasProvider(LocationManager.FUSED_PROVIDER)) {
+            val req = android.location.LocationRequest.Builder(every)
+                .setQuality(if (still) android.location.LocationRequest.QUALITY_BALANCED_POWER_ACCURACY else android.location.LocationRequest.QUALITY_HIGH_ACCURACY)
+                .setMinUpdateDistanceMeters(metres)
+                .build()
+            lm.requestLocationUpdates(LocationManager.FUSED_PROVIDER, req, app.mainExecutor, listener)
+        } else {
+            // Without Android's own fusion: GPS for precision (not while still), the network for a quick fix indoors.
+            val providers = if (still) listOf(LocationManager.NETWORK_PROVIDER) else listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            for (p in providers) if (lm.isProviderEnabled(p)) lm.requestLocationUpdates(p, every, metres, listener, Looper.getMainLooper())
+        }
+    }
+
+    /** Still or moving, from each new position; the asking changes with it. */
+    private fun pace(fix: Fix) {
+        val a = anchor
+        val walking = (fix.speed ?: 0f) > 1.0f
+        if (a == null || metres(a, fix) > (if (still) 40.0 else STILL_RADIUS) || walking) {
+            anchor = fix
+            stillSince = fix.at
+            if (still) { still = false; app.getSystemService(LocationManager::class.java)?.let(::request); Log.i(TAG, "Moving: precise positions") }
+            return
+        }
+        if (!still && fix.at - stillSince >= STILL_AFTER_MS) {
+            still = true
+            app.getSystemService(LocationManager::class.java)?.let(::request)
+            Log.i(TAG, "Still: gentle positions")
+        }
     }
 
     private fun battery(): Int = runCatching {
@@ -151,6 +185,7 @@ class Where(
         _self.value = next
         changed()
         share(fix)
+        if (listening) pace(fix)
     }
 
     /** A laptop's position, from its helper. */
@@ -236,6 +271,10 @@ class Where(
         private const val KEEP_POINTS = 3000
         private const val SHARE_MS = 2 * 60_000L
         private const val SHARE_TRAIL = 300
+        private const val STILL_MS = 120_000L
+        private const val STILL_METRES = 25f
+        private const val STILL_RADIUS = 25.0
+        private const val STILL_AFTER_MS = 3 * 60_000L
 
         /** Metres between two positions (haversine). */
         fun metres(a: Fix, b: Fix): Double {
