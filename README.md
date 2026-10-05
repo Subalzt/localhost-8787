@@ -682,6 +682,18 @@ networks cannot reach each other at all, the call says so instead of going throu
   moment later and see yourself after two trips through the codecs and the host's grid.
 - Registered with Android as a call, so Bluetooth headsets and car kits carry it and can hang it
   up, and it keeps going with the app in the background (camera too).
+- **On the laptop**, as on WhatsApp's: calls ring on the page too (a soft ring, and the tab says
+  who), and **Answer** there takes the call on the laptop, its microphone, camera and speakers in
+  it. **Calls** on the page's Home calls a linked phone (or makes a test call) from the laptop;
+  **Use this laptop** moves a call under way onto it, **To phone** hands it back, and the phone's
+  call screen shows *On LEGION_7I · Take back*. The laptop connects to its own phone only, which
+  stays in the call quietly and passes everything on, so it works wherever the phone's call does,
+  with no server in between. Under the hood: WebRTC on Android sends what the phone records on
+  every connection, so the laptop's voice is written in where the microphone's would be, and the
+  others' voices are mixed on the phone and sent to the page as sound over a data channel; on the
+  page they play through a connection to itself, so the browser's echo cancelling hears them and
+  the laptop's speakers are not heard back. Needs the page at `localhost:8787` (through the
+  helper) or the website, where a browser lets a page use the microphone.
 
 ### 20. Laptop and laptop
 

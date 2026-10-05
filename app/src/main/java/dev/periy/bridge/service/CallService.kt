@@ -64,6 +64,10 @@ class CallService : Service() {
                 startForeground(ONGOING_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL or camera)
             } else startForeground(ONGOING_ID, n)
         }.recoverCatching {
+            // Started from a laptop's page with the app in the background, Android does not let the
+            // microphone in (the laptop's is used then): as a call alone.
+            if (Build.VERSION.SDK_INT >= 30) startForeground(ONGOING_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
+        }.recoverCatching {
             // Without call standing the microphone alone still keeps it going.
             if (Build.VERSION.SDK_INT >= 30) startForeground(ONGOING_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         }

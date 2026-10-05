@@ -834,6 +834,55 @@ class BridgeServer(
             if ((ctx.applicationContext as dev.periy.bridge.BridgeApp).container.calls.receive(from, me.id, w)) call.respond(ApiResult(true))
             else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That signal does not open here"))
         }
+        // ---- Calls from a laptop's page: it rings there, answers, calls, and takes the call
+        // with its own microphone, camera and speakers (server/Calls.kt, "a laptop's page").
+        get("/api/call") {
+            call.device() ?: return@get
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respond(PageCallDto(calls().forPage(), peers.dto().map { it.name }))
+        }
+        post("/api/call/start") {
+            call.device() ?: return@post
+            val r = runCatching { call.receive<PageCallStart>() }.getOrNull()
+            if (r == null || (r.name != TEST_CALL && peers.find(r.name) == null)) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "No such phone"))
+                return@post
+            }
+            if (r.name == TEST_CALL) calls().testCall(r.video, camera = false) else calls().call(r.name, r.video, camera = false)
+            call.respond(ApiResult(true))
+        }
+        post("/api/call/answer") {
+            call.device() ?: return@post
+            calls().answer(false)
+            call.respond(ApiResult(true))
+        }
+        post("/api/call/end") {
+            call.device() ?: return@post
+            calls().hangUp()
+            call.respond(ApiResult(true))
+        }
+        post("/api/call/join") {
+            val me = call.device() ?: return@post
+            val r = runCatching { call.receive<PageCallSdp>() }.getOrNull()
+            if (r == null || r.sdp.length > 64_000) {
+                call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad offer"))
+                return@post
+            }
+            runCatching { calls().pageJoin(r.sdp, displayName(me), me.id) }
+                .onSuccess { call.respond(PageCallSdp(it)) }
+                .onFailure { call.respond(HttpStatusCode.Conflict, ApiResult(false, it.message ?: "Could not join the call")) }
+        }
+        post("/api/call/media") {
+            call.device() ?: return@post
+            val r = runCatching { call.receive<PageCallMedia>() }.getOrNull() ?: PageCallMedia()
+            calls().pageMedia(r.muted, r.camera)
+            call.respond(ApiResult(true))
+        }
+        post("/api/call/leave") {
+            call.device() ?: return@post
+            calls().pageLeave()
+            call.respond(ApiResult(true))
+        }
         post("/api/peers/msg/read") {
             val me = call.device() ?: return@post
             val from = peers.byDevice(me.id)?.name
@@ -1296,6 +1345,8 @@ class BridgeServer(
      * is paired from the same address, else by its browser ("Edge on Windows").
      */
     private fun displayName(d: PairedDevice): String = shownName(d, devices.devices.value)
+
+    private fun calls() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.calls
 
     /** Wi-Fi Direct, being tried as a faster way to host the direct link. Debug builds only. */
     private val p2p by lazy { dev.periy.bridge.net.P2pLink(ctx) }
@@ -2474,6 +2525,8 @@ class BridgeServer(
     }
 
     private companion object {
+        /** The name a page starts a test call with: its own voice and picture through a call and back. */
+        const val TEST_CALL = "Test call"
         const val GRACE_MS = 500L
         const val TIMEOUT_MS = 2_000L
         const val HEARTBEAT_MS = 15_000L

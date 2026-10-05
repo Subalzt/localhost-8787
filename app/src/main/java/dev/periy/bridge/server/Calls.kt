@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -113,6 +114,27 @@ data class CallMember(
     val path: String = "",
 )
 
+/** Someone in the call, as a laptop's page shows them. */
+@Serializable
+data class PageCallMember(val name: String, val phase: String, val camera: Boolean, val mic: Boolean, val speaking: Boolean)
+
+/** The call as a laptop's page shows it (sent with every change, as "call"). */
+@Serializable
+data class PageCall(
+    val id: String,
+    val phase: String,
+    val video: Boolean,
+    val outgoing: Boolean,
+    val since: Long,
+    val members: List<PageCallMember>,
+    /** The laptop that has the call, or "" while this phone has it. */
+    val laptop: String,
+    val muted: Boolean,
+    val camera: Boolean,
+    val test: Boolean,
+    val why: String,
+)
+
 /** The call on the screen. */
 data class CallState(
     val id: String,
@@ -137,6 +159,10 @@ data class CallState(
     val test: Boolean = false,
     /** This phone's screen goes in place of its camera. */
     val sharing: Boolean = false,
+    /** A laptop's page has the call (its name): its microphone, camera and speakers, this phone's quiet. */
+    val laptop: String = "",
+    val laptopMuted: Boolean = false,
+    val laptopCamera: Boolean = false,
 ) {
     /** Who is in it (or being called), for a title or a notification. */
     val peer: String get() = members.filter { it.phase != "left" }.joinToString(", ") { it.name }.ifEmpty { members.firstOrNull()?.name ?: "Call" }
@@ -193,12 +219,22 @@ class Calls(
     /** The drawing context the screen's pictures share with the codecs. */
     val egl: EglBase by lazy { EglBase.create() }
 
+    /** The phone's own speaker and microphone, muted while a laptop's page has the call. */
+    private var adm: JavaAudioDeviceModule? = null
+
     private val factory: PeerConnectionFactory by lazy {
         PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(app).createInitializationOptions())
         val adm = JavaAudioDeviceModule.builder(app)
             .setUseHardwareAcousticEchoCanceler(true)
             .setUseHardwareNoiseSuppressor(true)
+            // While a laptop's page has the call, what the microphone recorded is replaced by the
+            // laptop's voice, so every connection sends it (see PageLeg).
+            .setAudioBufferCallback { buffer, format, channels, rate, bytes, at ->
+                if (format == android.media.AudioFormat.ENCODING_PCM_16BIT) laptopVoice?.into(buffer, channels, rate, bytes)
+                at
+            }
             .createAudioDeviceModule()
+        this.adm = adm
         PeerConnectionFactory.builder()
             .setAudioDeviceModule(adm)
             .setVideoEncoderFactory(DefaultVideoEncoderFactory(egl.eglBaseContext, true, true))
@@ -248,6 +284,8 @@ class Calls(
         /** Each member's voice and picture as they come in, for the host to pass on. */
         val remoteAudio = HashMap<String, AudioTrack>()
         val remoteVideo = HashMap<String, VideoTrack>()
+        /** In a big call, not the host: the other phones' voices the host passes on, by connection. */
+        val passed = HashMap<String, MutableList<AudioTrack>>()
         /** The host of a big call: the grid it sends everyone. */
         var grid: CallCompositor? = null
         /** A test call: the far end on this same phone, and its own grid. */
@@ -275,20 +313,48 @@ class Calls(
     private var screenTrack: VideoTrack? = null
     private var screenTextures: SurfaceTextureHelper? = null
 
-    /** What this phone sends as its picture now: its screen while shared, else its camera while on. */
-    private fun myVideo(): VideoTrack? = screenTrack ?: if (cameraOn) videoTrack else null
+    /**
+     * A laptop's page in the call in this phone's place: one more connection, to the browser, which
+     * sends its microphone and camera and is sent everyone's voices and one picture back. This phone
+     * passes the laptop's voice and picture on as its own, its own speaker and microphone muted.
+     */
+    private class PageLeg(val pc: PeerConnection, val laptop: String, val device: String) {
+        var mic: AudioTrack? = null
+        var cam: VideoTrack? = null
+        var picture: RtpSender? = null
+        /** Everyone else's voices to the laptop, mixed here (see [ToLaptop]). */
+        @Volatile var voices: DataChannel? = null
+        var toLaptop: ToLaptop? = null
+        var voiceIn: LaptopVoice? = null
+        @Volatile var gatheredAll = false
+        var camera = false
+        var muted = false
+    }
+
+    private var page: PageLeg? = null
+    /** The laptop's camera, as a picture of this phone's own to send on. */
+    private var pageCam: Forward? = null
+    /** What the laptop is shown: the one other picture, or a grid of them. */
+    private var pageView: Forward? = null
+    private var pageGrid: CallCompositor? = null
+
+    /** The laptop's voice while its page has the call, in place of what the microphone records. */
+    @Volatile private var laptopVoice: LaptopVoice? = null
+
+    /** What this phone sends as its picture now: its screen while shared, else the laptop's camera or its own while on. */
+    private fun myVideo(): VideoTrack? = screenTrack ?: if (page?.camera == true) pageCam?.track else if (cameraOn) videoTrack else null
 
     // ------------------------------------------------------------------ starting, answering, ending
 
     /** Calls [name], with the camera on for a [video] call. Needs the microphone (and camera) allowed, and the screen in front. */
-    fun call(name: String, video: Boolean) {
+    fun call(name: String, video: Boolean, camera: Boolean = video) {
         scope.launch {
             if (call != null) return@launch
             val c = Call(UUID.randomUUID().toString(), host = true, video = video)
             c.roster = listOf(RosterEntry(c.me, peers.deviceName()))
             call = c
-            show(CallState(c.id, host = true, outgoing = true, phase = "calling", video = video, camera = video, speaker = video))
-            if (video) setCameraNow(true)
+            show(CallState(c.id, host = true, outgoing = true, phase = "calling", video = video, camera = camera, speaker = camera))
+            if (camera) setCameraNow(true)
             invite(name)
             // Registered with Android once it knows who is being called.
             if (call === c) register()
@@ -301,16 +367,16 @@ class Calls(
      * a moment, as an echo test does) and the picture through the host's grid, so the camera, the
      * codecs, the connection, passing tracks on and the grid are all in it.
      */
-    fun testCall(video: Boolean) {
+    fun testCall(video: Boolean, camera: Boolean = video) {
         scope.launch {
             if (call != null) return@launch
             val c = Call(UUID.randomUUID().toString(), host = true, video = video)
             c.test = true
             c.roster = listOf(RosterEntry(c.me, peers.deviceName()), RosterEntry(ECHO, ECHO_NAME))
             call = c
-            show(CallState(c.id, host = true, outgoing = true, phase = "connecting", video = video, camera = video, test = true,
+            show(CallState(c.id, host = true, outgoing = true, phase = "connecting", video = video, camera = camera, test = true,
                 members = listOf(CallMember(ECHO, ECHO_NAME, "joining"))))
-            if (video) setCameraNow(true)
+            if (camera) setCameraNow(true)
             register()
             runCatching { startEcho(c) }.onFailure { Log.w(TAG, "Test call", it); endHere("The test could not start: ${it.message}") }
         }
@@ -324,7 +390,9 @@ class Calls(
         var gotAudio: AudioTrack? = null
         var gotVideo: VideoTrack? = null
         fun wire() {
-            echoAudio?.setTrack(gotAudio, false)
+            // What this phone records, sent back: WebRTC here takes no other voice on a connection
+            // that sends (it pours the microphone into each one too), so none is passed on.
+            echoAudio?.setTrack(audioTrack, false)
             val v = gotVideo ?: return
             val g = c.echoGrid ?: CallCompositor(factory).also { c.echoGrid = it }
             g.set(listOf("back" to v))
@@ -567,6 +635,7 @@ class Calls(
         c.levels?.cancel()
         c.legs.values.forEach { closeLeg(it) }
         c.legs.clear()
+        page?.let { pageGone(it, quiet = true) }
         stopScreenNow()
         runCatching { c.echo?.close(); c.echo?.dispose() }
         c.echoGrid?.release(); c.grid?.release()
@@ -797,7 +866,7 @@ class Calls(
         // Through the host: no connections between members.
         val keep = if (relay && !c.host) setOf(c.hostId) else ids
         c.legs.keys.filter { it !in ids || it !in keep }.forEach { id -> c.legs.remove(id)?.let { closeLeg(it) } }
-        c.remoteAudio.keys.retainAll(ids); c.remoteVideo.keys.retainAll(ids)
+        c.remoteAudio.keys.retainAll(ids); c.remoteVideo.keys.retainAll(ids); c.passed.keys.retainAll(c.legs.keys)
         val s = _state.value ?: return
         val known = s.members.associateBy { it.id }
         val members = r.filter { it.id != c.me }.map { e ->
@@ -827,6 +896,7 @@ class Calls(
                 if (!c.test) leg.audioSlots.forEach { it.setTrack(null, false) }
             }
             if (!c.test) { c.grid?.release(); c.grid = null }
+            refreshPage()
             return
         }
         val grid = c.grid ?: CallCompositor(factory).also { c.grid = it }
@@ -839,6 +909,150 @@ class Calls(
             val others = c.roster.map { it.id }.filter { it != member && it != c.me }.mapNotNull { c.remoteAudio[it] }
             leg.audioSlots.forEachIndexed { i, sender -> sender.setTrack(others.getOrNull(i), false) }
         }
+        refreshPage()
+    }
+
+    // ------------------------------------------------------------------ a laptop's page in the call
+
+    /**
+     * The laptop's page takes the call: [offer] is its browser's, with its microphone (and camera)
+     * on the voice and picture channels, and a data channel ("voices") to hear everyone on. The
+     * answer is returned once it carries this phone's addresses. [laptop] is the name to show.
+     *
+     * WebRTC on Android pours what the microphone records into every connection that sends a
+     * voice, so no connection can send any other voice as well (fed from two threads at once, it
+     * stops the app). So the laptop's voice goes in where the microphone's would ([LaptopVoice],
+     * every connection then sends it), and everyone else's comes out of the call's own voices,
+     * mixed here and sent to the laptop as sound over the data channel ([ToLaptop]). The pictures
+     * go as pictures, both ways.
+     */
+    suspend fun pageJoin(offer: String, laptop: String, device: String): String = scope.async {
+        val c = call ?: error("There is no call")
+        page?.let { pageGone(it, quiet = true) }
+        lateinit var leg: PageLeg
+        val pc = factory.createPeerConnection(rtcConfig(), object : PeerConnection.Observer {
+            override fun onIceConnectionChange(s: PeerConnection.IceConnectionState) {
+                Log.i(TAG, "Call ${c.id} on $laptop: $s")
+                if (s == PeerConnection.IceConnectionState.FAILED || s == PeerConnection.IceConnectionState.CLOSED)
+                    scope.launch { if (page === leg) pageGone(leg, quiet = false) }
+            }
+            override fun onIceGatheringChange(s: PeerConnection.IceGatheringState) {
+                if (s == PeerConnection.IceGatheringState.COMPLETE) leg.gatheredAll = true
+            }
+            override fun onDataChannel(d: DataChannel) { if (d.label() == "voices") leg.voices = d }
+            override fun onIceCandidate(cand: IceCandidate) {}
+            override fun onTrack(t: RtpTransceiver) {}
+            override fun onSignalingChange(s: PeerConnection.SignalingState) {}
+            override fun onIceConnectionReceivingChange(b: Boolean) {}
+            override fun onIceCandidatesRemoved(cs: Array<out IceCandidate>) {}
+            override fun onAddStream(s: MediaStream) {}
+            override fun onRemoveStream(s: MediaStream) {}
+            override fun onRenegotiationNeeded() {}
+            override fun onAddTrack(r: RtpReceiver, s: Array<out MediaStream>) {}
+        }) ?: error("Could not start the connection")
+        leg = PageLeg(pc, laptop, device)
+        pc.awaitSetRemote(SessionDescription(SessionDescription.Type.OFFER, offer))
+        // Asked for once: each time the list is asked for, the one before is let go.
+        val ts = pc.transceivers
+        // Only received: a voice sent on this connection would carry what the microphone records.
+        ts.filter { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO }.forEachIndexed { i, t ->
+            t.direction = RtpTransceiver.RtpTransceiverDirection.RECV_ONLY
+            if (i == 0) leg.mic = t.receiver.track() as? AudioTrack
+        }
+        ts.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.let { t ->
+            t.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV
+            leg.cam = t.receiver.track() as? VideoTrack
+            leg.picture = t.sender
+        }
+        val answer = pc.awaitCreate(false)
+        pc.awaitSetLocal(answer)
+        withTimeoutOrNull(1_500) { while (!leg.gatheredAll) delay(30) }
+        val sdp = pc.localDescription?.description ?: error("No answer")
+        // The laptop has it now: its voice in place of this phone's microphone, this phone's
+        // speaker quiet (the voices still come out of the call to be mixed), its camera off.
+        page = leg
+        leg.mic?.let { mic ->
+            mic.setVolume(0.0)
+            val v = LaptopVoice()
+            mic.addSink(v)
+            leg.voiceIn = v
+            laptopVoice = v
+        }
+        leg.toLaptop = ToLaptop { leg.voices }
+        adm?.setSpeakerMute(true)
+        if (cameraOn) setCameraNow(false)
+        leg.cam?.let { pageCam = Forward(factory, it, "laptop-camera") }
+        refreshSenders()
+        _state.value?.let { show(it.copy(laptop = laptop, camera = false)) }
+        tellMedia()
+        sdp
+    }.await()
+
+    /** The laptop's microphone and camera, as its page has them. */
+    fun pageMedia(muted: Boolean, camera: Boolean) {
+        scope.launch {
+            val leg = page ?: return@launch
+            leg.muted = muted; leg.camera = camera
+            refreshSenders()
+            _state.value?.let { show(it.copy(laptopMuted = muted, laptopCamera = camera)) }
+            tellMedia()
+        }
+    }
+
+    /** The call back on this phone: from its own screen ("Take back"), or the laptop's page handing it back. */
+    fun pageLeave() {
+        scope.launch { page?.let { pageGone(it, quiet = false) } }
+    }
+
+    private fun pageGone(leg: PageLeg, quiet: Boolean) {
+        if (page !== leg) { closePage(leg); return }
+        page = null
+        laptopVoice = null
+        leg.voiceIn?.let { v -> runCatching { leg.mic?.removeSink(v) } }
+        leg.toLaptop?.release()
+        refreshSenders()
+        closePage(leg)
+        pageCam?.release(); pageCam = null
+        pageView?.release(); pageView = null
+        pageGrid?.release(); pageGrid = null
+        adm?.setSpeakerMute(false)
+        if (quiet) return
+        _state.value?.let { show(it.copy(laptop = "", laptopMuted = false, laptopCamera = false)) }
+        scope.launch { tellMedia() }
+    }
+
+    private fun closePage(leg: PageLeg) {
+        runCatching { leg.voices?.close() }
+        runCatching { leg.pc.close() }
+        runCatching { leg.pc.dispose() }
+    }
+
+    /**
+     * What the laptop is sent: every voice in the call (each other phone's, and those a big call's
+     * host passes on), mixed and sent as sound; and the one other picture, or a grid of them.
+     */
+    private fun refreshPage() {
+        val c = call ?: return
+        val leg = page ?: return
+        val voices = (c.roster.map { it.id }.filter { it != c.me }.mapNotNull { c.remoteAudio[it] } + c.passed.values.flatten()).distinct()
+        leg.toLaptop?.hear(voices)
+        val pictures = c.roster.map { it.id }.filter { it != c.me }.mapNotNull { id -> c.remoteVideo[id]?.let { id to it } }
+        val out: VideoTrack? = when {
+            pictures.isEmpty() -> null
+            pictures.size == 1 -> {
+                pageGrid?.release(); pageGrid = null
+                val v = pictures[0].second
+                if (pageView?.from !== v) { pageView?.release(); pageView = Forward(factory, v, "laptop-view") }
+                pageView?.track
+            }
+            else -> {
+                pageView?.release(); pageView = null
+                val g = pageGrid ?: CallCompositor(factory).also { pageGrid = it }
+                g.set(pictures)
+                g.track
+            }
+        }
+        leg.picture?.setTrack(out, false)
     }
 
     /** Media steps between two phones in the call. */
@@ -948,6 +1162,7 @@ class Calls(
                         is VideoTrack -> { cc.remoteVideo[member] = track; updateMember(member) { it.copy(video = track) }; refreshSenders() }
                         // The other phone's own voice is on the channel this phone's mic is on; the rest are voices passed on.
                         is AudioTrack -> if (t.sender.id() == leg.micSender?.id()) { cc.remoteAudio[member] = track; refreshSenders() }
+                            else { cc.passed.getOrPut(member) { mutableListOf() }.let { if (track !in it) it += track }; refreshPage() }
                     }
                 }
             }
@@ -1121,7 +1336,10 @@ class Calls(
         val c = call ?: return
         val s = _state.value ?: return
         val to = only?.let { listOf(it) } ?: c.roster.map { it.id }.filter { it != c.me }
-        to.forEach { sendToMember(it, CallSignal(c.id, "media", camera = s.camera || screenTrack != null, mic = !s.muted, screen = screenTrack != null)) }
+        val p = page
+        val camera = s.camera || screenTrack != null || p?.camera == true
+        val mic = if (p != null) !p.muted else !s.muted
+        to.forEach { sendToMember(it, CallSignal(c.id, "media", camera = camera, mic = mic, screen = screenTrack != null)) }
     }
 
     /** A media step to another member: straight to it when it is linked here, else through the host. */
@@ -1156,6 +1374,16 @@ class Calls(
     private fun show(s: CallState?) {
         _state.value = s
         onChange(s)
+        EventBus.emit("call", json.encodeToString(forPage(s)))
+    }
+
+    /** The call as a laptop's page shows it; null when there is none. */
+    fun forPage(s: CallState? = _state.value): PageCall? = s?.let {
+        PageCall(
+            it.id, it.phase, it.video, it.outgoing, it.since,
+            it.members.filter { m -> m.phase != "left" }.map { m -> PageCallMember(m.name, m.phase, m.camera, m.mic, m.speaking) },
+            it.laptop, if (it.laptop.isNotEmpty()) it.laptopMuted else it.muted, it.laptopCamera, it.test, it.why,
+        )
     }
 
     // ------------------------------------------------------------------ coroutines over WebRTC's callbacks
@@ -1222,4 +1450,27 @@ object CallCrypto {
     fun open(psk: ByteArray, w: CallWire): String? = runCatching {
         String(cipher(Cipher.DECRYPT_MODE, psk, Base64.decode(w.n, Base64.NO_WRAP), w.call).doFinal(Base64.decode(w.c, Base64.NO_WRAP)))
     }.getOrNull()
+}
+
+/**
+ * A picture passed on: each frame of [from] (another connection's) fed to a source of this phone's
+ * own, so it can be sent on a connection of its own, at the frames and size it comes in.
+ */
+class Forward(factory: PeerConnectionFactory, val from: VideoTrack, id: String) : org.webrtc.VideoSink {
+    private val source = factory.createVideoSource(false)
+    val track: VideoTrack = factory.createVideoTrack(id, source)
+
+    init {
+        source.capturerObserver.onCapturerStarted(true)
+        from.addSink(this)
+    }
+
+    override fun onFrame(f: org.webrtc.VideoFrame) = source.capturerObserver.onFrameCaptured(f)
+
+    fun release() {
+        runCatching { from.removeSink(this) }
+        runCatching { source.capturerObserver.onCapturerStopped() }
+        runCatching { track.dispose() }
+        runCatching { source.dispose() }
+    }
 }

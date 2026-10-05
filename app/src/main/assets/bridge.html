@@ -2364,6 +2364,55 @@
     @keyframes cmdk-pop { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
   }
   @media (max-width: 999px) { .pro-find, .pro-devs { display: none; } }
+  /* ------------------------------------------------------------ calls, on this laptop */
+  .call-list { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; }
+  .call-who { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 7px; border-radius: 14px; background: var(--bg); }
+  .call-who b { font-size: 14px; font-weight: 600; }
+  .call-who .call-sub { font-size: 12.5px; color: var(--sub); margin-left: -4px; }
+  .call-who .call-gap { width: 6px; }
+  .call-av { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 650; font-size: 14px; flex: 0 0 auto; }
+  .call-ic { width: 32px; height: 32px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
+    background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); transition: transform .18s cubic-bezier(.25,.8,.3,1), background .15s; }
+  .call-ic:hover { background: color-mix(in srgb, var(--good) 22%, transparent); }
+  .call-ic:active { transform: scale(.92); }
+  .call-ic:disabled { opacity: .4; cursor: default; }
+  .call-ic svg, .cu-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+  .call-ui { position: fixed; right: 22px; bottom: 22px; z-index: 950; width: 340px; max-width: calc(100vw - 32px);
+    background: #0C0C0F; color: #fff; border-radius: 22px; overflow: hidden; box-shadow: 0 24px 70px -20px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+    opacity: 0; transform: translateY(18px) scale(.97); pointer-events: none; visibility: hidden;
+    transition: opacity .28s, transform .38s cubic-bezier(.2,.9,.25,1.05), width .35s cubic-bezier(.25,.8,.3,1), visibility 0s .38s; }
+  .call-ui.open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition-delay: 0s; }
+  .call-ui.pictures { width: min(720px, calc(100vw - 32px)); }
+  .cu-stage { position: relative; display: none; aspect-ratio: 16 / 10; background: #000; }
+  .call-ui.pictures .cu-stage { display: block; }
+  .cu-stage #cu-remote { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+  .cu-stage #cu-self { position: absolute; right: 12px; bottom: 12px; width: 24%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 12px;
+    transform: scaleX(-1); box-shadow: 0 6px 20px rgba(0,0,0,.5); display: none; background: #111; }
+  .cu-stage.self #cu-self { display: block; }
+  .cu-stage .cu-off { position: absolute; inset: 0; display: none; place-items: center; color: rgba(255,255,255,.55); font-size: 14px; }
+  .cu-stage.off .cu-off { display: grid; }
+  .cu-head { display: flex; align-items: center; gap: 12px; padding: 18px 20px 4px; }
+  .cu-head .call-av { width: 46px; height: 46px; font-size: 19px; }
+  .cu-head .call-av.talking { box-shadow: 0 0 0 3px #0C0C0F, 0 0 0 5px #30D158; }
+  .cu-who { display: flex; flex-direction: column; min-width: 0; }
+  .cu-who b { font-size: 16px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cu-who span { font-size: 13px; color: rgba(255,255,255,.62); font-variant-numeric: tabular-nums; }
+  .cu-note { margin: 8px 20px 0; font-size: 12.5px; color: #FF9F0A; }
+  .cu-bar { display: flex; justify-content: center; gap: 14px; padding: 16px 18px 20px; }
+  .cu-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; background: none; color: #fff; cursor: pointer; font: inherit; font-size: 11.5px; }
+  .cu-btn i { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.14);
+    transition: transform .18s cubic-bezier(.25,.8,.3,1), background .15s; }
+  .cu-btn:hover i { background: rgba(255,255,255,.22); }
+  .cu-btn:active i { transform: scale(.92); }
+  .cu-btn.on i { background: #fff; color: #000; }
+  .cu-btn.end i { background: #FF3B30; }
+  .cu-btn.ok i { background: #30D158; }
+  .cu-btn.wide i { width: auto; padding: 0 18px; border-radius: 25px; gap: 8px; display: flex; align-items: center; font-size: 13.5px; font-weight: 600; }
+  .cu-btn svg { width: 21px; height: 21px; }
+  .cu-pop { animation: cu-pop .32s cubic-bezier(.2,.9,.25,1.2) both; }
+  @keyframes cu-pop { from { opacity: 0; transform: scale(.7); } }
+  @media (prefers-reduced-motion: reduce) { .call-ui, .cu-pop { transition: none; animation: none; } }
 </style>
 </head>
 <body>
@@ -2464,6 +2513,10 @@
     <input id="folder-input" type="file" webkitdirectory multiple hidden>
     <!-- Files dragged over the page: it blurs, and says where they go. -->
     <div class="drop-veil" id="drop" hidden><div><span class="send-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span><b>Drop to send</b><span id="drop-to">to the phone</span></div></div>
+
+    <!-- Calls: the phone's linked phones, called from here with this laptop's microphone and camera. -->
+    <div class="bar">Calls</div>
+    <div class="card call-list" id="call-list"></div>
 
     <div class="bar">On the phone</div>
     <div class="card" id="files"><p class="empty">Nothing yet</p></div>
@@ -2772,6 +2825,21 @@
   </div>
   <p class="viewer-note" id="viewer-note" hidden></p>
   <span class="viewer-count" id="viewer-count" hidden></span>
+</div>
+
+<!-- A call: ringing here, under way on the phone, or on this laptop (see "calls, on this laptop"). -->
+<div class="call-ui" id="call-ui" aria-live="polite">
+  <div class="cu-stage" id="cu-stage">
+    <video id="cu-remote" autoplay playsinline></video>
+    <div class="cu-off" id="cu-off">Camera off</div>
+    <video id="cu-self" autoplay playsinline muted></video>
+  </div>
+  <div class="cu-head">
+    <span class="call-av" id="cu-av"></span>
+    <div class="cu-who"><b id="cu-name"></b><span id="cu-status"></span></div>
+  </div>
+  <p class="cu-note" id="cu-note" hidden></p>
+  <div class="cu-bar" id="cu-bar"></div>
 </div>
 
 <script>
@@ -5352,6 +5420,7 @@ function connectEvents() {
   });
   // A computer opened or closed its page, here: somewhere to send, or not any more.
   events.addEventListener("targets", loadTargetsSoon);
+  callsWatch(events);
   events.addEventListener("incoming", function (e) {
     try { showIncoming(JSON.parse(e.data)); } catch (err) {}
   });
@@ -10139,6 +10208,388 @@ window.addEventListener("keydown", function (e) {
     info.paired ? showApp() : (showLogin(), siteLogin());
   } catch (e) { showLogin(); siteLogin(); }
 })();
+// ------------------------------------------------------------------ calls, on this laptop
+//
+// The phone's calls ring here too, and this laptop can take them: its microphone, camera and
+// speakers in the call in the phone's place, the phone passing them on with its own quiet; or it
+// calls a linked phone itself. Its one connection is to its own phone (server/Calls.kt, "a laptop's
+// page"), so a call works wherever the phone's call does, with no server in between.
+
+var callNow = null;        // the call as the phone tells it (PageCall), or null
+var callPhones = [];       // linked phones this laptop can call
+var callRtc = null;        // this laptop in the call: { pc, mic, cam, video, audios, joined, ... }
+var callRing = null, callTick = null, callAudio = null, callTitle = null;
+var CALL_TEST = "Test call";
+var CALL_IC = {
+  phone: '<path d="M21.5 16.6v2.9a2 2 0 0 1-2.2 2 19.6 19.6 0 0 1-8.5-3 19.3 19.3 0 0 1-6-6 19.6 19.6 0 0 1-3-8.6A2 2 0 0 1 3.8 1.7h2.9a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L7.7 9.3a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.6 2.6.7a2 2 0 0 1 1.9 2.3z"/>',
+  video: '<path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2.5"/>',
+  videoOff: '<path d="m22 8-6 4 6 4V8z"/><path d="M16 13.5V16a2 2 0 0 1-2 2H4.5A2.5 2.5 0 0 1 2 15.5v-7A2.5 2.5 0 0 1 4.5 6H8"/><path d="m2 2 20 20"/>',
+  mic: '<rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M18.5 10.5a6.5 6.5 0 0 1-13 0M12 17v4.5"/>',
+  micOff: '<path d="M15 9.3V5.5a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 4.6 2.5M18.5 10.5a6.5 6.5 0 0 1-1 3.5M5.5 10.5a6.5 6.5 0 0 0 10.4 5.2M12 17v4.5"/><path d="m3 3 18 18"/>',
+  end: '<path transform="rotate(135 12 12)" d="M21.5 16.6v2.9a2 2 0 0 1-2.2 2 19.6 19.6 0 0 1-8.5-3 19.3 19.3 0 0 1-6-6 19.6 19.6 0 0 1-3-8.6A2 2 0 0 1 3.8 1.7h2.9a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L7.7 9.3a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.6 2.6.7a2 2 0 0 1 1.9 2.3z"/>',
+  handset: '<rect x="6.5" y="2" width="11" height="20" rx="2.5"/><path d="M11 18.5h2"/>',
+  laptop: '<rect x="4" y="4.5" width="16" height="11" rx="1.5"/><path d="M2 19.5h20"/>'
+};
+
+function callSvg(name) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + CALL_IC[name] + '</svg>'; }
+
+/** A person's colour, from their name, as the phone gives it. */
+function callHue(name) { var h = 0; for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360; return h; }
+function callAvatar(name, cls) {
+  var h = callHue(name);
+  return '<span class="call-av' + (cls ? " " + cls : "") + '" style="background:linear-gradient(160deg,hsl(' + h + ' 70% 58%),hsl(' + ((h + 30) % 360) + ' 70% 42%))">' +
+    esc((name || "?").trim().charAt(0).toUpperCase()) + '</span>';
+}
+
+function callsWatch(es) {
+  es.addEventListener("call", function (e) { var c = null; try { c = JSON.parse(e.data); } catch (err) { return; } callTake(c); });
+  es.addEventListener("peers", callsLoad);
+  callsLoad();
+}
+
+async function callsLoad() {
+  try {
+    var r = await api("/api/call", { cache: "no-store" });
+    if (!r.ok) return;
+    var d = await r.json();
+    callPhones = d.phones || [];
+    renderCallList();
+    callTake(d.call);
+  } catch (e) {}
+}
+
+function renderCallList() {
+  var host = $("call-list");
+  if (!host) return;
+  var busy = !!(callNow && callNow.phase !== "ended");
+  var items = callPhones.map(function (n) { return { name: n, label: n, sub: "" }; })
+    .concat([{ name: CALL_TEST, label: "Test call", sub: "your voice and picture back" }]);
+  host.innerHTML = items.map(function (it) {
+    return '<div class="call-who">' + callAvatar(it.label) + '<b>' + esc(it.label) + '</b>' +
+      (it.sub ? '<span class="call-sub">· ' + esc(it.sub) + '</span>' : '') + '<span class="call-gap"></span>' +
+      '<button class="call-ic" type="button" data-name="' + esc(it.name) + '" data-video="0" title="Voice call"' + (busy ? " disabled" : "") + '>' + callSvg("phone") + '</button>' +
+      '<button class="call-ic" type="button" data-name="' + esc(it.name) + '" data-video="1" title="Video call"' + (busy ? " disabled" : "") + '>' + callSvg("video") + '</button></div>';
+  }).join("");
+  host.querySelectorAll(".call-ic").forEach(function (b) {
+    b.addEventListener("click", function () { callStart(b.dataset.name, b.dataset.video === "1"); });
+  });
+}
+
+/** The call as the phone now has it. */
+function callTake(c) {
+  var was = callNow;
+  callNow = c && c.phase !== "ended" ? c : (c && c.phase === "ended" ? c : null);
+  if (callRtc && callRtc.joined && c && c.laptop) callRtc.sawLaptop = true;
+  // Ended, or the phone (or another laptop) has it now: this laptop's part is over.
+  if (callRtc && (!c || c.phase === "ended" || (callRtc.sawLaptop && !c.laptop))) callDrop();
+  if (c && c.phase === "ringing" && !c.outgoing) callRingStart(c); else callRingStop();
+  if (!!was !== !!callNow || (was && callNow && was.phase !== callNow.phase)) renderCallList();
+  renderCall();
+}
+
+function callNote(t) { var n = $("cu-note"); n.textContent = t || ""; n.hidden = !t; }
+
+function callClock(since) {
+  var s = Math.max(0, Math.floor((Date.now() - since) / 1000));
+  return s >= 3600 ? Math.floor(s / 3600) + ":" + String(Math.floor(s / 60) % 60).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0")
+    : Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+
+function renderCall() {
+  var ui = $("call-ui"), c = callNow;
+  if (!c) { ui.classList.remove("open", "pictures"); clearInterval(callTick); callTick = null; callNote(""); return; }
+  var here = !!(callRtc && callRtc.joined), joining = !!(callRtc && !callRtc.joined);
+  var name = c.test ? "Test call" : (c.members.map(function (m) { return m.name; }).join(", ") || "Call");
+  $("cu-av").outerHTML = callAvatar(name, c.members.some(function (m) { return m.speaking; }) ? "talking" : "").replace('class="call-av', 'id="cu-av" class="call-av');
+  $("cu-name").textContent = name;
+  var status = function () {
+    if (c.phase === "ringing" && !c.outgoing) return (c.video ? "Video call" : "Voice call") + " · ringing on the phone too";
+    if (c.phase === "ended") return c.why || "Call ended";
+    if (joining) return "Moving to this laptop…";
+    var when = c.phase === "active" && c.since ? callClock(c.since) : c.phase === "connecting" ? "Connecting…" : "Calling…";
+    return when + (here ? " · on this laptop" : c.laptop ? " · on " + c.laptop : " · on the phone");
+  };
+  $("cu-status").textContent = status();
+  clearInterval(callTick);
+  callTick = c.phase === "active" ? setInterval(function () { $("cu-status").textContent = status(); }, 1000) : null;
+
+  var b = function (cls, icon, label, act) {
+    return '<button class="cu-btn cu-pop ' + cls + '" type="button" data-act="' + act + '"><i>' + callSvg(icon) + '</i>' + esc(label) + '</button>';
+  };
+  var bar = "";
+  if (c.phase === "ended") bar = "";
+  else if (c.phase === "ringing" && !c.outgoing) bar = b("end", "end", "Decline", "end") + (c.video ? b("ok", "video", "Video", "answer-video") : "") + b("ok", "phone", "Answer", "answer");
+  else if (here) bar = b(callRtc.muted ? "on" : "", callRtc.muted ? "micOff" : "mic", callRtc.muted ? "Unmute" : "Mute", "mute") +
+    b(callRtc.camera ? "on" : "", callRtc.camera ? "video" : "videoOff", "Camera", "camera") +
+    b("", "handset", "To phone", "back") + b("end", "end", "End", "end");
+  else if (!joining) bar = '<button class="cu-btn wide cu-pop" type="button" data-act="join"><i>' + callSvg("laptop") + 'Use this laptop</i></button>' + b("end", "end", "End", "end");
+  var host = $("cu-bar");
+  if (host.dataset.shape !== bar) {
+    host.innerHTML = bar;
+    host.dataset.shape = bar;
+    host.querySelectorAll(".cu-btn").forEach(function (btn, i) {
+      btn.style.animationDelay = (i * 45) + "ms";
+      btn.addEventListener("click", function () { callAct(btn.dataset.act); });
+    });
+  }
+  renderCallStage();
+  ui.classList.add("open");
+}
+
+/** The pictures: the other side's, and this laptop's own, while either is there. */
+function renderCallStage() {
+  var ui = $("call-ui"), stage = $("cu-stage"), v = $("cu-remote");
+  var here = !!(callRtc && callRtc.joined);
+  var track = v.srcObject && v.srcObject.getVideoTracks()[0];
+  var mine = here && callRtc.camera;
+  // Someone's camera on (in a test call, this laptop's own, which is what comes back).
+  var anyone = callNow && (callNow.members.some(function (m) { return m.camera; }) || (callNow.test && mine));
+  var theirs = here && anyone && track && !track.muted && track.readyState === "live";
+  ui.classList.toggle("pictures", !!(theirs || mine || (here && anyone)));
+  stage.classList.toggle("self", !!mine);
+  stage.classList.toggle("off", !theirs);
+}
+
+function callAct(act) {
+  if (act === "answer") callJoin({ answer: true, video: false });
+  else if (act === "answer-video") callJoin({ answer: true, video: true });
+  else if (act === "join") callJoin({});
+  else if (act === "mute") callMedia(!callRtc.muted, callRtc.camera);
+  else if (act === "camera") callCamera(!callRtc.camera);
+  else if (act === "back") { api("/api/call/leave", { method: "POST" }).catch(function () {}); callDrop(); renderCall(); }
+  else if (act === "end") { api("/api/call/end", { method: "POST" }).catch(function () {}); callDrop(); renderCall(); }
+}
+
+async function callStart(name, video) {
+  if (callNow && callNow.phase !== "ended") return;
+  callNote("");
+  if (!callCanTalk()) return;
+  try {
+    var r = await api("/api/call/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name, video: video }) });
+    if (!r.ok) throw new Error(serverMessageOf(await r.text()) || "Could not call");
+  } catch (e) { callFlash(e.message); return; }
+  callJoin({ video: video });
+}
+
+function serverMessageOf(t) { try { return JSON.parse(t).message; } catch (e) { return ""; } }
+
+/** A word on the call window, or on its own for a moment when there is no call to show it in. */
+function callFlash(t) {
+  if (!callNow) { callNow = { id: "", phase: "ended", video: false, outgoing: true, since: 0, members: [], laptop: "", muted: false, camera: false, test: false, why: t }; renderCall(); setTimeout(function () { if (callNow && !callNow.id) { callNow = null; renderCall(); } }, 3500); }
+  else callNote(t);
+}
+
+/** The microphone needs the page to be a secure one: localhost through the helper, or the website. */
+function callCanTalk() {
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.RTCPeerConnection) return true;
+  callFlash("To use this laptop's microphone, open the page at localhost:8787 (through the laptop helper).");
+  return false;
+}
+
+/** This laptop takes the call: its microphone (and camera), and everyone's voices and picture here. */
+async function callJoin(o) {
+  if (callRtc || !callCanTalk()) return;
+  var rtc = callRtc = { joined: false, sawLaptop: false, muted: false, camera: false, audios: [] };
+  // Made now, while the click that asked for it still counts, so the browser lets it play.
+  try { rtc.ac = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000, latencyHint: "interactive" }); } catch (e) {}
+  callNote("");
+  renderCall();
+  try {
+    try {
+      rtc.mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    } catch (e) {
+      throw new Error(e && e.name === "NotAllowedError" ? "Allow the microphone for this page, then try again." : "No microphone on this laptop.");
+    }
+    if (callRtc !== rtc) { rtc.mic.getTracks().forEach(function (t) { t.stop(); }); return; }
+    if (o.answer) await api("/api/call/answer", { method: "POST" });
+    var pc = rtc.pc = new RTCPeerConnection({ bundlePolicy: "max-bundle" });
+    // The microphone out; everyone's voices back as sound on a data channel (the phone mixes them:
+    // see Calls.pageJoin); the picture both ways.
+    pc.addTransceiver(rtc.mic.getAudioTracks()[0], { direction: "sendonly" });
+    rtc.video = pc.addTransceiver("video", { direction: "sendrecv" });
+    rtc.dc = pc.createDataChannel("voices", { ordered: false, maxRetransmits: 0 });
+    rtc.dc.binaryType = "arraybuffer";
+    rtc.dc.onmessage = function (e) { callHear(rtc, e.data); };
+    pc.ontrack = function (e) {
+      if (e.track.kind === "audio") {
+        var a = new Audio();
+        a.autoplay = true;
+        a.srcObject = new MediaStream([e.track]);
+        rtc.audios.push(a);
+        a.play().catch(function () {});
+      } else {
+        $("cu-remote").srcObject = new MediaStream([e.track]);
+        e.track.onmute = e.track.onunmute = renderCallStage;
+        renderCallStage();
+      }
+    };
+    pc.onconnectionstatechange = function () {
+      if (callRtc === rtc && (pc.connectionState === "failed" || pc.connectionState === "closed")) {
+        callDrop();
+        callNote(pc.connectionState === "failed" ? "Lost the way to the phone: the call is back on it." : "");
+        renderCall();
+      }
+    };
+    await pc.setLocalDescription(await pc.createOffer());
+    await new Promise(function (ok) {
+      if (pc.iceGatheringState === "complete") return ok();
+      var t = setTimeout(ok, 2000);
+      pc.onicegatheringstatechange = function () { if (pc.iceGatheringState === "complete") { clearTimeout(t); ok(); } };
+    });
+    if (callRtc !== rtc) return;
+    var r = await api("/api/call/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sdp: pc.localDescription.sdp }) });
+    var d = await r.json().catch(function () { return {}; });
+    if (!r.ok || !d.sdp) throw new Error(d.message || "Could not move the call here");
+    await pc.setRemoteDescription({ type: "answer", sdp: d.sdp });
+    rtc.joined = true;
+    if (o.video) await callCamera(true);
+  } catch (e) {
+    if (callRtc === rtc) { callDrop(); callFlash(e.message || "Could not move the call here"); }
+  }
+  renderCall();
+}
+
+async function callCamera(on) {
+  var rtc = callRtc;
+  if (!rtc || !rtc.joined) return;
+  if (on && !rtc.cam) {
+    try {
+      rtc.cam = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } });
+    } catch (e) { callNote(e && e.name === "NotAllowedError" ? "Allow the camera for this page to turn it on." : "No camera on this laptop."); return; }
+    if (callRtc !== rtc) { rtc.cam.getTracks().forEach(function (t) { t.stop(); }); return; }
+    await rtc.video.sender.replaceTrack(rtc.cam.getVideoTracks()[0]);
+    $("cu-self").srcObject = rtc.cam;
+  } else if (!on && rtc.cam) {
+    await rtc.video.sender.replaceTrack(null);
+    rtc.cam.getTracks().forEach(function (t) { t.stop(); });
+    rtc.cam = null;
+    $("cu-self").srcObject = null;
+  }
+  callMedia(rtc.muted, on);
+}
+
+function callMedia(muted, camera) {
+  var rtc = callRtc;
+  if (!rtc) return;
+  rtc.muted = muted; rtc.camera = camera;
+  if (rtc.mic) rtc.mic.getAudioTracks().forEach(function (t) { t.enabled = !muted; });
+  api("/api/call/media", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ muted: muted, camera: camera }) }).catch(function () {});
+  renderCall();
+}
+
+/** This laptop's part in the call over: its microphone and camera off, its connection closed. */
+function callDrop() {
+  var rtc = callRtc;
+  callRtc = null;
+  if (!rtc) return;
+  [rtc.mic, rtc.cam].forEach(function (s) { if (s) s.getTracks().forEach(function (t) { t.stop(); }); });
+  rtc.audios.forEach(function (a) { a.srcObject = null; });
+  (rtc.loop || []).forEach(function (pc) { try { pc.close(); } catch (e) {} });
+  if (rtc.ac) try { rtc.ac.close(); } catch (e) {}
+  if (rtc.pc) try { rtc.pc.close(); } catch (e) {}
+  $("cu-remote").srcObject = null;
+  $("cu-self").srcObject = null;
+}
+
+/**
+ * Everyone's voices, as the phone sends them: 16-bit mono sound at 48 kHz, 10 ms a message, played
+ * by a small worklet that keeps 40 ms in hand and never lets more than a quarter second pile up.
+ */
+var CALL_WORKLET = "class P extends AudioWorkletProcessor{constructor(){super();this.q=[];this.c=null;this.p=0;this.on=false;" +
+  "this.port.onmessage=e=>{this.q.push(e.data);if(this.q.length>24)this.q.splice(0,this.q.length-6)}}" +
+  "process(i,o){const out=o[0][0];let k=0;if(!this.on){if(this.q.length<4){out.fill(0);return true}this.on=true}" +
+  "while(k<out.length){if(!this.c){this.c=this.q.shift();this.p=0;if(!this.c){out.fill(0,k);this.on=false;break}}" +
+  "const n=Math.min(out.length-k,this.c.length-this.p);out.set(this.c.subarray(this.p,this.p+n),k);k+=n;this.p+=n;" +
+  "if(this.p>=this.c.length)this.c=null}return true}}registerProcessor('l87-voices',P);";
+
+function callHear(rtc, data) {
+  if (!rtc.player) {
+    rtc.early = rtc.early || [];
+    if (rtc.early.length < 10) rtc.early.push(data);
+    if (!rtc.playerStarting) {
+      rtc.playerStarting = true;
+      callPlayer(rtc).then(function (p) {
+        if (callRtc !== rtc) return;
+        rtc.player = p;
+        var early = rtc.early || [];
+        rtc.early = null;
+        early.forEach(function (d) { callHear(rtc, d); });
+      }).catch(function () { callNote("Could not play the call's sound here."); });
+    }
+    return;
+  }
+  var s = new Int16Array(data), f = new Float32Array(s.length);
+  for (var i = 0; i < s.length; i++) f[i] = s[i] / 32768;
+  rtc.player.port.postMessage(f, [f.buffer]);
+}
+
+/**
+ * The voices' player. They go through a connection from this page to itself before the speakers:
+ * a browser's echo cancelling listens only to what WebRTC itself plays, so this way the laptop's
+ * own speakers are not heard back in the call through its microphone.
+ */
+async function callPlayer(rtc) {
+  var ac = rtc.ac || (rtc.ac = new AudioContext({ sampleRate: 48000, latencyHint: "interactive" }));
+  await ac.audioWorklet.addModule(URL.createObjectURL(new Blob([CALL_WORKLET], { type: "application/javascript" })));
+  var node = new AudioWorkletNode(ac, "l87-voices", { outputChannelCount: [1] });
+  var dest = ac.createMediaStreamDestination();
+  node.connect(dest);
+  var a = new RTCPeerConnection(), b = new RTCPeerConnection();
+  rtc.loop = [a, b];
+  a.onicecandidate = function (e) { if (e.candidate) b.addIceCandidate(e.candidate).catch(function () {}); };
+  b.onicecandidate = function (e) { if (e.candidate) a.addIceCandidate(e.candidate).catch(function () {}); };
+  a.addTrack(dest.stream.getAudioTracks()[0], dest.stream);
+  b.ontrack = function (e) {
+    var el = new Audio();
+    el.autoplay = true;
+    el.srcObject = new MediaStream([e.track]);
+    rtc.audios.push(el);
+    el.play().catch(function () {});
+  };
+  await a.setLocalDescription(await a.createOffer());
+  await b.setRemoteDescription(a.localDescription);
+  await b.setLocalDescription(await b.createAnswer());
+  await a.setRemoteDescription(b.localDescription);
+  if (ac.state === "suspended") await ac.resume().catch(function () {});
+  return node;
+}
+
+/** A call ringing: a soft ring here every few seconds, and the tab's title says who. */
+function callRingStart(c) {
+  if (callRing) return;
+  var who = c.members.map(function (m) { return m.name; }).join(", ") || "A phone";
+  callTitle = document.title;
+  var flip = false;
+  var ring = function () {
+    flip = !flip;
+    document.title = flip ? who + " is calling" : callTitle;
+    if (!flip) return;
+    try {
+      var ac = callAudio || (callAudio = new (window.AudioContext || window.webkitAudioContext)());
+      if (ac.state === "suspended") ac.resume();
+      var t0 = ac.currentTime;
+      [0, 0.42].forEach(function (d) {
+        var g = ac.createGain();
+        g.gain.setValueAtTime(0, t0 + d);
+        g.gain.linearRampToValueAtTime(0.05, t0 + d + 0.03);
+        g.gain.setValueAtTime(0.05, t0 + d + 0.32);
+        g.gain.linearRampToValueAtTime(0, t0 + d + 0.38);
+        g.connect(ac.destination);
+        [440, 480].forEach(function (f) { var o = ac.createOscillator(); o.frequency.value = f; o.connect(g); o.start(t0 + d); o.stop(t0 + d + 0.4); });
+      });
+    } catch (e) {}
+  };
+  ring();
+  callRing = setInterval(ring, 2000);
+  try { if (window.Notification && Notification.permission === "granted" && document.hidden) new Notification(who, { body: (c.video ? "Video call" : "Voice call") + " · answer on this laptop", tag: "call" }); } catch (e) {}
+}
+
+function callRingStop() {
+  if (!callRing) return;
+  clearInterval(callRing);
+  callRing = null;
+  if (callTitle) document.title = callTitle;
+}
 </script>
 
 </body>

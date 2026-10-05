@@ -228,6 +228,23 @@ fun CallScreen(answerNow: Boolean, onAnswered: () -> Unit) {
                 else -> VoiceStage(call, status, calls, toggleCamera, toggleShare, onAdd = { adding = true })
             }
         }
+        // On a laptop's page: its microphone, camera and speakers have the call, this phone's are quiet.
+        AnimatedVisibility(
+            call.laptop.isNotEmpty() && call.phase != "ended",
+            enter = fadeIn(tween(220)) + slideInVertically(tween(260)) { -it },
+            exit = fadeOut(tween(220)),
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            Row(
+                Modifier.padding(top = top + 104.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.16f))
+                    .clickable { calls.pageLeave() }.padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("On ${call.laptop}", style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = Color.White)
+                Text("  ·  Take back", style = TextStyle(fontSize = 13.sp), color = Color.White.copy(alpha = 0.7f))
+            }
+        }
         AnimatedVisibility(adding, enter = fadeIn(tween(200)), exit = fadeOut(tween(200))) {
             AddSheet(call, onPick = { calls.add(it); adding = false }, onClose = { adding = false })
         }

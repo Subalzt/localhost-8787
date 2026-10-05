@@ -208,3 +208,9 @@ data class DirectDto(
      */
     val kind: String = "direct",
 )
+
+/** The call for a laptop's page, and the linked phones it can call. */
+@Serializable data class PageCallDto(val call: PageCall?, val phones: List<String>)
+@Serializable data class PageCallStart(val name: String = "", val video: Boolean = false)
+@Serializable data class PageCallSdp(val sdp: String = "")
+@Serializable data class PageCallMedia(val muted: Boolean = false, val camera: Boolean = false)
