@@ -2583,6 +2583,66 @@
   .lap-view:fullscreen .lv-bar { position: absolute; top: 0; left: 0; right: 0; opacity: 0; transition: opacity .2s; z-index: 1; }
   .lap-view:fullscreen .lv-bar:hover { opacity: 1; }
   .lv-btn.off { background: rgba(255,255,255,.06); color: rgba(255,255,255,.55); }
+  /* Security cameras */
+  .cams-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 14px; }
+  .cams-head h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+  .cams-head span { color: var(--sub); font-size: 13px; }
+  .cams-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+  .cam-tile { border-radius: 20px; overflow: hidden; background: #111113; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .cam-pic { position: relative; aspect-ratio: 16 / 9; background: #060607; display: grid; place-items: center; cursor: pointer; }
+  .cam-pic canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .cam-pic .rec { position: absolute; top: 12px; left: 12px; display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em;
+    background: rgba(0,0,0,.5); padding: 4px 9px 4px 7px; border-radius: 20px; }
+  .cam-pic .rec i { width: 8px; height: 8px; border-radius: 50%; background: #FF3B30; animation: rec-blink 1.2s infinite; }
+  .cam-pic .off { display: flex; flex-direction: column; align-items: center; gap: 12px; color: rgba(255,255,255,.55); font-size: 13.5px; text-align: center; padding: 0 20px; }
+  .cam-pic .off svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+  .cam-btn { border: 0; border-radius: 20px; background: #fff; color: #000; font: inherit; font-size: 13.5px; font-weight: 650; padding: 8px 16px; cursor: pointer; }
+  .cam-btn.dim { background: rgba(255,255,255,.14); color: #fff; }
+  .cam-info { display: flex; align-items: center; gap: 10px; padding: 12px 16px 14px; }
+  .cam-info div { flex: 1; min-width: 0; }
+  .cam-info b { display: block; font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cam-info span { display: block; font-size: 12.5px; color: rgba(255,255,255,.55); }
+  .cam-info .cam-btn { padding: 6px 13px; font-size: 12.5px; }
+  .cam-full { position: fixed; inset: 0; z-index: 975; background: #000; color: #fff; animation: fade-in .2s both; }
+  .cam-full canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .cam-full .cf-note { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,.7); font-size: 14px; margin: 0; text-align: center; }
+  .cf-top { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 12px; padding: 16px 18px; background: linear-gradient(rgba(0,0,0,.55), transparent); }
+  .cf-top div { flex: 1; min-width: 0; }
+  .cf-top b { display: block; font-size: 17px; font-weight: 650; }
+  .cf-top span { display: block; font-size: 12.5px; color: rgba(255,255,255,.7); }
+  .cf-round { width: 42px; height: 42px; border: 0; border-radius: 50%; background: rgba(255,255,255,.16); color: #fff; display: grid; place-items: center; cursor: pointer; flex: 0 0 auto;
+    transition: background .15s, transform .15s; }
+  .cf-round:hover { background: rgba(255,255,255,.26); }
+  .cf-round:active { transform: scale(.92); }
+  .cf-round svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .cf-round.on { background: #fff; color: #000; }
+  .cf-bottom { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 16px 22px;
+    background: linear-gradient(transparent, rgba(0,0,0,.6)); }
+  .cf-talk { width: 72px; height: 72px; border: 0; border-radius: 50%; background: rgba(255,255,255,.18); color: #fff; display: grid; place-items: center; cursor: pointer;
+    transition: background .15s, transform .15s; touch-action: none; }
+  .cf-talk svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+  .cf-talk.on { background: #34C759; transform: scale(1.08); }
+  .cf-hint { font-size: 12px; color: rgba(255,255,255,.7); }
+  .cf-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .cf-row .cam-btn { padding: 9px 16px; }
+  .cf-row .cam-btn.red { background: #FF3B30; color: #fff; }
+  .cam-clips { position: absolute; inset: 0; background: #000; overflow: auto; padding: 18px; }
+  .cam-clips .cc-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .cam-clips .cc-head b { flex: 1; font-size: 20px; }
+  .cam-clips .cc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .cam-clips .cc { border-radius: 14px; overflow: hidden; background: #151517; cursor: pointer; }
+  .cam-clips .cc img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #0b0b0c; }
+  .cam-clips .cc div { padding: 8px 10px 10px; font-size: 13px; }
+  .cam-clips .cc small { display: block; color: rgba(255,255,255,.55); font-size: 12px; }
+  .cam-clips video { width: 100%; max-height: 70vh; background: #000; border-radius: 12px; }
+  .cam-clips .cc-play { margin-bottom: 16px; }
+  .cam-clips .cc-acts { display: flex; gap: 8px; margin-top: 8px; }
+  .cam-alerts { position: fixed; top: 16px; right: 16px; z-index: 990; display: flex; flex-direction: column; gap: 10px; width: min(340px, calc(100vw - 32px)); }
+  .cam-alert { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 16px; background: rgba(28,28,30,.96); color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    cursor: pointer; animation: menu-in .2s both; }
+  .cam-alert img { width: 96px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; background: #000; }
+  .cam-alert b { display: block; font-size: 14px; }
+  .cam-alert span { font-size: 12.5px; color: rgba(255,255,255,.65); }
   .lv-drop { position: absolute; inset: 52px 14px 14px; border: 2px dashed rgba(255,255,255,.7); border-radius: 16px; background: rgba(0,0,0,.45);
     display: grid; place-items: center; color: #fff; font-size: 16px; font-weight: 600; pointer-events: none; }
   .lv-sends { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
@@ -2744,6 +2804,13 @@
   <!-- The map the app shows too (assets/map.html), asking /api/where itself; told when something moved. -->
   <section data-panel="map" hidden>
     <iframe class="map-frame" id="map-frame" src="about:blank" title="Where your phones and laptops are"></iframe>
+  </section>
+
+  <!-- ---------------------------------------------------------- security cameras -->
+  <!-- Your phones as cameras (server/Cameras.kt): live, each decoded here; one full screen with its controls. -->
+  <section data-panel="cams" hidden>
+    <div class="cams-head"><h2>Cameras</h2><span id="cams-sub"></span></div>
+    <div class="cams-grid" id="cams-grid"><p class="empty">Looking for your cameras…</p></div>
   </section>
 
   <!-- ---------------------------------------------------------- phone storage -->
@@ -3052,6 +3119,19 @@
 </div>
 
 <!-- Another laptop, seen and driven from this one (see "another laptop, from this one"). -->
+<div class="cam-full" id="cam-full" hidden>
+  <canvas id="cf-canvas"></canvas>
+  <p class="cf-note" id="cf-note"></p>
+  <div class="cf-top"><div><b id="cf-name"></b><span id="cf-status"></span></div><button class="cf-round" type="button" id="cf-close" title="Close">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
+  <div class="cf-bottom">
+    <button class="cf-talk" type="button" id="cf-talk" title="Hold to talk through its speaker"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M18.5 10.5a6.5 6.5 0 0 1-13 0M12 17v4.5"/></svg></button>
+    <span class="cf-hint" id="cf-hint">Hold to talk (or hold Space)</span>
+    <div class="cf-row" id="cf-row"></div>
+  </div>
+  <div class="cam-clips" id="cam-clips" hidden></div>
+</div>
+<div class="cam-alerts" id="cam-alerts"></div>
 <div class="lap-view" id="lap-view" hidden>
   <div class="lv-bar">
     <b id="lv-name"></b><span id="lv-stats"></span><span class="grow"></span>
@@ -3103,6 +3183,7 @@ var TABS = [
   { id: "home", label: "Home", icon: "<path d=\"M3.5 10.5 12 3.5l8.5 7\"/><path d=\"M5.5 9v10a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9\"/><path d=\"M10 20.5V15a2 2 0 0 1 4 0v5.5\"/>" },
   { id: "phones", label: "Phones", icon: "<path d=\"M9 2.5h6A2.5 2.5 0 0 1 17.5 5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 19V5A2.5 2.5 0 0 1 9 2.5Z\"/><path d=\"M11 18.5h2\"/>" },
   { id: "map", label: "Map", icon: "<path d=\"M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z\"/><circle cx=\"12\" cy=\"10\" r=\"2.5\"/>" },
+  { id: "cams", label: "Cameras", icon: "<path d=\"M5.5 6.5h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z\"/><path d=\"M15.5 10.5l4.2-2.6a.5.5 0 0 1 .8.4v7.4a.5.5 0 0 1-.8.4l-4.2-2.6\"/>" },
   { id: "phone", label: "Files", icon: "<path d=\"M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17Z\"/>" },
   { id: "music", label: "Music", icon: "<path d=\"M9 18V5.5l11-2V16\"/><circle cx=\"6.5\" cy=\"18\" r=\"2.5\"/><circle cx=\"17.5\" cy=\"16\" r=\"2.5\"/>" },
   { id: "alerts", label: "Alerts", icon: "<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z\"/><path d=\"M10 20.5a2 2 0 0 0 4 0\"/>" },
@@ -3483,6 +3564,7 @@ function selectTab(id, fromHistory) {
   if (id === "alerts") { alertsSeen = true; renderAlertCount(); }
   if (id === "phones") phonesShown();
   if (id === "map" && $("map-frame").getAttribute("src") === "about:blank") $("map-frame").src = "/map.html?api=1";
+  if (id === "cams") camsShown(); else camsHidden();
 }
 
 
@@ -3494,7 +3576,7 @@ function selectTab(id, fromHistory) {
 // so a reload or a bookmark opens that tab.
 
 var navReady = false;
-var NAV_TABS = ["home", "phones", "map", "phone", "music", "alerts", "settings"];
+var NAV_TABS = ["home", "phones", "map", "cams", "phone", "music", "alerts", "settings"];
 
 function navState() { return history.state || {}; }
 
@@ -3522,6 +3604,7 @@ function setupNav() {
     var st = e.state || { tab: (location.hash || "#home").slice(1) };
     if (np.layered && st.layer !== "player") { np.layered = false; npCollapse(); }
     if (!$("viewer").hidden && st.layer !== "viewer") closeViewer(true);
+    if (cams.full && st.layer !== "cam") camClose();
     if (!$("mon-sheet").hidden && !document.body.classList.contains("mon-dock") && st.layer !== "monitor") $("mon-sheet").hidden = true;
     if (NAV_TABS.indexOf(st.tab) >= 0 && st.tab !== document.body.dataset.tab) selectTab(st.tab, true);
   });
@@ -5666,6 +5749,7 @@ function connectEvents() {
   callsWatch(events);
   chatsWatch(events);
   lapsWatch(events);
+  camsWatch(events);
   events.addEventListener("where", function () { var f = $("map-frame"); if (f && f.contentWindow && f.getAttribute("src") !== "about:blank") f.contentWindow.postMessage("where", "*"); });
   events.addEventListener("incoming", function (e) {
     try { showIncoming(JSON.parse(e.data)); } catch (err) {}
@@ -11088,13 +11172,17 @@ function lapPicture(v, au, canvas, ctx) {
       v.codec = codec;
       v.dec = new VideoDecoder({
         output: function (frame) {
-          if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) { canvas.width = frame.displayWidth; canvas.height = frame.displayHeight; }
-          ctx.drawImage(frame, 0, 0);
+          // Turned upright when it comes on its side (a phone's camera).
+          var r = v.rot || 0, fw = frame.displayWidth, fh = frame.displayHeight;
+          var sw = r % 180 ? fh : fw, sh = r % 180 ? fw : fh;
+          if (canvas.width !== sw || canvas.height !== sh) { canvas.width = sw; canvas.height = sh; }
+          if (r) { ctx.save(); ctx.translate(sw / 2, sh / 2); ctx.rotate(r * Math.PI / 180); ctx.drawImage(frame, -fw / 2, -fh / 2); ctx.restore(); }
+          else ctx.drawImage(frame, 0, 0);
           frame.close();
           v.frames++;
-          $("lv-note").textContent = "";
+          (v.note || $("lv-note")).textContent = "";
         },
-        error: function (e) { $("lv-note").textContent = "Could not decode the picture (" + e.message + ")."; }
+        error: function (e) { (v.note || $("lv-note")).textContent = "Could not decode the picture (" + e.message + ")."; }
       });
       // Annex B (start codes, the settings in the stream): no description.
       v.dec.configure({ codec: codec, optimizeForLatency: true, hardwareAcceleration: "prefer-hardware" });
@@ -11141,7 +11229,7 @@ function lapSound(v, adts) {
         error: function () { v.soundBroken = true; }
       });
       // No description: the frames carry their own (ADTS) headers.
-      v.adec.configure({ codec: "mp4a.40.2", sampleRate: 48000, numberOfChannels: 2 });
+      v.adec.configure({ codec: "mp4a.40.2", sampleRate: 48000, numberOfChannels: v.channels || 2 });
     } catch (e) { v.soundBroken = true; return; }
   }
   if (v.adec.state !== "configured") return;
@@ -11308,6 +11396,378 @@ function lapSetup() {
     }).catch(function () {});
   });
 }
+
+// ------------------------------------------------------------------ security cameras
+//
+// Your phones as cameras (server/Cameras.kt): this phone's own and every linked phone's, live in a
+// grid, each stream decoded here as another laptop's screen is (pictures whole, the sound between
+// them with the top bit of the length set). One opens full screen with listen, hold to talk (the
+// microphone here, 16 kHz, out of the camera phone's speaker), torch, flip, turn, motion, record
+// and its clips. Movement seen by any of them shows here with its picture.
+
+var cams = { list: [], views: {}, full: null, timer: null, shown: false, talk: null };
+
+function camsWatch(es) {
+  es.addEventListener("cams", function () { clearTimeout(cams.reload); cams.reload = setTimeout(function () { if (cams.shown || cams.full) camsLoad(); }, 300); });
+  es.addEventListener("camalert", function (e) { var a; try { a = JSON.parse(e.data); } catch (x) { return; } camAlert(a); });
+}
+
+function camQ(target, extra) {
+  var q = target && target !== "self" ? "peer=" + encodeURIComponent(target) : "";
+  if (extra) q += (q ? "&" : "") + extra;
+  return q ? "?" + q : "";
+}
+
+function camsShown() {
+  cams.shown = true;
+  camsLoad();
+  clearInterval(cams.timer);
+  cams.timer = setInterval(function () { if (document.visibilityState === "visible") camsLoad(); }, 5000);
+}
+
+function camsHidden() {
+  if (!cams.shown) return;
+  cams.shown = false;
+  clearInterval(cams.timer);
+  Object.keys(cams.views).forEach(function (k) { camStop(cams.views[k]); });
+  cams.views = {};
+}
+
+async function camsLoad() {
+  try {
+    var r = await api("/api/cams", { cache: "no-store" });
+    if (!r.ok) return;
+    var d = await r.json();
+    cams.list = d.cams || [];
+    renderCams();
+    if (cams.full) { var c = cams.list.filter(function (x) { return x.target === cams.full.target; })[0]; if (c) camFullStatus(c); }
+  } catch (e) {}
+}
+
+function camAgo(at) {
+  if (!at) return "";
+  var s = Math.round((Date.now() - at) / 1000);
+  return s < 60 ? "just now" : s < 3600 ? Math.round(s / 60) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : new Date(at).toLocaleDateString();
+}
+
+function camStatus(st) {
+  if (!st) return "Not reachable now";
+  if (st.waking) return "Waking it to start the camera…";
+  if (st.error) return st.error;
+  if (!st.on) return "Camera mode off";
+  if (!st.running) return "Starting…";
+  var out = [st.recording ? "Recording" : "Live"];
+  if (st.lastMotion) out.push("movement " + camAgo(st.lastMotion));
+  if (st.battery >= 0) out.push(st.battery + "%" + (st.charging ? " charging" : ""));
+  if (st.viewers) out.push(st.viewers + " watching");
+  return out.join(" · ");
+}
+
+var CAM_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 6.5h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z"/><path d="M15.5 10.5l4.2-2.6a.5.5 0 0 1 .8.4v7.4a.5.5 0 0 1-.8.4l-4.2-2.6"/></svg>';
+
+/** The grid: each camera's tile kept as it is while it stays live, so its picture does not restart. */
+function renderCams() {
+  var host = $("cams-grid");
+  if (!host) return;
+  var live = cams.list.filter(function (c) { return c.state && c.state.running; }).length;
+  $("cams-sub").textContent = cams.list.length ? live + " of " + cams.list.length + " live" : "";
+  if (!cams.list.length) { host.innerHTML = '<p class="empty">No phones yet.</p>'; return; }
+  var seen = {};
+  cams.list.forEach(function (c, i) {
+    seen[c.target] = true;
+    var st = c.state, on = st && st.on && st.running;
+    var tile = host.querySelector('.cam-tile[data-t="' + CSS.escape(c.target) + '"]');
+    if (!tile) {
+      tile = document.createElement("div");
+      tile.className = "cam-tile";
+      tile.dataset.t = c.target;
+      tile.innerHTML = '<div class="cam-pic"></div><div class="cam-info"><div><b></b><span></span></div></div>';
+      tile.querySelector(".cam-pic").addEventListener("click", function () { var cc = camByTarget(c.target); if (cc && cc.state && cc.state.running) camOpen(cc); });
+    }
+    if (host.children[i] !== tile) host.insertBefore(tile, host.children[i] || null);
+    tile.querySelector(".cam-info b").textContent = c.name + (c.self ? " (the phone this page is on)" : "");
+    tile.querySelector(".cam-info span").textContent = camStatus(st);
+    // The switch: on and off from here, this phone's or a linked one's.
+    var info = tile.querySelector(".cam-info"), btn = info.querySelector(".cam-btn");
+    if (st) {
+      if (!btn) { btn = document.createElement("button"); btn.type = "button"; btn.className = "cam-btn dim"; info.appendChild(btn);
+        btn.addEventListener("click", function () { var cc = camByTarget(c.target); if (cc && cc.state) camSet(c.target, { on: !cc.state.on }); }); }
+      btn.textContent = st.on ? "Turn off" : "Turn on";
+    } else if (btn) btn.remove();
+    var pic = tile.querySelector(".cam-pic");
+    var v = cams.views[c.target];
+    if (on && !cams.full) {
+      if (!v || v.rot !== (st.rotation || 0)) {
+        if (v) camStop(v);
+        pic.innerHTML = '<canvas></canvas>' + (st.recording ? '<span class="rec"><i></i>REC</span>' : "");
+        cams.views[c.target] = camPlay(c.target, pic.querySelector("canvas"), { rot: st.rotation || 0 });
+      } else {
+        var rec = pic.querySelector(".rec");
+        if (st.recording && !rec) pic.insertAdjacentHTML("beforeend", '<span class="rec"><i></i>REC</span>');
+        if (!st.recording && rec) rec.remove();
+      }
+    } else {
+      if (v) { camStop(v); delete cams.views[c.target]; }
+      if (!on) pic.innerHTML = '<div class="off">' + CAM_SVG + '<span>' + esc(!st ? "Not reachable now" : st.waking ? "Waking it…" : st.on ? "Starting…" : "Camera mode is off") + '</span></div>';
+    }
+  });
+  Array.prototype.slice.call(host.querySelectorAll(".cam-tile")).forEach(function (t) {
+    if (!seen[t.dataset.t]) { if (cams.views[t.dataset.t]) { camStop(cams.views[t.dataset.t]); delete cams.views[t.dataset.t]; } t.remove(); }
+  });
+  var empty = host.querySelector(".empty"); if (empty) empty.remove();
+}
+
+function camByTarget(t) { return cams.list.filter(function (c) { return c.target === t; })[0]; }
+
+/** One camera's stream onto [canvas]: pictures through WebCodecs, the sound when [o.listen]. */
+function camPlay(target, canvas, o) {
+  var v = { target: target, ctrl: new AbortController(), dec: null, codec: "", ts: 0, frames: 0, rot: o.rot || 0, note: o.note || null, channels: 1, listen: !!o.listen };
+  if (!window.VideoDecoder) { if (v.note) v.note.textContent = "This browser cannot show the cameras: it needs WebCodecs (Chrome, Edge, Firefox 130 and later)."; return v; }
+  if (o.listen) { try { v.ac = new AudioContext({ latencyHint: "interactive", sampleRate: 48000 }); v.gain = v.ac.createGain(); v.gain.connect(v.ac.destination); } catch (e) { v.ac = null; } }
+  var ctx = canvas.getContext("2d");
+  (async function () {
+    try {
+      var res = await fetch("/api/cams/stream" + camQ(target, o.listen ? "listen=1" : ""), { signal: v.ctrl.signal, cache: "no-store", credentials: "same-origin" });
+      if (!res.ok) { var d = await res.json().catch(function () { return {}; }); if (v.note) v.note.textContent = d.message || "Could not watch it."; return; }
+      var reader = res.body.getReader(), buf = new Uint8Array(0);
+      while (!v.stopped) {
+        var part = await reader.read();
+        if (part.done) break;
+        var joined = new Uint8Array(buf.length + part.value.length);
+        joined.set(buf); joined.set(part.value, buf.length);
+        buf = joined;
+        var at = 0;
+        while (buf.length - at >= 4) {
+          var n = ((buf[at] << 24) | (buf[at + 1] << 16) | (buf[at + 2] << 8) | buf[at + 3]) >>> 0;
+          var sound = n >= 0x80000000;
+          if (sound) n -= 0x80000000;
+          if (buf.length - at < 4 + n) break;
+          if (sound) { if (v.ac) lapSound(v, buf.slice(at + 4, at + 4 + n)); }
+          else lapPicture(v, buf.subarray(at + 4, at + 4 + n), canvas, ctx);
+          at += 4 + n;
+        }
+        buf = buf.slice(at);
+      }
+    } catch (e) {}
+    // Ended by itself (the camera restarted, the link dropped): again in a moment, while it is still wanted.
+    if (!v.stopped) setTimeout(function () {
+      if (v.stopped) return;
+      if (cams.views[target] === v) { delete cams.views[target]; renderCams(); }
+      else if (cams.full && cams.full.view === v) camFullPlay();
+    }, 1500);
+  })();
+  return v;
+}
+
+function camStop(v) {
+  if (!v) return;
+  v.stopped = true;
+  try { v.ctrl.abort(); } catch (e) {}
+  if (v.dec) try { v.dec.close(); } catch (e) {}
+  if (v.adec) try { v.adec.close(); } catch (e) {}
+  if (v.ac) try { v.ac.close(); } catch (e) {}
+}
+
+async function camSet(target, change) {
+  var body = Object.assign({ target: target }, change);
+  try {
+    var r = await api("/api/cams/set", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    var d = await r.json().catch(function () { return {}; });
+    if (!r.ok) { camSay(d.message || "It did not take that."); return false; }
+    setTimeout(camsLoad, 400);
+    return true;
+  } catch (e) { camSay("Could not reach it."); return false; }
+}
+
+function camSay(text) {
+  if (cams.full) $("cf-status").textContent = text;
+  else $("cams-sub").textContent = text;
+}
+
+// ---- one camera, full screen
+
+function camOpen(c) {
+  // The grid stops while one is watched full screen: one stream from each camera at a time.
+  Object.keys(cams.views).forEach(function (k) { camStop(cams.views[k]); });
+  cams.views = {};
+  cams.full = { target: c.target, listen: false, view: null };
+  $("cam-full").hidden = false;
+  $("cam-clips").hidden = true;
+  camFullStatus(c);
+  camFullPlay();
+  if (typeof navLayer === "function") navLayer("cam");
+}
+
+function camFullPlay() {
+  var f = cams.full;
+  if (!f) return;
+  if (f.view) camStop(f.view);
+  var c = camByTarget(f.target), st = c && c.state;
+  $("cf-note").textContent = st && st.running ? "Connecting…" : camStatus(st);
+  f.view = camPlay(f.target, $("cf-canvas"), { rot: (st && st.rotation) || 0, listen: f.listen, note: $("cf-note") });
+  if (f.view.gain) f.view.gain.gain.value = cams.talk ? 0 : 1;
+}
+
+function camClose() {
+  var f = cams.full;
+  if (!f) return;
+  camTalk(false);
+  camStop(f.view);
+  cams.full = null;
+  $("cam-full").hidden = true;
+  if (cams.shown) renderCams();
+}
+
+function camFullStatus(c) {
+  var f = cams.full, st = c.state || {};
+  $("cf-name").textContent = c.name;
+  $("cf-status").textContent = camStatus(c.state);
+  if (f.view && f.view.rot !== (st.rotation || 0)) camFullPlay();
+  var b = function (label, on, act, cls) { return '<button class="cam-btn' + (on ? "" : " dim") + (cls ? " " + cls : "") + '" type="button" data-act="' + act + '">' + label + '</button>'; };
+  $("cf-row").innerHTML =
+    b(f.listen ? "Listening" : "Listen", f.listen, "listen") +
+    b("Torch", st.torch, "torch") +
+    b(st.lens === "front" ? "Front camera" : "Back camera", false, "flip") +
+    b("Turn", false, "turn") +
+    b("Motion alerts", st.motion, "motion") +
+    (st.recording ? b("Stop recording", true, "rec", "red") : b("Record", false, "rec")) +
+    b("Clips", false, "clips") +
+    b("Turn off", false, "off");
+  $("cf-row").querySelectorAll("[data-act]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var a = btn.dataset.act, cc = camByTarget(f.target), s = (cc && cc.state) || {};
+      if (a === "listen") { f.listen = !f.listen; camFullPlay(); camFullStatus(cc); }
+      else if (a === "torch") camSet(f.target, { torch: !s.torch });
+      else if (a === "flip") camSet(f.target, { lens: s.lens === "front" ? "back" : "front" });
+      else if (a === "turn") camSet(f.target, { rotate: (s.rotate || 0) + 90 });
+      else if (a === "motion") camSet(f.target, { motion: !s.motion });
+      else if (a === "rec") camSet(f.target, { recordNow: !s.recording });
+      else if (a === "clips") camClips(f.target);
+      else if (a === "off") { camSet(f.target, { on: false }); camClose(); }
+    });
+  });
+}
+
+/** Hold to talk: this laptop's microphone, 16 kHz, a tenth of a second at a time, out of the camera phone's speaker. */
+async function camTalk(on) {
+  var f = cams.full;
+  if (!on) {
+    var t = cams.talk;
+    cams.talk = null;
+    $("cf-talk").classList.remove("on");
+    $("cf-hint").textContent = "Hold to talk (or hold Space)";
+    if (t) { try { t.proc.disconnect(); t.src.disconnect(); t.stream.getTracks().forEach(function (x) { x.stop(); }); t.ac.close(); } catch (e) {} }
+    if (f && f.view && f.view.gain) f.view.gain.gain.value = 1;
+    return;
+  }
+  if (!f || cams.talk) return;
+  if (!navigator.mediaDevices) { $("cf-hint").textContent = "To talk, open the page at localhost:8787 through the laptop helper."; return; }
+  var talk = cams.talk = { pending: [], sending: false };
+  $("cf-talk").classList.add("on");
+  $("cf-hint").textContent = "Talking…";
+  // What it says back is not heard here while talking, so it does not come round again.
+  if (f.view && f.view.gain) f.view.gain.gain.value = 0;
+  try {
+    talk.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  } catch (e) { cams.talk = null; $("cf-talk").classList.remove("on"); $("cf-hint").textContent = "Allow the microphone for this page to talk."; return; }
+  if (cams.talk !== talk) { talk.stream.getTracks().forEach(function (x) { x.stop(); }); return; }
+  talk.ac = new AudioContext({ sampleRate: 16000 });
+  talk.src = talk.ac.createMediaStreamSource(talk.stream);
+  talk.proc = talk.ac.createScriptProcessor(1600 > 1024 ? 2048 : 1024, 1, 1);
+  talk.proc.onaudioprocess = function (e) {
+    var x = e.inputBuffer.getChannelData(0), pcm = new Int16Array(x.length);
+    for (var i = 0; i < x.length; i++) { var y = Math.max(-1, Math.min(1, x[i])); pcm[i] = y < 0 ? y * 32768 : y * 32767; }
+    talk.pending.push(pcm);
+    camTalkSend(talk, f.target);
+  };
+  talk.src.connect(talk.proc);
+  talk.proc.connect(talk.ac.destination);
+}
+
+async function camTalkSend(talk, target) {
+  if (talk.sending || !talk.pending.length) return;
+  talk.sending = true;
+  var parts = talk.pending.splice(0), n = parts.reduce(function (a, p) { return a + p.length; }, 0), all = new Int16Array(n), at = 0;
+  parts.forEach(function (p) { all.set(p, at); at += p.length; });
+  try { await api("/api/cams/talk" + camQ(target), { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: all.buffer }); } catch (e) {}
+  talk.sending = false;
+  if (talk.pending.length) camTalkSend(talk, target);
+}
+
+// ---- clips
+
+async function camClips(target) {
+  var box = $("cam-clips");
+  box.hidden = false;
+  var c = camByTarget(target);
+  box.innerHTML = '<div class="cc-head"><b>Clips · ' + esc(c ? c.name : target) + '</b><button class="cf-round" type="button" data-x title="Close">' +
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div><div class="cc-play"></div><div class="cc-grid"><p class="cf-hint">Asking for them…</p></div>';
+  box.querySelector("[data-x]").addEventListener("click", function () { box.hidden = true; box.innerHTML = ""; });
+  var list = [];
+  try { var r = await api("/api/cams/clips" + camQ(target), { cache: "no-store" }); if (r.ok) list = await r.json(); } catch (e) {}
+  var grid = box.querySelector(".cc-grid");
+  if (!grid) return;
+  if (!list.length) { grid.innerHTML = '<p class="cf-hint">No clips yet. With Motion alerts and recording on, movement records one; or Record by hand.</p>'; return; }
+  grid.innerHTML = list.map(function (k) {
+    var d = new Date(k.at), len = Math.round(k.ms / 1000);
+    return '<div class="cc" data-id="' + esc(k.id) + '"><img loading="lazy" alt="" src="/api/cams/clip' + camQ(target, "id=" + encodeURIComponent(k.id) + "&thumb=1") + '"><div>' +
+      esc(d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + ", " + d.toLocaleTimeString()) +
+      '<small>' + (k.motion ? "Movement" : "By hand") + " · " + Math.floor(len / 60) + ":" + String(len % 60).padStart(2, "0") + " · " + chatSize(k.size) + '</small></div></div>';
+  }).join("");
+  grid.querySelectorAll(".cc").forEach(function (el) {
+    el.addEventListener("click", function () {
+      var id = el.dataset.id, play = box.querySelector(".cc-play");
+      play.innerHTML = '<video controls autoplay playsinline src="/api/cams/clip' + camQ(target, "id=" + encodeURIComponent(id)) + '"></video>' +
+        '<div class="cc-acts"><a class="cam-btn dim" href="/api/cams/clip' + camQ(target, "id=" + encodeURIComponent(id) + "&dl=1") + '" download>Download</a>' +
+        '<button class="cam-btn dim" type="button" data-del>Delete</button></div>';
+      play.querySelector("[data-del]").addEventListener("click", async function () {
+        if (!confirm("Delete this clip?")) return;
+        try { await api("/api/cams/clip/delete" + camQ(target, "id=" + encodeURIComponent(id)), { method: "POST" }); } catch (e) {}
+        camClips(target);
+      });
+      play.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
+// ---- movement, from any camera
+
+function camAlert(a) {
+  var host = $("cam-alerts");
+  if (!host) return;
+  var el = document.createElement("div");
+  el.className = "cam-alert";
+  el.innerHTML = (a.jpeg ? '<img alt="" src="data:image/jpeg;base64,' + a.jpeg + '">' : "") + '<div><b>Movement: ' + esc(a.camera) + '</b><span>' +
+    esc(new Date(a.at).toLocaleTimeString()) + ' · click to watch</span></div>';
+  el.addEventListener("click", function () {
+    el.remove();
+    selectTab("cams");
+    var t = a.target || "self";
+    var open = function () { var c = camByTarget(t); if (c && c.state && c.state.running) camOpen(c); };
+    if (camByTarget(t)) open(); else setTimeout(open, 800);
+  });
+  host.prepend(el);
+  while (host.children.length > 3) host.lastChild.remove();
+  setTimeout(function () { el.remove(); }, 30000);
+  if (document.visibilityState !== "visible" && window.Notification && Notification.permission === "granted") {
+    try { new Notification("Movement: " + a.camera, { body: new Date(a.at).toLocaleTimeString(), icon: a.jpeg ? "data:image/jpeg;base64," + a.jpeg : undefined }); } catch (e) {}
+  }
+}
+
+(function camSetup() {
+  var talk = $("cf-talk");
+  if (!talk) return;
+  talk.addEventListener("pointerdown", function (e) { e.preventDefault(); try { talk.setPointerCapture(e.pointerId); } catch (x) {} camTalk(true); });
+  talk.addEventListener("pointerup", function () { camTalk(false); });
+  talk.addEventListener("pointercancel", function () { camTalk(false); });
+  $("cf-close").addEventListener("click", function () { if (typeof navClose === "function") navClose("cam", camClose); else camClose(); });
+  document.addEventListener("keydown", function (e) {
+    if (!cams.full) return;
+    if (e.key === "Escape") { if (!$("cam-clips").hidden) { $("cam-clips").hidden = true; return; } camClose(); }
+    else if (e.code === "Space" && !e.repeat && !/INPUT|TEXTAREA/.test(e.target.tagName)) { e.preventDefault(); camTalk(true); }
+  });
+  document.addEventListener("keyup", function (e) { if (cams.full && e.code === "Space") camTalk(false); });
+})();
 
 // ------------------------------------------------------------------ calls, on this laptop
 //

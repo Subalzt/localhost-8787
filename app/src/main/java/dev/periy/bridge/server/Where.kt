@@ -386,20 +386,22 @@ class Where(
 /** Where a phone is, sealed for a linked phone: as [CallCrypto], under its own label. */
 object WhereCrypto {
     private val L_WHERE = "L87W/1 where".toByteArray()
+    /** The same seal for a camera's alerts (server/Cameras.kt), under its own label. */
+    val L_CAM = "L87C/1 camera".toByteArray()
     private val rng = SecureRandom()
 
-    private fun cipher(mode: Int, psk: ByteArray, nonce: ByteArray): Cipher =
+    private fun cipher(mode: Int, psk: ByteArray, nonce: ByteArray, label: ByteArray): Cipher =
         Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(mode, SecretKeySpec(dev.periy.bridge.net.TunnelCrypto.hmac(psk, L_WHERE), "AES"), GCMParameterSpec(128, nonce))
+            init(mode, SecretKeySpec(dev.periy.bridge.net.TunnelCrypto.hmac(psk, label), "AES"), GCMParameterSpec(128, nonce))
         }
 
-    fun seal(psk: ByteArray, text: String): CallWire {
+    fun seal(psk: ByteArray, text: String, label: ByteArray = L_WHERE): CallWire {
         val nonce = ByteArray(12).also(rng::nextBytes)
-        val ct = cipher(Cipher.ENCRYPT_MODE, psk, nonce).doFinal(text.toByteArray())
+        val ct = cipher(Cipher.ENCRYPT_MODE, psk, nonce, label).doFinal(text.toByteArray())
         return CallWire("where", Base64.encodeToString(nonce, Base64.NO_WRAP), Base64.encodeToString(ct, Base64.NO_WRAP))
     }
 
-    fun open(psk: ByteArray, w: CallWire): String? = runCatching {
-        String(cipher(Cipher.DECRYPT_MODE, psk, Base64.decode(w.n, Base64.NO_WRAP)).doFinal(Base64.decode(w.c, Base64.NO_WRAP)))
+    fun open(psk: ByteArray, w: CallWire, label: ByteArray = L_WHERE): String? = runCatching {
+        String(cipher(Cipher.DECRYPT_MODE, psk, Base64.decode(w.n, Base64.NO_WRAP), label).doFinal(Base64.decode(w.c, Base64.NO_WRAP)))
     }.getOrNull()
 }

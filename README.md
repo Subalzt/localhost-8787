@@ -741,6 +741,37 @@ trail. Satellite at a tap.
   key, as messages are, so every phone and every laptop's page sees everything.
 - The positions stay on your devices. The map's pictures come from OpenStreetMap (Esri for satellite).
 
+### Security cameras
+
+Any of your phones is a security camera you watch from your other phones and laptops, from
+anywhere, with the camera phone locked in a drawer or on a shelf. **Devices → Cameras** on the
+phone (also a **Cameras** tile in Quick Settings, and over the lock screen: no unlocking to look),
+and **Cameras** on the page: the control centre, every phone's camera live in a grid.
+
+- **Camera mode**: one switch on the camera phone, or **Turn on** from any other device. It keeps
+  running with the screen off and the phone locked. Android lets an app take the camera only while
+  it is in front, so a phone asked from afar wakes over its lock screen for a moment (as a call
+  rings), starts the camera and goes back; it stays locked.
+- **Live**: the camera phone's hardware H.264, 1280×720 at up to 20 pictures a second, each viewer
+  joining at the next key picture; decoded by the other phone's hardware or by the browser
+  (WebCodecs), turned upright.
+- **Full screen**, one camera: **Listen** (its microphone, AAC, a fraction of a second behind),
+  **Hold to talk** (your voice out of its speaker; on the page, hold Space too), **Torch**, back or
+  front camera, **Turn** the picture, **Motion alerts**, **Record**, **Clips**, **Turn off**.
+- **Motion alerts**: the camera phone watches a small copy of the picture for movement (a whole
+  picture getting lighter or darker, a light switched on, is not movement; something that comes and
+  stays becomes part of the scene). Your other phones get a notification with what it saw, which
+  opens the camera over the lock screen; laptops get a Windows notification with the picture (Linux
+  and Mac: a notification), and the page a card. At most one a minute per camera.
+- **Clips**: movement records a clip, from a few seconds before it to 20 s after the last movement
+  (five minutes at most); **Record** records by hand. MP4 with sound, kept on the camera phone (2 GB,
+  the oldest go first), played, downloaded and deleted from any device.
+- It all goes the way messages and calls go between your devices (the same Wi-Fi, IPv6, the
+  tunnel), alerts sealed with the two phones' key. Nothing passes through anyone else's server.
+- While a phone is a camera it holds its camera: face unlock cannot use it then (a fingerprint or
+  the PIN still unlocks), and another app that wants the camera gets it only after camera mode is
+  off. Best on a spare phone, plugged in.
+
 ### 20. Laptop and laptop
 
 **See and drive another laptop.** Home on the page lists the other laptops whose helper is running;

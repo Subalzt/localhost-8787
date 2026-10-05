@@ -1268,6 +1268,100 @@ class BridgeServer(
             calls().pageLeave()
             call.respond(ApiResult(true))
         }
+        // ---- Security cameras (server/Cameras.kt). This phone's camera ("self"), or a linked phone's
+        // (?peer=NAME), passed on to it as it is: the control centre on any of your devices sees them all.
+        get("/api/cams") {
+            call.device() ?: return@get
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respond(cameras().all())
+        }
+        get("/api/cams/state") {
+            call.device() ?: return@get
+            if (call.request.queryParameters["peer"] != null) { camsAfar(call, "/api/cams/state"); return@get }
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respond(cameras().withBattery(cameras().state.value))
+        }
+        post("/api/cams/set") {
+            val me = call.device() ?: return@post
+            val c = runCatching { call.receive<CamSet>() }.getOrNull() ?: run { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Nothing to change")); return@post }
+            if (c.target.isEmpty() || c.target == "self" || c.target == peers.deviceName()) {
+                val why = cameras().set(c)
+                if (why == null) call.respond(ApiResult(true)) else call.respond(HttpStatusCode.Conflict, ApiResult(false, why))
+                return@post
+            }
+            if (peers.byDevice(me.id) != null) { call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Only this phone's own camera")); return@post }
+            val peer = peers.find(c.target) ?: run { call.respond(HttpStatusCode.NotFound, ApiResult(false, "${c.target} is not linked")); return@post }
+            val ok = withContext(Dispatchers.IO) { peers.deliver(peer, "/api/cams/set", Json.encodeToString(c.copy(target = "self")).toByteArray()) }
+            if (ok) call.respond(ApiResult(true)) else call.respond(HttpStatusCode.BadGateway, ApiResult(false, "${peer.name} did not take it (allow its camera there first?)"))
+        }
+        // The live picture (and the sound, with listen=1): each picture whole with its length; the sound
+        // between them, its length's top bit set. Lasts while it is watched.
+        get("/api/cams/stream") {
+            call.device() ?: return@get
+            if (call.request.queryParameters["peer"] != null) { camsAfar(call, "/api/cams/stream"); return@get }
+            if (!cameras().state.value.on) { call.respond(HttpStatusCode.Conflict, ApiResult(false, "Camera mode is off on ${peers.deviceName()}")); return@get }
+            val v = cameras().watch(call.request.queryParameters["listen"] == "1")
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respondBytesWriter(ContentType("application", "x-l87-frames")) {
+                try {
+                    for (f in v.ch) { writeFully(f, 0, f.size); flush(); Monitor.addOut(f.size) }
+                } catch (_: Throwable) {
+                } finally { v.close() }
+            }
+        }
+        // A viewer's voice, out of the camera phone's speaker: 16 kHz mono 16-bit, a piece at a time.
+        post("/api/cams/talk") {
+            val me = call.device() ?: return@post
+            val pcm = withContext(Dispatchers.IO) { call.receiveChannel().toInputStream().use { it.readNBytes(256 * 1024) } }
+            val to = call.request.queryParameters["peer"]
+            if (to == null) { cameras().talk(pcm); call.respond(ApiResult(true)); return@post }
+            if (peers.byDevice(me.id) != null) { call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Only this phone's own camera")); return@post }
+            val peer = peers.find(to) ?: run { call.respond(HttpStatusCode.NotFound, ApiResult(false, "$to is not linked")); return@post }
+            val ok = withContext(Dispatchers.IO) { peers.deliverBytes(peer, "/api/cams/talk", pcm) }
+            call.respond(ApiResult(ok))
+        }
+        get("/api/cams/snap") {
+            call.device() ?: return@get
+            if (call.request.queryParameters["peer"] != null) { camsAfar(call, "/api/cams/snap"); return@get }
+            val jpg = withContext(Dispatchers.IO) { cameras().snap() } ?: run { call.respond(HttpStatusCode.NotFound, ApiResult(false, "No picture yet")); return@get }
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respondBytes(jpg, ContentType.Image.JPEG)
+        }
+        get("/api/cams/clips") {
+            call.device() ?: return@get
+            if (call.request.queryParameters["peer"] != null) { camsAfar(call, "/api/cams/clips"); return@get }
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respond(cameras().clips())
+        }
+        get("/api/cams/clip") {
+            call.device() ?: return@get
+            if (call.request.queryParameters["peer"] != null) { camsAfar(call, "/api/cams/clip"); return@get }
+            val q = call.request.queryParameters
+            val thumb = q["thumb"] == "1"
+            val f = cameras().clipFile(q["id"].orEmpty(), thumb) ?: run { call.respond(HttpStatusCode.NotFound, ApiResult(false, "No such clip")); return@get }
+            if (q["dl"] == "1") call.response.header(HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, f.name).toString())
+            call.response.header(HttpHeaders.CacheControl, "private, max-age=3600")
+            call.respond(io.ktor.server.http.content.LocalFileContent(f, if (thumb) ContentType.Image.JPEG else ContentType.Video.MP4))
+        }
+        post("/api/cams/clip/delete") {
+            val me = call.device() ?: return@post
+            val q = call.request.queryParameters
+            val to = q["peer"]
+            if (to == null) { cameras().deleteClip(q["id"].orEmpty()); call.respond(ApiResult(true)); return@post }
+            if (peers.byDevice(me.id) != null) { call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Only this phone's own clips")); return@post }
+            val peer = peers.find(to) ?: run { call.respond(HttpStatusCode.NotFound, ApiResult(false, "$to is not linked")); return@post }
+            val ok = withContext(Dispatchers.IO) { peers.deliverBytes(peer, "/api/cams/clip/delete?id=" + java.net.URLEncoder.encode(q["id"].orEmpty(), "UTF-8"), ByteArray(0)) }
+            call.respond(ApiResult(ok))
+        }
+        // A linked phone's camera saw movement, sealed: a notification here, and this phone's laptops told.
+        post("/api/peers/cam/alert") {
+            val me = call.device() ?: return@post
+            val from = peers.byDevice(me.id)?.name
+            val w = runCatching { call.receive<CallWire>() }.getOrNull()
+            if (from == null || w == null || w.c.length > 1_000_000) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad alert")); return@post }
+            if (cameras().alertFrom(me.id, from, w)) call.respond(ApiResult(true)) else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That does not open here"))
+        }
         // A linked phone asking this one to ring, or to go into lost mode, sealed (server/FindMe.kt).
         post("/api/peers/find") {
             val me = call.device() ?: return@post
@@ -1764,6 +1858,14 @@ class BridgeServer(
     private fun messages() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.messages
     private fun where() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.where
     private fun findMe() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.findMe
+    private fun cameras() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.cameras
+
+    /** A linked phone's camera, asked of it: only from this phone's own pages and app, never passed on twice. */
+    private suspend fun camsAfar(call: ApplicationCall, path: String) {
+        val me = call.device() ?: return
+        if (peers.byDevice(me.id) != null) { call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Only this phone's own camera")); return }
+        proxyToPeer(call, path)
+    }
 
     /** Reads exactly [n] bytes into [b] (from [off]); false when the stream ends first. */
     private fun readAll(input: java.io.InputStream, b: ByteArray, n: Int, off: Int = 0): Boolean {

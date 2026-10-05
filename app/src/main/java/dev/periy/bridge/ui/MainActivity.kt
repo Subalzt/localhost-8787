@@ -240,6 +240,9 @@ class MainActivity : ComponentActivity() {
             if (intent.hasExtra("callpipeonly")) c.calls.pipeOnly = intent.getBooleanExtra("callpipeonly", false)
             if (intent.getBooleanExtra("calltest", false)) c.calls.testCall(intent.getBooleanExtra("video", false))
             if (intent.getBooleanExtra("callstate", false)) c.calls.logState()
+            // Cameras: `--ez camon true|false` (this phone's camera mode), `--ez camrec true|false`.
+            if (intent.hasExtra("camon")) c.cameras.set(dev.periy.bridge.server.CamSet(on = intent.getBooleanExtra("camon", false)))
+            if (intent.hasExtra("camrec")) c.cameras.set(dev.periy.bridge.server.CamSet(recordNow = intent.getBooleanExtra("camrec", false)))
             // `--ez laptopscreen true`: the laptop's screen view, as Control's row opens it.
             if (intent.getBooleanExtra("laptopscreen", false)) startActivity(android.content.Intent(this, SecondScreenActivity::class.java))
             if (intent.getBooleanExtra("closescreen", false)) SecondScreenActivity.openView?.finish()
@@ -1734,6 +1737,10 @@ private fun LazyListScope.devicesTab(
     item {
         GroupCard(Modifier.padding(top = 4.dp)) {
             SettingRow("Where they are", "Your phones and laptops on a map, precisely", first = true, icon = BlazeIcons.Pin, onClick = openMap)
+            // Phones as security cameras (server/Cameras.kt): the control centre, over the lock screen too.
+            val camCtx = LocalContext.current
+            SettingRow("Cameras", "Your phones as security cameras, live, with motion alerts", icon = BlazeIcons.Video,
+                onClick = { camCtx.startActivity(android.content.Intent(camCtx, CamerasActivity::class.java)) })
         }
     }
     item {

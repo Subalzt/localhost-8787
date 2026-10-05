@@ -1830,6 +1830,7 @@ public static class BlazeItPc
                             string d = data.ToString();
                             if (ev == "clipsync") clipSync = d == "on";
                             else if (ev == "call") CallEvent(d);
+                            else if (ev == "camalert") CamAlert(d);
                             else if (ev == "display")
                             {
                                 string[] p = d.Split(' ');
@@ -2684,6 +2685,42 @@ public static class BlazeItPc
             ringingCall = null;
             Toasts("[Windows.UI.Notifications.ToastNotificationManager]::History.Remove('call', 'calls', '" + ToastApp + "')");
         }
+    }
+
+    /**
+     * Movement seen by one of your phones in camera mode ("camalert"): a Windows notification with
+     * what it saw, which opens the page's Cameras. The pictures are kept beside the helper's other
+     * files, the last few only.
+     */
+    static void CamAlert(string d)
+    {
+        string camera = CallField(d, "camera");
+        if (camera.Length == 0) camera = "A camera";
+        string jpeg = CallField(d, "jpeg");
+        string pic = null;
+        try
+        {
+            if (jpeg.Length > 0)
+            {
+                pic = Path.Combine(Dir, "cam-alert-" + DateTime.UtcNow.Ticks + ".jpg");
+                File.WriteAllBytes(pic, Convert.FromBase64String(jpeg));
+                var old = new List<string>(Directory.GetFiles(Dir, "cam-alert-*.jpg"));
+                old.Sort();
+                for (int i = 0; i + 5 < old.Count; i++) try { File.Delete(old[i]); } catch { }
+            }
+        }
+        catch { pic = null; }
+        string url = "http://localhost:" + PhonePort + "/#cams";
+        string e1 = System.Security.SecurityElement.Escape("Movement: " + camera);
+        string e2 = System.Security.SecurityElement.Escape("Seen at " + DateTime.Now.ToString("HH:mm:ss") + " \u00b7 click to watch");
+        string xml = "<toast activationType=\"protocol\" launch=\"" + url + "\">" +
+            "<visual><binding template=\"ToastGeneric\"><text>" + e1 + "</text><text>" + e2 + "</text>" +
+            (pic != null ? "<image placement=\"hero\" src=\"" + System.Security.SecurityElement.Escape(new Uri(pic).AbsoluteUri) + "\"/>" : "") +
+            "</binding></visual><actions><action content=\"Watch\" activationType=\"protocol\" arguments=\"" + url + "\"/></actions></toast>";
+        Toasts("$x = New-Object Windows.Data.Xml.Dom.XmlDocument; $x.LoadXml('" + xml.Replace("'", "''") + "'); " +
+            "$t = [Windows.UI.Notifications.ToastNotification]::new($x); $t.Group = 'cams'; " +
+            "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('" + ToastApp + "').Show($t)");
+        Log("Movement: " + camera);
     }
 
     /** A few lines of PowerShell with Windows' notifications at hand, run apart (this helper does not wait). */

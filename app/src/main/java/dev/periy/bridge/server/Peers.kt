@@ -937,6 +937,11 @@ class PeerManager(
         request("POST", peer.asTarget(), path, peer.cookie, body, "application/json").code in 200..299
     }.getOrDefault(false)
 
+    /** [path] on [peer], whichever way it can be reached now: the answer's text when it said yes, else null. */
+    fun fetch(peer: Peer, path: String): String? = runCatching {
+        request("GET", peer.asTarget(), path, peer.cookie, null).takeIf { it.code in 200..299 }?.body
+    }.getOrNull()
+
     /** Posts raw [body] (a sealed attachment) to [path] on [peer]; true when it took it. */
     fun deliverBytes(peer: Peer, path: String, body: ByteArray): Boolean = runCatching {
         request("POST", peer.asTarget(), path, peer.cookie, body, "application/octet-stream").code in 200..299

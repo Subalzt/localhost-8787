@@ -112,6 +112,9 @@ class Container(ctx: Context) {
     val findMe: dev.periy.bridge.server.FindMe by lazy { dev.periy.bridge.server.FindMe(app).also { f -> f.onLost = { where.lostChanged() } } }
 
     /** Messages with linked phones, each phone the other's server (server/Messages.kt). */
+    /** Phones as security cameras (server/Cameras.kt). */
+    val cameras: dev.periy.bridge.server.Cameras by lazy { dev.periy.bridge.server.Cameras(app, peers) { tunnelKeys.psk(it) } }
+
     val messages by lazy { dev.periy.bridge.server.Messages(app, peers) { tunnelKeys.psk(it) } }
 
     /** The phone as a website, NAME.dedyn.io:8443 with a PIN (docs/website.md). */

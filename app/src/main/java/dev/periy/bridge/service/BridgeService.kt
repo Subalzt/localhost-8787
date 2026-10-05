@@ -112,6 +112,8 @@ class BridgeService : Service() {
 
         startForegroundCompat(buildNotification())
         container.where.start()
+        // Camera mode left on: back on (from the background it wakes the phone a moment to be let).
+        if (container.cameras.state.value.on) container.cameras.startService()
 
         if (container.server?.isRunning != true) {
             scope.launch {

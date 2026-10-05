@@ -99,6 +99,44 @@
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.PhoneBridge">
 
+        <!-- Security cameras (server/Cameras.kt): the control centre, over the lock screen too; the
+             moment's wake that lets a locked phone start its camera; camera mode itself. -->
+        <activity
+            android:name=".ui.CamerasActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="dev.periy.bridge.cameras"
+            android:excludeFromRecents="false"
+            android:theme="@style/Theme.PhoneBridge" />
+        <activity
+            android:name=".ui.CamWakeActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="dev.periy.bridge.camwake"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.PhoneBridge" />
+        <service
+            android:name=".service.CameraService"
+            android:exported="false"
+            android:foregroundServiceType="camera|microphone|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shown only for a moment when the camera cannot be started from the background, before handing over to the camera type." />
+        </service>
+        <service
+            android:name=".ui.CamTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_notification"
+            android:label="Cameras"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- Lost mode, over the lock screen (server/FindMe.kt). -->
         <activity
             android:name=".ui.LostActivity"

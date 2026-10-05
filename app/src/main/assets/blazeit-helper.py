@@ -52,6 +52,7 @@ import struct
 import subprocess
 import sys
 import threading
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -2824,6 +2825,8 @@ def events_loop():
                 d = "\n".join(data)
                 if ev == "clipsync":
                     clip_sync = d == "on"
+                elif ev == "camalert":
+                    cam_alert(d)
                 elif ev == "call":
                     call_event(d)
                 elif ev == "display":
@@ -3075,6 +3078,34 @@ def call_relay(browser):
 # Linux, the Notification Centre on a Mac) saying who, to answer on the page at localhost (Phones).
 
 ringing_call = None
+
+
+def cam_alert(d):
+    """Movement seen by one of your phones in camera mode: a notification with what it saw."""
+    try:
+        a = json.loads(d)
+    except ValueError:
+        return
+    camera = a.get("camera") or "A camera"
+    pic = None
+    if a.get("jpeg"):
+        try:
+            pic = os.path.join(tempfile.gettempdir(), "localhost8787-cam-alert.jpg")
+            with open(pic, "wb") as f:
+                f.write(base64.b64decode(a["jpeg"]))
+        except (OSError, ValueError):
+            pic = None
+    body = "Seen at %s. Watch: http://localhost:%d/#cams" % (time.strftime("%H:%M:%S"), PHONE_PORT)
+    try:
+        if MAC:
+            subprocess.Popen(["osascript", "-e", 'display notification %s with title %s sound name "Glass"' %
+                              (json.dumps(body), json.dumps("Movement: " + camera))], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif shutil.which("notify-send"):
+            subprocess.Popen(["notify-send", "-a", "Localhost 8787", "-u", "critical", "-i", pic or "camera-web", "-t", "30000",
+                              "Movement: " + camera, body], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        pass
+    log("Movement: " + camera)
 
 
 def call_event(d):
