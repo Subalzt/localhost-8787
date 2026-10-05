@@ -209,7 +209,6 @@ def main():
     ap.add_argument("--album", default="")
     ap.add_argument("--fix", action="store_true", help="give the phone better lyrics where these fit badly")
     ap.add_argument("--words", action="store_true", help="then time them word by word (align.py)")
-    ap.add_argument("--retime", action="store_true", help="also retime lyrics that fit but whose times are off")
     ap.add_argument("--out", default=os.path.join(align.HERE, "verify.json"))
     args = ap.parse_args()
     phone = Phone(args.phone)
@@ -269,7 +268,10 @@ def main():
                     if cc > conf + 0.05 or (score > mine + 0.05 and cc >= conf - 0.03):
                         best = (c, cl, cf, cc)
                 r["candidates"] = [{"id": x[3]["id"], "fit": round(x[1], 3), "within": round(x[2], 3), "synced": bool(x[3].get("syncedLyrics"))} for x in cands[:6]]
-            elif args.retime and timed and within < 0.9:
+            # Nothing better to be had, but the words fit: they are timed from the singing instead
+            # (untimed lyrics, or times that are off). Buried vocals (a poor fit) are left alone,
+            # since where they are heard cannot be trusted either.
+            if bad and not best and have and conf >= 0.18 and (not timed or within < 0.85):
                 best = (None, have, fitted, conf)
             print(line + f" ({time.time() - t0:.0f} s)", flush=True)
             r["fixed"] = False
