@@ -210,7 +210,17 @@ data class DirectDto(
 )
 
 /** The call for a laptop's page, and the linked phones it can call. */
-@Serializable data class PageCallDto(val call: PageCall?, val phones: List<String>)
+@Serializable data class PageCallDto(val call: PageCall?, val phones: List<String>, val recent: List<CallRecord> = emptyList())
 @Serializable data class PageCallStart(val name: String = "", val video: Boolean = false)
 @Serializable data class PageCallSdp(val sdp: String = "")
 @Serializable data class PageCallMedia(val muted: Boolean = false, val camera: Boolean = false)
+
+/** Conversations for a laptop's page (server/Messages.kt), newest first, and the phones it can write to. */
+@Serializable data class ChatSummary(val key: String, val title: String, val group: Boolean, val members: List<String>, val unread: Int, val at: Long, val last: String, val lastMine: Boolean, val lastFrom: String)
+@Serializable data class ChatList(val me: String, val chats: List<ChatSummary>, val phones: List<String>)
+/** One message for the page; [ready] once its attachment is here. */
+@Serializable data class ChatItem(val id: String, val mine: Boolean, val text: String, val at: Long, val state: String, val kind: String, val name: String, val size: Long, val mime: String, val durationMs: Long, val w: Int, val h: Int, val from: String, val ready: Boolean)
+@Serializable data class ChatThread(val key: String, val title: String, val group: Boolean, val members: List<String>, val messages: List<ChatItem>)
+@Serializable data class ChatSend(val key: String = "", val text: String = "")
+@Serializable data class ChatKey(val key: String = "")
+@Serializable data class ChatNewGroup(val name: String = "", val members: List<String> = emptyList())

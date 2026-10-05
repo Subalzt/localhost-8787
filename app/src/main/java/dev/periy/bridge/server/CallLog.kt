@@ -64,6 +64,7 @@ class CallLog(ctx: Context) {
     private fun set(list: List<CallRecord>) {
         _calls.value = list
         prefs.edit().putString(K, json.encodeToString(ser, list)).apply()
+        EventBus.emit("recent", "")
     }
 
     private fun notifyMissed(r: CallRecord) {

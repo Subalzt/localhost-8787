@@ -834,12 +834,105 @@ class BridgeServer(
             if ((ctx.applicationContext as dev.periy.bridge.BridgeApp).container.calls.receive(from, me.id, w)) call.respond(ApiResult(true))
             else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That signal does not open here"))
         }
+        // ---- Messages on a laptop's page, as WhatsApp's: the phone's conversations (server/Messages.kt),
+        // read and written there; the phone sends them on as it does its own. "messages" says one changed.
+        get("/api/chats") {
+            call.device() ?: return@get
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            val m = messages()
+            val keys = (m.threads.value.keys + m.groups.value.keys.map { Messages.GROUP + it }).distinct()
+            val chats = keys.mapNotNull { k ->
+                val g = m.group(k)
+                val t = m.thread(k)
+                if (g == null && t.isEmpty()) return@mapNotNull null
+                val last = t.lastOrNull()
+                ChatSummary(
+                    k, m.title(k), g != null, g?.let { m.others(it) } ?: listOf(k), m.unread(k),
+                    last?.at ?: g?.at ?: 0L, last?.let { chatLine(it) }.orEmpty(), last?.mine == true, last?.from.orEmpty(),
+                )
+            }.sortedByDescending { it.at }
+            call.respond(ChatList(peers.deviceName(), chats, peers.dto().map { it.name }))
+        }
+        get("/api/chats/thread") {
+            call.device() ?: return@get
+            val k = call.request.queryParameters["key"].orEmpty()
+            val m = messages()
+            val g = m.group(k)
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respond(ChatThread(k, m.title(k), g != null, g?.let { m.others(it) } ?: listOf(k), m.thread(k).map { x ->
+                ChatItem(x.id, x.mine, x.text, x.at, x.state, x.kind, x.name, x.size, x.mime, x.durationMs, x.w, x.h, x.from,
+                    x.file.isNotEmpty() && java.io.File(x.file).exists())
+            }))
+        }
+        get("/api/chats/file") {
+            call.device() ?: return@get
+            val k = call.request.queryParameters["key"].orEmpty()
+            val id = call.request.queryParameters["id"].orEmpty()
+            val x = messages().thread(k).firstOrNull { it.id == id }
+            val f = x?.file?.takeIf { it.isNotEmpty() }?.let { java.io.File(it) }?.takeIf { it.exists() }
+            if (x == null || f == null) { call.respond(HttpStatusCode.NotFound, ApiResult(false, "Not here (yet)")); return@get }
+            if (call.request.queryParameters["dl"] == "1") call.response.header(HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, x.name).toString())
+            call.response.header(HttpHeaders.CacheControl, "private, max-age=86400")
+            call.respond(io.ktor.server.http.content.LocalFileContent(f, runCatching { ContentType.parse(x.mime) }.getOrDefault(ContentType.Application.OctetStream)))
+        }
+        post("/api/chats/send") {
+            call.device() ?: return@post
+            val r = runCatching { call.receive<ChatSend>() }.getOrNull()
+            if (r == null || r.key.isEmpty() || r.text.isBlank()) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Nothing to send")); return@post }
+            messages().send(r.key, r.text)
+            call.respond(ApiResult(true))
+        }
+        post("/api/chats/read") {
+            call.device() ?: return@post
+            val r = runCatching { call.receive<ChatKey>() }.getOrNull()
+            if (r != null && r.key.isNotEmpty()) messages().markRead(r.key)
+            call.respond(ApiResult(true))
+        }
+        post("/api/chats/upload") {
+            call.device() ?: return@post
+            val q = call.request.queryParameters
+            val k = q["key"].orEmpty()
+            val kind = q["kind"].orEmpty().takeIf { it in Messages.FILE_KINDS } ?: "file"
+            val name = q["name"].orEmpty().ifEmpty { "file" }.replace(Regex("""[\\/:*?"<>|]"""), "_").take(120)
+            val mime = call.request.headers[HttpHeaders.ContentType]?.substringBefore(';')?.trim().orEmpty().ifEmpty { PhoneFiles.mimeOf(name) }
+            if (k.isEmpty()) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "No conversation")); return@post }
+            val tmp = java.io.File.createTempFile("upload", ".part", ctx.cacheDir)
+            val ok = withContext(Dispatchers.IO) {
+                call.receiveStream().use { i ->
+                    tmp.outputStream().use { o ->
+                        val buf = ByteArray(64 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val n = i.read(buf)
+                            if (n < 0) break
+                            total += n
+                            if (total > Messages.MAX_FILE) return@withContext false
+                            o.write(buf, 0, n)
+                        }
+                        true
+                    }
+                }
+            }
+            if (!ok) { tmp.delete(); call.respond(HttpStatusCode.PayloadTooLarge, ApiResult(false, "Too big: 40 MB at most")); return@post }
+            messages().sendUpload(k, tmp, name, mime, kind, q["ms"]?.toLongOrNull() ?: 0L)
+            call.respond(ApiResult(true))
+        }
+        post("/api/chats/group") {
+            call.device() ?: return@post
+            val r = runCatching { call.receive<ChatNewGroup>() }.getOrNull()
+            val known = peers.dto().map { it.name }.toSet()
+            val members = r?.members.orEmpty().filter { it in known }
+            if (members.isEmpty()) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Pick phones for it")); return@post }
+            call.respond(ChatKey(messages().createGroup(r?.name.orEmpty(), members)))
+        }
+
         // ---- Calls from a laptop's page: it rings there, answers, calls, and takes the call
         // with its own microphone, camera and speakers (server/Calls.kt, "a laptop's page").
         get("/api/call") {
             call.device() ?: return@get
             call.response.header(HttpHeaders.CacheControl, "no-store")
-            call.respond(PageCallDto(calls().forPage(), peers.dto().map { it.name }))
+            call.respond(PageCallDto(calls().forPage(), peers.dto().map { it.name }, (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.callLog.calls.value))
         }
         post("/api/call/start") {
             call.device() ?: return@post
@@ -849,6 +942,12 @@ class BridgeServer(
                 return@post
             }
             if (r.name == TEST_CALL) calls().testCall(r.video, camera = false) else calls().call(r.name, r.video, camera = false)
+            call.respond(ApiResult(true))
+        }
+        // The page's list of recent calls was looked at: missed calls are not new any more.
+        post("/api/call/seen") {
+            call.device() ?: return@post
+            (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.callLog.seen()
             call.respond(ApiResult(true))
         }
         post("/api/call/answer") {
@@ -1347,6 +1446,15 @@ class BridgeServer(
     private fun displayName(d: PairedDevice): String = shownName(d, devices.devices.value)
 
     private fun calls() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.calls
+    private fun messages() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.messages
+
+    /** A message as one line, for the list of conversations. */
+    private fun chatLine(x: ChatMsg): String = when (x.kind) {
+        "image" -> if (x.text.isNotEmpty()) "Photo: " + x.text else "Photo"
+        "voice" -> "Voice note"
+        "file" -> x.name.ifEmpty { "File" }
+        else -> x.text
+    }
 
     /** Wi-Fi Direct, being tried as a faster way to host the direct link. Debug builds only. */
     private val p2p by lazy { dev.periy.bridge.net.P2pLink(ctx) }

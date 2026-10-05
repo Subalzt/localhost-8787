@@ -2413,6 +2413,119 @@
   .cu-pop { animation: cu-pop .32s cubic-bezier(.2,.9,.25,1.2) both; }
   @keyframes cu-pop { from { opacity: 0; transform: scale(.7); } }
   @media (prefers-reduced-motion: reduce) { .call-ui, .cu-pop { transition: none; animation: none; } }
+  /* ------------------------------------------------------------ messages, on this laptop */
+  .chat-wrap { display: grid; grid-template-columns: 310px minmax(0, 1fr); height: calc(100vh - 150px - var(--player-h, 0px)); min-height: 440px;
+    background: var(--surface); border-radius: var(--r-card); overflow: hidden; box-shadow: var(--card-shadow); }
+  .chat-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); position: relative; }
+  .chat-side-head { display: flex; align-items: center; gap: 8px; padding: 14px 12px 8px 18px; }
+  .chat-side-head b { flex: 1; font-size: 17px; font-weight: 700; letter-spacing: -.2px; }
+  .chat-list { flex: 1; overflow-y: auto; padding: 2px 8px 10px; }
+  .chat-row { display: flex; gap: 11px; align-items: center; padding: 9px 10px; border-radius: 12px; cursor: pointer; transition: background .15s; }
+  .chat-row:hover { background: color-mix(in srgb, var(--txt) 5%, transparent); }
+  .chat-row.on { background: var(--bg); }
+  .chat-row .call-av { width: 44px; height: 44px; font-size: 18px; }
+  .chat-row .ct { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .chat-row .ct-top, .chat-row .ct-bot { display: flex; gap: 6px; align-items: center; min-width: 0; }
+  .chat-row .ct-top b { flex: 1; font-size: 14.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-row time { font-size: 11.5px; color: var(--sub); flex: 0 0 auto; }
+  .chat-row .ct-bot span { flex: 1; font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-row .unread { min-width: 19px; height: 19px; padding: 0 6px; border-radius: 10px; background: var(--blue); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+  .chat-row.has-unread time { color: var(--blue); }
+  .chat-empty-list { padding: 30px 16px; text-align: center; color: var(--sub); font-size: 13.5px; }
+  .chat-new { position: absolute; top: 48px; right: 10px; left: 10px; z-index: 5; background: var(--bg); border-radius: 14px; box-shadow: var(--float-shadow); padding: 8px; max-height: 70%; overflow-y: auto; }
+  .chat-new .cn-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; cursor: pointer; font-size: 14px; }
+  .chat-new .cn-row:hover { background: var(--surface); }
+  .chat-new .cn-row .call-av { width: 30px; height: 30px; font-size: 13px; }
+  .chat-new .cn-head { font-size: 11.5px; font-weight: 650; color: var(--sub); text-transform: uppercase; letter-spacing: .4px; padding: 8px 8px 4px; }
+  .chat-new input[type=text] { width: 100%; border: 0; background: var(--surface); border-radius: 10px; padding: 9px 12px; font: inherit; font-size: 14px; color: var(--txt); outline: none; margin: 4px 0 6px; }
+  .chat-new label.cn-row input { accent-color: var(--blue); width: 17px; height: 17px; }
+  .chat-new .cn-act { display: flex; justify-content: flex-end; gap: 8px; padding: 6px 4px 2px; }
+
+  .chat-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); position: relative; }
+  .chat-none { margin: auto; max-width: 300px; text-align: center; color: var(--sub); display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 13.5px; }
+  .chat-none svg { width: 46px; height: 46px; fill: none; stroke: var(--faint); stroke-width: 1.4; stroke-linejoin: round; }
+  .chat-none b { color: var(--txt); font-size: 16px; }
+  .chat-head { display: flex; align-items: center; gap: 12px; padding: 11px 14px 11px 18px; border-bottom: 1px solid var(--line); }
+  .chat-head .call-av { width: 38px; height: 38px; font-size: 16px; }
+  .chat-head .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .chat-head .who b { font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-head .who span { font-size: 12.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-head .back { display: none; }
+  .chat-msgs { flex: 1; overflow-y: auto; padding: 12px 20px 10px; display: flex; flex-direction: column; }
+  .chat-day { align-self: center; font-size: 11.5px; font-weight: 650; color: var(--sub); background: var(--surface); border-radius: 10px; padding: 3px 10px; margin: 14px 0 10px; }
+  .chat-ev { align-self: center; font-size: 12px; color: var(--sub); margin: 6px 0; }
+  .bub { max-width: min(560px, 74%); padding: 7px 12px 7px; border-radius: 19px; font-size: 14.5px; line-height: 1.38; margin-top: 8px;
+    white-space: pre-wrap; overflow-wrap: anywhere; position: relative; }
+  .bub.them { align-self: flex-start; background: var(--surface-2); color: var(--txt); }
+  .bub.mine { align-self: flex-end; background: var(--blue); color: #fff; }
+  .bub.run { margin-top: 2px; }
+  .bub.mine.run-next { border-bottom-right-radius: 7px; } .bub.mine.run { border-top-right-radius: 7px; }
+  .bub.them.run-next { border-bottom-left-radius: 7px; } .bub.them.run { border-top-left-radius: 7px; }
+  .bub.fresh { animation: bub-in .32s cubic-bezier(.2,.9,.25,1.08) both; }
+  @keyframes bub-in { from { opacity: 0; transform: translateY(10px) scale(.96); } }
+  .bub .from { display: block; font-size: 12px; font-weight: 650; margin-bottom: 1px; }
+  .bub .meta { float: right; display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; margin: 7px 0 -3px 12px; opacity: .62; white-space: nowrap; }
+  .bub .meta svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .bub.mine .meta.read { opacity: 1; }
+  .bub a { color: inherit; }
+  .bub.photo { padding: 3px; background: none; }
+  .bub.photo img { display: block; max-width: min(340px, 100%); max-height: 380px; border-radius: 16px; cursor: zoom-in; background: var(--surface-2); }
+  .bub.photo .meta { position: absolute; right: 12px; bottom: 9px; margin: 0; opacity: 1; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+  .bub.photo .cap { padding: 6px 9px 3px; }
+  .bub .voice { display: flex; align-items: center; gap: 10px; min-width: 210px; }
+  .bub .voice button { width: 34px; height: 34px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; flex: 0 0 auto;
+    background: color-mix(in srgb, currentColor 18%, transparent); color: inherit; }
+  .bub .voice button svg { width: 15px; height: 15px; fill: currentColor; }
+  .bub .voice .track { flex: 1; height: 4px; border-radius: 2px; background: color-mix(in srgb, currentColor 25%, transparent); position: relative; cursor: pointer; }
+  .bub .voice .track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: currentColor; width: 0; }
+  .bub .voice time { font-size: 12px; opacity: .8; font-variant-numeric: tabular-nums; }
+  .bub .filecard { display: flex; align-items: center; gap: 10px; text-decoration: none; min-width: 200px; }
+  .bub .filecard .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, currentColor 16%, transparent); flex: 0 0 auto; }
+  .bub .filecard .ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+  .bub .filecard b { display: block; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  .bub .filecard small { font-size: 12px; opacity: .75; }
+  .chat-compose { display: flex; align-items: flex-end; gap: 6px; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
+  .chat-compose textarea { flex: 1; resize: none; border: 0; background: var(--surface); border-radius: 20px; padding: 10px 15px; font: inherit; font-size: 14.5px;
+    line-height: 1.35; max-height: 160px; color: var(--txt); outline: none; min-height: 40px; }
+  .chat-btn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: none; color: var(--sub); display: grid; place-items: center; cursor: pointer; flex: 0 0 auto;
+    transition: background .15s, color .15s, transform .18s cubic-bezier(.25,.8,.3,1); }
+  .chat-btn:hover { background: var(--surface); color: var(--txt); }
+  .chat-btn:active { transform: scale(.92); }
+  .chat-btn svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .chat-btn.send { background: var(--blue); color: #fff; }
+  .chat-btn.send:hover { background: var(--blue); filter: brightness(1.08); }
+  .chat-btn.recording { background: var(--bad); color: #fff; }
+  .chat-rec { flex: 1; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 6px 0 15px; background: var(--surface); border-radius: 20px; font-variant-numeric: tabular-nums; }
+  .chat-rec i { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); animation: rec-blink 1s infinite; }
+  .chat-rec span { flex: 1; font-size: 14px; }
+  @keyframes rec-blink { 50% { opacity: .25; } }
+  .chat-viewer { position: fixed; inset: 0; z-index: 960; background: rgba(0,0,0,.88); display: grid; place-items: center; cursor: zoom-out; animation: fade-in .2s both; }
+  .chat-viewer img { max-width: 94vw; max-height: 92vh; border-radius: 6px; }
+  @keyframes fade-in { from { opacity: 0; } }
+  .chat-drop { position: absolute; inset: 0; z-index: 4; background: color-mix(in srgb, var(--bg) 82%, transparent); display: grid; place-items: center; font-weight: 650; color: var(--blue); border: 2px dashed var(--blue); border-radius: 12px; margin: 8px; }
+  @media (max-width: 780px) {
+    .chat-wrap { grid-template-columns: minmax(0, 1fr); }
+    .chat-wrap.open .chat-side { display: none; }
+    .chat-wrap:not(.open) .chat-main { display: none; }
+    .chat-head .back { display: grid; }
+  }
+  @media (prefers-reduced-motion: reduce) { .bub.fresh { animation: none; } }
+  .phones-top { display: flex; align-items: center; margin: 0 0 16px; }
+  .seg .seg-count { font-style: normal; margin-left: 7px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--blue); color: #fff;
+    font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; vertical-align: 1px; }
+  .seg .seg-count.bad { background: var(--bad); }
+  .phones-calls .call-list { margin-bottom: 0; }
+  .call-recent { padding: 6px 10px; }
+  .rc-row { display: flex; align-items: center; gap: 12px; padding: 9px 8px; border-radius: 12px; }
+  .rc-row:hover { background: color-mix(in srgb, var(--txt) 4%, transparent); }
+  .rc-row .call-av { width: 40px; height: 40px; font-size: 16px; }
+  .rc-row .rc-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .rc-row .rc-who b { font-size: 14.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rc-row.missed .rc-who b { color: var(--bad); }
+  .rc-row .rc-who span { font-size: 12.5px; color: var(--sub); display: flex; align-items: center; gap: 5px; }
+  .rc-row .rc-who svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .rc-row time { font-size: 12.5px; color: var(--sub); }
+  .chat-wrap { height: calc(100vh - 205px - var(--player-h, 0px)); }
 </style>
 </head>
 <body>
@@ -2514,12 +2627,48 @@
     <!-- Files dragged over the page: it blurs, and says where they go. -->
     <div class="drop-veil" id="drop" hidden><div><span class="send-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span><b>Drop to send</b><span id="drop-to">to the phone</span></div></div>
 
-    <!-- Calls: the phone's linked phones, called from here with this laptop's microphone and camera. -->
-    <div class="bar">Calls</div>
-    <div class="card call-list" id="call-list"></div>
-
     <div class="bar">On the phone</div>
     <div class="card" id="files"><p class="empty">Nothing yet</p></div>
+  </section>
+
+  <!-- ---------------------------------------------------------- phone to phone, as on the phone's Phones -->
+  <section data-panel="phones" hidden>
+    <div class="phones-top">
+      <div class="seg" id="phones-seg" role="tablist" aria-label="Show">
+        <button type="button" data-seg="chats" class="on">Chats<i class="seg-count" id="seg-chats-count" hidden></i></button>
+        <button type="button" data-seg="calls">Calls<i class="seg-count" id="seg-calls-count" hidden></i></button>
+      </div>
+    </div>
+    <!-- Calls: the linked phones, called from here with this laptop's microphone and camera, and the recent ones. -->
+    <div class="phones-calls" id="phones-calls" hidden>
+      <div class="card call-list" id="call-list"></div>
+      <div class="bar">Recent</div>
+      <div class="card call-recent" id="call-recent"><p class="empty">No calls yet</p></div>
+    </div>
+    <div class="chat-wrap" id="chat-wrap">
+      <aside class="chat-side">
+        <div class="chat-side-head">
+          <b>Chats</b>
+          <button class="chat-btn" id="chat-new-btn" type="button" title="New chat or group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+          <div class="chat-new" id="chat-new" hidden></div>
+        </div>
+        <div class="chat-list" id="chat-list"></div>
+      </aside>
+      <div class="chat-main" id="chat-main">
+        <div class="chat-none" id="chat-none"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.5a8 8 0 0 1-11.7 7.1L3.5 20l1.4-4.6A8 8 0 1 1 20.5 11.5Z"/></svg><b>Messages</b><span>Your phone's chats with linked phones, sealed end to end. Pick one, or start one with +.</span></div>
+        <div class="chat-head" id="chat-head" hidden></div>
+        <div class="chat-msgs" id="chat-msgs" hidden></div>
+        <div class="chat-compose" id="chat-compose" hidden>
+          <button class="chat-btn" id="chat-attach" type="button" title="Photo or file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 11.5-7.9 7.9a5 5 0 0 1-7.1-7.1l8.3-8.3a3.3 3.3 0 0 1 4.7 4.7l-8.3 8.3a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6"/></svg></button>
+          <textarea id="chat-text" rows="1" placeholder="Message"></textarea>
+          <div class="chat-rec" id="chat-rec" hidden><i></i><span id="chat-rec-time">0:00</span><button class="chat-btn" id="chat-rec-cancel" type="button" title="Throw it away"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+          <button class="chat-btn" id="chat-mic" type="button" title="Voice note"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M18.5 10.5a6.5 6.5 0 0 1-13 0M12 17v4.5"/></svg></button>
+          <button class="chat-btn send" id="chat-send" type="button" title="Send" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+        </div>
+        <input id="chat-file" type="file" multiple hidden>
+      </div>
+    </div>
+    <div class="chat-viewer" id="chat-viewer" hidden><img id="chat-viewer-img" alt=""></div>
   </section>
 
   <!-- ---------------------------------------------------------- phone storage -->
@@ -2863,7 +3012,8 @@ var events = null;
 var ticker = null;
 var TABS = [
   { id: "home", label: "Home", icon: "<path d=\"M3.5 10.5 12 3.5l8.5 7\"/><path d=\"M5.5 9v10a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9\"/><path d=\"M10 20.5V15a2 2 0 0 1 4 0v5.5\"/>" },
-  { id: "phone", label: "Phone", icon: "<path d=\"M9 2.5h6A2.5 2.5 0 0 1 17.5 5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 19V5A2.5 2.5 0 0 1 9 2.5Z\"/><path d=\"M11 18.5h2\"/>" },
+  { id: "phones", label: "Phones", icon: "<path d=\"M9 2.5h6A2.5 2.5 0 0 1 17.5 5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 19V5A2.5 2.5 0 0 1 9 2.5Z\"/><path d=\"M11 18.5h2\"/>" },
+  { id: "phone", label: "Files", icon: "<path d=\"M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17Z\"/>" },
   { id: "music", label: "Music", icon: "<path d=\"M9 18V5.5l11-2V16\"/><circle cx=\"6.5\" cy=\"18\" r=\"2.5\"/><circle cx=\"17.5\" cy=\"16\" r=\"2.5\"/>" },
   { id: "alerts", label: "Alerts", icon: "<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z\"/><path d=\"M10 20.5a2 2 0 0 0 4 0\"/>" },
   { id: "settings", label: "Settings", icon: "<path d=\"M3.5 7.5H13M18 7.5h2.5M3.5 16.5H6M11 16.5h9.5\"/><circle cx=\"15.5\" cy=\"7.5\" r=\"2.5\"/><circle cx=\"8.5\" cy=\"16.5\" r=\"2.5\"/>" },
@@ -2969,7 +3119,8 @@ function buildTabs() {
     b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + t.icon + '</svg><span>' + t.label + '</span>' +
       (t.id === "music" ? '<i class="tab-note" id="tab-eq" aria-label="Playing" hidden></i>' : "") +
       (t.id === "home" ? '<i class="count" id="tab-count" hidden></i>' : "") +
-      (t.id === "alerts" ? '<i class="count" id="alerts-count" hidden></i>' : "");
+      (t.id === "alerts" ? '<i class="count" id="alerts-count" hidden></i>' : "") +
+      (t.id === "phones" ? '<i class="count" id="msgs-count" hidden></i>' : "");
     b.dataset.tab = t.id;
     b.title = t.label;
     b.addEventListener("click", function () { selectTab(t.id); });
@@ -3240,6 +3391,7 @@ function selectTab(id, fromHistory) {
   if (id === "music") musicOpen();
   if (id === "phone" && !fs.loaded) fsOpen("");
   if (id === "alerts") { alertsSeen = true; renderAlertCount(); }
+  if (id === "phones") phonesShown();
 }
 
 
@@ -3251,7 +3403,7 @@ function selectTab(id, fromHistory) {
 // so a reload or a bookmark opens that tab.
 
 var navReady = false;
-var NAV_TABS = ["home", "phone", "music", "alerts", "settings"];
+var NAV_TABS = ["home", "phones", "phone", "music", "alerts", "settings"];
 
 function navState() { return history.state || {}; }
 
@@ -5421,6 +5573,7 @@ function connectEvents() {
   // A computer opened or closed its page, here: somewhere to send, or not any more.
   events.addEventListener("targets", loadTargetsSoon);
   callsWatch(events);
+  chatsWatch(events);
   events.addEventListener("incoming", function (e) {
     try { showIncoming(JSON.parse(e.data)); } catch (err) {}
   });
@@ -9930,6 +10083,8 @@ function setupDrop() {
   function hideVeil() { depth = 0; veil.classList.remove("on"); veil.hidden = true; $("beam").classList.remove("over"); }
   window.addEventListener("dragenter", function (e) {
     if (!carriesFiles(e) || $("app").hidden) return;
+    // A chat open in Phones takes what is dropped on it, into the chat (chatSetup).
+    if (document.body.dataset.tab === "phones" && phonesSeg === "chats" && chats.open) return;
     if (depth++ === 0) {
       $("beam").classList.add("over");
       $("drop-to").textContent = "to " + sendToName();
@@ -10208,6 +10363,382 @@ window.addEventListener("keydown", function (e) {
     info.paired ? showApp() : (showLogin(), siteLogin());
   } catch (e) { showLogin(); siteLogin(); }
 })();
+// ------------------------------------------------------------------ messages, on this laptop
+//
+// The phone's conversations with linked phones, read and written here as WhatsApp Web does: the
+// phone keeps them and sends what is written here on as it does its own, sealed end to end
+// (server/Messages.kt). "messages" says one changed; the open one is read while it is on screen.
+
+var chats = { list: [], phones: [], me: "", open: null, thread: null, seen: {}, rec: null, timer: null };
+var CHAT_IC = {
+  clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 1.8"/>',
+  sent: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  read: '<path d="m2.5 12.5 4.5 4.5 9.5-9.5"/><path d="m11 16.5.5.5 9.5-9.5"/>',
+  file: '<path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8Z"/><path d="M14 3v5h5"/>',
+  play: '<path d="M8 5.5v13l11-6.5z"/>',
+  pause: '<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>'
+};
+function chatSvg(name, cls) { return '<svg viewBox="0 0 24 24" aria-hidden="true"' + (cls ? ' class="' + cls + '"' : '') + '>' + CHAT_IC[name] + '</svg>'; }
+
+function chatsWatch(es) {
+  es.addEventListener("messages", function (e) {
+    clearTimeout(chats.timer);
+    var key = e.data;
+    chats.timer = setTimeout(function () { chatsLoad(); if (chats.open && (!key || key === chats.open)) chatLoadThread(); }, 150);
+  });
+  chatsLoad();
+  chatSetup();
+}
+
+async function chatsLoad() {
+  try {
+    var r = await api("/api/chats", { cache: "no-store" });
+    if (!r.ok) return;
+    var d = await r.json();
+    chats.list = d.chats || []; chats.phones = d.phones || []; chats.me = d.me || "";
+    renderChatList();
+    renderChatCount();
+  } catch (e) {}
+}
+
+function renderChatCount() { renderPhonesCount(); }
+
+function chatVisible() { return document.body.dataset.tab === "phones" && phonesSeg === "chats" && document.visibilityState === "visible"; }
+
+function chatWhen(at, long) {
+  var d = new Date(at), now = new Date();
+  var day = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  var hm = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (at >= day) return long ? "Today" : hm;
+  if (at >= day - 864e5) return "Yesterday";
+  if (at >= day - 6 * 864e5) return d.toLocaleDateString([], { weekday: long ? "long" : "short" });
+  return d.toLocaleDateString([], { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
+}
+
+function renderChatList() {
+  var host = $("chat-list");
+  if (!host) return;
+  if (!chats.list.length) {
+    host.innerHTML = '<div class="chat-empty-list">' + (chats.phones.length ? "No chats yet. Start one with +." : "Link another phone on the phone (Phones) to chat with it.") + '</div>';
+    return;
+  }
+  host.innerHTML = chats.list.map(function (c) {
+    var last = (c.lastMine ? "You: " : c.group && c.lastFrom ? c.lastFrom + ": " : "") + (c.last || (c.group ? "New group" : ""));
+    return '<div class="chat-row' + (c.key === chats.open ? " on" : "") + (c.unread ? " has-unread" : "") + '" data-key="' + esc(c.key) + '">' +
+      callAvatar(c.title) + '<div class="ct"><div class="ct-top"><b>' + esc(c.title) + '</b><time>' + (c.at ? esc(chatWhen(c.at)) : "") + '</time></div>' +
+      '<div class="ct-bot"><span>' + esc(last) + '</span>' + (c.unread ? '<i class="unread">' + c.unread + '</i>' : "") + '</div></div></div>';
+  }).join("");
+  host.querySelectorAll(".chat-row").forEach(function (row) { row.addEventListener("click", function () { chatOpen(row.dataset.key); }); });
+}
+
+function chatOpen(key) {
+  if (chats.open !== key) { chats.thread = null; chats.seen = {}; }
+  chats.open = key;
+  $("chat-wrap").classList.add("open");
+  $("chat-new").hidden = true;
+  renderChatList();
+  chatLoadThread();
+  setTimeout(function () { $("chat-text").focus(); }, 50);
+}
+
+async function chatLoadThread() {
+  var key = chats.open;
+  if (!key) return;
+  try {
+    var r = await api("/api/chats/thread?key=" + encodeURIComponent(key), { cache: "no-store" });
+    if (!r.ok || chats.open !== key) return;
+    var d = await r.json();
+    var first = !chats.thread;
+    chats.thread = d;
+    renderThread(first);
+    if (chatVisible() && d.messages.some(function (m) { return !m.mine && m.state === "new"; })) chatRead();
+  } catch (e) {}
+}
+
+function chatRead() {
+  if (!chats.open) return;
+  api("/api/chats/read", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: chats.open }) }).catch(function () {});
+}
+
+/** The open tab came to the front: the chat open in it is read. */
+function chatsShown() {
+  if (chats.open && chats.thread && chats.thread.messages.some(function (m) { return !m.mine && m.state === "new"; })) chatRead();
+  renderChatCount();
+  if (!chats.open && chats.list.length && window.innerWidth > 780) chatOpen(chats.list[0].key);
+}
+
+function chatFileUrl(m, dl) { return "/api/chats/file?key=" + encodeURIComponent(chats.open) + "&id=" + encodeURIComponent(m.id) + (dl ? "&dl=1" : ""); }
+
+function chatSize(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : n >= 1024 ? Math.round(n / 1024) + " KB" : n + " B"; }
+
+function chatClock(ms) { var s = Math.round(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+
+function chatText(t) {
+  return esc(t).replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+}
+
+function renderThread(first) {
+  var t = chats.thread, key = chats.open;
+  var info = chats.list.filter(function (c) { return c.key === key; })[0];
+  var title = t ? t.title : key, group = t ? t.group : false, members = t ? t.members : [key];
+  $("chat-none").hidden = true;
+  ["chat-head", "chat-msgs", "chat-compose"].forEach(function (id) { $(id).hidden = false; });
+  var head = '<button class="chat-btn back" type="button" data-act="back" title="Chats">' + chatSvg("back") + '</button>' + callAvatar(title) +
+    '<div class="who"><b>' + esc(title) + '</b><span>' + esc(group ? "You, " + members.join(", ") : "Linked phone · sealed end to end") + '</span></div>';
+  if (!group) head += '<button class="call-ic" type="button" data-act="voice" title="Voice call">' + callSvg("phone") + '</button>' +
+    '<button class="call-ic" type="button" data-act="video" title="Video call">' + callSvg("video") + '</button>';
+  var h = $("chat-head");
+  if (h.dataset.shape !== head) {
+    h.innerHTML = head; h.dataset.shape = head;
+    h.querySelectorAll("[data-act]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (b.dataset.act === "back") { $("chat-wrap").classList.remove("open"); chats.open = null; renderChatList(); }
+        else callStart(title, b.dataset.act === "video");
+      });
+    });
+  }
+  var box = $("chat-msgs");
+  var nearEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+  var msgs = t ? t.messages : [];
+  var out = [], lastDay = "", prev = null;
+  msgs.forEach(function (m, i) {
+    var day = new Date(m.at).toDateString();
+    if (day !== lastDay) { out.push('<div class="chat-day">' + esc(chatWhen(m.at, true)) + '</div>'); lastDay = day; prev = null; }
+    if (m.kind === "event") { out.push('<div class="chat-ev">' + esc((m.mine ? "You " : (m.from || title) + " ") + m.text) + '</div>'); prev = null; return; }
+    var next = msgs[i + 1];
+    var same = function (a, b) { return a && b && a.kind !== "event" && a.mine === b.mine && (a.from || "") === (b.from || "") && b.at - a.at < 180000 && new Date(a.at).toDateString() === new Date(b.at).toDateString(); };
+    var run = same(prev, m), runNext = same(m, next);
+    var fresh = !first && !chats.seen[m.id];
+    var cls = "bub " + (m.mine ? "mine" : "them") + (run ? " run" : "") + (runNext ? " run-next" : "") + (fresh ? " fresh" : "") + (m.kind === "image" ? " photo" : "");
+    var meta = '<span class="meta' + (m.mine && m.state === "read" ? " read" : "") + '">' + esc(new Date(m.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })) +
+      (m.mine ? chatSvg(m.state === "waiting" ? "clock" : m.state === "read" ? "read" : "sent") : "") + '</span>';
+    var from = group && !m.mine && !run ? '<span class="from" style="color:hsl(' + callHue(m.from || "?") + ' 65% 45%)">' + esc(m.from) + '</span>' : "";
+    var body;
+    if (m.kind === "image") {
+      body = (m.ready ? '<img loading="lazy" src="' + chatFileUrl(m) + '" data-full="' + chatFileUrl(m) + '" alt=""' + (m.w && m.h ? ' width="' + Math.min(340, m.w) + '" style="aspect-ratio:' + m.w + '/' + m.h + '"' : "") + '>'
+        : '<div style="padding:30px 40px;opacity:.6">Photo on its way…</div>') + (m.text ? '<div class="cap">' + chatText(m.text) + '</div>' : "") + meta;
+    } else if (m.kind === "voice") {
+      body = from + '<div class="voice" data-src="' + (m.ready ? chatFileUrl(m) : "") + '" data-ms="' + m.durationMs + '"><button type="button" title="Play">' + chatSvg("play") +
+        '</button><div class="track"><i></i></div><time>' + chatClock(m.durationMs || 0) + '</time></div>' + meta;
+    } else if (m.kind === "file") {
+      body = from + '<a class="filecard"' + (m.ready ? ' href="' + chatFileUrl(m, true) + '" download="' + esc(m.name) + '"' : "") + '><span class="ic">' + chatSvg("file") +
+        '</span><span><b>' + esc(m.name || "File") + '</b><small>' + esc(chatSize(m.size || 0)) + (m.ready ? "" : " · on its way") + '</small></span></a>' + meta;
+    } else body = from + chatText(m.text) + meta;
+    out.push('<div class="' + cls + '">' + body + '</div>');
+    chats.seen[m.id] = true;
+    prev = m;
+  });
+  box.innerHTML = out.join("") || '<div class="chat-ev">Say hello. Messages go to ' + esc(title) + ' sealed, through your phone.</div>';
+  box.querySelectorAll(".bub img[data-full]").forEach(function (img) {
+    img.addEventListener("click", function () { $("chat-viewer-img").src = img.dataset.full; $("chat-viewer").hidden = false; });
+    img.addEventListener("load", function () { if (nearEnd || first) box.scrollTop = box.scrollHeight; });
+  });
+  box.querySelectorAll(".voice").forEach(chatVoice);
+  if (first || nearEnd) box.scrollTop = box.scrollHeight;
+}
+
+/** A voice note's player: play and pause, the bar showing how far, a tap on it to go there. */
+function chatVoice(v) {
+  var btn = v.querySelector("button"), bar = v.querySelector(".track i"), time = v.querySelector("time");
+  var a = null, total = +v.dataset.ms || 0;
+  var draw = function () {
+    var d = a && isFinite(a.duration) && a.duration > 0 ? a.duration * 1000 : total;
+    var at = a ? a.currentTime * 1000 : 0;
+    bar.style.width = d ? Math.min(100, at / d * 100) + "%" : "0";
+    time.textContent = chatClock(a && !a.paused ? at : d);
+  };
+  btn.addEventListener("click", function () {
+    if (!v.dataset.src) return;
+    if (!a) {
+      a = new Audio(v.dataset.src);
+      a.addEventListener("timeupdate", draw);
+      a.addEventListener("ended", function () { btn.innerHTML = chatSvg("play"); a.currentTime = 0; draw(); });
+    }
+    document.querySelectorAll(".chat-msgs audio").forEach(function () {});
+    if (a.paused) { a.play().catch(function () {}); btn.innerHTML = chatSvg("pause"); } else { a.pause(); btn.innerHTML = chatSvg("play"); }
+  });
+  v.querySelector(".track").addEventListener("click", function (e) {
+    if (!a || !isFinite(a.duration)) return;
+    var r = e.currentTarget.getBoundingClientRect();
+    a.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * a.duration;
+    draw();
+  });
+}
+
+async function chatSend() {
+  var ta = $("chat-text"), text = ta.value.trim(), key = chats.open;
+  if (!text || !key) return;
+  ta.value = ""; chatGrow(); chatComposeState();
+  // Shown at once, waiting, until the phone says it has it.
+  if (chats.thread) { chats.thread.messages.push({ id: "local-" + Date.now(), mine: true, text: text, at: Date.now(), state: "waiting", kind: "text" }); renderThread(false); $("chat-msgs").scrollTop = 1e9; }
+  try {
+    var r = await api("/api/chats/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: key, text: text }) });
+    if (!r.ok) throw new Error();
+  } catch (e) { ta.value = text; chatComposeState(); }
+}
+
+async function chatUpload(file, kind, name, ms) {
+  var key = chats.open;
+  if (!key) return;
+  var q = "?key=" + encodeURIComponent(key) + "&kind=" + kind + "&name=" + encodeURIComponent(name || file.name || "file") + (ms ? "&ms=" + Math.round(ms) : "");
+  try {
+    var r = await api("/api/chats/upload" + q, { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
+    if (!r.ok) { var d = await r.json().catch(function () { return {}; }); alert(d.message || "Could not send " + (name || file.name)); }
+  } catch (e) {}
+}
+
+function chatGrow() { var ta = $("chat-text"); ta.style.height = "auto"; ta.style.height = Math.min(160, ta.scrollHeight) + "px"; }
+function chatComposeState() {
+  var has = !!$("chat-text").value.trim(), rec = !!chats.rec;
+  $("chat-send").hidden = !has && !rec;
+  $("chat-mic").hidden = has || rec;
+  $("chat-text").hidden = rec;
+  $("chat-attach").hidden = rec;
+  $("chat-rec").hidden = !rec;
+}
+
+/** A voice note: the microphone until Send (or the cross), in the browser's own Opus. */
+async function chatRecord() {
+  if (chats.rec) return;
+  if (!navigator.mediaDevices || !window.MediaRecorder) { alert("To record here, open the page at localhost:8787 through the laptop helper."); return; }
+  var stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+  catch (e) { alert("Allow the microphone for this page to record a voice note."); return; }
+  var type = ["audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/webm"].filter(function (t) { return MediaRecorder.isTypeSupported(t); })[0] || "";
+  var mr = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : undefined);
+  var parts = [], began = Date.now();
+  var rec = chats.rec = { mr: mr, stream: stream, send: false, tick: setInterval(function () { $("chat-rec-time").textContent = chatClock(Date.now() - began); }, 250) };
+  mr.ondataavailable = function (e) { if (e.data && e.data.size) parts.push(e.data); };
+  mr.onstop = function () {
+    clearInterval(rec.tick);
+    stream.getTracks().forEach(function (t) { t.stop(); });
+    if (chats.rec === rec) chats.rec = null;
+    chatComposeState();
+    var ms = Date.now() - began;
+    if (!rec.send || ms < 600) return;
+    var blob = new Blob(parts, { type: mr.mimeType || type || "audio/webm" });
+    chatUpload(blob, "voice", "voice." + (/ogg/.test(blob.type) ? "ogg" : "webm"), ms);
+  };
+  mr.start(250);
+  $("chat-rec-time").textContent = "0:00";
+  chatComposeState();
+}
+function chatRecordEnd(send) { var r = chats.rec; if (!r) return; r.send = send; try { r.mr.stop(); } catch (e) {} }
+
+function chatNewMenu() {
+  var box = $("chat-new");
+  if (!box.hidden) { box.hidden = true; return; }
+  var phones = chats.phones;
+  box.innerHTML = (phones.length ? '<div class="cn-head">Chat with</div>' + phones.map(function (n) {
+      return '<div class="cn-row" data-name="' + esc(n) + '">' + callAvatar(n) + esc(n) + '</div>';
+    }).join("") + (phones.length > 1 ? '<div class="cn-head">New group</div><input type="text" id="cn-name" placeholder="Group name" maxlength="60">' +
+      phones.map(function (n) { return '<label class="cn-row"><input type="checkbox" value="' + esc(n) + '">' + esc(n) + '</label>'; }).join("") +
+      '<div class="cn-act"><button class="btn sm" type="button" id="cn-make">Make the group</button></div>' : "")
+    : '<div class="chat-empty-list">No linked phones yet: link one on the phone, in Phones.</div>');
+  box.hidden = false;
+  box.querySelectorAll(".cn-row[data-name]").forEach(function (r) { r.addEventListener("click", function () { chatOpen(r.dataset.name); }); });
+  var make = $("cn-make");
+  if (make) make.addEventListener("click", async function () {
+    var members = Array.prototype.map.call(box.querySelectorAll("input[type=checkbox]:checked"), function (c) { return c.value; });
+    if (!members.length) return;
+    try {
+      var r = await api("/api/chats/group", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: $("cn-name").value, members: members }) });
+      var d = await r.json();
+      if (d.key) { await chatsLoad(); chatOpen(d.key); }
+    } catch (e) {}
+  });
+}
+
+function chatSetup() {
+  if (chatSetup.done) return;
+  chatSetup.done = true;
+  var ta = $("chat-text");
+  ta.addEventListener("input", function () { chatGrow(); chatComposeState(); });
+  ta.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatSend(); } });
+  $("chat-send").addEventListener("click", function () { if (chats.rec) chatRecordEnd(true); else chatSend(); });
+  $("chat-mic").addEventListener("click", chatRecord);
+  $("chat-rec-cancel").addEventListener("click", function () { chatRecordEnd(false); });
+  $("chat-attach").addEventListener("click", function () { $("chat-file").click(); });
+  $("chat-file").addEventListener("change", function (e) {
+    Array.prototype.forEach.call(e.target.files || [], function (f) { chatUpload(f, /^image\/(jpeg|png|webp|heic|heif|bmp)$/.test(f.type) ? "image" : "file"); });
+    e.target.value = "";
+  });
+  $("chat-new-btn").addEventListener("click", chatNewMenu);
+  $("chat-viewer").addEventListener("click", function () { $("chat-viewer").hidden = true; });
+  // Files dropped on an open chat go into it (anywhere else on the page they go to the phone, as ever).
+  var main = $("chat-main");
+  main.addEventListener("dragover", function (e) { if (chats.open && e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, "Files") >= 0) { e.preventDefault(); e.stopPropagation(); } });
+  main.addEventListener("drop", function (e) {
+    if (!chats.open || !e.dataTransfer || !e.dataTransfer.files.length) return;
+    e.preventDefault(); e.stopPropagation();
+    Array.prototype.forEach.call(e.dataTransfer.files, function (f) { chatUpload(f, /^image\/(jpeg|png|webp|heic|heif|bmp)$/.test(f.type) ? "image" : "file"); });
+  });
+  document.addEventListener("visibilitychange", function () { if (chatVisible()) chatsShown(); });
+  chatComposeState();
+}
+
+// ------------------------------------------------------------------ phones: chats and calls, as on the phone
+
+var phonesSeg = "chats";
+var recentCalls = [];
+
+/** Chats or Calls, as the phone's Phones tab has them. */
+function phonesSegment(seg) {
+  phonesSeg = seg;
+  document.querySelectorAll("#phones-seg button").forEach(function (b) { b.classList.toggle("on", b.dataset.seg === seg); });
+  $("chat-wrap").hidden = seg !== "chats";
+  $("phones-calls").hidden = seg !== "calls";
+  if (seg === "calls" && recentCalls.some(function (r) { return r.fresh; })) api("/api/call/seen", { method: "POST" }).catch(function () {});
+  phonesShown();
+}
+
+/** The Phones tab came to the front, or changed what it shows. */
+function phonesShown() {
+  if (phonesSeg === "chats") chatsShown();
+  renderPhonesCount();
+}
+
+/** Unread messages and missed calls not yet looked at: on the tab, and on each half of it. */
+function renderPhonesCount() {
+  var msgs = chats.list.reduce(function (a, c) { return a + (c.key === chats.open && chatVisible() ? 0 : c.unread); }, 0);
+  var missed = recentCalls.filter(function (r) { return r.fresh; }).length;
+  var tab = $("msgs-count"), n = msgs + missed;
+  if (tab) { tab.textContent = n > 99 ? "99+" : String(n); tab.hidden = !n; }
+  var a = $("seg-chats-count"), b = $("seg-calls-count");
+  if (a) { a.textContent = String(msgs); a.hidden = !msgs; }
+  if (b) { b.textContent = String(missed); b.hidden = !missed; b.classList.add("bad"); }
+}
+
+var RC_IC = {
+  out: '<path d="M7 17 17 7M9 7h8v8"/>',
+  in: '<path d="M17 7 7 17M15 17H7V9"/>',
+  video: '<path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2.5"/>'
+};
+
+function renderRecent() {
+  var host = $("call-recent");
+  if (!host) return;
+  if (!recentCalls.length) { host.innerHTML = '<p class="empty">No calls yet</p>'; return; }
+  host.innerHTML = recentCalls.slice(0, 40).map(function (r) {
+    var who = r.names.join(", ") || "Call";
+    var missed = r.outcome === "missed";
+    var how = r.outcome === "answered" ? (r.durationMs ? callClock(Date.now() - r.durationMs) : "Answered")
+      : { missed: "Missed", declined: "Declined", "no answer": "No answer", busy: "Busy", cancelled: "Cancelled", failed: "Didn't connect" }[r.outcome] || r.outcome;
+    var one = r.names.length === 1 && r.names[0] !== "Test call";
+    return '<div class="rc-row' + (missed ? " missed" : "") + '">' + callAvatar(who) +
+      '<div class="rc-who"><b>' + esc(who) + '</b><span><svg viewBox="0 0 24 24" aria-hidden="true">' + (r.outgoing ? RC_IC.out : RC_IC.in) + '</svg>' +
+      esc((r.video ? "Video" : "Voice") + " · " + how) + '</span></div><time>' + esc(chatWhen(r.at)) + '</time>' +
+      (one ? '<button class="call-ic" type="button" data-name="' + esc(r.names[0]) + '" data-video="' + (r.video ? 1 : 0) + '" title="Call back">' + callSvg(r.video ? "video" : "phone") + '</button>' : "") +
+      '</div>';
+  }).join("");
+  host.querySelectorAll(".call-ic").forEach(function (b) { b.addEventListener("click", function () { callStart(b.dataset.name, b.dataset.video === "1"); }); });
+}
+
+function phonesSetup() {
+  document.querySelectorAll("#phones-seg button").forEach(function (b) { b.addEventListener("click", function () { phonesSegment(b.dataset.seg); }); });
+}
+
 // ------------------------------------------------------------------ calls, on this laptop
 //
 // The phone's calls ring here too, and this laptop can take them: its microphone, camera and
@@ -10244,7 +10775,9 @@ function callAvatar(name, cls) {
 function callsWatch(es) {
   es.addEventListener("call", function (e) { var c = null; try { c = JSON.parse(e.data); } catch (err) { return; } callTake(c); });
   es.addEventListener("peers", callsLoad);
+  es.addEventListener("recent", callsLoad);
   callsLoad();
+  if (!callsWatch.ready) { callsWatch.ready = true; phonesSetup(); }
 }
 
 async function callsLoad() {
@@ -10253,7 +10786,10 @@ async function callsLoad() {
     if (!r.ok) return;
     var d = await r.json();
     callPhones = d.phones || [];
+    recentCalls = d.recent || [];
     renderCallList();
+    renderRecent();
+    renderPhonesCount();
     callTake(d.call);
   } catch (e) {}
 }

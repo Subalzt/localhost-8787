@@ -170,38 +170,60 @@ class Messages(
      */
     fun sendFile(key: String, uri: Uri, kind: String, durationMs: Long = 0, caption: String = "") {
         scope.launch {
-            val id = UUID.randomUUID().toString()
             val cr = app.contentResolver
             val (name, mime) = cr.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
                 ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }.let { (it ?: "file") to (cr.getType(uri) ?: PhoneFiles.mimeOf(it ?: "")) }
-            val out: File
-            var w = 0; var h = 0
-            if (kind == "image") {
-                out = File(dir, "$id.jpg")
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                cr.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-                var sample = 1
-                while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 2048) sample *= 2
-                val bmp = cr.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return@launch
-                val turned = rotateByExif(uri, bmp)
-                val scale = minOf(1f, 2048f / maxOf(turned.width, turned.height))
-                val fin = if (scale < 1f) Bitmap.createScaledBitmap(turned, (turned.width * scale).toInt(), (turned.height * scale).toInt(), true) else turned
-                out.outputStream().use { fin.compress(Bitmap.CompressFormat.JPEG, 86, it) }
-                w = fin.width; h = fin.height
-            } else {
-                out = File(dir, id + "." + (name.substringAfterLast('.', "bin").take(8)))
-                cr.openInputStream(uri)?.use { i -> out.outputStream().use { i.copyTo(it) } } ?: return@launch
-            }
-            if (out.length() > MAX_FILE) { out.delete(); return@launch }
-            change(key) {
-                it + ChatMsg(
-                    id, true, caption.trim(), System.currentTimeMillis(), "waiting", kind = kind, file = out.path,
-                    name = if (kind == "image") "$id.jpg" else name, size = out.length(), mime = if (kind == "image") "image/jpeg" else mime,
-                    durationMs = durationMs, w = w, h = h, pending = recipients(key),
-                )
-            }
-            flush(key)
+            keep(key, kind, name, mime, durationMs, caption, { cr.openInputStream(uri) }, { rotateByExif(uri, it) })
         }
+    }
+
+    /**
+     * A photo, a voice note or a file a laptop's page sent, in [tmp] (this app's cache, gone after):
+     * kept and sent as [sendFile] does. A voice note keeps the browser's own format (Opus).
+     */
+    fun sendUpload(key: String, tmp: File, name: String, mime: String, kind: String, durationMs: Long = 0) {
+        scope.launch {
+            try {
+                keep(key, kind, name, mime, durationMs, "", { tmp.inputStream() }) { bmp ->
+                    runCatching {
+                        val deg = androidx.exifinterface.media.ExifInterface(tmp.path).rotationDegrees
+                        if (deg == 0) bmp else Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, android.graphics.Matrix().apply { postRotate(deg.toFloat()) }, true)
+                    }.getOrDefault(bmp)
+                }
+            } finally { tmp.delete() }
+        }
+    }
+
+    /** An attachment into this app's files (a photo made smaller: 2048 across at most), then sent like a message. */
+    private fun keep(key: String, kind: String, name: String, mime: String, durationMs: Long, caption: String, open: () -> java.io.InputStream?, turn: (Bitmap) -> Bitmap) {
+        val id = UUID.randomUUID().toString()
+        val out: File
+        var w = 0; var h = 0
+        if (kind == "image") {
+            out = File(dir, "$id.jpg")
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            open()?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 2048) sample *= 2
+            val bmp = open()?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return
+            val turned = turn(bmp)
+            val scale = minOf(1f, 2048f / maxOf(turned.width, turned.height))
+            val fin = if (scale < 1f) Bitmap.createScaledBitmap(turned, (turned.width * scale).toInt(), (turned.height * scale).toInt(), true) else turned
+            out.outputStream().use { fin.compress(Bitmap.CompressFormat.JPEG, 86, it) }
+            w = fin.width; h = fin.height
+        } else {
+            out = File(dir, id + "." + (name.substringAfterLast('.', "bin").take(8)))
+            open()?.use { i -> out.outputStream().use { i.copyTo(it) } } ?: return
+        }
+        if (out.length() > MAX_FILE) { out.delete(); return }
+        change(key) {
+            it + ChatMsg(
+                id, true, caption.trim(), System.currentTimeMillis(), "waiting", kind = kind, file = out.path,
+                name = if (kind == "image") "$id.jpg" else name, size = out.length(), mime = if (kind == "image") "image/jpeg" else mime,
+                durationMs = durationMs, w = w, h = h, pending = recipients(key),
+            )
+        }
+        flush(key)
     }
 
     /** A voice note recorded into [f] (this app's files), [durationMs] long. */
