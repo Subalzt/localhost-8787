@@ -462,6 +462,12 @@ singing starts again. On the phone they ride over the cover too, and a tap opens
   word. Run it again after adding songs; it skips the ones already done. The first run sets itself
   up in `tools\lyrics-align\venv` (Python 3.11 and ffmpeg needed, about 3 GB). Every song's lyrics
   as they were are kept in `tools\lyrics-align\backup`, and `align.bat usb --restore` puts them back.
+- **Checked against the singing.** LRCLIB is written by its users, and now and then an entry is
+  another version's, or its lines are out of order. `tools\lyrics-align\verify.py --fix --words`
+  lines each song's whole lyrics up with its vocals without trusting their times, so it learns how
+  well the words fit and when each line is really sung; a song that fits badly or runs off time is
+  looked up again on LRCLIB, every entry of about its length is tried, and the best is kept, timed
+  from the singing and then word by word.
 
 ### 12. The phone's notifications on the laptop
 
