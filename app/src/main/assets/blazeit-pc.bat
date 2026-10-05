@@ -3629,6 +3629,35 @@ public static class BlazeItPc
     static int farFails;
     static DateTime farNext = DateTime.MinValue;
 
+    /**
+     * The phone's website name (site.txt), looked up: its IPv6 addresses now. The phone keeps the
+     * name pointing at itself, so a new address on mobile data is known here without the board.
+     */
+    static List<string> SiteAddrs()
+    {
+        var list = new List<string>();
+        try
+        {
+            string name = File.Exists(SiteFile) ? File.ReadAllText(SiteFile).Trim() : "";
+            if (name.Length == 0) return list;
+            foreach (IPAddress a in Dns.GetHostAddresses(name))
+                if (a.AddressFamily == AddressFamily.InterNetworkV6 && !a.IsIPv6LinkLocal) list.Add(a.ToString());
+        }
+        catch { }
+        return list;
+    }
+
+    static DateTime siteLooked = DateTime.MinValue;
+
+    /** While waiting to try from afar again: the website name says the phone has moved (looked at every 30 s). */
+    static bool SiteMoved(List<string> saved)
+    {
+        if ((DateTime.UtcNow - siteLooked).TotalSeconds < 30) return false;
+        siteLooked = DateTime.UtcNow;
+        foreach (string a in SiteAddrs()) if (!saved.Contains(a)) return true;
+        return false;
+    }
+
     static void FarFailed(string why)
     {
         farFails++;
@@ -3646,7 +3675,7 @@ public static class BlazeItPc
         {
             Tunnel87.Conn t = tunnel;
             if (t != null && t.Alive) { farFails = 0; return TunnelHost; }
-            if (DateTime.UtcNow < farNext) return null;
+            if (DateTime.UtcNow < farNext && !SiteMoved(TunnelAddrs(conf))) return null;
             if (!tunnelServing)
             {
                 try
@@ -3693,6 +3722,17 @@ public static class BlazeItPc
             foreach (string a in saved) race.Add(a);
             Thread asking = new Thread(delegate ()
             {
+                // First the website name (quick, and needs no board), then the board.
+                List<string> site = SiteAddrs(), moved = new List<string>();
+                foreach (string a in site) if (!saved.Contains(a)) moved.Add(a);
+                if (moved.Count > 0)
+                {
+                    Log("The phone's website points to " + string.Join(", ", moved.ToArray()));
+                    var all = new List<string>(moved);
+                    foreach (string a in saved) if (!all.Contains(a)) all.Add(a);
+                    TunnelSaveAddrs(all);
+                    foreach (string a in moved) { race.Add(a); saved.Add(a); }
+                }
                 List<string> now = Tunnel87.Where(psk), fresh = new List<string>();
                 foreach (string a in now) if (!saved.Contains(a)) fresh.Add(a);
                 if (fresh.Count > 0)

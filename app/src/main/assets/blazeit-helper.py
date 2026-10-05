@@ -1940,6 +1940,36 @@ def via(addr):
 far_fails, far_next = 0, 0.0
 
 
+def site_addrs():
+    """The phone's website name (site.txt), looked up: its IPv6 addresses now. The phone keeps the name
+    pointing at itself, so a new address on mobile data is known here without the board."""
+    name = read_file(os.path.join(CONF, "site.txt")).strip()
+    if not name:
+        return []
+    try:
+        found = socket.getaddrinfo(name, None, socket.AF_INET6)
+    except OSError:
+        return []
+    out = []
+    for f in found:
+        a = f[4][0].split("%")[0]
+        if not a.lower().startswith("fe80") and a not in out:
+            out.append(a)
+    return out
+
+
+site_looked = 0.0
+
+
+def site_moved(saved):
+    """While waiting to try from afar again: the website name says the phone has moved (looked at every 30 s)."""
+    global site_looked
+    if time.time() - site_looked < 30:
+        return False
+    site_looked = time.time()
+    return any(a not in saved for a in site_addrs())
+
+
 def far_failed(why):
     global far_fails, far_next
     far_fails += 1
@@ -1958,7 +1988,7 @@ def tunnel_path():
         if tunnel and tunnel.alive:
             far_fails = 0
             return tunnel_local
-        if time.time() < far_next:
+        if time.time() < far_next and not site_moved(list(c.get("addrs") or [])):
             return None
         if tunnel_local is None and tunnel_serve() is None:
             return None
@@ -1972,6 +2002,14 @@ def tunnel_path():
             race.add(a)
 
         def ask():
+            # First the website name (quick, and needs no board), then the board.
+            moved = [a for a in site_addrs() if a not in saved]
+            if moved:
+                log("The phone's website points to %s" % ", ".join(moved))
+                tunnel_save_addrs(moved + [a for a in saved if a not in moved])
+                for a in moved:
+                    race.add(a)
+                    saved.append(a)
             now = tunnel_where(c)
             fresh = [a for a in now if a not in saved]
             if fresh:
