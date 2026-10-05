@@ -173,9 +173,10 @@ data class CallState(
 
 /**
  * Calls between linked phones, voice and video, two phones or up to [MAX] at once, each phone the
- * others' server, with nothing in between. Past [MESH] phones the call goes through the phone that
- * started it: each phone sends it its picture and voice once, and it sends each one back everyone's
- * voice and one picture of everyone in a grid ([CallCompositor]). A test call ([testCall]) runs a
+ * others' server, with nothing in between. Past [MESH] phones the pictures go through the phone that
+ * started it: each phone sends it its picture once, and it sends each one back one picture of
+ * everyone in a grid ([CallCompositor]); the voices still go straight between every pair (they are
+ * light, and WebRTC on Android cannot pass one on: see pageJoin). A test call ([testCall]) runs a
  * whole call on this one phone, its own voice and picture through a second connection and back.
  *
  * Every call is WebRTC: Opus voice with the phone's own echo cancelling and noise suppression, and
@@ -279,7 +280,7 @@ class Calls(
         /** Candidates that came before their offer. */
         val early = HashMap<String, MutableList<IceCandidate>>()
         var levels: Job? = null
-        /** Past MESH phones: everything through the host. */
+        /** Past MESH phones: the pictures through the host. */
         var relay = false
         /** Each member's voice and picture as they come in, for the host to pass on. */
         val remoteAudio = HashMap<String, AudioTrack>()
@@ -863,8 +864,9 @@ class Calls(
         c.relay = relay
         val ids = r.map { it.id }.toSet()
         if (c.me !in ids && !c.host) return
-        // Through the host: no connections between members.
-        val keep = if (relay && !c.host) setOf(c.hostId) else ids
+        // Every pair connected, in a big call too: the voices go straight between phones (light,
+        // and never passed on: see pageJoin), only the pictures through the host.
+        val keep = ids
         c.legs.keys.filter { it !in ids || it !in keep }.forEach { id -> c.legs.remove(id)?.let { closeLeg(it) } }
         c.remoteAudio.keys.retainAll(ids); c.remoteVideo.keys.retainAll(ids); c.passed.keys.retainAll(c.legs.keys)
         val s = _state.value ?: return
@@ -873,10 +875,7 @@ class Calls(
             known[e.id] ?: CallMember(e.id, if (e.id == c.hostId) c.hostPeer else e.name, "joining")
         } + s.members.filter { it.phase == "invited" } +
             s.members.filter { it.id !in ids && it.phase != "invited" && !it.id.startsWith("?") }.map { it.copy(phase = "left", video = null, speaking = false) }
-        // Through the host, the others are there as long as the host is.
-        val hostPhase = members.firstOrNull { it.id == c.hostId }?.phase
-        val shown = if (relay && !c.host && hostPhase != null) members.map { if (it.id != c.hostId && it.phase == "joining") it.copy(phase = hostPhase) else it } else members
-        show(s.copy(members = shown.distinctBy { it.id }, relay = relay))
+        show(s.copy(members = members.distinctBy { it.id }, relay = relay))
         if (!c.host && r.none { it.id != c.me && it.id != c.hostId } && r.size <= 1) { endHere("Call ended"); return }
         refreshSenders()
         setBitrates()
@@ -890,24 +889,28 @@ class Calls(
      */
     private fun refreshSenders() {
         val c = call ?: run { return }
-        if (!c.host || !c.relay || c.test) {
-            c.legs.values.forEach { leg ->
-                leg.videoSender?.setTrack(myVideo(), false)
-                if (!c.test) leg.audioSlots.forEach { it.setTrack(null, false) }
+        // No voice is ever passed on (WebRTC here sends what the phone records on every connection,
+        // and stops the app when one carries another voice too): the spare channels stay empty.
+        if (!c.test) c.legs.values.forEach { leg -> leg.audioSlots.forEach { it.setTrack(null, false) } }
+        when {
+            !c.relay || c.test -> {
+                c.legs.values.forEach { it.videoSender?.setTrack(myVideo(), false) }
+                if (!c.test) { c.grid?.release(); c.grid = null }
             }
-            if (!c.test) { c.grid?.release(); c.grid = null }
-            refreshPage()
-            return
-        }
-        val grid = c.grid ?: CallCompositor(factory).also { c.grid = it }
-        grid.set(buildList {
-            myVideo()?.let { add(c.me to it) }
-            for (e in c.roster) if (e.id != c.me) c.remoteVideo[e.id]?.let { add(e.id to it) }
-        })
-        for ((member, leg) in c.legs) {
-            leg.videoSender?.setTrack(grid.track, false)
-            val others = c.roster.map { it.id }.filter { it != member && it != c.me }.mapNotNull { c.remoteAudio[it] }
-            leg.audioSlots.forEachIndexed { i, sender -> sender.setTrack(others.getOrNull(i), false) }
+            c.host -> {
+                // A big call's host: everyone's picture in one grid, to each phone.
+                val grid = c.grid ?: CallCompositor(factory).also { c.grid = it }
+                grid.set(buildList {
+                    myVideo()?.let { add(c.me to it) }
+                    for (e in c.roster) if (e.id != c.me) c.remoteVideo[e.id]?.let { add(e.id to it) }
+                })
+                c.legs.values.forEach { it.videoSender?.setTrack(grid.track, false) }
+            }
+            else -> {
+                // In a big call: this phone's picture to the host only; to the others, its voice.
+                c.legs.forEach { (member, leg) -> leg.videoSender?.setTrack(if (member == c.hostId) myVideo() else null, false) }
+                c.grid?.release(); c.grid = null
+            }
         }
         refreshPage()
     }
@@ -1036,7 +1039,11 @@ class Calls(
         val leg = page ?: return
         val voices = (c.roster.map { it.id }.filter { it != c.me }.mapNotNull { c.remoteAudio[it] } + c.passed.values.flatten()).distinct()
         leg.toLaptop?.hear(voices)
-        val pictures = c.roster.map { it.id }.filter { it != c.me }.mapNotNull { id -> c.remoteVideo[id]?.let { id to it } }
+        val on = _state.value?.members.orEmpty().filter { it.camera }.map { it.id }.toSet()
+        val pictures = when {
+            c.relay && !c.host -> listOfNotNull(c.remoteVideo[c.hostId]?.let { c.hostId to it })
+            else -> c.roster.map { it.id }.filter { it != c.me && (it in on || c.test) }.mapNotNull { id -> c.remoteVideo[id]?.let { id to it } }
+        }
         val out: VideoTrack? = when {
             pictures.isEmpty() -> null
             pictures.size == 1 -> {
@@ -1100,7 +1107,7 @@ class Calls(
                 if (leg == null) c.early.getOrPut(sig.from) { mutableListOf() }.add(cand)
                 else if (leg.remoteSet) leg.pc.addIceCandidate(cand) else synchronized(leg.pending) { leg.pending.add(cand) }
             }
-            "media" -> updateMember(sig.from) { it.copy(camera = sig.camera, mic = sig.mic, screen = sig.screen) }
+            "media" -> { updateMember(sig.from) { it.copy(camera = sig.camera, mic = sig.mic, screen = sig.screen) }; refreshPage() }
         }
     }
 
@@ -1257,9 +1264,6 @@ class Calls(
             if (c.levels == null) c.levels = scope.launch { listen(c) }
         }
         updateMember(leg.member) { it.copy(phase = "connected") }
-        if (c.relay && !c.host && leg.member == c.hostId) _state.value?.let { st ->
-            show(st.copy(members = st.members.map { if (it.phase == "joining") it.copy(phase = "connected") else it }))
-        }
         // How it goes: the pair of candidates in use, as a person would say it.
         leg.pc.getStats { report ->
             val pair = report.statsMap.values.firstOrNull { it.type == "candidate-pair" && it.members["state"] == "succeeded" && it.members["nominated"] == true }

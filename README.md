@@ -672,11 +672,12 @@ networks cannot reach each other at all, the call says so instead of going throu
   passes the setting-up steps on between phones that are not linked with each other, so only it
   needs to be linked with everyone. Everyone shows in a grid, lit green while they talk, with a mark
   when muted.
-- **Bigger calls, five to eight**: past four, every phone sends its picture and voice only to the
-  phone that started the call, and that phone sends each one back everyone's voice and one picture
-  of everyone in a grid, the one talking framed in green. Each phone then sends once and receives
-  once however many are in the call; the host does the work, so it is best on a phone with a good
-  connection.
+- **Bigger calls, five to eight**: past four, every phone sends its picture only to the phone that
+  started the call, and that phone sends each one back one picture of everyone in a grid, the one
+  talking framed in green; so each phone sends one picture and receives one however many are in
+  the call, and the host does the work, best on a phone with a good connection. The voices still go
+  straight between every pair of phones: voice is light (seven others at about 40 kbit/s each), and
+  WebRTC on Android cannot pass a voice on (it sends what the phone records on every connection).
 - **Test call** (*Phones*, voice or video): your own voice and picture through a whole call and
   back, through a second connection on the same phone, as an echo test does: you hear yourself a
   moment later and see yourself after two trips through the codecs and the host's grid.
