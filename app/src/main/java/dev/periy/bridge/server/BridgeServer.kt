@@ -846,7 +846,7 @@ class BridgeServer(
             call.device() ?: return@get
             call.response.header(HttpHeaders.CacheControl, "no-store")
             val w = where()
-            call.respond(WhereDto(w.places(), w.allowed(), w.allowedAlways()))
+            call.respond(WhereDto(w.places(), w.allowed(), w.allowedAlways(), w.zones.value))
         }
         post("/api/where/laptop") {
             val me = call.device() ?: return@post
@@ -854,6 +854,27 @@ class BridgeServer(
             if (f == null || f.lat !in -90.0..90.0 || f.lon !in -180.0..180.0 || f.acc <= 0f) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad position")); return@post }
             where().laptop(me.id, helperMachine(me.name).removeSuffix(" (website)"),
                 Fix(f.lat, f.lon, f.acc, if (f.at > 0) f.at else System.currentTimeMillis(), src = "wifi", battery = f.battery))
+            call.respond(ApiResult(true))
+        }
+        // Ring a phone, or put it in lost mode: this one, or a linked one (passed on, sealed) (server/FindMe.kt).
+        post("/api/find") {
+            call.device() ?: return@post
+            val c = runCatching { call.receive<FindCmd>() }.getOrNull()
+            if (c == null || c.action !in setOf("ring", "stop", "lost", "found")) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Nothing to do")); return@post }
+            val why = withContext(Dispatchers.IO) { where().find(c) { findMe().handle(it) } }
+            if (why == null) call.respond(ApiResult(true)) else call.respond(HttpStatusCode.BadGateway, ApiResult(false, why))
+        }
+        // Places marked on the map: arriving and leaving them is said on this phone.
+        post("/api/where/zone") {
+            call.device() ?: return@post
+            val z = runCatching { call.receive<Zone>() }.getOrNull()
+            if (z == null || z.name.isBlank() || z.radius !in 20.0..50_000.0) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad place")); return@post }
+            where().setZone(z.copy(id = z.id.ifEmpty { java.util.UUID.randomUUID().toString().take(12) }, name = z.name.trim().take(40)))
+            call.respond(ApiResult(true))
+        }
+        post("/api/where/zone/delete") {
+            call.device() ?: return@post
+            runCatching { call.receive<ChatKey>() }.getOrNull()?.key?.let { where().deleteZone(it) }
             call.respond(ApiResult(true))
         }
         post("/api/where/forget") {
@@ -1149,6 +1170,17 @@ class BridgeServer(
         post("/api/call/leave") {
             call.device() ?: return@post
             calls().pageLeave()
+            call.respond(ApiResult(true))
+        }
+        // A linked phone asking this one to ring, or to go into lost mode, sealed (server/FindMe.kt).
+        post("/api/peers/find") {
+            val me = call.device() ?: return@post
+            peers.byDevice(me.id) ?: run { call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Not a linked phone")); return@post }
+            val w = runCatching { call.receive<CallWire>() }.getOrNull()
+            val text = w?.let { WhereCrypto.open((ctx.applicationContext as dev.periy.bridge.BridgeApp).container.tunnelKeys.psk(me.id), it) }
+            val c = text?.let { runCatching { Json.decodeFromString<FindCmd>(it) }.getOrNull() }
+            if (c == null) { call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That does not open here")); return@post }
+            findMe().handle(c)
             call.respond(ApiResult(true))
         }
         // Where a linked phone and its laptops are, sealed with the two phones' key (server/Where.kt).
@@ -1626,6 +1658,7 @@ class BridgeServer(
     private fun calls() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.calls
     private fun messages() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.messages
     private fun where() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.where
+    private fun findMe() = (ctx.applicationContext as dev.periy.bridge.BridgeApp).container.findMe
 
     /** A message as one line, for the list of conversations. */
     private fun chatLine(x: ChatMsg): String = when (x.kind) {

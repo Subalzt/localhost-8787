@@ -106,7 +106,10 @@ class Container(ctx: Context) {
     private val laptopWatch = dev.periy.bridge.server.LaptopWatch(app) { prefs.laptopAlerts }
 
     /** Where your phones and laptops are (server/Where.kt). */
-    val where by lazy { dev.periy.bridge.server.Where(app, peers) { tunnelKeys.psk(it) } }
+    val where: dev.periy.bridge.server.Where by lazy { dev.periy.bridge.server.Where(app, peers) { tunnelKeys.psk(it) }.also { w -> w.lostNow = { findMe.lost.value.on } } }
+
+    /** Ringing this phone and lost mode, from the map (server/FindMe.kt). */
+    val findMe: dev.periy.bridge.server.FindMe by lazy { dev.periy.bridge.server.FindMe(app).also { f -> f.onLost = { where.lostChanged() } } }
 
     /** Messages with linked phones, each phone the other's server (server/Messages.kt). */
     val messages by lazy { dev.periy.bridge.server.Messages(app, peers) { tunnelKeys.psk(it) } }

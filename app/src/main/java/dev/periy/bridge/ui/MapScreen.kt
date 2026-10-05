@@ -61,6 +61,7 @@ fun MapScreen(onClose: () -> Unit) {
     val where = ctx.container.where
     val self by where.selfTrail.collectAsStateWithLifecycle()
     val others by where.others.collectAsStateWithLifecycle()
+    val zones by where.zones.collectAsStateWithLifecycle()
     var asked by remember { mutableIntStateOf(0) }
     val allowed = remember(asked) { where.allowed() }
     val always = remember(asked) { where.allowedAlways() }
@@ -84,10 +85,11 @@ fun MapScreen(onClose: () -> Unit) {
     }
 
     val json = remember { Json { encodeDefaults = true } }
-    LaunchedEffect(self, others, ready, asked) {
+    LaunchedEffect(self, others, zones, ready, asked) {
         val v = view ?: return@LaunchedEffect
         if (!ready) return@LaunchedEffect
         val places = json.encodeToString(where.places())
+        v.evaluateJavascript("setZones(" + json.encodeToString(where.zones.value) + ")", null)
         v.evaluateJavascript("setPlaces($places, $allowed, $always)", null)
     }
 
@@ -100,6 +102,26 @@ fun MapScreen(onClose: () -> Unit) {
                     layoutParams = android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
+                    // The map's Play sound and Lost mode (server/FindMe.kt), for this phone or a linked one.
+                    addJavascriptInterface(object {
+                        @android.webkit.JavascriptInterface
+                        fun find(cmd: String) {
+                            val c = runCatching { json.decodeFromString<dev.periy.bridge.server.FindCmd>(cmd) }.getOrNull() ?: return
+                            Thread {
+                                val why = where.find(c) { ctx.container.findMe.handle(it) }
+                                post { evaluateJavascript("findSaid(" + org.json.JSONObject.quote(why ?: "") + ")", null) }
+                            }.start()
+                        }
+                        @android.webkit.JavascriptInterface
+                        fun zone(z: String) {
+                            runCatching { json.decodeFromString<dev.periy.bridge.server.Zone>(z) }.getOrNull()?.let {
+                                where.setZone(it.copy(id = it.id.ifEmpty { java.util.UUID.randomUUID().toString().take(12) }))
+                            }
+                        }
+
+                        @android.webkit.JavascriptInterface
+                        fun unzone(id: String) = where.deleteZone(id)
+                    }, "Phone")
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(w: WebView?, url: String?) { ready = true; asked++ }
                     }

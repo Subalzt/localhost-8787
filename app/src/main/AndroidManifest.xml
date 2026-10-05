@@ -99,6 +99,17 @@
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.PhoneBridge">
 
+        <!-- Lost mode, over the lock screen (server/FindMe.kt). -->
+        <activity
+            android:name=".ui.LostActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.PhoneBridge" />
+        <receiver android:name=".server.FindMe$Stop" android:exported="false" />
+
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"

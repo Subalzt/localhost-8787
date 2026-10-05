@@ -68,6 +68,25 @@
   .btn { border: 0; border-radius: 10px; background: var(--chip); color: var(--txt); font: inherit; font-size: 13.5px; font-weight: 600; padding: 8px 14px; cursor: pointer; text-decoration: none; }
   .btn.blue { background: var(--blue); color: #fff; }
   .empty { padding: 14px 12px; color: var(--sub); font-size: 13.5px; }
+  .btn.red { background: var(--bad); color: #fff; }
+  .row .lostchip, .lostchip { display: inline-block; width: auto; overflow: visible; margin-left: 6px; padding: 1px 7px; border-radius: 8px; background: var(--bad); color: #fff; font-size: 11px; font-weight: 700; vertical-align: 2px; }
+  .lostform { display: none; margin-top: 10px; }
+  .lostform.on { display: block; }
+  .lostform input { width: 100%; margin: 0 0 8px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--chip); color: var(--txt); font: inherit; font-size: 14px; }
+  .said { margin-top: 8px; font-size: 12.5px; color: var(--sub); }
+  .sheet h2 { font-size: 15px; font-weight: 700; margin: 14px 12px 4px; display: flex; align-items: center; }
+  .sheet h2 .btn { margin-left: auto; padding: 5px 12px; font-size: 12.5px; }
+  .zrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; font-size: 14px; }
+  .zrow .zi { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--blue) 15%, transparent); color: var(--blue); flex: 0 0 auto; }
+  .zrow .zi svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
+  .zrow b { flex: 1; font-weight: 600; } .zrow span { color: var(--sub); font-size: 12.5px; }
+  .zrow button { border: 0; background: none; color: var(--bad); font: inherit; font-size: 13px; cursor: pointer; }
+  .zform { margin: 4px 10px 10px; display: none; } .zform.on { display: block; }
+  .zform input[type=text] { width: 100%; margin: 6px 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--chip); color: var(--txt); font: inherit; font-size: 14px; }
+  .zform label { font-size: 12.5px; color: var(--sub); display: flex; align-items: center; gap: 8px; }
+  .zform input[type=range] { flex: 1; }
+  .ztip { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 600; background: var(--sheet); padding: 8px 14px; border-radius: 12px; box-shadow: var(--shadow); font-size: 13.5px; display: none; }
+  .ztip.on { display: block; }
   .fab { position: absolute; right: 14px; top: 14px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
   .fab button { width: 44px; height: 44px; border-radius: 12px; border: 0; background: var(--sheet); color: var(--txt); box-shadow: var(--shadow);
     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); display: grid; place-items: center; cursor: pointer; }
@@ -80,7 +99,13 @@
   <button type="button" id="fit" title="Show everything"><svg viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/></svg></button>
   <button type="button" id="layer" title="Satellite"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg></button>
 </div>
-<div class="sheet" id="sheet"><h1>Devices</h1><p class="hint" id="hint"></p><div id="list"></div></div>
+<div class="sheet" id="sheet"><h1>Devices</h1><p class="hint" id="hint"></p><div id="list"></div>
+  <h2>Places <button class="btn" type="button" id="zadd">Mark a place</button></h2>
+  <div class="zform" id="zform"><input type="text" id="zname" maxlength="40" placeholder="Name (Home, College…)">
+    <label>Size <input type="range" id="zrad" min="50" max="1000" step="25" value="150"><span id="zradv">150 m</span></label>
+    <div style="display:flex;gap:8px;margin-top:8px"><button class="btn blue" type="button" id="zsave">Save</button><button class="btn" type="button" id="zcancel">Cancel</button></div></div>
+  <div id="zlist"></div><p class="hint" style="margin-top:6px">Your phone tells you when a phone or laptop arrives at or leaves one.</p></div>
+<div class="ztip" id="ztip">Tap the map where the place is</div>
 <script>
 var map = L.map("map", { zoomControl: false, attributionControl: true, worldCopyJump: true }).setView([20, 78], 4);
 var dark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
@@ -163,17 +188,100 @@ function list_() {
     var f = p.fix, d = me && !p.self ? far(metres(me.fix, f)) : p.self ? "This phone" : "";
     var bat = f.battery >= 0 ? " · " + f.battery + "%" : "";
     return '<div class="row' + (chosen === p.id ? " on" : "") + '" data-id="' + esc(p.id) + '"><div class="av" style="background:' + face(p.name) + '">' +
-      esc(p.name.trim().charAt(0).toUpperCase()) + '</div><div class="who"><b>' + esc(p.name) + '</b><span>' + esc(ago(f.at) + " · ±" + Math.round(f.acc) + " m" + bat +
+      esc(p.name.trim().charAt(0).toUpperCase()) + '</div><div class="who"><b>' + esc(p.name) + (p.lost ? '<span class="lostchip">Lost</span>' : "") + '</b><span>' + esc(ago(f.at) + " · ±" + Math.round(f.acc) + " m" + bat +
       (p.via ? " · via " + p.via : "")) + '</span></div><div class="dist">' + esc(d) + '</div></div>' +
       '<div class="detail"><dl class="facts"><dt>Where</dt><dd>' + f.lat.toFixed(6) + ", " + f.lon.toFixed(6) + '</dd><dt>Within</dt><dd>' + Math.round(f.acc) + ' m</dd>' +
       (f.alt != null ? '<dt>Height</dt><dd>' + Math.round(f.alt) + ' m</dd>' : "") + (f.speed != null && f.speed > 0.5 ? '<dt>Moving</dt><dd>' + Math.round(f.speed * 3.6) + ' km/h</dd>' : "") +
       '<dt>Seen</dt><dd>' + esc(new Date(f.at).toLocaleString()) + '</dd><dt>From</dt><dd>' + esc(f.src || "") + '</dd></dl>' +
       '<div class="acts"><a class="btn blue" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=' + f.lat + "," + f.lon + '">Directions</a>' +
-      '<button class="btn" type="button" data-trail="' + esc(p.id) + '">' + ((p.trail || []).length > 1 ? "Trail (" + p.trail.length + ")" : "No trail yet") + '</button></div></div>';
+      '<button class="btn" type="button" data-trail="' + esc(p.id) + '">' + ((p.trail || []).length > 1 ? "Trail (" + p.trail.length + ")" : "No trail yet") + '</button>' +
+      (p.kind === "phone" ? '<button class="btn" type="button" data-find="ring" data-to="' + esc(target(p)) + '">Play sound</button>' +
+        (p.lost ? '<button class="btn red" type="button" data-find="found" data-to="' + esc(target(p)) + '">End lost mode</button>'
+                : '<button class="btn red" type="button" data-lost="' + esc(p.id) + '">Lost mode…</button>') : "") + '</div>' +
+      (p.kind === "phone" && !p.lost ? '<div class="lostform" id="lf-' + esc(p.id) + '"><input type="text" maxlength="300" placeholder="Message on its screen (it is lost; please call…)">' +
+        '<input type="tel" maxlength="40" placeholder="A number to call"><button class="btn red" type="button" data-find="lost" data-to="' + esc(target(p)) + '">Turn on lost mode</button></div>' : "") +
+      '<div class="said" id="said-' + esc(p.id) + '"></div></div>';
   }).join("");
   host.querySelectorAll(".row").forEach(function (r) { r.onclick = function () { choose(r.dataset.id === chosen ? null : r.dataset.id, true); }; });
   host.querySelectorAll("[data-trail]").forEach(function (b) { b.onclick = function () { showTrail = !showTrail; drawTrail(); }; });
+  host.querySelectorAll("[data-lost]").forEach(function (b) { b.onclick = function () { var f = document.getElementById("lf-" + b.dataset.lost); if (f) f.classList.toggle("on"); }; });
+  host.querySelectorAll("[data-find]").forEach(function (b) {
+    b.onclick = function () {
+      var form = b.closest(".lostform"), ins = form ? form.querySelectorAll("input") : [];
+      findAct({ action: b.dataset.find, target: b.dataset.to, message: ins[0] ? ins[0].value : "", contact: ins[1] ? ins[1].value : "" }, b.closest(".detail"));
+    };
+  });
 }
+
+/** Who a find goes to: this phone, or the linked phone it is known through. */
+function target(p) { return p.self ? "self" : (p.via || p.name); }
+
+var findAt = null;
+/** Play sound, Lost mode, End lost mode: the app's own way in it, /api/find on the page. */
+function findAct(cmd, detail) {
+  findAt = detail ? detail.querySelector(".said") : null;
+  if (findAt) findAt.textContent = cmd.action === "ring" ? "Ringing…" : cmd.action === "lost" ? "Turning on lost mode…" : "Ending lost mode…";
+  if (window.Phone && Phone.find) { Phone.find(JSON.stringify(cmd)); return; }
+  fetch("/api/find", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cmd) })
+    .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { findSaid(r.ok ? "" : d.message || "Could not reach it"); }); })
+    .catch(function () { findSaid("Could not reach it"); });
+}
+function findSaid(why) { if (findAt) findAt.textContent = why ? why : "Done."; }
+
+// ---- places: marked on the map; arriving and leaving them is said on the phone (server/Where.kt)
+var zones = [], zoneLayers = [], picking = false, pick = null, pickCircle = null;
+function setZones(list) {
+  zones = list || [];
+  zoneLayers.forEach(function (l) { map.removeLayer(l); });
+  zoneLayers = [];
+  zones.forEach(function (z) {
+    zoneLayers.push(L.circle([z.lat, z.lon], { radius: z.radius, color: "#5E5CE6", weight: 2, dashArray: "6 6", fillOpacity: .06, interactive: false }).addTo(map));
+    zoneLayers.push(L.marker([z.lat, z.lon], { interactive: false, icon: L.divIcon({ className: "", iconSize: [120, 20], iconAnchor: [60, -6],
+      html: '<div style="text-align:center;font-size:12px;font-weight:700;color:#5E5CE6;text-shadow:0 0 3px var(--bg),0 0 3px var(--bg)">' + esc(z.name) + '</div>' }) }).addTo(map));
+  });
+  var host = document.getElementById("zlist");
+  host.innerHTML = zones.length ? zones.map(function (z) {
+    return '<div class="zrow"><span class="zi"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="2"/></svg></span><b>' + esc(z.name) +
+      '</b><span>' + Math.round(z.radius) + ' m</span><button type="button" data-unzone="' + esc(z.id) + '">Remove</button></div>';
+  }).join("") : '<div class="empty" style="padding:6px 12px">None yet.</div>';
+  host.querySelectorAll("[data-unzone]").forEach(function (b) { b.onclick = function () { zoneSend(null, b.dataset.unzone); }; });
+}
+function zoneSend(z, removeId) {
+  if (window.Phone && Phone.zone) { if (z) Phone.zone(JSON.stringify(z)); else Phone.unzone(removeId); return; }
+  fetch(z ? "/api/where/zone" : "/api/where/zone/delete", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(z || { key: removeId }) }).then(function () { if (window.whereLoad) whereLoad(); }).catch(function () {});
+}
+function zoneDone() {
+  picking = false; pick = null;
+  if (pickCircle) { map.removeLayer(pickCircle); pickCircle = null; }
+  document.getElementById("zform").classList.remove("on");
+  document.getElementById("ztip").classList.remove("on");
+}
+document.getElementById("zadd").onclick = function () {
+  picking = true;
+  document.getElementById("ztip").classList.add("on");
+  document.getElementById("zform").classList.add("on");
+};
+document.getElementById("zrad").oninput = function () {
+  document.getElementById("zradv").textContent = this.value + " m";
+  if (pickCircle) pickCircle.setRadius(+this.value);
+};
+map.on("click", function (e) {
+  if (!picking) return;
+  pick = e.latlng;
+  document.getElementById("ztip").classList.remove("on");
+  var r = +document.getElementById("zrad").value;
+  if (pickCircle) pickCircle.setLatLng(pick); else pickCircle = L.circle(pick, { radius: r, color: "#5E5CE6", weight: 2, fillOpacity: .12 }).addTo(map);
+  document.getElementById("zname").focus();
+});
+document.getElementById("zsave").onclick = function () {
+  var name = document.getElementById("zname").value.trim();
+  if (!pick || !name) { document.getElementById("ztip").classList.add("on"); return; }
+  zoneSend({ id: "", name: name, lat: pick.lat, lon: pick.lng, radius: +document.getElementById("zrad").value });
+  document.getElementById("zname").value = "";
+  zoneDone();
+};
+document.getElementById("zcancel").onclick = zoneDone;
 
 var showTrail = false;
 function choose(id, fly) {
@@ -197,9 +305,9 @@ setPlaces = function (list, allowed, always) { placesRaw = list || []; lastAllow
 
 // The page: its own requests to /api/where, on each word from the page that something moved, and each 20 s.
 if (/[?&]api=1/.test(location.search)) {
-  var load = function () {
+  var load = window.whereLoad = function () {
     fetch("/api/where", { credentials: "same-origin", cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { if (d) setPlaces(d.places, d.allowed, d.always); }).catch(function () {});
+      .then(function (d) { if (d) { setZones(d.zones); setPlaces(d.places, d.allowed, d.always); } }).catch(function () {});
   };
   load();
   setInterval(load, 20000);

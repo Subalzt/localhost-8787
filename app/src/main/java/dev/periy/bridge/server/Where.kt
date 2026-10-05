@@ -53,9 +53,15 @@ data class Place(
     val trail: List<Fix> = emptyList(),
     /** This phone itself. */
     val self: Boolean = false,
+    /** In lost mode (server/FindMe.kt). */
+    val lost: Boolean = false,
     /** Through which phone it is known, when not this one ("" for this phone and its own laptops). */
     val via: String = "",
 )
+
+/** A place marked on the map: arriving and leaving it is said in a notification. */
+@Serializable
+data class Zone(val id: String, val name: String, val lat: Double, val lon: Double, val radius: Double)
 
 /** What a phone tells its linked phones: itself and its laptops. */
 @Serializable
@@ -83,7 +89,13 @@ class Where(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Serializable
-    private data class Kept(val self: List<Fix> = emptyList(), val others: List<Place> = emptyList())
+    private data class Kept(
+        val self: List<Fix> = emptyList(),
+        val others: List<Place> = emptyList(),
+        val zones: List<Zone> = emptyList(),
+        /** Which device is in which place now ("device|place"), so a restart says nothing twice. */
+        val inside: Map<String, Boolean> = emptyMap(),
+    )
 
     private val kept = runCatching { json.decodeFromString<Kept>(file.readText()) }.getOrDefault(Kept())
 
@@ -95,7 +107,14 @@ class Where(
     /** Every other phone and laptop, by id. */
     val others: StateFlow<Map<String, Place>> = _others.asStateFlow()
 
+    private val _zones = MutableStateFlow(kept.zones)
+    /** The places marked on the map. */
+    val zones: StateFlow<List<Zone>> = _zones.asStateFlow()
+    private val inside = java.util.concurrent.ConcurrentHashMap(kept.inside)
+
     private var listening = false
+    /** Lost mode: always precise, as often as it moves (set by the app's container). */
+    var lostNow: () -> Boolean = { false }
     /**
      * Moving: high accuracy, every 20 s or 5 m. Still (3 minutes within 25 m): balanced power (Wi-Fi
      * and cells, mostly no GPS), every 2 minutes, so all-the-time location costs little; back to
@@ -159,7 +178,7 @@ class Where(
             if (still) { still = false; app.getSystemService(LocationManager::class.java)?.let(::request); Log.i(TAG, "Moving: precise positions") }
             return
         }
-        if (!still && fix.at - stillSince >= STILL_AFTER_MS) {
+        if (!still && fix.at - stillSince >= STILL_AFTER_MS && !lostNow()) {
             still = true
             app.getSystemService(LocationManager::class.java)?.let(::request)
             Log.i(TAG, "Still: gentle positions")
@@ -183,6 +202,7 @@ class Where(
         val moved = last == null || metres(last, fix) >= TRAIL_METRES || fix.at - last.at >= TRAIL_MS
         val next = (if (moved) trail + fix else trail.dropLast(1) + fix).filter { fix.at - it.at <= KEEP_MS }.takeLast(KEEP_POINTS)
         _self.value = next
+        checkZones("self", peers.deviceName(), fix)
         changed()
         share(fix)
         if (listening) pace(fix)
@@ -196,6 +216,7 @@ class Where(
         val moved = last == null || metres(last, fix) >= TRAIL_METRES || fix.at - last.at >= TRAIL_MS
         val next = (if (moved) trail + fix else trail.dropLast(1) + fix).filter { fix.at - it.at <= KEEP_MS }.takeLast(KEEP_POINTS)
         _others.value = _others.value + (id to Place(id, name, "laptop", fix, next))
+        checkZones(id, name, fix)
         changed()
         // Linked phones hear of this phone's laptops too, with its own position's next word.
         lastShared = 0
@@ -204,7 +225,7 @@ class Where(
 
     /** Everything known, this phone first, for the map. */
     fun places(): List<Place> {
-        val me = Place("self", peers.deviceName(), "phone", _self.value.lastOrNull(), _self.value, self = true)
+        val me = Place("self", peers.deviceName(), "phone", _self.value.lastOrNull(), _self.value, self = true, lost = lostNow())
         return listOf(me) + _others.value.values.sortedByDescending { it.fix?.at ?: 0L }
     }
 
@@ -221,7 +242,7 @@ class Where(
     }
 
     private fun shareNow() {
-        val mine = listOf(Place(peers.deviceName(), peers.deviceName(), "phone", _self.value.lastOrNull(), _self.value.takeLast(SHARE_TRAIL))) +
+        val mine = listOf(Place(peers.deviceName(), peers.deviceName(), "phone", _self.value.lastOrNull(), _self.value.takeLast(SHARE_TRAIL), lost = lostNow())) +
             _others.value.values.filter { it.kind == "laptop" && it.via.isEmpty() }.map { it.copy(trail = it.trail.takeLast(SHARE_TRAIL)) }
         val text = json.encodeToString(WhereShare(mine))
         scope.launch {
@@ -246,8 +267,82 @@ class Where(
                 trail = (next[id]?.trail.orEmpty() + p.trail).distinctBy { it.at }.sortedBy { it.at }.takeLast(KEEP_POINTS))
         }
         _others.value = next
+        share.places.forEach { p -> p.fix?.let { checkZones("$from/${p.id}", p.name, it) } }
         changed()
         return true
+    }
+
+    /** Lost mode went on or off: linked phones hear of it at once. */
+    fun lostChanged() {
+        lastShared = 0
+        if (still) { still = false; app.getSystemService(LocationManager::class.java)?.let(::request) }
+        shareNow()
+        changed()
+    }
+
+    /**
+     * Ring a phone or put it in lost mode ([c].target: "self" or empty for this one, else a linked
+     * phone's name, told sealed). Blocks while a linked phone is asked. Null when done, else why not.
+     */
+    fun find(c: FindCmd, here: (FindCmd) -> Unit): String? {
+        if (c.target.isEmpty() || c.target == "self" || c.target == peers.deviceName()) { here(c); return null }
+        val peer = peers.find(c.target) ?: return "${c.target} is not linked"
+        val key = peers.messageKey(peer) ?: return "${c.target} is not linked"
+        val body = json.encodeToString(WhereCrypto.seal(key, json.encodeToString(c.copy(target = "")))).toByteArray()
+        return if (runCatching { peers.deliver(peer, "/api/peers/find", body) }.getOrDefault(false)) null else "${c.target} could not be reached"
+    }
+
+    // ------------------------------------------------------------------ places
+
+    /** Marks a place (or changes one, by its id). */
+    fun setZone(z: Zone) {
+        _zones.value = _zones.value.filterNot { it.id == z.id } + z
+        changed()
+    }
+
+    fun deleteZone(id: String) {
+        _zones.value = _zones.value.filterNot { it.id == id }
+        inside.keys.removeAll { it.endsWith("|$id") }
+        changed()
+    }
+
+    /**
+     * Whether [name] has arrived at or left a marked place, said once each time: in when within its
+     * radius, out when past it by 30 m or the position's own uncertainty (so a position wobbling at
+     * the edge says nothing); a position much less sure than the place is wide is not used.
+     */
+    private fun checkZones(device: String, name: String, fix: Fix) {
+        for (z in _zones.value) {
+            if (fix.acc > z.radius * 2 && fix.acc > 100) continue
+            val d = metres(Fix(z.lat, z.lon, 0f, 0), fix)
+            val key = "$device|${z.id}"
+            val was = inside[key]
+            val now = when {
+                d <= z.radius -> true
+                d >= z.radius + maxOf(30.0, fix.acc.toDouble()) -> false
+                else -> was ?: continue
+            }
+            inside[key] = now
+            if (was != null && was != now) say(if (now) "$name arrived at ${z.name}" else "$name left ${z.name}", fix)
+        }
+    }
+
+    private fun say(text: String, fix: Fix) {
+        val nm = app.getSystemService(android.app.NotificationManager::class.java) ?: return
+        if (nm.getNotificationChannel(PLACES) == null) nm.createNotificationChannel(
+            android.app.NotificationChannel(PLACES, "Arriving and leaving", android.app.NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Your phones and laptops arriving at and leaving the places marked on the map."
+            },
+        )
+        val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(fix.at))
+        val n = androidx.core.app.NotificationCompat.Builder(app, PLACES)
+            .setSmallIcon(dev.periy.bridge.R.drawable.ic_notification)
+            .setContentTitle(text)
+            .setContentText("At $time, within ${fix.acc.toInt()} m")
+            .setAutoCancel(true)
+            .build()
+        runCatching { nm.notify(text.hashCode(), n) }
+        EventBus.emit("place", text)
     }
 
     /** A phone or laptop taken off the map. */
@@ -257,12 +352,13 @@ class Where(
     }
 
     private fun changed() {
-        scope.launch { runCatching { file.writeText(json.encodeToString(Kept(_self.value, _others.value.values.toList()))) } }
+        scope.launch { runCatching { file.writeText(json.encodeToString(Kept(_self.value, _others.value.values.toList(), _zones.value, HashMap(inside)))) } }
         EventBus.emit("where", "")
     }
 
     companion object {
         private const val TAG = "Where"
+        private const val PLACES = "places"
         private const val INTERVAL_MS = 20_000L
         private const val MIN_METRES = 5f
         private const val TRAIL_METRES = 15.0
