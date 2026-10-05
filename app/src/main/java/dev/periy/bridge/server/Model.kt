@@ -219,9 +219,15 @@ data class DirectDto(
 @Serializable data class ChatSummary(val key: String, val title: String, val group: Boolean, val members: List<String>, val unread: Int, val at: Long, val last: String, val lastMine: Boolean, val lastFrom: String)
 @Serializable data class ChatList(val me: String, val chats: List<ChatSummary>, val phones: List<String>)
 /** One message for the page; [ready] once its attachment is here. */
-@Serializable data class ChatItem(val id: String, val mine: Boolean, val text: String, val at: Long, val state: String, val kind: String, val name: String, val size: Long, val mime: String, val durationMs: Long, val w: Int, val h: Int, val from: String, val ready: Boolean)
-@Serializable data class ChatThread(val key: String, val title: String, val group: Boolean, val members: List<String>, val messages: List<ChatItem>)
-@Serializable data class ChatSend(val key: String = "", val text: String = "")
+@Serializable data class ChatItem(
+    val id: String, val mine: Boolean, val text: String, val at: Long, val state: String, val kind: String, val name: String, val size: Long, val mime: String,
+    val durationMs: Long, val w: Int, val h: Int, val from: String, val ready: Boolean,
+    val reply: String = "", val replyText: String = "", val replyFrom: String = "", val reactions: Map<String, String> = emptyMap(),
+)
+@Serializable data class ChatThread(val key: String, val title: String, val group: Boolean, val members: List<String>, val messages: List<ChatItem>, val typing: List<String> = emptyList())
+@Serializable data class ChatSend(val key: String = "", val text: String = "", val reply: String = "")
+/** A reaction from the page ("" takes it back), or the page taking one of the phone's messages back. */
+@Serializable data class ChatReact(val key: String = "", val id: String = "", val emoji: String = "")
 @Serializable data class ChatKey(val key: String = "")
 /** Where your phones and laptops are, for the map (server/Where.kt). */
 @Serializable data class WhereDto(val places: List<Place>, val allowed: Boolean, val always: Boolean, val zones: List<Zone> = emptyList())

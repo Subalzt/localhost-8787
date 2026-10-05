@@ -2510,6 +2510,44 @@
     .chat-head .back { display: grid; }
   }
   @media (prefers-reduced-motion: reduce) { .bub.fresh { animation: none; } }
+  /* Replies, reactions, the held message's menu, "typing…" */
+  .bub .more { position: absolute; top: 3px; right: 5px; width: 24px; height: 22px; border: 0; border-radius: 11px; padding: 0; display: grid; place-items: center;
+    background: inherit; color: inherit; cursor: pointer; opacity: 0; transition: opacity .15s; }
+  .bub .more svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .bub:hover .more, .bub .more:focus-visible { opacity: .85; }
+  .bub.photo .more { top: 8px; right: 9px; background: rgba(0,0,0,.45); color: #fff; }
+  .bub .quote { display: block; margin: 0 0 5px; padding: 5px 9px 5px 10px; border-left: 3px solid currentColor; border-radius: 9px; cursor: pointer;
+    background: color-mix(in srgb, currentColor 10%, transparent); white-space: normal; }
+  .bub.mine .quote { background: rgba(0,0,0,.16); }
+  .bub .quote b { display: block; font-size: 12px; font-weight: 650; }
+  .bub .quote span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; opacity: .78; }
+  .bub.photo .quote { margin: 3px 3px 6px; color: var(--txt); }
+  .bub.deleted { font-style: italic; color: var(--sub); background: var(--surface-2); }
+  .bub.flash { animation: bub-flash 1.2s ease; }
+  @keyframes bub-flash { 30% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 45%, transparent); } }
+  .reacts { display: flex; gap: 2px; margin: -5px 8px 0; padding: 2px 3px; border-radius: 13px; background: var(--surface); border: 1px solid var(--bg);
+    position: relative; z-index: 1; font-size: 13.5px; }
+  .reacts.mine { align-self: flex-end; } .reacts.them { align-self: flex-start; }
+  .reacts button { border: 0; background: none; color: var(--sub); font: inherit; font-size: 13.5px; padding: 1px 6px; border-radius: 10px; cursor: pointer; }
+  .reacts button.on { background: color-mix(in srgb, var(--blue) 20%, transparent); }
+  .reacts button small { font-size: 11.5px; font-weight: 650; margin-left: 2px; }
+  .chat-menu { position: fixed; z-index: 970; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; animation: menu-in .16s cubic-bezier(.2,.9,.3,1.1) both; }
+  @keyframes menu-in { from { opacity: 0; transform: scale(.94); } }
+  .chat-menu .emo { display: flex; gap: 2px; padding: 4px 6px; border-radius: 26px; background: var(--bg); box-shadow: 0 8px 30px rgba(0,0,0,.22), 0 0 0 1px var(--line); }
+  .chat-menu .emo button { width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; font-size: 23px; cursor: pointer; transition: transform .15s, background .15s; }
+  .chat-menu .emo button:hover { transform: scale(1.18); }
+  .chat-menu .emo button.on { background: color-mix(in srgb, var(--blue) 22%, transparent); }
+  .chat-menu .acts { min-width: 210px; border-radius: 14px; overflow: hidden; background: var(--bg); box-shadow: 0 8px 30px rgba(0,0,0,.22), 0 0 0 1px var(--line); }
+  .chat-menu .acts button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--txt); font: inherit; font-size: 14px; padding: 10px 15px; cursor: pointer; }
+  .chat-menu .acts button + button { border-top: 1px solid var(--line); }
+  .chat-menu .acts button:hover { background: var(--surface); }
+  .chat-menu .acts button.bad { color: var(--bad); }
+  .chat-reply { display: flex; align-items: center; gap: 10px; padding: 8px 12px 0 16px; }
+  .chat-reply i { width: 3px; align-self: stretch; border-radius: 2px; background: var(--blue); }
+  .chat-reply div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .chat-reply b { font-size: 12.5px; font-weight: 650; color: var(--blue); }
+  .chat-reply span { font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-head .who span.typing { color: var(--blue); }
   .phones-top { display: flex; align-items: center; margin: 0 0 16px; }
   .map-frame { display: block; width: 100%; height: calc(100vh - 150px - var(--player-h, 0px)); min-height: 440px; border: 0;
     border-radius: var(--r-card); background: var(--surface); box-shadow: var(--card-shadow); }
@@ -2682,6 +2720,7 @@
         <div class="chat-none" id="chat-none"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.5a8 8 0 0 1-11.7 7.1L3.5 20l1.4-4.6A8 8 0 1 1 20.5 11.5Z"/></svg><b>Messages</b><span>Your phone's chats with linked phones, sealed end to end. Pick one, or start one with +.</span></div>
         <div class="chat-head" id="chat-head" hidden></div>
         <div class="chat-msgs" id="chat-msgs" hidden></div>
+        <div class="chat-reply" id="chat-reply" hidden></div>
         <div class="chat-compose" id="chat-compose" hidden>
           <button class="chat-btn" id="chat-attach" type="button" title="Photo or file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 11.5-7.9 7.9a5 5 0 0 1-7.1-7.1l8.3-8.3a3.3 3.3 0 0 1 4.7 4.7l-8.3 8.3a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6"/></svg></button>
           <textarea id="chat-text" rows="1" placeholder="Message"></textarea>
@@ -2693,6 +2732,7 @@
       </div>
     </div>
     <div class="chat-viewer" id="chat-viewer" hidden><img id="chat-viewer-img" alt=""></div>
+    <div class="chat-menu" id="chat-menu" hidden></div>
   </section>
 
   <!-- ---------------------------------------------------------- where your phones and laptops are -->
@@ -10414,7 +10454,8 @@ window.addEventListener("keydown", function (e) {
 // phone keeps them and sends what is written here on as it does its own, sealed end to end
 // (server/Messages.kt). "messages" says one changed; the open one is read while it is on screen.
 
-var chats = { list: [], phones: [], me: "", open: null, thread: null, seen: {}, rec: null, timer: null };
+var chats = { list: [], phones: [], me: "", open: null, thread: null, seen: {}, rec: null, timer: null, replying: null, typing: {}, typedAt: 0 };
+var CHAT_QUICK = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 var CHAT_IC = {
   clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 1.8"/>',
   sent: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
@@ -10422,7 +10463,8 @@ var CHAT_IC = {
   file: '<path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8Z"/><path d="M14 3v5h5"/>',
   play: '<path d="M8 5.5v13l11-6.5z"/>',
   pause: '<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/>',
-  back: '<path d="M15 5l-7 7 7 7"/>'
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  down: '<path d="m6.5 9.5 5.5 5.5 5.5-5.5"/>'
 };
 function chatSvg(name, cls) { return '<svg viewBox="0 0 24 24" aria-hidden="true"' + (cls ? ' class="' + cls + '"' : '') + '>' + CHAT_IC[name] + '</svg>'; }
 
@@ -10431,6 +10473,13 @@ function chatsWatch(es) {
     clearTimeout(chats.timer);
     var key = e.data;
     chats.timer = setTimeout(function () { chatsLoad(); if (chats.open && (!key || key === chats.open)) chatLoadThread(); }, 150);
+  });
+  es.addEventListener("typing", function (e) {
+    var d; try { d = JSON.parse(e.data); } catch (x) { return; }
+    var t = chats.typing[d.key] || (chats.typing[d.key] = {});
+    t[d.who || d.key] = Date.now();
+    if (d.key === chats.open && chats.thread) renderThread(false);
+    setTimeout(function () { if (d.key === chats.open && chats.thread) renderThread(false); }, 6100);
   });
   chatsLoad();
   chatSetup();
@@ -10478,7 +10527,7 @@ function renderChatList() {
 }
 
 function chatOpen(key) {
-  if (chats.open !== key) { chats.thread = null; chats.seen = {}; }
+  if (chats.open !== key) { chats.thread = null; chats.seen = {}; chatReplyTo(null); }
   chats.open = key;
   $("chat-wrap").classList.add("open");
   $("chat-new").hidden = true;
@@ -10496,6 +10545,10 @@ async function chatLoadThread() {
     var d = await r.json();
     var first = !chats.thread;
     chats.thread = d;
+    // A message that came is no longer being written; the phone says who still is.
+    var t = {}, now = Date.now();
+    (d.typing || []).forEach(function (w) { t[w] = (chats.typing[key] || {})[w] || now; });
+    chats.typing[key] = t;
     renderThread(first);
     if (chatVisible() && d.messages.some(function (m) { return !m.mine && m.state === "new"; })) chatRead();
   } catch (e) {}
@@ -10529,8 +10582,10 @@ function renderThread(first) {
   var title = t ? t.title : key, group = t ? t.group : false, members = t ? t.members : [key];
   $("chat-none").hidden = true;
   ["chat-head", "chat-msgs", "chat-compose"].forEach(function (id) { $(id).hidden = false; });
+  var typing = Object.keys(chats.typing[key] || {}).filter(function (w) { return Date.now() - chats.typing[key][w] < 6000; });
+  var typingLine = !typing.length ? "" : !group ? "typing…" : typing.length === 1 ? typing[0] + " is typing…" : typing.length + " people are typing…";
   var head = '<button class="chat-btn back" type="button" data-act="back" title="Chats">' + chatSvg("back") + '</button>' + callAvatar(title) +
-    '<div class="who"><b>' + esc(title) + '</b><span>' + esc(group ? "You, " + members.join(", ") : "Linked phone · sealed end to end") + '</span></div>';
+    '<div class="who"><b>' + esc(title) + '</b><span' + (typingLine ? ' class="typing"' : "") + '>' + esc(typingLine || (group ? "You, " + members.join(", ") : "Linked phone · sealed end to end")) + '</span></div>';
   if (!group) head += '<button class="call-ic" type="button" data-act="voice" title="Voice call">' + callSvg("phone") + '</button>' +
     '<button class="call-ic" type="button" data-act="video" title="Video call">' + callSvg("video") + '</button>';
   var h = $("chat-head");
@@ -10555,22 +10610,36 @@ function renderThread(first) {
     var same = function (a, b) { return a && b && a.kind !== "event" && a.mine === b.mine && (a.from || "") === (b.from || "") && b.at - a.at < 180000 && new Date(a.at).toDateString() === new Date(b.at).toDateString(); };
     var run = same(prev, m), runNext = same(m, next);
     var fresh = !first && !chats.seen[m.id];
-    var cls = "bub " + (m.mine ? "mine" : "them") + (run ? " run" : "") + (runNext ? " run-next" : "") + (fresh ? " fresh" : "") + (m.kind === "image" ? " photo" : "");
+    var cls = "bub " + (m.mine ? "mine" : "them") + (run ? " run" : "") + (runNext ? " run-next" : "") + (fresh ? " fresh" : "") + (m.kind === "image" ? " photo" : "") +
+      (m.kind === "deleted" ? " deleted" : "");
     var meta = '<span class="meta' + (m.mine && m.state === "read" ? " read" : "") + '">' + esc(new Date(m.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })) +
       (m.mine ? chatSvg(m.state === "waiting" ? "clock" : m.state === "read" ? "read" : "sent") : "") + '</span>';
     var from = group && !m.mine && !run ? '<span class="from" style="color:hsl(' + callHue(m.from || "?") + ' 65% 45%)">' + esc(m.from) + '</span>' : "";
     var body;
-    if (m.kind === "image") {
-      body = (m.ready ? '<img loading="lazy" src="' + chatFileUrl(m) + '" data-full="' + chatFileUrl(m) + '" alt=""' + (m.w && m.h ? ' width="' + Math.min(340, m.w) + '" style="aspect-ratio:' + m.w + '/' + m.h + '"' : "") + '>'
+    var quote = m.reply ? '<span class="quote" data-ref="' + esc(m.reply) + '"' + (!m.mine ? ' style="color:hsl(' + callHue(m.replyFrom || "You") + ' 65% 45%)"' : "") + '><b>' +
+      esc(m.replyFrom || "You") + '</b><span style="color:' + (m.mine ? "#fff" : "var(--txt)") + '">' + esc(m.replyText || "Message") + '</span></span>' : "";
+    var more = m.kind === "deleted" || String(m.id).indexOf("local-") === 0 ? "" : '<button class="more" type="button" title="React, reply, more">' + chatSvg("down") + '</button>';
+    if (m.kind === "deleted") {
+      body = from + esc(m.mine ? "You deleted this message" : "This message was deleted") + meta;
+    } else if (m.kind === "image") {
+      body = quote + (m.ready ? '<img loading="lazy" src="' + chatFileUrl(m) + '" data-full="' + chatFileUrl(m) + '" alt=""' + (m.w && m.h ? ' width="' + Math.min(340, m.w) + '" style="aspect-ratio:' + m.w + '/' + m.h + '"' : "") + '>'
         : '<div style="padding:30px 40px;opacity:.6">Photo on its way…</div>') + (m.text ? '<div class="cap">' + chatText(m.text) + '</div>' : "") + meta;
     } else if (m.kind === "voice") {
-      body = from + '<div class="voice" data-src="' + (m.ready ? chatFileUrl(m) : "") + '" data-ms="' + m.durationMs + '"><button type="button" title="Play">' + chatSvg("play") +
+      body = from + quote + '<div class="voice" data-src="' + (m.ready ? chatFileUrl(m) : "") + '" data-ms="' + m.durationMs + '"><button type="button" title="Play">' + chatSvg("play") +
         '</button><div class="track"><i></i></div><time>' + chatClock(m.durationMs || 0) + '</time></div>' + meta;
     } else if (m.kind === "file") {
-      body = from + '<a class="filecard"' + (m.ready ? ' href="' + chatFileUrl(m, true) + '" download="' + esc(m.name) + '"' : "") + '><span class="ic">' + chatSvg("file") +
+      body = from + quote + '<a class="filecard"' + (m.ready ? ' href="' + chatFileUrl(m, true) + '" download="' + esc(m.name) + '"' : "") + '><span class="ic">' + chatSvg("file") +
         '</span><span><b>' + esc(m.name || "File") + '</b><small>' + esc(chatSize(m.size || 0)) + (m.ready ? "" : " · on its way") + '</small></span></a>' + meta;
-    } else body = from + chatText(m.text) + meta;
-    out.push('<div class="' + cls + '">' + body + '</div>');
+    } else body = from + quote + chatText(m.text) + meta;
+    out.push('<div class="' + cls + '" data-id="' + esc(m.id) + '">' + more + body + '</div>');
+    var rs = m.reactions || {}, counts = {};
+    Object.keys(rs).forEach(function (w) { counts[rs[w]] = (counts[rs[w]] || 0) + 1; });
+    var emo = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
+    if (emo.length) out.push('<div class="reacts ' + (m.mine ? "mine" : "them") + '">' + emo.map(function (e) {
+      var who = Object.keys(rs).filter(function (w) { return rs[w] === e; }).map(function (w) { return w || "You"; }).join(", ");
+      return '<button type="button" data-id="' + esc(m.id) + '" data-emo="' + esc(e) + '" class="' + (rs[""] === e ? "on" : "") + '" title="' + esc(who) + '">' + esc(e) +
+        (counts[e] > 1 ? "<small>" + counts[e] + "</small>" : "") + '</button>';
+    }).join("") + '</div>');
     chats.seen[m.id] = true;
     prev = m;
   });
@@ -10580,7 +10649,103 @@ function renderThread(first) {
     img.addEventListener("load", function () { if (nearEnd || first) box.scrollTop = box.scrollHeight; });
   });
   box.querySelectorAll(".voice").forEach(chatVoice);
+  box.querySelectorAll(".bub .more").forEach(function (b) {
+    b.addEventListener("click", function (e) { e.stopPropagation(); chatMenu(b.parentNode.dataset.id, b.getBoundingClientRect()); });
+  });
+  box.querySelectorAll(".bub[data-id]").forEach(function (b) {
+    b.addEventListener("contextmenu", function (e) {
+      if (b.classList.contains("deleted") || String(b.dataset.id).indexOf("local-") === 0 || window.getSelection().toString()) return;
+      e.preventDefault();
+      chatMenu(b.dataset.id, { left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY });
+    });
+  });
+  box.querySelectorAll(".bub .quote").forEach(function (q) {
+    q.addEventListener("click", function () {
+      var to = box.querySelector('.bub[data-id="' + CSS.escape(q.dataset.ref) + '"]');
+      if (!to) return;
+      to.scrollIntoView({ behavior: "smooth", block: "center" });
+      to.classList.remove("flash"); void to.offsetWidth; to.classList.add("flash");
+    });
+  });
+  box.querySelectorAll(".reacts button").forEach(function (b) {
+    b.addEventListener("click", function () { chatReact(b.dataset.id, b.classList.contains("on") ? "" : b.dataset.emo); });
+  });
   if (first || nearEnd) box.scrollTop = box.scrollHeight;
+}
+
+function chatMsg(id) { return chats.thread ? chats.thread.messages.filter(function (m) { return m.id === id; })[0] : null; }
+
+/** A message as a few words, for a reply's quote and the reply bar. */
+function chatSnippet(m) {
+  return m.kind === "image" ? (m.text ? "Photo: " + m.text : "Photo") : m.kind === "voice" ? "Voice note" : m.kind === "file" ? (m.name || "File") : m.text;
+}
+
+/** A message's menu, by it: the quick reactions, then Reply, Copy and (mine) Delete for everyone. */
+function chatMenu(id, at) {
+  var m = chatMsg(id), menu = $("chat-menu");
+  if (!m) return;
+  var mineR = (m.reactions || {})[""];
+  menu.innerHTML = '<div class="emo">' + CHAT_QUICK.map(function (e) { return '<button type="button" data-emo="' + e + '"' + (mineR === e ? ' class="on"' : "") + '>' + e + '</button>'; }).join("") + '</div>' +
+    '<div class="acts"><button type="button" data-act="reply">Reply</button>' +
+    (m.kind === "text" || (m.kind === "image" && m.text) ? '<button type="button" data-act="copy">Copy</button>' : "") +
+    (m.mine ? '<button type="button" data-act="unsend" class="bad">Delete for everyone</button>' : "") + '</div>';
+  menu.hidden = false;
+  var w = menu.offsetWidth, h = menu.offsetHeight;
+  var x = m.mine ? at.right - w : at.left, y = at.bottom + 6;
+  if (y + h > window.innerHeight - 8) y = Math.max(8, at.top - h - 6);
+  menu.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, x)) + "px";
+  menu.style.top = y + "px";
+  menu.querySelectorAll("[data-emo]").forEach(function (b) {
+    b.addEventListener("click", function () { chatMenuClose(); chatReact(id, mineR === b.dataset.emo ? "" : b.dataset.emo); });
+  });
+  menu.querySelectorAll("[data-act]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      chatMenuClose();
+      if (b.dataset.act === "reply") chatReplyTo(m);
+      else if (b.dataset.act === "copy") { try { navigator.clipboard.writeText(m.text); } catch (e) {} }
+      else if (confirm("Delete this message for everyone?")) chatUnsend(id);
+    });
+  });
+}
+function chatMenuClose() { var menu = $("chat-menu"); if (menu) menu.hidden = true; }
+
+/** Answering a message: the bar over the line says which, until sent or crossed out. */
+function chatReplyTo(m) {
+  chats.replying = m;
+  var bar = $("chat-reply");
+  if (!bar) return;
+  if (!m) { bar.hidden = true; bar.innerHTML = ""; return; }
+  var who = m.mine ? "yourself" : m.from || (chats.thread ? chats.thread.title : "");
+  bar.innerHTML = '<i></i><div><b>Replying to ' + esc(who) + '</b><span>' + esc(chatSnippet(m)) + '</span></div>' +
+    '<button class="chat-btn" type="button" title="Cancel the reply"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>';
+  bar.hidden = false;
+  bar.querySelector("button").addEventListener("click", function () { chatReplyTo(null); });
+  $("chat-text").focus();
+}
+
+async function chatReact(id, emoji) {
+  var key = chats.open, m = chatMsg(id);
+  if (!key || !m) return;
+  // Shown at once; the phone's answer follows.
+  m.reactions = Object.assign({}, m.reactions || {});
+  if (emoji) m.reactions[""] = emoji; else delete m.reactions[""];
+  renderThread(false);
+  api("/api/chats/react", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: key, id: id, emoji: emoji }) }).catch(function () {});
+}
+
+async function chatUnsend(id) {
+  var key = chats.open, m = chatMsg(id);
+  if (!key || !m) return;
+  m.kind = "deleted"; m.text = ""; m.reactions = {};
+  renderThread(false);
+  api("/api/chats/unsend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: key, id: id }) }).catch(function () {});
+}
+
+/** Writing: the other phones see "typing…", told at most every 3 s. */
+function chatTyping() {
+  if (!chats.open || Date.now() - chats.typedAt < 3000) return;
+  chats.typedAt = Date.now();
+  api("/api/chats/typing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: chats.open }) }).catch(function () {});
 }
 
 /** A voice note's player: play and pause, the bar showing how far, a tap on it to go there. */
@@ -10612,13 +10777,18 @@ function chatVoice(v) {
 }
 
 async function chatSend() {
-  var ta = $("chat-text"), text = ta.value.trim(), key = chats.open;
+  var ta = $("chat-text"), text = ta.value.trim(), key = chats.open, rp = chats.replying;
   if (!text || !key) return;
-  ta.value = ""; chatGrow(); chatComposeState();
+  ta.value = ""; chatGrow(); chatComposeState(); chatReplyTo(null);
+  chats.typedAt = 0;
   // Shown at once, waiting, until the phone says it has it.
-  if (chats.thread) { chats.thread.messages.push({ id: "local-" + Date.now(), mine: true, text: text, at: Date.now(), state: "waiting", kind: "text" }); renderThread(false); $("chat-msgs").scrollTop = 1e9; }
+  if (chats.thread) {
+    chats.thread.messages.push({ id: "local-" + Date.now(), mine: true, text: text, at: Date.now(), state: "waiting", kind: "text",
+      reply: rp ? rp.id : "", replyText: rp ? chatSnippet(rp) : "", replyFrom: rp ? (rp.mine ? "" : rp.from || chats.thread.title) : "" });
+    renderThread(false); $("chat-msgs").scrollTop = 1e9;
+  }
   try {
-    var r = await api("/api/chats/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: key, text: text }) });
+    var r = await api("/api/chats/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: key, text: text, reply: rp ? rp.id : "" }) });
     if (!r.ok) throw new Error();
   } catch (e) { ta.value = text; chatComposeState(); }
 }
@@ -10699,8 +10869,14 @@ function chatSetup() {
   if (chatSetup.done) return;
   chatSetup.done = true;
   var ta = $("chat-text");
-  ta.addEventListener("input", function () { chatGrow(); chatComposeState(); });
-  ta.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatSend(); } });
+  ta.addEventListener("input", function () { chatGrow(); chatComposeState(); if (ta.value.trim()) chatTyping(); });
+  ta.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatSend(); }
+    else if (e.key === "Escape" && chats.replying) chatReplyTo(null);
+  });
+  document.addEventListener("mousedown", function (e) { var menu = $("chat-menu"); if (menu && !menu.hidden && !menu.contains(e.target)) chatMenuClose(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") chatMenuClose(); });
+  $("chat-msgs").addEventListener("scroll", chatMenuClose);
   $("chat-send").addEventListener("click", function () { if (chats.rec) chatRecordEnd(true); else chatSend(); });
   $("chat-mic").addEventListener("click", chatRecord);
   $("chat-rec-cancel").addEventListener("click", function () { chatRecordEnd(false); });

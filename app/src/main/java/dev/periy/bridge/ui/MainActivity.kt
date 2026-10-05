@@ -1992,6 +1992,7 @@ private fun preview(m: dev.periy.bridge.server.ChatMsg): String = when (m.kind) 
     "voice" -> "Voice note"
     "file" -> "File: " + m.name
     "event" -> m.text
+    "deleted" -> if (m.mine) "You deleted this message" else "This message was deleted"
     else -> m.text
 }
 

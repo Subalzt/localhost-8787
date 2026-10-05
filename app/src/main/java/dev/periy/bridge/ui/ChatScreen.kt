@@ -94,6 +94,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
@@ -168,6 +171,13 @@ fun ChatScreen(name: String, onClose: () -> Unit) {
     val list = threads[key].orEmpty()
     var unlinking by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<ChatMsg?>(null) }
+    // Held a message: its menu (reactions, Reply, Copy, Delete for everyone). Answering one: the bar over the line.
+    var menuFor by remember { mutableStateOf<ChatMsg?>(null) }
+    var replying by remember { mutableStateOf<ChatMsg?>(null) }
+    val typingAll by messages.typing.collectAsState()
+    var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val typingNow = typingAll[key].orEmpty().filterValues { clock - it < Messages.TYPING_MS }.keys.toList()
+    LaunchedEffect(typingAll[key]) { while (true) { clock = System.currentTimeMillis(); if (typingAll[key].orEmpty().values.none { clock - it < Messages.TYPING_MS }) break; delay(1000) } }
     val state = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val startCall = rememberStartCall()
@@ -181,6 +191,7 @@ fun ChatScreen(name: String, onClose: () -> Unit) {
     }
     LaunchedEffect(list.size) { if (list.isNotEmpty() && state.firstVisibleItemIndex < 3) state.animateScrollToItem(0) }
     BackHandler(viewing != null) { viewing = null }
+    BackHandler(menuFor != null) { menuFor = null }
 
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Box(Modifier.fillMaxSize().background(Bridge.Bg)) {
@@ -196,10 +207,15 @@ fun ChatScreen(name: String, onClose: () -> Unit) {
                 ChatAvatar(title, 38.dp, group = group != null)
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
                     Text(title, style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val typingLine = when {
+                        typingNow.isEmpty() -> null
+                        group == null -> "typing…"
+                        typingNow.size == 1 -> "${typingNow[0]} is typing…"
+                        else -> "${typingNow.size} people are typing…"
+                    }
                     Text(
-                        if (group != null) (listOf("You") + messages.others(group)).joinToString(", ")
-                        else "End-to-end encrypted",
-                        style = CaptionStyle.copy(fontSize = 12.sp), color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        typingLine ?: if (group != null) (listOf("You") + messages.others(group)).joinToString(", ") else "End-to-end encrypted",
+                        style = CaptionStyle.copy(fontSize = 12.sp), color = if (typingLine != null) Bridge.Accent else Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
                 HeaderButton(BlazeIcons.Video, "Video call") { startGroupCall(c, startCall, callPeople, true) }
@@ -238,7 +254,12 @@ fun ChatScreen(name: String, onClose: () -> Unit) {
                             else if (!sameAbove) Spacer(Modifier.height(8.dp))
                             when (m.kind) {
                                 "event" -> EventLine(m, group?.host.orEmpty(), title)
-                                else -> MessageRow(m, group != null, sameAbove, sameBelow, onOpen = { viewing = it })
+                                else -> MessageRow(
+                                    m, group != null, sameAbove, sameBelow, onOpen = { viewing = it },
+                                    onHold = { menuFor = it },
+                                    onQuote = { id -> shown.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { i -> scope.launch { state.animateScrollToItem(i) } } },
+                                    onReaction = { e -> messages.react(key, m.id, if (m.reactions[""] == e) "" else e) },
+                                )
                             }
                             if (lastMine && m.kind != "event") Text(
                                 when (m.state) { "waiting" -> "Waiting" + if (group == null) " for $title" else ""; "read" -> "Read"; else -> "Delivered" },
@@ -259,7 +280,38 @@ fun ChatScreen(name: String, onClose: () -> Unit) {
                 }
             }
 
-            Composer(onSend = { messages.send(key, it) }, onFile = { uri, kind -> messages.sendFile(key, uri, kind) }, onVoice = { f, ms -> messages.sendVoice(key, f, ms) })
+            Composer(
+                onSend = { messages.send(key, it, replying?.id.orEmpty()); replying = null },
+                onFile = { uri, kind -> messages.sendFile(key, uri, kind) }, onVoice = { f, ms -> messages.sendVoice(key, f, ms) },
+                replying = replying, replyName = replying?.let { if (it.mine) "yourself" else it.from.ifEmpty { title } }.orEmpty(),
+                onCancelReply = { replying = null }, onTyping = { messages.typing(key) },
+            )
+        }
+
+        // A held message: react, reply, copy, take it back.
+        AnimatedVisibility(menuFor != null, enter = fadeIn(tween(160)), exit = fadeOut(tween(140))) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f))
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { menuFor = null },
+            )
+        }
+        AnimatedVisibility(
+            menuFor != null, modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn(tween(160)) + scaleIn(spring(dampingRatio = 0.7f, stiffness = 600f), initialScale = 0.85f),
+            exit = fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.92f),
+        ) {
+            var last by remember { mutableStateOf<ChatMsg?>(null) }
+            menuFor?.let { last = it }
+            last?.let { m ->
+                val clip = androidx.compose.ui.platform.LocalClipboardManager.current
+                MessageMenu(
+                    m,
+                    onReact = { e -> messages.react(key, m.id, if (m.reactions[""] == e) "" else e); menuFor = null },
+                    onReply = { replying = m; menuFor = null },
+                    onCopy = if (m.kind == "text" || (m.kind == "image" && m.text.isNotEmpty())) ({ clip.setText(androidx.compose.ui.text.AnnotatedString(m.text)); menuFor = null }) else null,
+                    onDelete = if (m.mine) ({ messages.unsend(key, m.id); if (replying?.id == m.id) replying = null; menuFor = null }) else null,
+                )
+            }
         }
 
         // A photo, full screen: pinch to zoom, tap or back to close.
@@ -320,7 +372,10 @@ private fun EventLine(m: ChatMsg, host: String, title: String) {
 
 /** One message, on its side: in a group theirs carry who wrote them (the first of a run) and their avatar (the last). */
 @Composable
-private fun MessageRow(m: ChatMsg, inGroup: Boolean, sameAbove: Boolean, sameBelow: Boolean, onOpen: (ChatMsg) -> Unit) {
+private fun MessageRow(
+    m: ChatMsg, inGroup: Boolean, sameAbove: Boolean, sameBelow: Boolean, onOpen: (ChatMsg) -> Unit,
+    onHold: (ChatMsg) -> Unit, onQuote: (String) -> Unit, onReaction: (String) -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().padding(top = if (sameAbove) 2.dp else 0.dp),
         horizontalArrangement = if (m.mine) Arrangement.End else Arrangement.Start,
@@ -335,14 +390,19 @@ private fun MessageRow(m: ChatMsg, inGroup: Boolean, sameAbove: Boolean, sameBel
                 m.from, style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold), color = Color.hsl(nameHue(m.from), 0.6f, 0.62f),
                 modifier = Modifier.padding(start = 10.dp, bottom = 2.dp),
             )
-            Bubble(m, sameAbove, sameBelow, onOpen)
+            val view = LocalView.current
+            Bubble(
+                m, sameAbove, sameBelow, onOpen, onQuote,
+                Modifier.onHold(enabled = m.kind != "deleted") { view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); onHold(m) },
+            )
+            if (m.reactions.isNotEmpty()) Reactions(m, onReaction)
         }
     }
 }
 
 /** The bubble: mine in the accent, theirs on a chip; the corners on the side of a run sit close. */
 @Composable
-private fun Bubble(m: ChatMsg, joinedAbove: Boolean, joinedBelow: Boolean, onOpen: (ChatMsg) -> Unit) {
+private fun Bubble(m: ChatMsg, joinedAbove: Boolean, joinedBelow: Boolean, onOpen: (ChatMsg) -> Unit, onQuote: (String) -> Unit, modifier: Modifier = Modifier) {
     val big = 20.dp
     val small = 6.dp
     val shape = if (m.mine) RoundedCornerShape(big, if (joinedAbove) small else big, if (joinedBelow) small else big, big)
@@ -351,9 +411,24 @@ private fun Bubble(m: ChatMsg, joinedAbove: Boolean, joinedBelow: Boolean, onOpe
     val bg = if (m.mine) Brush.linearGradient(listOf(Bridge.Accent, Bridge.Accent.copy(alpha = 0.82f).compositeOn(Color.Black)))
     else SolidColor(Bridge.Chip)
     val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(m.at))
-    Box(
-        Modifier.widthIn(max = 300.dp).clip(shape).background(bg).graphicsLayer { alpha = if (m.mine && m.state == "waiting") 0.7f else 1f },
+    if (m.kind == "deleted") {
+        Row(
+            modifier.widthIn(max = 300.dp).clip(shape).background(Bridge.Chip).padding(start = 13.dp, end = 11.dp, top = 8.dp, bottom = 7.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text(
+                if (m.mine) "You deleted this message" else "This message was deleted",
+                style = TextStyle(fontSize = 15.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = Bridge.Muted,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(time, style = TextStyle(fontSize = 11.sp), color = Bridge.Muted.copy(alpha = 0.8f))
+        }
+        return
+    }
+    Column(
+        modifier.widthIn(max = 300.dp).clip(shape).background(bg).graphicsLayer { alpha = if (m.mine && m.state == "waiting") 0.7f else 1f },
     ) {
+        if (m.reply.isNotEmpty()) Quote(m, fg, onQuote)
         when (m.kind) {
             "image" -> Column {
                 PhotoThumb(m, Modifier.widthIn(max = 260.dp).clickable(enabled = m.file.isNotEmpty()) { onOpen(m) })
@@ -362,9 +437,118 @@ private fun Bubble(m: ChatMsg, joinedAbove: Boolean, joinedBelow: Boolean, onOpe
             }
             "voice" -> VoiceNote(m, fg, time)
             "file" -> FileCard(m, fg, time)
-            else -> Column(Modifier.padding(start = 13.dp, end = 11.dp, top = 8.dp, bottom = 6.dp)) {
+            else -> Column(Modifier.padding(start = 13.dp, end = 11.dp, top = if (m.reply.isNotEmpty()) 4.dp else 8.dp, bottom = 6.dp)) {
                 Text(m.text, style = TextStyle(fontSize = 16.sp, lineHeight = 21.sp), color = fg)
                 Text(time, style = TextStyle(fontSize = 11.sp), color = fg.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.End))
+            }
+        }
+    }
+}
+
+/** What a reply answers, at the top of its bubble: who and a few words; a tap goes to it. */
+@Composable
+private fun Quote(m: ChatMsg, fg: Color, onQuote: (String) -> Unit) {
+    val who = m.replyFrom.ifEmpty { "You" }
+    val tint = if (m.mine) Color.White else Color.hsl(nameHue(who), 0.6f, 0.62f)
+    Row(
+        Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp).widthIn(min = 120.dp).clip(RoundedCornerShape(12.dp))
+            .background(if (m.mine) Color.Black.copy(alpha = 0.16f) else Bridge.Text.copy(alpha = 0.06f))
+            .clickable { onQuote(m.reply) },
+    ) {
+        Box(Modifier.width(3.dp).height(44.dp).background(tint))
+        Column(Modifier.padding(horizontal = 9.dp, vertical = 5.dp)) {
+            Text(who, style = TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold), color = tint, maxLines = 1)
+            Text(m.replyText.ifEmpty { "Message" }, style = TextStyle(fontSize = 13.5.sp), color = fg.copy(alpha = 0.75f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** A message's reactions, just under it: each emoji once, with how many; a tap on one takes yours back or makes it yours. */
+@Composable
+private fun Reactions(m: ChatMsg, onReaction: (String) -> Unit) {
+    val counts = m.reactions.values.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }
+    Row(
+        Modifier.offset(y = (-4).dp).padding(horizontal = 6.dp).clip(RoundedCornerShape(50)).background(Bridge.Surface)
+            .padding(horizontal = 3.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        for ((e, n) in counts) {
+            val mine = m.reactions[""] == e
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(if (mine) Bridge.Accent.copy(alpha = 0.22f) else Color.Transparent)
+                    .clickable { onReaction(e) }.padding(horizontal = 6.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(e, style = TextStyle(fontSize = 14.sp))
+                if (n > 1) Text(" $n", style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium), color = Bridge.Muted)
+            }
+        }
+    }
+}
+
+/** The quick reactions, as WhatsApp's. */
+private val QUICK = listOf("👍", "❤️", "😂", "😮", "😢", "🙏")
+
+/** A held message's menu: the quick reactions, then Reply, Copy and (mine) Delete for everyone. */
+@Composable
+private fun MessageMenu(m: ChatMsg, onReact: (String) -> Unit, onReply: () -> Unit, onCopy: (() -> Unit)?, onDelete: (() -> Unit)?) {
+    Column(Modifier.padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(
+            Modifier.clip(RoundedCornerShape(50)).background(Bridge.Surface).padding(horizontal = 6.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            for (e in QUICK) Box(
+                Modifier.size(46.dp).clip(CircleShape).background(if (m.reactions[""] == e) Bridge.Accent.copy(alpha = 0.25f) else Color.Transparent)
+                    .pressable(CircleShape, scaleTo = 0.8f) { onReact(e) },
+                contentAlignment = Alignment.Center,
+            ) { Text(e, style = TextStyle(fontSize = 25.sp)) }
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            Messages.snippetOf(m), style = BodyStyle, color = Color.White, maxLines = 3, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 300.dp).padding(horizontal = 8.dp),
+        )
+        Spacer(Modifier.height(10.dp))
+        Column(Modifier.width(250.dp).clip(RoundedCornerShape(16.dp)).background(Bridge.Surface)) {
+            MenuLine("Reply", BlazeIcons.Reply, Bridge.Text, onReply)
+            if (onCopy != null) { MenuRule(); MenuLine("Copy", BlazeIcons.Copy, Bridge.Text, onCopy) }
+            if (onDelete != null) { MenuRule(); MenuLine("Delete for everyone", BlazeIcons.Trash, Bridge.Danger, onDelete) }
+        }
+    }
+}
+
+@Composable
+private fun MenuLine(label: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = TextStyle(fontSize = 16.sp), color = color, modifier = Modifier.weight(1f))
+        Icon(icon, null, tint = color, modifier = Modifier.size(19.dp))
+    }
+}
+
+@Composable
+private fun MenuRule() = Box(Modifier.fillMaxWidth().height(0.5.dp).background(Bridge.Outline))
+
+/**
+ * A long press, seen before the bubble's own taps (a photo opening, a voice note playing): after it the
+ * rest of the touch is the menu's, so lifting does not also open or play.
+ */
+private fun Modifier.onHold(enabled: Boolean, action: () -> Unit): Modifier = if (!enabled) this else pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        var ended = false
+        withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+            while (!ended) {
+                val ev = awaitPointerEvent(PointerEventPass.Initial)
+                val ch = ev.changes.firstOrNull { it.id == down.id }
+                if (ch == null || !ch.pressed || (ch.position - down.position).getDistance() > viewConfiguration.touchSlop) ended = true
+            }
+        }
+        if (!ended) {
+            action()
+            while (true) {
+                val ev = awaitPointerEvent(PointerEventPass.Initial)
+                ev.changes.forEach { it.consume() }
+                if (ev.changes.none { it.pressed }) break
             }
         }
     }
@@ -544,7 +728,10 @@ private fun openFile(ctx: android.content.Context, m: ChatMsg) {
  * while the line is empty (hold to record, slide left to drop it) and Send once something is written.
  */
 @Composable
-private fun Composer(onSend: (String) -> Unit, onFile: (android.net.Uri, String) -> Unit, onVoice: (File, Long) -> Unit) {
+private fun Composer(
+    onSend: (String) -> Unit, onFile: (android.net.Uri, String) -> Unit, onVoice: (File, Long) -> Unit,
+    replying: ChatMsg?, replyName: String, onCancelReply: () -> Unit, onTyping: () -> Unit,
+) {
     val ctx = LocalContext.current
     val view = LocalView.current
     var text by remember { mutableStateOf("") }
@@ -562,6 +749,8 @@ private fun Composer(onSend: (String) -> Unit, onFile: (android.net.Uri, String)
     LaunchedEffect(recordingSince) { while (recordingSince > 0) { now = System.currentTimeMillis(); delay(100) } }
     val density = LocalDensity.current
     val cancelPx = with(density) { 110.dp.toPx() }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(replying?.id) { if (replying != null) runCatching { focus.requestFocus() } }
 
     fun startRec() {
         if (ctx.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) { mic.launch(Manifest.permission.RECORD_AUDIO); return }
@@ -589,6 +778,23 @@ private fun Composer(onSend: (String) -> Unit, onFile: (android.net.Uri, String)
     }
 
     Column(Modifier.fillMaxWidth().background(Bridge.Bg).navigationBarsPadding()) {
+        // Answering a message: who and what, over the line.
+        var lastReply by remember { mutableStateOf<ChatMsg?>(null) }
+        replying?.let { lastReply = it }
+        AnimatedVisibility(replying != null, enter = slideInVertically { it / 2 } + fadeIn(), exit = slideOutVertically { it / 2 } + fadeOut()) {
+            lastReply?.let { r ->
+                Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.width(3.dp).height(38.dp).clip(RoundedCornerShape(2.dp)).background(Bridge.Accent))
+                    Column(Modifier.weight(1f).padding(start = 10.dp)) {
+                        Text("Replying to $replyName", style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Accent, maxLines = 1)
+                        Text(Messages.snippetOf(r), style = CaptionStyle, color = Bridge.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Box(Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onCancelReply), contentAlignment = Alignment.Center) {
+                        Icon(BlazeIcons.Close, "Cancel reply", tint = Bridge.Muted, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+        }
         // Photo or file, rising over the line.
         AnimatedVisibility(attaching, enter = slideInVertically { it / 2 } + fadeIn(), exit = slideOutVertically { it / 2 } + fadeOut()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -616,8 +822,8 @@ private fun Composer(onSend: (String) -> Unit, onFile: (android.net.Uri, String)
                 } else {
                     if (text.isEmpty()) Text("Message", style = TextStyle(fontSize = 16.sp), color = Bridge.Faint)
                     BasicTextField(
-                        text, { text = it }, textStyle = TextStyle(fontSize = 16.sp, color = Bridge.Text),
-                        cursorBrush = SolidColor(Bridge.Accent), maxLines = 6, modifier = Modifier.fillMaxWidth(),
+                        text, { if (it.length > text.length) onTyping(); text = it }, textStyle = TextStyle(fontSize = 16.sp, color = Bridge.Text),
+                        cursorBrush = SolidColor(Bridge.Accent), maxLines = 6, modifier = Modifier.fillMaxWidth().focusRequester(focus),
                     )
                 }
             }

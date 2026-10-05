@@ -19,7 +19,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -56,6 +59,14 @@ data class ChatMsg(
     val from: String = "",
     /** The linked phones it still has to reach: its own for mine, the others' as a group's host passing it on. */
     val pending: List<String> = emptyList(),
+    /** A reply: the message it answers (its id), a few words of it, and who wrote that ("" for this phone). */
+    val reply: String = "",
+    val replyText: String = "",
+    val replyFrom: String = "",
+    /** Reactions: who (a phone's name, or "" for this phone) and the emoji. */
+    val reactions: Map<String, String> = emptyMap(),
+    /** For a reaction or an unsending on its way ([kind] react or unsend): the message it is about. */
+    val ref: String = "",
 )
 
 /** A group conversation: its [host] keeps it and passes each message on ("" when that is this phone). */
@@ -81,7 +92,16 @@ data class MsgBody(
     val gname: String = "",
     val gmembers: List<String> = emptyList(),
     val from: String = "",
+    val reply: String = "",
+    val replyText: String = "",
+    val replyFrom: String = "",
+    /** A reaction (its emoji in [text], "" to take it back) or an unsending: the message it is about. */
+    val ref: String = "",
 )
+
+/** Someone writing in a conversation: one to one, or in [group] (as [from] when passed on by its keeper). */
+@Serializable
+data class MsgTyping(val group: String = "", val from: String = "")
 
 /** The other phone has read everything of this one's up to [upTo] (this phone's own clock). */
 @Serializable
@@ -113,7 +133,10 @@ class Messages(
 
     private val _threads = MutableStateFlow(load())
     /** Every conversation: a linked phone's name, or "group:" and the group's id; oldest message first. */
-    val threads: StateFlow<Map<String, List<ChatMsg>>> = _threads.asStateFlow()
+    val threads: StateFlow<Map<String, List<ChatMsg>>> = _threads.map(::visible).stateIn(scope, SharingStarted.Eagerly, visible(_threads.value))
+
+    /** Without the reactions and unsendings still on their way, which are not messages of their own. */
+    private fun visible(all: Map<String, List<ChatMsg>>) = all.mapValues { (_, l) -> l.filterNot { it.kind in CONTROL_KINDS } }
 
     private val _groups = MutableStateFlow(loadGroups())
     val groups: StateFlow<Map<String, ChatGroup>> = _groups.asStateFlow()
@@ -133,7 +156,8 @@ class Messages(
         }
     }
 
-    fun thread(key: String): List<ChatMsg> = _threads.value[key].orEmpty()
+    fun thread(key: String): List<ChatMsg> = raw(key).filterNot { it.kind in CONTROL_KINDS }
+    private fun raw(key: String): List<ChatMsg> = _threads.value[key].orEmpty()
 
     fun unread(key: String): Int = thread(key).count { !it.mine && it.state == "new" }
 
@@ -156,12 +180,79 @@ class Messages(
 
     // ------------------------------------------------------------------ writing
 
-    /** Writes [text] in conversation [key]; it goes now if its phones can be reached, or waits here until they can. */
-    fun send(key: String, text: String) {
+    /**
+     * Writes [text] in conversation [key], as a reply to message [reply] when given; it goes now if its
+     * phones can be reached, or waits here until they can.
+     */
+    fun send(key: String, text: String, reply: String = "") {
         val t = text.trim().take(MAX_CHARS)
         if (t.isEmpty()) return
-        change(key) { it + ChatMsg(UUID.randomUUID().toString(), true, t, System.currentTimeMillis(), "waiting", pending = recipients(key)) }
+        val r = if (reply.isNotEmpty()) thread(key).firstOrNull { it.id == reply } else null
+        change(key) {
+            it + ChatMsg(
+                UUID.randomUUID().toString(), true, t, System.currentTimeMillis(), "waiting", pending = recipients(key),
+                reply = r?.id.orEmpty(), replyText = r?.let(::snippet).orEmpty(), replyFrom = r?.let { m -> if (m.mine) "" else m.from.ifEmpty { key } }.orEmpty(),
+            )
+        }
         flush(key)
+    }
+
+    /** A message as a few words, for a reply's quote. */
+    private fun snippet(m: ChatMsg): String = snippetOf(m)
+
+    /** Reacts to message [id] with [emoji] ("" takes this phone's reaction back), here and on its phones. */
+    fun react(key: String, id: String, emoji: String) {
+        if (thread(key).none { it.id == id }) return
+        change(key) { l ->
+            l.map { if (it.id == id) it.copy(reactions = if (emoji.isEmpty()) it.reactions - "" else it.reactions + ("" to emoji)) else it } +
+                ChatMsg(UUID.randomUUID().toString(), true, emoji, System.currentTimeMillis(), "waiting", kind = "react", ref = id, pending = recipients(key))
+        }
+        flush(key)
+    }
+
+    /** Takes back one of this phone's own messages, for everyone: here at once, on its phones as they are reached. */
+    fun unsend(key: String, id: String) {
+        val m = thread(key).firstOrNull { it.id == id && it.mine && it.kind !in CONTROL_KINDS } ?: return
+        if (m.file.isNotEmpty()) runCatching { File(m.file).delete() }
+        change(key) { l ->
+            l.map { if (it.id == id) it.copy(kind = "deleted", text = "", file = "", name = "", reactions = emptyMap(), pending = emptyList()) else it } +
+                ChatMsg(UUID.randomUUID().toString(), true, "", System.currentTimeMillis(), "waiting", kind = "unsend", ref = id, pending = recipients(key))
+        }
+        flush(key)
+    }
+
+    private val typedAt = ConcurrentHashMap<String, Long>()
+
+    /** This phone is writing in [key]: its phones hear so, at most every 3 s, and show it for a few seconds. */
+    fun typing(key: String) {
+        val now = System.currentTimeMillis()
+        if (now - (typedAt[key] ?: 0L) < 3_000) return
+        typedAt[key] = now
+        val g = group(key)
+        scope.launch {
+            for (to in recipients(key)) {
+                val peer = peers.find(to) ?: continue
+                runCatching { peers.deliver(peer, "/api/peers/msg/typing", json.encodeToString(MsgTyping(g?.id.orEmpty())).toByteArray()) }
+            }
+        }
+    }
+
+    private val _typing = MutableStateFlow<Map<String, Map<String, Long>>>(emptyMap())
+    /** Who is writing in each conversation now, and since when (shown while it is under 6 s old). */
+    val typing: StateFlow<Map<String, Map<String, Long>>> = _typing.asStateFlow()
+
+    /** [from] is writing to this phone, or in group [group] (passed on to the group's others when this phone keeps it). */
+    fun typingFrom(from: String, group: String, author: String = from) {
+        val key = if (group.isNotEmpty()) GROUP + group else from
+        _typing.value = _typing.value + (key to (_typing.value[key].orEmpty() + (author to System.currentTimeMillis())))
+        EventBus.emit("typing", org.json.JSONObject().put("key", key).put("who", author).toString())
+        val g = if (group.isNotEmpty()) _groups.value[group] else null
+        if (g != null && g.host.isEmpty() && from in g.members) scope.launch {
+            for (to in g.members - from) {
+                val peer = peers.find(to) ?: continue
+                runCatching { peers.deliver(peer, "/api/peers/msg/typing", json.encodeToString(MsgTyping(group, author)).toByteArray()) }
+            }
+        }
     }
 
     /**
@@ -265,12 +356,14 @@ class Messages(
         scope.launch {
             try {
                 val down = HashSet<String>()
-                for (m in thread(key).filter { it.pending.isNotEmpty() }) {
+                for (m in raw(key).filter { it.pending.isNotEmpty() }) {
                     // An attachment passed on goes once it has arrived here.
                     if (m.kind in FILE_KINDS && (m.file.isEmpty() || !File(m.file).exists())) continue
                     val done = m.pending.filter { r -> r !in down && deliver(key, m, r).also { ok -> if (!ok) down += r } }
                     if (done.isNotEmpty()) change(key) { l ->
                         l.map { if (it.id == m.id) it.copy(pending = it.pending - done.toSet(), state = if (it.mine && (it.pending - done.toSet()).isEmpty() && it.state == "waiting") "sent" else it.state) else it }
+                            // A reaction or an unsending that has reached everyone has done its work.
+                            .filterNot { it.kind in CONTROL_KINDS && it.pending.isEmpty() }
                     }
                 }
             } finally {
@@ -284,7 +377,7 @@ class Messages(
         val peer = peers.find(to) ?: return false
         val k = peers.messageKey(peer) ?: return false
         val g = group(key)
-        val wire = if (g == null && m.kind == "text") MsgCrypto.seal(k, m)
+        val wire = if (g == null && m.kind == "text" && m.reply.isEmpty()) MsgCrypto.seal(k, m)
         else MsgCrypto.sealBody(
             k, m.id, m.at,
             MsgBody(
@@ -292,6 +385,8 @@ class Messages(
                 group = g?.id.orEmpty(), gname = g?.name.orEmpty(),
                 gmembers = g?.let { if (it.host.isEmpty()) it.members else it.members }.orEmpty(),
                 from = if (m.mine) "" else m.from,
+                // Who wrote what it answers, from the sender's side: "" for the sender itself.
+                reply = m.reply, replyText = m.replyText, replyFrom = if (m.mine || m.replyFrom.isNotEmpty() || m.reply.isEmpty()) m.replyFrom else peers.deviceName(), ref = m.ref,
             ),
         )
         if (!peers.deliver(peer, "/api/peers/msg", json.encodeToString(wire).toByteArray())) return false
@@ -330,19 +425,51 @@ class Messages(
                 }
             }
         }
-        if (thread(key).any { it.id == w.id }) return true
+        if (raw(key).any { it.id == w.id }) return true
         val author = if (body.group.isNotEmpty()) body.from.ifEmpty { from } else ""
+        if (body.kind in CONTROL_KINDS) {
+            if (!controlSeen.add(w.id)) return true
+            val who = author.ifEmpty { from }
+            change(key) { l ->
+                val applied = l.map { m ->
+                    when {
+                        m.id != body.ref -> m
+                        body.kind == "react" -> m.copy(reactions = if (body.text.isEmpty()) m.reactions - who else m.reactions + (who to body.text.take(8)))
+                        // Only its own writer takes a message back.
+                        body.kind == "unsend" && !m.mine && m.from.ifEmpty { from } == who -> {
+                            if (m.file.isNotEmpty()) runCatching { File(m.file).delete() }
+                            m.copy(kind = "deleted", text = "", file = "", name = "", reactions = emptyMap())
+                        }
+                        else -> m
+                    }
+                }
+                // This phone keeps the group: the others hear of it too.
+                if (relayTo.isNotEmpty()) applied + ChatMsg(w.id, false, body.text, w.at, "", kind = body.kind, from = who, ref = body.ref, pending = relayTo) else applied
+            }
+            if (relayTo.isNotEmpty()) flush(key)
+            return true
+        }
         val seen = open == key
         change(key) {
             (it + ChatMsg(
                 w.id, false, body.text, w.at, if (seen) "read" else "new", kind = body.kind, name = body.name, size = body.size,
                 mime = body.mime, durationMs = body.durationMs, w = body.w, h = body.h, from = author, pending = relayTo,
+                // Kept from this phone's side: "" for this phone, else who.
+                reply = body.reply, replyText = body.replyText,
+                replyFrom = if (body.reply.isEmpty()) "" else when (body.replyFrom) { "" -> author.ifEmpty { from }; peers.deviceName() -> ""; else -> body.replyFrom },
             )).sortedBy { m -> m.at }
         }
+        // Whoever was writing has written.
+        _typing.value[key]?.let { t -> _typing.value = _typing.value + (key to (t - author.ifEmpty { from })) }
         if (seen && body.group.isEmpty()) sendRead(key) else if (!seen && body.kind != "event") notify(key, author, body)
         if (relayTo.isNotEmpty()) flush(key)
         return true
     }
+
+    /** Reactions and unsendings already applied, so one that comes twice is applied once. */
+    private val controlSeen: MutableSet<String> = java.util.Collections.newSetFromMap(object : LinkedHashMap<String, Boolean>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?) = size > 2000
+    })
 
     /** A message's attachment: kept in this app's files, and passed on when this phone keeps its group. */
     fun receiveBlob(deviceId: String, id: String, sealed: ByteArray): Boolean {
@@ -380,7 +507,7 @@ class Messages(
 
     @Synchronized
     private fun change(key: String, f: (List<ChatMsg>) -> List<ChatMsg>) {
-        _threads.value = _threads.value + (key to f(thread(key)).takeLast(KEEP))
+        _threads.value = _threads.value + (key to f(raw(key)).takeLast(KEEP))
         save()
         EventBus.emit("messages", key)
     }
@@ -449,6 +576,18 @@ class Messages(
         /** An attachment's largest size: it is sealed whole in memory. */
         const val MAX_FILE = 40L * 1024 * 1024
         val FILE_KINDS = setOf("image", "voice", "file")
+        /** Not messages of their own: a reaction and an unsending, on their way, kept until delivered. */
+        val CONTROL_KINDS = setOf("react", "unsend")
+
+        /** A message as a few words, for a reply's quote. */
+        fun snippetOf(m: ChatMsg): String = when (m.kind) {
+            "image" -> if (m.text.isNotEmpty()) "Photo: " + m.text.take(60) else "Photo"
+            "voice" -> "Voice note"
+            "file" -> m.name.ifEmpty { "File" }
+            else -> m.text.take(100)
+        }
+        /** How long "typing…" shows after the last word of it. */
+        const val TYPING_MS = 6_000L
         /** The newest this many messages are kept in each conversation. */
         private const val KEEP = 5_000
         private const val RETRY_MS = 20_000L

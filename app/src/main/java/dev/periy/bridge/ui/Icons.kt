@@ -245,6 +245,7 @@ object BlazeIcons {
 
     /** A cross. */
     val Close: ImageVector = stroked("close", "M6.5 6.5l11 11", "M17.5 6.5l-11 11")
+    val Reply: ImageVector = stroked("reply", "M9.5 6.5L4 12l5.5 5.5", "M4 12h10a6 6 0 0 1 6 6v1")
 
     /** A tick. */
     val Check: ImageVector = stroked("check", "M5 12.5 10 17.5 19 7")

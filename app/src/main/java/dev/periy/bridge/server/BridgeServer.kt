@@ -988,10 +988,11 @@ class BridgeServer(
             val m = messages()
             val g = m.group(k)
             call.response.header(HttpHeaders.CacheControl, "no-store")
+            val now = System.currentTimeMillis()
             call.respond(ChatThread(k, m.title(k), g != null, g?.let { m.others(it) } ?: listOf(k), m.thread(k).map { x ->
                 ChatItem(x.id, x.mine, x.text, x.at, x.state, x.kind, x.name, x.size, x.mime, x.durationMs, x.w, x.h, x.from,
-                    x.file.isNotEmpty() && java.io.File(x.file).exists())
-            }))
+                    x.file.isNotEmpty() && java.io.File(x.file).exists(), x.reply, x.replyText, x.replyFrom, x.reactions)
+            }, m.typing.value[k].orEmpty().filterValues { now - it < Messages.TYPING_MS }.keys.toList()))
         }
         get("/api/chats/file") {
             call.device() ?: return@get
@@ -1009,7 +1010,27 @@ class BridgeServer(
             call.device() ?: return@post
             val r = runCatching { call.receive<ChatSend>() }.getOrNull()
             if (r == null || r.key.isEmpty() || r.text.isBlank()) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Nothing to send")); return@post }
-            messages().send(r.key, r.text)
+            messages().send(r.key, r.text, r.reply)
+            call.respond(ApiResult(true))
+        }
+        // Reacting, taking a message back for everyone, and "typing…", from the page.
+        post("/api/chats/react") {
+            call.device() ?: return@post
+            val r = runCatching { call.receive<ChatReact>() }.getOrNull()
+            if (r == null || r.key.isEmpty() || r.id.isEmpty()) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Nothing to react to")); return@post }
+            messages().react(r.key, r.id, r.emoji.take(8))
+            call.respond(ApiResult(true))
+        }
+        post("/api/chats/unsend") {
+            call.device() ?: return@post
+            val r = runCatching { call.receive<ChatReact>() }.getOrNull()
+            if (r == null || r.key.isEmpty() || r.id.isEmpty()) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Nothing to delete")); return@post }
+            messages().unsend(r.key, r.id)
+            call.respond(ApiResult(true))
+        }
+        post("/api/chats/typing") {
+            call.device() ?: return@post
+            runCatching { call.receive<ChatKey>() }.getOrNull()?.key?.takeIf { it.isNotEmpty() }?.let { messages().typing(it) }
             call.respond(ApiResult(true))
         }
         post("/api/chats/read") {
@@ -1191,6 +1212,15 @@ class BridgeServer(
             if (from == null || w == null || w.c.length > 512_000) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad position")); return@post }
             if (where().receive(from, me.id, w)) call.respond(ApiResult(true))
             else call.respond(HttpStatusCode.Forbidden, ApiResult(false, "That does not open here"))
+        }
+        // A linked phone's "typing…" (server/Messages.kt): it says nothing itself, so it needs no seal.
+        post("/api/peers/msg/typing") {
+            val me = call.device() ?: return@post
+            val from = peers.byDevice(me.id)?.name
+            val t = runCatching { call.receive<MsgTyping>() }.getOrNull()
+            if (from == null || t == null) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad typing")); return@post }
+            messages().typingFrom(from, t.group, t.from.ifEmpty { from })
+            call.respond(ApiResult(true))
         }
         post("/api/peers/msg/read") {
             val me = call.device() ?: return@post
@@ -1665,6 +1695,7 @@ class BridgeServer(
         "image" -> if (x.text.isNotEmpty()) "Photo: " + x.text else "Photo"
         "voice" -> "Voice note"
         "file" -> x.name.ifEmpty { "File" }
+        "deleted" -> if (x.mine) "You deleted this message" else "This message was deleted"
         else -> x.text
     }
 

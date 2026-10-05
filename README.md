@@ -649,6 +649,12 @@ IPv4, and nothing else ever holds it. No account, no number, no company.
 - **Delivered and Read** under the newest of yours; a red count on *Phones* for what you have not
   read; a notification with the text, which opens the conversation.
 - **Unlink** sits in the conversation's header, and asks first.
+- **Hold a message** (on the page: its arrow, or a right-click) for the quick reactions, **Reply**,
+  **Copy** and, on your own, **Delete for everyone**. A reply carries a quote of what it answers (a
+  tap goes to it); reactions sit under the message with how many, and a tap on yours takes it back;
+  a deleted message says so on every phone, its photo or file gone too. **typing…** shows under the
+  name while the other phone writes (in a group, who). Reactions and deletions are sealed and wait
+  like messages when a phone cannot be reached; "typing" says nothing and is never kept.
 
 | A conversation | A call |
 | --- | --- |
@@ -954,8 +960,7 @@ player, `net/` for addresses, the direct link, STUN, the tunnel, hole punching a
 - Protected video cannot be shown on the laptop's screen on the phone.
 - Apple Lossless (ALAC) does not play in browsers. Empty folders are not created.
 - A free dynv6 name stays active only while the account is used.
-- Messages are text only so far, between the phones' apps; the page does not show them yet. A
-  message goes only while both phones are on; until then it waits on the sending phone.
+- A message goes only while both phones are on; until then it waits on the sending phone.
 - From another network the laptop's screen adjusts its picture on Windows; the Linux and Mac
   helper sends a fixed 1280-wide picture at 1.5 Mbit/s. The laptop's sound is not sent yet.
 - Calls are voice only for now, between linked phones. With no relay, a call needs the two phones
