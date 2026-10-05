@@ -726,6 +726,7 @@ public static class BlazeItPc
                     addrs.Insert(0, v6.Groups[1].Value);
                     if (TunnelConf() == null) Say("This laptop has not been paired with the phone yet: pair once on the same network first.");
                     TunnelSaveAddrs(addrs);
+                    farFails = 0; farNext = DateTime.MinValue;
                     continue;
                 }
                 Match m = Regex.Match(typed, @"(\d{1,3}(\.\d{1,3}){3})");
@@ -902,6 +903,8 @@ public static class BlazeItPc
                 using (HttpWebResponse resp = (HttpWebResponse)t.GetResponse()) conf = Body(resp);
                 SiteKeep(name, cookie, conf);
                 Say("Allowed through " + name + ". This laptop finds the phone by itself from now on.");
+                // New keys: tried from afar at once, not after the wait left from before.
+                farFails = 0; farNext = DateTime.MinValue;
                 return true;
             }
             Say("Nobody answered on the phone.");

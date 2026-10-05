@@ -669,6 +669,7 @@ def site_sign_in(name):
             t = urllib.request.Request(base + "/api/tunnel", headers={"Cookie": cookie, "User-Agent": user_agent()})
             site_keep(name, cookie, json.loads(urllib.request.urlopen(t, timeout=15).read().decode("utf-8")))
             say("Allowed through %s. This computer finds the phone by itself from now on." % name)
+            far_reset()   # new keys: tried from afar at once, not after the wait left from before
             return True
         say("Nobody answered on the phone.")
         return False
@@ -1968,6 +1969,11 @@ def site_moved(saved):
         return False
     site_looked = time.time()
     return any(a not in saved for a in site_addrs())
+
+
+def far_reset():
+    global far_fails, far_next
+    far_fails, far_next = 0, 0.0
 
 
 def far_failed(why):
