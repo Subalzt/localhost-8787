@@ -731,6 +731,38 @@ class PeerManager(
         return c
     }
 
+    /**
+     * A call's pipe to the other phone (server/CallPipe.kt), whichever way it is reached now: a
+     * socket, past the HTTP upgrade, for the call's packets each way. Throws when it cannot be had.
+     */
+    fun openCallPipe(peer: Peer, callId: String, from: String): java.net.Socket {
+        val to = peer.asTarget()
+        val s = java.net.Socket(java.net.Proxy.NO_PROXY)
+        try {
+            s.connect(java.net.InetSocketAddress(to.host, to.port), 5000)
+            s.tcpNoDelay = true
+            s.soTimeout = 10_000
+            val q = "call=" + java.net.URLEncoder.encode(callId, "UTF-8") + "&from=" + java.net.URLEncoder.encode(from, "UTF-8")
+            val req = "GET /api/peers/call/pipe?$q HTTP/1.1\r\nHost: ${to.host}:${to.port}\r\nUser-Agent: BlazeItPhone/1 (${deviceName()})\r\n" +
+                "$PHONE_ID_HEADER: ${access.selfId}\r\nCookie: ${peer.cookie}\r\nConnection: Upgrade\r\nUpgrade: l87-pipe\r\n\r\n"
+            s.getOutputStream().apply { write(req.toByteArray()); flush() }
+            // The answer's head, byte by byte, so nothing past it is read here.
+            val i = s.getInputStream()
+            val head = StringBuilder()
+            while (!head.endsWith("\r\n\r\n")) {
+                val b = i.read()
+                if (b < 0 || head.length > 8192) error("${peer.name} closed it")
+                head.append(b.toChar())
+            }
+            if (!head.startsWith("HTTP/1.1 101")) error("${peer.name} said " + head.lineSequence().first())
+            s.soTimeout = 0
+            return s
+        } catch (e: Exception) {
+            runCatching { s.close() }
+            throw e
+        }
+    }
+
     // ------------------------------------------------------------------ straight through
 
     /** Opens a pipe on the other phone (see [Pipes]); its id there, or what went wrong. */

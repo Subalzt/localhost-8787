@@ -666,14 +666,19 @@ IPv4, and nothing else ever holds it. No account, no number, no company.
 beside it makes a video call. Sound and picture go straight between the phones (WebRTC: Opus with
 the phone's own echo cancelling and noise suppression, video in the phone's hardware codec), on the
 same Wi-Fi, over IPv6, or punched across IPv4, and every call is set up over the same sealed channel
-as messages, so its keys are known to the phones in it only. There is no relay server: when two
-networks cannot reach each other at all, the call says so instead of going through anyone.
+as messages, so its keys are known to the phones in it only. There is no relay server. When the
+networks let no call through (no UDP between them, two strict NATs) but the phones still reach each
+other for messages, the call goes **through the phones' link**: five seconds in, the calling phone
+opens a pipe to the other over the same way messages take (the Wi-Fi, IPv6, the tunnel), and each
+phone hands the call's packets between it and its own call connection. WebRTC's checks and
+encryption run end to end through it; it only carries. Only when the phones cannot reach each other
+at all does the call say so.
 
 - **Ringing**: full screen, over the lock screen, the caller's avatar in its own colour with rings
   going out; **Decline** and **Answer**, or **Voice** and **Video** for a video call.
 - **Under way**: **Mute**, **Camera** (on and off at any time, in a voice call too), **Flip**,
   **Speaker**, **Add** and **End**, how it goes (*Same network, direct*, *IPv6, direct*, *IPv4,
-  punched through*) and that it is end-to-end encrypted. With pictures, the other phone fills the
+  punched through*, *Through the phones' link*) and that it is end-to-end encrypted. With pictures, the other phone fills the
   screen and yours sits in a corner you can drag to any other; the buttons fade after a moment and
   come back at a touch.
 - **Group calls**: **Add** brings in another linked phone, up to eight in a call, voice or video.
@@ -967,8 +972,9 @@ player, `net/` for addresses, the direct link, STUN, the tunnel, hole punching a
 - A message goes only while both phones are on; until then it waits on the sending phone.
 - From another network the laptop's screen adjusts its picture on Windows; the Linux and Mac
   helper sends a fixed 1280-wide picture at 1.5 Mbit/s. The laptop's sound is not sent yet.
-- Calls are voice only for now, between linked phones. With no relay, a call needs the two phones
-  to reach each other directly: on a network that allows only a web proxy (no IPv6, UDP only to a
-  few ports) neither calls nor the tunnel get through.
+- A call needs the two phones to reach each other, directly or through their link: on a network
+  that allows only a web proxy (no IPv6, UDP only to a few ports) neither calls nor the tunnel get
+  through. Through the link, a call rides on TCP: a lost packet holds up the ones behind it, so on
+  a lossy connection it stutters more than a direct call.
 - Linking from anywhere needs one of the two to have IPv6, or the NATs to allow punching (not both
   of the hard kind).

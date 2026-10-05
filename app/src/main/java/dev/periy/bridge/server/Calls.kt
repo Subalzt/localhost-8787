@@ -256,6 +256,11 @@ class Calls(
         /** Spare voice channels, which the host of a big call fills with the other phones' voices. */
         val audioSlots = mutableListOf<RtpSender>()
         var timeout: Job? = null
+        /** Its own connection is up. */
+        @Volatile var up = false
+        /** Its packets over the phones' link (CallPipe), when its own way did not come up; and that end's port here. */
+        var pipe: CallPipe? = null
+        @Volatile var pipePort = 0
     }
 
     /** The call this phone is in; null when none. All of it is touched on [scope]'s thread only. */
@@ -401,6 +406,7 @@ class Calls(
         }
         echo = factory.createPeerConnection(rtcConfig(), object : PeerConnection.Observer {
             override fun onIceCandidate(cand: IceCandidate) {
+                if (pipeOnly) return
                 scope.launch { if (call === c) { if (leg.remoteSet) leg.pc.addIceCandidate(cand) else synchronized(leg.pending) { leg.pending.add(cand) } } }
             }
             override fun onTrack(t: RtpTransceiver) {
@@ -425,7 +431,9 @@ class Calls(
         val offer = leg.pc.awaitCreate(true)
         leg.pc.awaitSetLocal(offer)
         leg.sentDescription = true
-        echo.awaitSetRemote(offer)
+        // Gathered before the pipe looks for an address of its own.
+        withTimeoutOrNull(GATHER_MS) { while (leg.pc.localDescription?.description?.contains(" typ host") != true) delay(30) }
+        echo.awaitSetRemote(if (pipeOnly) SessionDescription(offer.type, noCandidates(offer.description)) else offer)
         c.echoRemoteSet = true
         synchronized(c.echoPending) { c.echoPending.forEach { echo.addIceCandidate(it) }; c.echoPending.clear() }
         // Asked for once: each time the list is asked for, the one before is let go.
@@ -436,7 +444,7 @@ class Calls(
         wire()
         val answer = echo.awaitCreate(false)
         echo.awaitSetLocal(answer)
-        leg.pc.awaitSetRemote(answer)
+        leg.pc.awaitSetRemote(if (pipeOnly) SessionDescription(answer.type, noCandidates(answer.description)) else answer)
         leg.remoteSet = true
         drainPending(leg)
         connectTimeout(c)
@@ -1000,6 +1008,9 @@ class Calls(
      * The answer with the helper's relay among its candidates ([RELAY_PORT] on the laptop's own
      * loopback), in each media section; with [only], the relay alone (debug builds, to try it).
      */
+    private fun noCandidates(sdp: String): String =
+        sdp.split("\r\n").filterNot { it.startsWith("a=candidate:") }.joinToString("\r\n")
+
     private fun withRelay(sdp: String, only: Boolean): String {
         val nl = if ("\r\n" in sdp) "\r\n" else "\n"
         val out = StringBuilder()
@@ -1241,6 +1252,7 @@ class Calls(
             }
         }
         c.legs[member] = leg
+        if (offerer) pipeLater(c, leg)
         return leg
     }
 
@@ -1296,6 +1308,7 @@ class Calls(
 
     private fun connected(leg: Leg) {
         val c = call ?: return
+        leg.up = true
         val s = _state.value ?: return
         if (s.phase != "active") {
             show(s.copy(phase = "active", since = if (s.since > 0) s.since else System.currentTimeMillis(), why = ""))
@@ -1303,14 +1316,24 @@ class Calls(
             if (c.levels == null) c.levels = scope.launch { listen(c) }
         }
         updateMember(leg.member) { it.copy(phase = "connected") }
-        // How it goes: the pair of candidates in use, as a person would say it.
+        describePath(leg, 0)
+    }
+
+    /** How a connection goes: the pair of candidates in use, as a person would say it; asked again until one is chosen. */
+    private fun describePath(leg: Leg, tries: Int) {
         leg.pc.getStats { report ->
             val pair = report.statsMap.values.firstOrNull { it.type == "candidate-pair" && it.members["state"] == "succeeded" && it.members["nominated"] == true }
+            if (pair == null) {
+                if (tries < 20) scope.launch { delay(500); if (call?.legs?.get(leg.member) === leg) describePath(leg, tries + 1) }
+                return@getStats
+            }
             val local = pair?.let { report.statsMap[it.members["localCandidateId"] as? String] }
             val remote = pair?.let { report.statsMap[it.members["remoteCandidateId"] as? String] }
             val types = listOfNotNull(local?.members?.get("candidateType"), remote?.members?.get("candidateType")).map { it.toString() }
             val addr = (remote?.members?.get("address") ?: remote?.members?.get("ip"))?.toString().orEmpty()
+            val port = (remote?.members?.get("port") as? Number)?.toInt() ?: 0
             val path = when {
+                leg.pipePort != 0 && port == leg.pipePort -> "Through the phones' link"
                 types.any { it == "relay" } -> "Relayed"
                 types.all { it == "host" } -> "Same network, direct"
                 addr.contains(':') -> "IPv6, direct"
@@ -1335,8 +1358,95 @@ class Calls(
 
     private fun closeLeg(leg: Leg) {
         leg.timeout?.cancel()
+        leg.pipe?.close()
         runCatching { leg.pc.close(); leg.pc.dispose() }
     }
+
+    // ------------------------------------------------------------------ through the phones' link
+    //
+    // Some networks let no call through between two phones (no UDP either way, both behind strict
+    // NATs) while the phones still reach each other for messages. Then, a few seconds into a call
+    // that has not come up, the phone that offered the connection opens a pipe to the other phone
+    // over that link (Peers.openCallPipe; /api/peers/call/pipe there) and each end hands the call's
+    // packets between it and its own connection (CallPipe). No server of anyone else's is used.
+
+    /** Debug builds: a test call goes through the pipe only, its own way left out. */
+    @Volatile var pipeOnly = false
+
+    private fun pipeLater(c: Call, leg: Leg) {
+        scope.launch {
+            delay(if (c.test && pipeOnly) 1_000L else PIPE_AFTER_MS)
+            if (call === c && c.legs[leg.member] === leg && !leg.up && leg.pipe == null) {
+                withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { startPipe(c, leg) }.onFailure { Log.i(TAG, "Call pipe to ${leg.member}: ${it.message}") } }
+            }
+        }
+    }
+
+    /** The linked phone a member is reached through, for a pipe: null when there is none. */
+    private fun peerFor(c: Call, member: String): String? =
+        c.linkOf[member] ?: (if (member == c.hostId) c.hostPeer else null)
+            ?: c.roster.firstOrNull { it.id == member }?.name?.takeIf { peers.find(it) != null }
+
+    private fun startPipe(c: Call, leg: Leg) {
+        val here = hostUdp(leg.pc) ?: error("no address of its own yet")
+        val udp = java.net.DatagramSocket(java.net.InetSocketAddress(here.address, 0))
+        val stream: java.net.Socket
+        if (c.test) {
+            // The far end is on this phone: the far half of the pipe runs here too, over a socket to itself.
+            val echoAt = c.echo?.let { hostUdp(it) } ?: run { udp.close(); error("the far end has no address") }
+            val server = java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())
+            stream = java.net.Socket(java.net.InetAddress.getLoopbackAddress(), server.localPort)
+            val far = server.accept().also { server.close() }
+            val farUdp = java.net.DatagramSocket(java.net.InetSocketAddress(here.address, 0))
+            CallPipe(farUdp, far.getInputStream(), far.getOutputStream(), echoAt, { call === c }) { runCatching { far.close() } }.start("call-pipe-far")
+        } else {
+            val peer = peerFor(c, leg.member)?.let { peers.find(it) } ?: run { udp.close(); error("not linked with this phone") }
+            stream = try { peers.openCallPipe(peer, c.id, c.me) } catch (e: Exception) { udp.close(); throw e }
+        }
+        stream.tcpNoDelay = true
+        val pipe = CallPipe(udp, stream.getInputStream(), stream.getOutputStream(), null, { call === c && c.legs[leg.member] === leg }) { runCatching { stream.close() } }
+        scope.launch {
+            if (call !== c || c.legs[leg.member] !== leg) { pipe.close(); return@launch }
+            leg.pipe = pipe
+            leg.pipePort = udp.localPort
+            pipe.start("call-pipe")
+            // This end of the pipe, as one more place the other phone can be reached, last in line.
+            val mid = Regex("""a=mid:(\S+)""").find(leg.pc.localDescription?.description.orEmpty())?.groupValues?.get(1) ?: "0"
+            val ip = here.address.hostAddress.orEmpty().substringBefore('%')
+            leg.pc.addIceCandidate(IceCandidate(mid, 0, "candidate:87088 1 udp 1 $ip ${udp.localPort} typ host generation 0"))
+            Log.i(TAG, "Call ${c.id} with ${leg.member}: trying through the phones' link")
+        }
+    }
+
+    /** One of a connection's own addresses and its port (a host UDP candidate), IPv4 first. */
+    private fun hostUdp(pc: PeerConnection): java.net.InetSocketAddress? {
+        val sdp = pc.localDescription?.description ?: return null
+        val found = Regex("""a=candidate:\S+ \d+ udp \d+ (\S+) (\d+) typ host""").findAll(sdp)
+            .map { it.groupValues[1] to it.groupValues[2].toInt() }.toList()
+        val pick = found.firstOrNull { !it.first.contains(':') } ?: found.firstOrNull() ?: return null
+        return java.net.InetSocketAddress(pick.first, pick.second)
+    }
+
+    /**
+     * The other end of a pipe a linked phone ([peerName]) opened for call [callId], as member
+     * [from]: where its packets go here (this phone's connection with that member), or null when
+     * this phone is not in that call with it.
+     */
+    suspend fun pipeTarget(peerName: String, callId: String, from: String): java.net.InetSocketAddress? = scope.async {
+        val c = call ?: return@async null
+        if (c.id != callId) return@async null
+        val linked = c.linkOf[from] == peerName || (from == c.hostId && c.hostPeer == peerName) ||
+            c.roster.any { it.id == from && it.name == peerName }
+        if (!linked) return@async null
+        c.legs[from]?.let { hostUdp(it.pc) }
+    }.await()
+
+    /** The pipe's end here, once set up: its port (for how the call says it goes) and when it is over. */
+    fun pipeOpened(callId: String, from: String, port: Int) {
+        scope.launch { val c = call; if (c?.id == callId) c.legs[from]?.pipePort = port }
+    }
+
+    fun inCall(callId: String): Boolean = call?.id == callId
 
     /** Who is talking, from each connection's sound levels, a few times a second: for the screen's rings. */
     private suspend fun listen(c: Call) {
@@ -1390,7 +1500,7 @@ class Calls(
         val c = call ?: return false
         if (c.test) {
             // The far end is on this phone: its candidates are handed over here.
-            if (sig.kind == "ice") {
+            if (sig.kind == "ice" && !pipeOnly) {
                 val cand = IceCandidate(sig.mid, sig.line, sig.cand)
                 val e = c.echo
                 if (e != null && c.echoRemoteSet) e.addIceCandidate(cand) else synchronized(c.echoPending) { c.echoPending.add(cand) }
@@ -1468,6 +1578,8 @@ class Calls(
         const val ECHO_NAME = "Test call"
         private const val RING_MS = 45_000L
         private const val CONNECT_MS = 25_000L
+        /** How long a call's own way has to come up before its packets go over the phones' link. */
+        private const val PIPE_AFTER_MS = 5_000L
         private const val GATHER_MS = 1_000L
         private const val SPEAKING = 0.04
         private val idRng = SecureRandom()

@@ -236,6 +236,8 @@ class MainActivity : ComponentActivity() {
             intent.getStringExtra("callto")?.let { c.calls.call(it, intent.getBooleanExtra("video", false)) }
             intent.getStringExtra("calladd")?.let { c.calls.add(it) }
             // `--ez calltest true [--ez video true]`: a test call, this phone through a call and back.
+            // `--ez callpipeonly true|false` first: the test goes through the phones'-link pipe only.
+            if (intent.hasExtra("callpipeonly")) c.calls.pipeOnly = intent.getBooleanExtra("callpipeonly", false)
             if (intent.getBooleanExtra("calltest", false)) c.calls.testCall(intent.getBooleanExtra("video", false))
             if (intent.getBooleanExtra("callstate", false)) c.calls.logState()
             // `--ez laptopscreen true`: the laptop's screen view, as Control's row opens it.

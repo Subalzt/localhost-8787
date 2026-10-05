@@ -1221,6 +1221,42 @@ class BridgeServer(
                 }
             })
         }
+        // A linked phone's call that could not get through by itself (server/CallPipe.kt): its packets
+        // over this connection, handed to this phone's own connection with it as datagrams.
+        get("/api/peers/call/pipe") {
+            val me = call.device() ?: return@get
+            val from = peers.byDevice(me.id)?.name
+            val q = call.request.queryParameters
+            val callId = q["call"].orEmpty()
+            val member = q["from"].orEmpty()
+            val to = from?.let { calls().pipeTarget(it, callId, member) }
+            if (to == null) { call.respond(HttpStatusCode.NotFound, ApiResult(false, "Not in that call")); return@get }
+            call.respond(object : io.ktor.http.content.OutgoingContent.ProtocolUpgrade() {
+                override val headers: io.ktor.http.Headers = io.ktor.http.Headers.build {
+                    append(HttpHeaders.Upgrade, "l87-pipe")
+                    append(HttpHeaders.Connection, "Upgrade")
+                }
+                override suspend fun upgrade(
+                    input: io.ktor.utils.io.ByteReadChannel,
+                    output: io.ktor.utils.io.ByteWriteChannel,
+                    engineContext: kotlin.coroutines.CoroutineContext,
+                    userContext: kotlin.coroutines.CoroutineContext,
+                ): kotlinx.coroutines.Job = kotlinx.coroutines.CoroutineScope(engineContext + Dispatchers.IO).launch {
+                    val udp = java.net.DatagramSocket(java.net.InetSocketAddress(to.address, 0))
+                    calls().pipeOpened(callId, member, udp.localPort)
+                    val ins = input.toInputStream()
+                    val outs = object : java.io.OutputStream() {
+                        override fun write(b: Int) = write(byteArrayOf(b.toByte()), 0, 1)
+                        override fun write(b: ByteArray, off: Int, len: Int) { kotlinx.coroutines.runBlocking { output.writeFully(b, off, len) } }
+                        override fun flush() { kotlinx.coroutines.runBlocking { output.flush() } }
+                        override fun close() { kotlinx.coroutines.runBlocking { output.flushAndClose() } }
+                    }
+                    val done = kotlinx.coroutines.CompletableDeferred<Unit>()
+                    CallPipe(udp, ins, outs, to, { calls().inCall(callId) }) { done.complete(Unit) }.start("call-pipe-peer")
+                    done.await()
+                }
+            })
+        }
         post("/api/call/media") {
             call.device() ?: return@post
             val r = runCatching { call.receive<PageCallMedia>() }.getOrNull() ?: PageCallMedia()
