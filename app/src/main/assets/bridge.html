@@ -10938,7 +10938,11 @@ async function callJoin(o) {
     }
     if (callRtc !== rtc) { rtc.mic.getTracks().forEach(function (t) { t.stop(); }); return; }
     if (o.answer) await api("/api/call/answer", { method: "POST" });
-    var pc = rtc.pc = new RTCPeerConnection({ bundlePolicy: "max-bundle" });
+    // STUN learns this laptop's public addresses, so a phone far away can be reached straight (as
+    // phones reach each other); failing that, the phone offers the helper's relay through its
+    // tunnel (Calls.withRelay), WebRTC over TCP, which always gets through.
+    var pc = rtc.pc = new RTCPeerConnection({ bundlePolicy: "max-bundle",
+      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }] });
     // The microphone out; everyone's voices back as sound on a data channel (the phone mixes them:
     // see Calls.pageJoin); the picture both ways.
     pc.addTransceiver(rtc.mic.getAudioTracks()[0], { direction: "sendonly" });
@@ -10973,7 +10977,7 @@ async function callJoin(o) {
       pc.onicegatheringstatechange = function () { if (pc.iceGatheringState === "complete") { clearTimeout(t); ok(); } };
     });
     if (callRtc !== rtc) return;
-    var r = await api("/api/call/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sdp: pc.localDescription.sdp }) });
+    var r = await api("/api/call/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sdp: pc.localDescription.sdp, relayOnly: !!window.callRelayOnly }) });
     var d = await r.json().catch(function () { return {}; });
     if (!r.ok || !d.sdp) throw new Error(d.message || "Could not move the call here");
     await pc.setRemoteDescription({ type: "answer", sdp: d.sdp });

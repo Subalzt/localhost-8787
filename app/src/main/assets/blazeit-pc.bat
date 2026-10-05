@@ -163,7 +163,82 @@ public static class BlazeItPc
         lyrics.IsBackground = true;
         lyrics.Start();
 
+        Thread callRelay = new Thread(CallRelayLoop);
+        callRelay.IsBackground = true;
+        callRelay.Start();
+
         ControlLoop();
+    }
+
+    // ------------------------------------------------------------------ calls on the page, from afar
+    //
+    // A call on this laptop's page while the phone is far away: the page's WebRTC may find no way
+    // straight to the phone (no IPv6 on one side, a network that lets nothing in). The phone then
+    // offers this relay (127.0.0.1:8790, on this laptop alone, so nothing is open to the network) as
+    // a last way: WebRTC over TCP, which the browser opens to it and this helper carries through its
+    // sealed tunnel to the phone (/api/call/pipe), as it does everything else.
+
+    const int CallRelayPort = 8790;
+
+    static void CallRelayLoop()
+    {
+        TcpListener l;
+        try { l = new TcpListener(IPAddress.Loopback, CallRelayPort); l.Start(); }
+        catch (Exception e) { Log("Call relay: " + e.Message); return; }
+        while (true)
+        {
+            TcpClient c;
+            try { c = l.AcceptTcpClient(); } catch { Thread.Sleep(1000); continue; }
+            var t = new Thread(delegate () { CallRelay(c); });
+            t.IsBackground = true;
+            t.Start();
+        }
+    }
+
+    static void CallRelay(TcpClient browser)
+    {
+        TcpClient up = null;
+        try
+        {
+            string at = phone;
+            if (at == null || session == null) return;
+            up = new TcpClient();
+            up.NoDelay = true; browser.NoDelay = true;
+            up.Connect(Via(at), PhonePort);
+            var us = up.GetStream();
+            byte[] req = Encoding.ASCII.GetBytes("GET /api/call/pipe HTTP/1.1\r\nHost: phone\r\nUser-Agent: " + Ua + "\r\nCookie: " + session +
+                "\r\nConnection: Upgrade\r\nUpgrade: l87-pipe\r\n\r\n");
+            us.Write(req, 0, req.Length);
+            // The answer's head, up to its blank line; what follows is the call's own.
+            var head = new StringBuilder();
+            while (!head.ToString().EndsWith("\r\n\r\n"))
+            {
+                int b = us.ReadByte();
+                if (b < 0 || head.Length > 8192) return;
+                head.Append((char)b);
+            }
+            if (!head.ToString().StartsWith("HTTP/1.1 101")) { Log("Call relay: the phone said " + head.ToString().Split('\r')[0]); return; }
+            Log("A call on the page goes through the tunnel (WebRTC over TCP).");
+            var bs = browser.GetStream();
+            var a = new Thread(delegate () { Carry(bs, us); try { up.Client.Shutdown(SocketShutdown.Send); } catch { } });
+            a.IsBackground = true;
+            a.Start();
+            Carry(us, bs);
+            a.Join(2000);
+        }
+        catch (Exception e) { Log("Call relay: " + e.Message); }
+        finally
+        {
+            try { browser.Close(); } catch { }
+            try { if (up != null) up.Close(); } catch { }
+        }
+    }
+
+    static void Carry(Stream from, Stream to)
+    {
+        byte[] buf = new byte[16 * 1024];
+        int n;
+        try { while ((n = from.Read(buf, 0, buf.Length)) > 0) { to.Write(buf, 0, n); to.Flush(); } } catch { }
     }
 
     // ------------------------------------------------------------------ new songs' lyrics, word by word
@@ -227,7 +302,8 @@ public static class BlazeItPc
         p.WaitForExit();
         foreach (string id in fresh) seen.Add(id);
         File.WriteAllLines(LyricsSeenFile, new List<string>(seen).ToArray());
-        Say("New songs' lyrics: " + timed + " of " + fresh.Count + " timed word by word" + (fixedN > 0 ? ", " + fixedN + " given better lyrics" : "") + ".");
+        Say("Checked the lyrics of " + fresh.Count + (fresh.Count == 1 ? " new song" : " new songs") + ": " +
+            (timed > 0 ? timed + " timed word by word" : "nothing to change") + (fixedN > 0 ? ", " + fixedN + " given better lyrics" : "") + ".");
     }
 
     [DllImport("kernel32.dll")] static extern uint SetThreadExecutionState(uint flags);

@@ -212,7 +212,7 @@ data class DirectDto(
 /** The call for a laptop's page, and the linked phones it can call. */
 @Serializable data class PageCallDto(val call: PageCall?, val phones: List<String>, val recent: List<CallRecord> = emptyList())
 @Serializable data class PageCallStart(val name: String = "", val video: Boolean = false)
-@Serializable data class PageCallSdp(val sdp: String = "")
+@Serializable data class PageCallSdp(val sdp: String = "", val relayOnly: Boolean = false)
 @Serializable data class PageCallMedia(val muted: Boolean = false, val camera: Boolean = false)
 
 /** Conversations for a laptop's page (server/Messages.kt), newest first, and the phones it can write to. */

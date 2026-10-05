@@ -2907,6 +2907,85 @@ def session_kind():
     return "x11" if os.environ.get("DISPLAY") else ""
 
 
+# ------------------------------------------------------------------ calls on the page, from afar
+#
+# A call on this computer's page while the phone is far away: the page's WebRTC may find no way
+# straight to it. The phone then offers this relay (127.0.0.1:8790, on this computer alone) as a last
+# way: WebRTC over TCP, which the browser opens to it and this helper carries through its sealed
+# tunnel to the phone (/api/call/pipe), as it does everything else.
+
+CALL_RELAY_PORT = 8790
+
+
+def call_relay_loop():
+    try:
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind(("127.0.0.1", CALL_RELAY_PORT))
+        srv.listen(4)
+    except OSError as e:
+        log("Call relay: %s" % e)
+        return
+    while True:
+        try:
+            c, _ = srv.accept()
+        except OSError:
+            time.sleep(1)
+            continue
+        threading.Thread(target=call_relay, args=(c,), daemon=True).start()
+
+
+def call_relay(browser):
+    up = None
+    try:
+        at = phone
+        if not at or not session:
+            return
+        up = socket.create_connection(tuple(via(at)), timeout=10)
+        up.sendall(("GET /api/call/pipe HTTP/1.1\r\nHost: phone\r\nUser-Agent: %s\r\nCookie: %s\r\n"
+                    "Connection: Upgrade\r\nUpgrade: l87-pipe\r\n\r\n" % (user_agent(), session)).encode())
+        head = b""
+        while not head.endswith(b"\r\n\r\n"):
+            ch = up.recv(1)
+            if not ch or len(head) > 8192:
+                return
+            head += ch
+        if not head.startswith(b"HTTP/1.1 101"):
+            log("Call relay: the phone said %s" % head.split(b"\r\n")[0].decode("latin-1"))
+            return
+        up.settimeout(None)
+        browser.settimeout(None)
+        for s in (up, browser):
+            s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
+        def carry(a, b):
+            try:
+                while True:
+                    data = a.recv(16384)
+                    if not data:
+                        break
+                    b.sendall(data)
+            except OSError:
+                pass
+            try:
+                b.shutdown(socket.SHUT_WR)
+            except OSError:
+                pass
+        t = threading.Thread(target=carry, args=(browser, up), daemon=True)
+        t.start()
+        carry(up, browser)
+        t.join(2)
+    except OSError as e:
+        log("Call relay: %s" % e)
+    finally:
+        for s in (browser, up):
+            try:
+                if s:
+                    s.close()
+            except OSError:
+                pass
+
+
 # ------------------------------------------------------------------ calls ringing on this computer
 #
 # A call ringing on the phone rings here too, the page open or not: a notification (notify-send on
@@ -4585,7 +4664,7 @@ def main():
     if SITE_SIGNIN and not read_file(os.path.join(CONF, "session.txt")):
         site_enroll(*SITE_SIGNIN)
     find_phone(True, typed=args.phone)
-    for loop in (relay_loop, link_loop, direct_loop, events_loop, volume_loop, tunnel_loop) + ((clip_loop,) if clip else ()):
+    for loop in (relay_loop, link_loop, direct_loop, events_loop, volume_loop, tunnel_loop, call_relay_loop) + ((clip_loop,) if clip else ()):
         threading.Thread(target=loop, daemon=True).start()
     control_loop(args.no_browser)
 

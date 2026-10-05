@@ -468,6 +468,10 @@ singing starts again. On the phone they ride over the cover too, and a tap opens
   well the words fit and when each line is really sung; a song that fits badly or runs off time is
   looked up again on LRCLIB, every entry of about its length is tried, and the best is kept, timed
   from the singing and then word by word.
+- **New songs by themselves.** Once the aligner has run on the laptop, the Windows helper looks at
+  the phone's songs every 10 minutes and gives the ones it has not seen before to the checker, at
+  low priority on the graphics card, and says how it went: add an album, and its lyrics are timed
+  word by word without lifting a finger.
 
 ### 12. The phone's notifications on the laptop
 
@@ -683,9 +687,18 @@ networks cannot reach each other at all, the call says so instead of going throu
   moment later and see yourself after two trips through the codecs and the host's grid.
 - Registered with Android as a call, so Bluetooth headsets and car kits carry it and can hang it
   up, and it keeps going with the app in the background (camera too).
-- **On the laptop**, as on WhatsApp's: calls ring on the page too (a soft ring, and the tab says
-  who), and **Answer** there takes the call on the laptop, its microphone, camera and speakers in
-  it. **Calls** on the page's Home calls a linked phone (or makes a test call) from the laptop;
+- **On the laptop**, as on WhatsApp Web: the page's **Phones** tab has **Chats** and **Calls**, as
+  the phone's has. **Chats** is the phone's conversations: the list with unread counts, bubbles with
+  day dividers and read ticks, photos (full size at a click), voice notes (played, and recorded in
+  the browser), files, links, new chats and groups, a call from a chat's header, and files dropped
+  on a chat sent into it. The phone keeps every message and sends what is written there on as its
+  own, sealed end to end. **Calls** lists the linked phones to call (and the test call) and the
+  recent calls, with call back.
+- Calls ring on the laptop too: on the page (a soft ring, and the tab says who), and with no page
+  open, as a Windows call notification from the helper that rings until the call stops ringing;
+  **Answer on the laptop** opens the page (on Linux and the Mac, a notification says who).
+  **Answer** on the page takes the call on the laptop, its microphone, camera and speakers in
+  it. **Calls** in Phones calls a linked phone (or makes a test call) from the laptop;
   **Use this laptop** moves a call under way onto it, **To phone** hands it back, and the phone's
   call screen shows *On LEGION_7I · Take back*. The laptop connects to its own phone only, which
   stays in the call quietly and passes everything on, so it works wherever the phone's call does,
@@ -693,8 +706,12 @@ networks cannot reach each other at all, the call says so instead of going throu
   every connection, so the laptop's voice is written in where the microphone's would be, and the
   others' voices are mixed on the phone and sent to the page as sound over a data channel; on the
   page they play through a connection to itself, so the browser's echo cancelling hears them and
-  the laptop's speakers are not heard back. Needs the page at `localhost:8787` (through the
-  helper) or the website, where a browser lets a page use the microphone.
+  the laptop's speakers are not heard back. With the phone far away it still works: the page tries
+  straight first (STUN, as phones do), and the phone also offers the helper's relay on the laptop's
+  own loopback (127.0.0.1:8790), WebRTC over TCP, which the helper carries through its sealed tunnel
+  and the phone hands to the call as UDP; so a call on the laptop goes wherever the helper reaches
+  the phone. Needs the page at `localhost:8787` (through the helper) or the website, where a
+  browser lets a page use the microphone.
 
 ### 20. Laptop and laptop
 

@@ -55,6 +55,7 @@ import io.ktor.server.sse.sse
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.readAvailable
+import io.ktor.utils.io.readFully
 import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
 import io.ktor.utils.io.writer
@@ -967,9 +968,70 @@ class BridgeServer(
                 call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Bad offer"))
                 return@post
             }
-            runCatching { calls().pageJoin(r.sdp, displayName(me), me.id) }
+            // Through the laptop helper (it hands its streams to this phone on the loopback): its relay is offered too.
+            val raw = call.request.local.remoteAddress
+            val relay = raw.startsWith("127.") || raw == "::1" || raw.startsWith("0:0:0:0:0:0:0:1")
+            runCatching { calls().pageJoin(r.sdp, displayName(me), me.id, relay, r.relayOnly) }
                 .onSuccess { call.respond(PageCallSdp(it)) }
                 .onFailure { call.respond(HttpStatusCode.Conflict, ApiResult(false, it.message ?: "Could not join the call")) }
+        }
+        // The laptop helper's relay for a call on its page: this connection, once answered, carries
+        // WebRTC over TCP, each packet with its length before it (RFC 4571), and hands each one to
+        // the page's connection here as UDP (Calls.pageUdp), its answers back the same way: WebRTC
+        // here sees one more way to the laptop, and needs nothing of TCP.
+        get("/api/call/pipe") {
+            call.device() ?: return@get
+            val to = calls().pageUdp()
+            if (to == null) { call.respond(HttpStatusCode.NotFound, ApiResult(false, "No call on a laptop")); return@get }
+            call.respond(object : io.ktor.http.content.OutgoingContent.ProtocolUpgrade() {
+                override val headers: io.ktor.http.Headers = io.ktor.http.Headers.build {
+                    append(HttpHeaders.Upgrade, "l87-pipe")
+                    append(HttpHeaders.Connection, "Upgrade")
+                }
+                override suspend fun upgrade(
+                    input: io.ktor.utils.io.ByteReadChannel,
+                    output: io.ktor.utils.io.ByteWriteChannel,
+                    engineContext: kotlin.coroutines.CoroutineContext,
+                    userContext: kotlin.coroutines.CoroutineContext,
+                ): kotlinx.coroutines.Job = kotlinx.coroutines.CoroutineScope(engineContext + Dispatchers.IO).launch {
+                    val udp = java.net.DatagramSocket()
+                    try {
+                        udp.connect(to)
+                        // From the laptop: each packet, its length first, out as one datagram.
+                        val up = launch {
+                            val len = ByteArray(2)
+                            val buf = ByteArray(65_536)
+                            try {
+                                while (true) {
+                                    input.readFully(len, 0, 2)
+                                    val n = ((len[0].toInt() and 0xFF) shl 8) or (len[1].toInt() and 0xFF)
+                                    input.readFully(buf, 0, n)
+                                    udp.send(java.net.DatagramPacket(buf, n))
+                                }
+                            } catch (_: Throwable) {
+                            } finally {
+                                // The laptop's side closed: the other way stops too.
+                                runCatching { udp.close() }
+                            }
+                        }
+                        // To the laptop: each datagram, its length first.
+                        val buf = ByteArray(65_536 + 2)
+                        val pkt = java.net.DatagramPacket(buf, 2, 65_536)
+                        while (up.isActive) {
+                            pkt.setData(buf, 2, 65_536)
+                            udp.receive(pkt)
+                            val n = pkt.length
+                            buf[0] = (n shr 8).toByte(); buf[1] = n.toByte()
+                            output.writeFully(buf, 0, n + 2)
+                            output.flush()
+                        }
+                    } catch (_: Exception) {
+                    } finally {
+                        runCatching { udp.close() }
+                        runCatching { output.flushAndClose() }
+                    }
+                }
+            })
         }
         post("/api/call/media") {
             call.device() ?: return@post

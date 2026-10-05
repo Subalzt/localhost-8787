@@ -929,7 +929,7 @@ class Calls(
      * mixed here and sent to the laptop as sound over the data channel ([ToLaptop]). The pictures
      * go as pictures, both ways.
      */
-    suspend fun pageJoin(offer: String, laptop: String, device: String): String = scope.async {
+    suspend fun pageJoin(offer: String, laptop: String, device: String, relay: Boolean = false, relayOnly: Boolean = false): String = scope.async {
         val c = call ?: error("There is no call")
         page?.let { pageGone(it, quiet = true) }
         lateinit var leg: PageLeg
@@ -970,7 +970,12 @@ class Calls(
         val answer = pc.awaitCreate(false)
         pc.awaitSetLocal(answer)
         withTimeoutOrNull(1_500) { while (!leg.gatheredAll) delay(30) }
-        val sdp = pc.localDescription?.description ?: error("No answer")
+        var sdp = pc.localDescription?.description ?: error("No answer")
+        // A page through the laptop helper: one more way, for when nothing gets through straight
+        // (the phone far away, behind a network that lets nothing in): WebRTC over TCP to the
+        // helper's relay on the laptop itself, which carries it through its tunnel to this phone
+        // (pipe, below). Lowest of all, so it is used only when nothing else answers.
+        if (relay) sdp = withRelay(sdp, relayOnly && dev.periy.bridge.BuildConfig.DEBUG)
         // The laptop has it now: its voice in place of this phone's microphone, this phone's
         // speaker quiet (the voices still come out of the call to be mixed), its camera off.
         page = leg
@@ -990,6 +995,40 @@ class Calls(
         tellMedia()
         sdp
     }.await()
+
+    /**
+     * The answer with the helper's relay among its candidates ([RELAY_PORT] on the laptop's own
+     * loopback), in each media section; with [only], the relay alone (debug builds, to try it).
+     */
+    private fun withRelay(sdp: String, only: Boolean): String {
+        val nl = if ("\r\n" in sdp) "\r\n" else "\n"
+        val out = StringBuilder()
+        var inMedia = false
+        fun relayLine() = "a=candidate:87087 1 tcp 1015022079 127.0.0.1 $RELAY_PORT typ host tcptype passive generation 0$nl"
+        for (line in sdp.split(nl)) {
+            if (line.isEmpty()) continue
+            if (line.startsWith("m=")) { inMedia = true }
+            if (only && line.startsWith("a=candidate:")) continue
+            if (inMedia && line.startsWith("a=end-of-candidates")) continue
+            out.append(line).append(nl)
+            // Right after the connection line of each media section.
+            if (inMedia && line.startsWith("c=")) out.append(relayLine())
+        }
+        return out.toString()
+    }
+
+    /**
+     * Where the laptop's relay goes on this phone: the page's connection's own port (a host UDP
+     * candidate, on one of this phone's addresses), which the relay's packets are handed to as UDP
+     * (see the pipe in BridgeServer); null without a laptop's page in the call.
+     */
+    fun pageUdp(): java.net.InetSocketAddress? {
+        val sdp = page?.pc?.localDescription?.description ?: return null
+        val found = Regex("""a=candidate:\S+ \d+ udp \d+ (\S+) (\d+) typ host""").findAll(sdp)
+            .map { it.groupValues[1] to it.groupValues[2].toInt() }.toList()
+        val pick = found.firstOrNull { !it.first.contains(':') } ?: found.firstOrNull() ?: return null
+        return java.net.InetSocketAddress(pick.first, pick.second)
+    }
 
     /** The laptop's microphone and camera, as its page has them. */
     fun pageMedia(muted: Boolean, camera: Boolean) {
@@ -1419,6 +1458,8 @@ class Calls(
         private const val TAG = "Calls"
         /** Phones in one call, this one too: up to [MESH] each straight to each other, past that through the host. */
         const val MAX = 8
+        /** The laptop helper's relay for calls on its page, on the laptop's own loopback. */
+        const val RELAY_PORT = 8790
         /** What a mesh carries on phones' own links: each phone sends its picture to each other one. */
         const val MESH = 4
         /** Spare voice channels on each connection, for the others' voices in a big call. */
