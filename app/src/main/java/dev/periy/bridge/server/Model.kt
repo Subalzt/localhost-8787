@@ -136,6 +136,10 @@ data class PairStatusDto(val state: String)
 /** [live]: the phone's listener is running now (allowed is not enough: HyperOS can keep it stopped). */
 @Serializable data class NotifList(val allowed: Boolean, val items: List<NotifDto>, val live: Boolean = true)
 
+/** A mix made for you, for a page: [ids] its songs in order. [done]/[all]: the library's sound measured so far, -1 when finished. */
+@Serializable data class MixDto(val key: String, val title: String, val line: String, val ids: List<Long>)
+@Serializable data class MixesDto(val mixes: List<MixDto>, val done: Int = -1, val all: Int = -1)
+
 /** The laptop's master volume, from its helper. */
 @Serializable data class VolumeReport(val level: Float = 0f, val muted: Boolean = false)
 

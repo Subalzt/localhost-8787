@@ -62,6 +62,7 @@ import io.ktor.utils.io.writer
 import kotlinx.coroutines.CoroutineScope
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.Dispatchers
+import dev.periy.bridge.container
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -539,6 +540,20 @@ class BridgeServer(
             }
             call.response.header(HttpHeaders.CacheControl, "private, max-age=86400")
             call.respond(info)
+        }
+
+        // The mixes made for you (music/SmartMixes.kt): each its name, a line, and its songs' ids in order.
+        get("/api/music/mixes") {
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            val mixes = ctx.container.mixes
+            val list = withContext(Dispatchers.IO) { mixes.mixes(music.tracks()) }
+            call.respond(MixesDto(list.map { MixDto(it.key, it.title, it.line, it.tracks.map { t -> t.id }) }, mixes.progress.value?.first ?: -1, mixes.progress.value?.second ?: -1))
+        }
+        // A page has played a song half way, or 30 s: it counts, as on the phone.
+        post("/api/music/played/{id}") {
+            val id = call.parameters["id"]?.toLongOrNull()
+            if (id != null) ctx.container.plays.played(id)
+            call.respond(ApiResult(id != null))
         }
 
         // The songs with a heart: the same on the phone's player and every page's.

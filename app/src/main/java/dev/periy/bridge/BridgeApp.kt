@@ -47,6 +47,9 @@ class Container(ctx: Context) {
     val sleep = dev.periy.bridge.music.SleepTimer(player)
     val alarms = dev.periy.bridge.music.Alarms(app)
     val ringer = dev.periy.bridge.music.AlarmRinger(app, music, favourites, player)
+    /** Plays counted, each song's sound measured, and the mixes made from them. */
+    val plays = dev.periy.bridge.music.PlayStats(app)
+    val mixes = dev.periy.bridge.music.SmartMixes(app, music, plays)
     /** The equalizer, the same for the phone's player and every page's. */
     val eq = dev.periy.bridge.music.EqStore(app)
     /**
@@ -60,6 +63,24 @@ class Container(ctx: Context) {
         // Android forgets alarms when the app is updated or killed hard: the next one, set again.
         runCatching { alarms.arm() }
         background.launch(kotlinx.coroutines.Dispatchers.Main) { eq.state.collect { player.applyEq(it) } }
+        // A song counts as played once half of it, or 30 s, has played (again after it starts over).
+        background.launch(kotlinx.coroutines.Dispatchers.Main) {
+            var counted = -1L
+            player.state.collectLatest { s ->
+                if (!s.playing) return@collectLatest
+                while (true) {
+                    val st = player.state.value
+                    val t = st.current ?: break
+                    val pos = st.positionNow()
+                    if (pos < 3_000) counted = -1
+                    val enough = minOf(dev.periy.bridge.music.PlayStats.ENOUGH_MS, (st.durationMs.takeIf { it > 0 } ?: t.durationMs) / 2)
+                    if (t.id != counted && enough > 2_000 && pos >= enough) { plays.played(t.id); counted = t.id }
+                    kotlinx.coroutines.delay(4_000)
+                }
+            }
+        }
+        // The library's sound, measured in the background a while after starting (new songs too).
+        background.launch { kotlinx.coroutines.delay(90_000); if (music.granted()) mixes.scan() }
         background.launch {
             player.state.map { it.current }.distinctUntilChangedBy { it?.id }.collectLatest { t ->
                 if (t == null) return@collectLatest

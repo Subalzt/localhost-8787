@@ -382,6 +382,8 @@ private fun TracksPage(
     Column(Modifier.fillMaxSize().padding(top = top)) {
         LazyColumn(Modifier.weight(1f), state = list, contentPadding = PaddingValues(top = 6.dp, bottom = bottom)) {
             noteFor(shelf, songs.isEmpty())?.let { n -> item(key = "note") { LibraryNote(n, requestMusic) } }
+            // The mixes made for you, across the top (not while searching).
+            if (shelf.query.isEmpty() && shelf.tracks.isNotEmpty()) item(key = "mixes") { MixesRow(shelf) }
             itemsIndexed(songs, key = { _, t -> t.id }) { i, t ->
                 TrackTile(
                     t, shelf.coverOf(t), current = t.id == playingId, hearted = t.id in hearts, acts = acts,
@@ -511,14 +513,20 @@ private fun AlbumPage(
     LazyColumn(Modifier.fillMaxSize().background(Nm.c.bg).padding(top = top), state = list, contentPadding = PaddingValues(bottom = bottom)) {
         item(key = "head") { AlbumHead(a, shelf, pushOffset, acts) }
         if (songs.isEmpty()) item(key = "none") { LibraryNote("Nothing matches", {}) }
+        // A mix (SmartMixes) is songs from all over: each with its own cover, in the mix's order.
+        val mix = a.key.startsWith(MIX_KEY)
         // In disc order, an album on more than one disc is split by disc, each under its header.
-        val byDisc = shelf.albumSort == 0 && songs.map { it.disc }.distinct().size > 1
+        val byDisc = !mix && shelf.albumSort == 0 && songs.map { it.disc }.distinct().size > 1
         songs.forEachIndexed { i, t ->
             if (byDisc && (i == 0 || songs[i - 1].disc != t.disc)) item(key = "disc-${t.disc}") {
                 DiscHeader(t.disc, songs.filter { it.disc == t.disc }, Modifier.entrance(shelf.pageEntrance, i + 2))
             }
             item(key = t.id) {
-                TrackTile(
+                if (mix) TrackTile(
+                    t, shelf.coverOf(t), current = t.id == playingId, hearted = t.id in hearts, acts = acts,
+                    modifier = Modifier.entrance(shelf.pageEntrance, i + 2),
+                ) { acts.play(songs, i) }
+                else TrackTile(
                     t, a.coverId, current = t.id == playingId, hearted = t.id in hearts, acts = acts,
                     number = if (t.track > 0) t.track else a.tracks.indexOf(t) + 1, inAlbum = true, sounding = now.playing,
                     modifier = Modifier.entrance(shelf.pageEntrance, i + 2),
@@ -544,6 +552,58 @@ private fun DiscHeader(disc: Int, tracks: List<TrackDto>, modifier: Modifier = M
 }
 
 // ---------------------------------------------------------------------------- pieces
+
+/** What an Album made from a mix has its key start with. */
+private const val MIX_KEY = "mix:"
+
+/**
+ * The mixes made for you (music/SmartMixes.kt), across the top of Songs: most played, not heard
+ * in a while, loudest, quietest, and one for each mood the library's sound falls into. Each opens
+ * as an album does. While the library is still being listened to, it says how far it has got.
+ */
+@Composable
+private fun MixesRow(shelf: MusicShelf) {
+    val mixes = LocalContext.current.container.mixes
+    val prof by mixes.profiles.collectAsState()
+    val plays by mixes.plays.all.collectAsState()
+    val progress by mixes.progress.collectAsState()
+    LaunchedEffect(shelf.tracks) { mixes.scan() }
+    val list = remember(shelf.tracks, prof, plays) { mixes.mixes(shelf.tracks) }
+    if (list.isEmpty() && progress == null) return
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp)) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.Bottom) {
+            Text("Mixes", style = TextStyle(fontFamily = MusicType, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Nm.c.large), modifier = Modifier.weight(1f))
+            progress?.let { (done, all) -> Text("Listening to your library · $done of $all", style = Nm.small.copy(fontSize = 12.sp)) }
+        }
+        androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            itemsIndexed(list, key = { _, m -> m.key }) { _, m -> MixCard(m, shelf) }
+        }
+    }
+}
+
+/** One mix: four of its covers as a square (or one), its name over the foot of it, a line under. */
+@Composable
+private fun MixCard(m: dev.periy.bridge.music.SmartMixes.Mix, shelf: MusicShelf) {
+    val covers = remember(m) { m.tracks.map { shelf.coverOf(it) }.distinct().take(4) }
+    val shape = RoundedCornerShape(10.dp)
+    Column(Modifier.width(142.dp).pressable(shape, scaleTo = 0.96f) {
+        shelf.openAlbum(Album(MIX_KEY + m.key, covers.first(), m.title, m.line, m.tracks, 0))
+    }) {
+        Box(Modifier.size(142.dp).clip(shape).border(0.5.dp, hairline(), shape)) {
+            if (covers.size >= 4) Column {
+                Row { Cover(covers[0], m.title, Modifier.size(71.dp), radius = 0.dp); Cover(covers[1], m.title, Modifier.size(71.dp), radius = 0.dp) }
+                Row { Cover(covers[2], m.title, Modifier.size(71.dp), radius = 0.dp); Cover(covers[3], m.title, Modifier.size(71.dp), radius = 0.dp) }
+            } else Cover(covers.first(), m.title, Modifier.fillMaxSize(), radius = 0.dp)
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.7f))))
+            Text(
+                m.title, style = TextStyle(fontFamily = MusicType, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, shadow = OnArt),
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(m.line + " · " + m.tracks.size, style = Nm.small.copy(fontSize = 12.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
 
 /** The pages left to right, by the shelf's numbers for them: Albums, Songs, Liked. */
 private val PAGE_ORDER = listOf(1, 0, 2)
@@ -877,7 +937,7 @@ private fun AlbumHead(a: Album, shelf: MusicShelf, pushOffset: () -> Float, acts
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { library.info(id) }.getOrNull() }
     }
     val genre = remember(a) { a.tracks.firstNotNullOfOrNull { t -> t.genre.takeIf { it.isNotBlank() } }.orEmpty() }
-    val meta = listOfNotNull(
+    val meta = if (a.key.startsWith(MIX_KEY)) "" else listOfNotNull(
         genre.takeIf { it.isNotEmpty() },
         a.year.takeIf { it > 0 }?.toString(),
         info?.let { formatLine(it, first?.mime.orEmpty(), kbps = false) }?.takeIf { it.isNotEmpty() }

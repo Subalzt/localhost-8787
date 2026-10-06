@@ -303,9 +303,11 @@ network and 60 an hour). [How it works](docs/website.md).
 Copy on one, paste on the other: text, pictures and files up to 50 MB. The box on Home shows what
 is shared, and under its title **Shared with** names every machine it reaches right now, on the
 phone and on every page: *Shared with Xiaomi 15, LEGION_7I and Linux*. Machines go by their name,
-never their browser; a browser in WSL is *Linux*. **History** (the clock) brings back the last 30
+never their browser; a browser in WSL is *Linux*. **History** (the clock) brings back the last 50
 items and closes by itself after ten seconds; with nothing in it, the clock just says *Nothing to
-clear*. **Clear history** empties the history and the clipboard everywhere. With the laptop
+clear*. **Search** narrows it to what has some words in it, and the **pin** keeps an item at the top
+however much you copy after it. **Clear history** empties the history, all but what is pinned, and
+the clipboard everywhere. With the laptop
 helper running it all happens by itself both ways, including **every screenshot** you take on
 the phone. To send copies from any phone app straight away, allow two things once over USB:
 
@@ -433,6 +435,23 @@ buttons working.
 - **The queue**: Namida's sheet, rising under the song as the cover shrinks to the top. Tap to
   play, drag by the handle to move, swipe away to take off; the broom and **Shuffle** as on the page.
 - Pull the mini player down under itself to stop and put it away. The queue is kept for next time.
+- **Mixes**, across the top of Songs (on the page too): **Most played**, **Not heard in a while**
+  (a month or more, or never), **Loudest**, **Quietest**, and one for each mood the library falls
+  into: **Energetic**, **Upbeat**, **Chill**, **Melancholy**, **Dark and heavy**. The phone listens
+  to every song once in the background, a minute of each, and measures how loud it is, its beat
+  (tempo from its onsets), how much it jumps and how bright it sounds; moods come from where a song
+  sits in your own library, so a library of loud rock still has its calm ones. A play counts once
+  half the song, or 30 s, has played, on the phone or on the page. Each mix opens like an album.
+- **Sleep timer**: the clock beside the sound controls. 15 minutes to an hour and a half, or the
+  end of this song; the music fades out over its last 30 seconds and stops. The button shows the
+  minutes left; **15 minutes more** or **Turn off** from the same menu.
+- **Alarms** (from the same menu, or the alarm clock in the status bar): wake to a song of your own,
+  or your favourites shuffled, fading in from silence over 15 s to 5 min. Set the time, the days and
+  the song; **Hear it now** tries it. Android's own alarm clock rings it, exactly and through Doze,
+  and set again after a reboot or an update; it opens the alarm screen **over the lock screen**
+  (the phone stays locked) with **Snooze**, **Stop**, and **Keep listening**, which carries the
+  same song on in the player. It plays on the alarm's volume, so it rings with the phone on silent,
+  and no notification comes with it.
 
 Albums run on from one song to the next without a gap, and a call or another app's sound pauses
 it.
@@ -483,7 +502,10 @@ singing starts again. On the phone they ride over the cover too, and a tap opens
 
 The page's **Alerts** tab shows the phone's notifications. Reply to a message, press their
 buttons (*Mark as read*), or clear them, and it happens on the phone. Ongoing ones (music,
-downloads) sit apart and never pop up. Needs *Notification access* on the phone.
+downloads) sit apart and never pop up. Needs *Notification access* on the phone. On HyperOS the
+app also needs **Autostart** on: without it, HyperOS does not start the notification reader again
+after an update, so nothing reaches the laptop. Settings says so (*Stopped*, with **Fix**), and the
+page shows a note instead of an empty list.
 
 <img src="docs/images/web-alerts.png" width="620" alt="Alerts">
 
@@ -729,6 +751,17 @@ at all does the call say so.
   and the phone hands to the call as UDP; so a call on the laptop goes wherever the helper reaches
   the phone. Needs the page at `localhost:8787` (through the helper) or the website, where a
   browser lets a page use the microphone.
+
+### Laptop health
+
+**Devices → Laptop health** on the phone (and **Health** beside each laptop on the page) shows how
+each laptop whose helper runs is doing, from anywhere, every 3 seconds while it is open: **CPU**
+(how busy, its name, its threads), **memory**, each **NVIDIA GPU** (how busy, its temperature,
+power and memory, from `nvidia-smi`), **battery** (charging, plugged in, or the time left), each
+**disk** and how full it is, the **temperatures** Windows gives without admin (its thermal zones,
+where the laptop has them; Linux's sensors), and the **five busiest programs**. The phone asks
+through the helper's own connection and the answer is back in about half a second. Windows,
+Linux and macOS helpers all answer.
 
 ### Where your phones and laptops are
 
