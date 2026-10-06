@@ -369,7 +369,8 @@ finds any song or album from anywhere on the page.
   place in (drag up off it to take the seek back).
 - **Across the internet it starts at once and steps down by itself**, as Spotify and Apple Music do. The page
   measures the link and asks for what it carries: the song's own file when there is room, else a
-  CD-quality FLAC copy (16-bit, 44.1 or 48 kHz), else AAC at 256, 128 or 64 kbps. The phone sends
+  CD-quality FLAC copy (16-bit, 44.1 or 48 kHz), else AAC at 256, 128 or 64 kbps, each only when
+  the link carries twice what it needs (a mobile link's speed comes and goes). The phone sends
   the copy while it is still making it, so a song starts within a second (it took 8 to 10 before),
   keeps it (up to 1 GB), and makes the next song's alongside. The line
   under the waveform says what you are hearing (*AAC 128 kbps for the internet*).
@@ -759,7 +760,8 @@ and **Cameras** on the page: the control centre, every phone's camera live in a 
   rings), starts the camera and goes back; it stays locked.
 - **Live**: the camera phone's hardware H.264, 1280×720 at up to 20 pictures a second, each viewer
   joining at the next key picture; decoded by the other phone's hardware or by the browser
-  (WebCodecs), turned upright. **From afar it keeps up rather than lags**: each viewer says a few
+  (WebCodecs), turned upright. A laptop's webcam from afar starts at 500 kbit/s at most and follows
+  the link down or up, reopened at each new rate (a moment's pause). **From afar it keeps up rather than lags**: each viewer says a few
   times a second what has reached it, and the camera never lets more than about a second be on its
   way (past that it skips to the next key picture); the picture's bitrate follows the slowest
   viewer's way (starting at 0.6 Mbit/s from afar, down to 0.09 and back up to 1.5), and the viewer

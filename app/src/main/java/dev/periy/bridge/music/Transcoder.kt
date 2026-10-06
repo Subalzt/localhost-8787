@@ -483,7 +483,9 @@ class Transcoder(ctx: Context, private val music: MusicLibrary) {
         /** t2: t1's copies were made from misread samples. */
         private const val VERSION = "t3"
         /** The link has to carry this much more than the song needs: room for the rest and for dips. */
-        const val HEADROOM = 1.25
+        // Twice what the copy needs: the page times one short burst, which a mobile link
+        // carries faster than it keeps up, and its speed comes and goes.
+        const val HEADROOM = 2.0
         private const val CACHE_BYTES = 1L shl 30
 
         /** 88.2/96 kHz halve, 176.4/192 kHz quarter; up to 48 kHz stays. */

@@ -674,6 +674,8 @@ public static class BlazeItPc
     {
         try
         {
+            // For trying the internet path with the cable still in: a file "no-cable.txt" beside the helper.
+            if (File.Exists(Path.Combine(Dir, "no-cable.txt"))) return null;
             string scrcpy = FindScrcpy();
             string adb = FindAdb(scrcpy != null ? Path.GetDirectoryName(scrcpy) : ScrcpyHome);
             if (!File.Exists(adb)) return null;
@@ -2333,7 +2335,8 @@ public static class BlazeItPc
     {
         if (slower) { failedKbit = remoteKbit; failedAt = DateTime.UtcNow; }
         remoteKbit = kbit;
-        try { File.WriteAllText(RateFile, kbit.ToString()); } catch { }
+        // The webcam's rate is its own: the screen's, kept for next time, stays as it was.
+        if (!screenWebcam) try { File.WriteAllText(RateFile, kbit.ToString()); } catch { }
         Say(slower ? "The link to the phone is slower: the laptop's screen goes at " + kbit + " kbit/s now."
                    : "The link to the phone keeps up: the laptop's screen goes at " + kbit + " kbit/s now.");
     }
@@ -2387,6 +2390,8 @@ public static class BlazeItPc
                 int saved;
                 try { if (int.TryParse(File.ReadAllText(RateFile).Trim(), out saved)) remoteKbit = Math.Max(250, Math.Min(MaxKbit, saved * 85 / 100)); } catch { }
             }
+            // The webcam from afar starts gently (500 kbit/s at most) and climbs as the link allows.
+            if (screenWebcam && remote) remoteKbit = Math.Min(remoteKbit, 500);
             // The sound goes too: to the phone's screen view, or into the stream of the page watching;
             // with the webcam, the microphone, and only to someone listening.
             if (http && screenWebcam) { if (screenListen) StartMic(ff, at, screenView); }
@@ -3147,6 +3152,9 @@ public static class BlazeItPc
                 Func<int, Process> respawn = delegate (int kbit)
                 {
                     if (gen != screenGen) return null;
+                    // A webcam opens for one program at a time: the running one goes first (a moment's
+                    // pause), where the screen's new rate starts beside the old one without one.
+                    if (screenWebcam) { Kill(secondScreen); Thread.Sleep(200); }
                     var again = screenWebcam ? WebcamTries(ff, Math.Min(kbit, 2500)) : remote ? RemoteTries(target, kbit) : CaptureTries(target, hdrWhite, dest, kbit);
                     if (way >= again.Count) return null;
                     var psi2 = new ProcessStartInfo(ff, again[way]);

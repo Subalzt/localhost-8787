@@ -242,6 +242,27 @@ class MainActivity : ComponentActivity() {
             if (intent.getBooleanExtra("callstate", false)) c.calls.logState()
             // `--ez dnsboardtest true`: how long a punch note takes to reach the website's nameservers (logcat DnsBoard).
             if (intent.getBooleanExtra("dnsboardtest", false)) c.site.boardZone()?.let { (n, t) -> dev.periy.bridge.net.DnsBoard.timeIt(n, t) }
+            // `--es webcamtest LAPTOP_ID`: a laptop's webcam watched here for 25 s (logcat WebcamTest: pictures, gaps).
+            intent.getStringExtra("webcamtest")?.let { id ->
+                Thread {
+                    val t0 = System.currentTimeMillis()
+                    val input = java.io.DataInputStream(dev.periy.bridge.server.LaptopCams.open(id, far = false, listen = false))
+                    var pics = 0; var bytes = 0L; var last = 0L; var first = -1L
+                    try {
+                        while (System.currentTimeMillis() - t0 < 25_000) {
+                            val n = input.readInt() and Int.MAX_VALUE; input.readInt()
+                            val b = ByteArray(n); input.readFully(b)
+                            val now = System.currentTimeMillis()
+                            if (first < 0) { first = now - t0; android.util.Log.e("WebcamTest", "first picture after $first ms") }
+                            if (last > 0 && now - last > 1000) android.util.Log.e("WebcamTest", "${now - last} ms with no picture at ${(now - t0) / 1000} s")
+                            last = now; pics++; bytes += n
+                            if (pics % 30 == 0) android.util.Log.e("WebcamTest", "$pics pictures, ${bytes * 8 / maxOf(1, now - t0 - first)} kbit/s, at ${(now - t0) / 1000} s")
+                        }
+                    } catch (e: Exception) { android.util.Log.e("WebcamTest", "ended: ${e.message} at ${(System.currentTimeMillis() - t0) / 1000} s") }
+                    android.util.Log.e("WebcamTest", "done: $pics pictures in 25 s")
+                    runCatching { input.close() }
+                }.start()
+            }
             // `--ez natprobe true`: how this network's NAT treats UDP (logcat NatProbe), for 3 minutes.
             if (intent.getBooleanExtra("natprobe", false)) dev.periy.bridge.net.NatProbe.run(intent.getStringExtra("natsend"))
             // Cameras: `--ez camon true|false` (this phone's camera mode), `--ez camrec true|false`.
