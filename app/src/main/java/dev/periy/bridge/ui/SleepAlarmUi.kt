@@ -359,3 +359,38 @@ private fun SongPicker(onPick: (TrackDto?) -> Unit, onBack: () -> Unit) {
         }
     }
 }
+
+/**
+ * Handoff from Now Playing: the song goes on in a laptop's page from the same moment (an open
+ * page takes it; with none, the laptop's helper opens one), and the phone stops. With more than
+ * one laptop, which one.
+ */
+@Composable
+internal fun HandoffButton() {
+    val ctx = LocalContext.current
+    val c = ctx.container
+    val nc = Nm.c
+    var open by remember { mutableStateOf(false) }
+    val send = { laptop: String? ->
+        val s = c.player.state.value
+        if (s.current == null) android.widget.Toast.makeText(ctx, "Nothing playing", android.widget.Toast.LENGTH_SHORT).show()
+        else {
+            val any = dev.periy.bridge.server.Handoff.musicToLaptop(s.queue.map { it.id }, s.index, s.positionNow(), c.peers.deviceName(), laptop)
+            android.widget.Toast.makeText(ctx, if (any) "Carrying on on the laptop" else "Offered to any page open on a laptop", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+    Box {
+        Box(
+            Modifier.size(46.dp).clip(CircleShape).clickable {
+                val laptops = dev.periy.bridge.server.Control.laptops()
+                if (laptops.size > 1) open = true else send(laptops.firstOrNull()?.first)
+            }.semantics { contentDescription = "Continue on the laptop" },
+            contentAlignment = Alignment.Center,
+        ) { Icon(BlazeIcons.Laptop, null, tint = nc.onSecondaryContainer, modifier = Modifier.size(21.dp)) }
+        if (open) NamidaMenu(onDismiss = { open = false }) { close ->
+            dev.periy.bridge.server.Control.laptops().forEach { (id, name) ->
+                NamidaMenuItem(BlazeIcons.Laptop, "Continue on $name", onClick = { close(); send(id) })
+            }
+        }
+    }
+}

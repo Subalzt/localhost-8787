@@ -273,6 +273,33 @@
             </intent-filter>
         </activity>
 
+        <!-- Handoff: "Open on laptop" in the share sheet (a link, a YouTube video at the same second),
+             and plainly (the tile, Devices) what the laptop is showing or playing, carried on here. -->
+        <activity
+            android:name=".ui.HandoffActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:label="Open on laptop"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+        <service
+            android:name=".ui.HandoffTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_notification"
+            android:label="Handoff"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <service
             android:name=".ui.ClipTileService"
             android:exported="true"

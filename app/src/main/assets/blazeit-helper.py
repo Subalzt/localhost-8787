@@ -2932,6 +2932,11 @@ def events_loop():
                             ack["sid"], ack["bytes"] = q[0], int(q[1])
                 elif ev == "direct":
                     direct_poked[0] = True
+                elif ev == "handoff" and not snapshot:
+                    # The phone carries on with what this computer is showing or playing (Handoff on the phone).
+                    threading.Thread(target=handoff_answer, args=(d.strip(),), daemon=True).start()
+                elif ev == "openurl" and not snapshot:
+                    open_from_phone(d.strip())
                 elif ev == "health" and not snapshot:
                     # The phone asks how this computer is doing (LaptopHealth on the phone).
                     threading.Thread(target=health_answer, args=(d.strip(),), daemon=True).start()
@@ -3465,6 +3470,82 @@ def health():
             disks.append({"name": mount, "used": u.used, "total": u.total})
     out["disks"] = disks
     return out
+
+
+def handoff_now(pause):
+    """What this computer is showing or playing, for the phone: on Linux the media players' own
+    word (MPRIS, through playerctl: a browser gives its page's address and where it is), on a Mac
+    the front Safari or Chrome tab. [pause]: what plays is paused here as the phone takes it."""
+    out = {"url": "", "title": "", "app": "", "laptop": machine_name()}
+    if sys.platform == "darwin":
+        for app, script in (("Safari", 'tell application "Safari" to return (URL of front document) & "\t" & (name of front document)'),
+                            ("Google Chrome", 'tell application "Google Chrome" to return (URL of active tab of front window) & "\t" & (title of active tab of front window)')):
+            try:
+                running = subprocess.run(["pgrep", "-x", app], capture_output=True).returncode == 0
+                if not running:
+                    continue
+                r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=5).stdout.strip()
+                if "\t" in r:
+                    out["url"], out["title"] = r.split("\t", 1)
+                    out["app"] = app
+                    break
+            except (OSError, subprocess.SubprocessError):
+                pass
+        return out
+    pc = shutil.which("playerctl")
+    if not pc:
+        return out
+    try:
+        o = subprocess.run([pc, "-a", "metadata", "--format",
+                            "{{playerName}}\t{{status}}\t{{position}}\t{{xesam:url}}\t{{title}}\t{{artist}}"],
+                           capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return out
+    best = None
+    for line in o.splitlines():
+        f = line.split("\t")
+        if len(f) < 6:
+            continue
+        rank = (2 if f[1] == "Playing" else 0) + (1 if f[3].startswith("http") else 0)
+        if best is None or rank > best[0]:
+            best = (rank, f)
+    if best:
+        f = best[1]
+        out.update({"url": f[3] if f[3].startswith("http") else "", "title": f[4], "app": f[0], "artist": f[5],
+                    "playing": f[1] == "Playing", "media": f[4]})
+        try:
+            out["pos"] = round(int(f[2]) / 1e6, 1)
+        except ValueError:
+            pass
+        if pause and f[1] == "Playing":
+            subprocess.run([pc, "-p", f[0], "pause"], capture_output=True, timeout=5)
+    return out
+
+
+def handoff_answer(rid):
+    try:
+        body = json.dumps(handoff_now(True))
+    except Exception as e:  # noqa: BLE001 - the phone hears why rather than waiting
+        body = json.dumps({"error": str(e)})
+    try:
+        request("POST", "/api/handoff/answer?id=" + urllib.parse.quote(rid), body=body,
+                headers={"Content-Type": "application/json"}, timeout=15)
+    except OSError:
+        pass
+
+
+def open_from_phone(b64):
+    """A page sent from the phone: opened in the default browser. Web addresses only."""
+    try:
+        url = base64.b64decode(b64).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return
+    if not re.match(r"^https?://", url):
+        log("Not a web address, not opened: " + url)
+        return
+    import webbrowser
+    webbrowser.open(url)
+    log("Opened from the phone: " + urllib.parse.urlparse(url).netloc)
 
 
 def health_answer(rid):

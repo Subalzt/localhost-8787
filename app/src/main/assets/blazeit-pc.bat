@@ -143,6 +143,8 @@ public static class BlazeItPc
         clip.SetApartmentState(ApartmentState.STA);
         clip.Start();
 
+        Thread hotkey = new Thread(HotkeyLoop);
+        hotkey.IsBackground = true; hotkey.SetApartmentState(ApartmentState.STA); hotkey.Start();
         Thread events = new Thread(EventsLoop);
         events.IsBackground = true;
         events.Start();
@@ -1046,6 +1048,343 @@ public static class BlazeItPc
             return n;
         }
         catch { return -1; }
+    }
+
+    // ------------------------------------------------------------------ handoff
+    //
+    // What this laptop is in the middle of, for the phone to carry on: the browser's page (its
+    // address from Firefox's own session file, or Chrome's and Edge's address bar) and whatever is
+    // playing in it, from Windows' media sessions, with where it is (so a video goes on at the same
+    // second); paused here as it goes. Asked for by the phone ("handoff ID"), or sent with Ctrl+Alt+P.
+
+    /** Windows' media sessions and the browser's address bar, read by PowerShell (WinRT and UI Automation are at hand there). */
+    const string HandoffScript = @"
+$ErrorActionPreference = 'SilentlyContinue'
+Add-Type -AssemblyName System.Runtime.WindowsRuntime, UIAutomationClient, UIAutomationTypes
+$asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select -First 1
+function Await($op, [Type]$t) { $k = $asTask.MakeGenericMethod($t).Invoke($null, @($op)); $k.Wait(4000) | Out-Null; $k.Result }
+[Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime] | Out-Null
+$m = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+$paused = $false
+foreach ($s in $m.GetSessions()) {
+  $p = Await ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+  $tl = $s.GetTimelineProperties(); $st = $s.GetPlaybackInfo().PlaybackStatus
+  $pos = $tl.Position.TotalSeconds
+  if ($st -eq 'Playing') { $pos += ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalSeconds }
+  'S' + [char]9 + $s.SourceAppUserModelId + [char]9 + $st + [char]9 + [math]::Round($pos, 1) + [char]9 + $p.Title + [char]9 + $p.Artist
+  if (PAUSE -and -not $paused -and $st -eq 'Playing') { $s.TryPauseAsync() | Out-Null; $paused = $true }
+}
+foreach ($b in Get-Process chrome, msedge, brave, opera, vivaldi | ? { $_.MainWindowHandle -ne 0 }) {
+  $root = [System.Windows.Automation.AutomationElement]::FromHandle($b.MainWindowHandle)
+  $c = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)
+  $e = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $c)
+  if ($e) { $v = $e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value; if ($v) { 'U' + [char]9 + $b.ProcessName + [char]9 + $b.MainWindowTitle + [char]9 + $v } }
+}
+";
+
+    /**
+     * What this laptop is showing or playing now, as JSON for the phone: the page's address and
+     * title, what is playing and where it is (seconds), and which program. [pause]: what is
+     * playing is paused here, as the phone takes it.
+     */
+    static string HandoffNow(bool pause)
+    {
+        string o = RunOut("powershell.exe", "-NoProfile -NonInteractive -EncodedCommand " +
+            Convert.ToBase64String(Encoding.Unicode.GetBytes(HandoffScript.Replace("PAUSE", pause ? "$true" : "$false"))));
+        string[] best = null, fg = Foreground();
+        var urls = new List<string[]>();
+        foreach (string raw in o.Split('\n'))
+        {
+            string[] f = raw.TrimEnd('\r').Split('\t');
+            if (f[0] == "S" && f.Length >= 6)
+            {
+                bool playing = f[2] == "Playing";
+                bool browser = IsBrowserApp(f[1]);
+                // A browser's playing session first, then any playing one, then a paused browser one.
+                int rank = (playing ? 2 : 0) + (browser ? 1 : 0);
+                int had = best == null ? -1 : (best[2] == "Playing" ? 2 : 0) + (IsBrowserApp(best[1]) ? 1 : 0);
+                if (rank > had) best = f;
+            }
+            else if (f[0] == "U" && f.Length >= 4) urls.Add(f);
+        }
+        string app = best != null ? best[1] : (fg != null ? fg[1] : "");
+        string title = best != null ? best[4] : "";
+        string url = "";
+        bool firefox = app == "308046B0AF4A39CB" || app.IndexOf("firefox", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            (best == null && fg != null && fg[1] == "firefox");
+        if (firefox)
+        {
+            // Firefox's address bar is hidden in full screen: its session file says the same, for every window.
+            string want = title.Length > 0 ? title : (fg != null ? Regex.Replace(fg[2], " [\u2014-] .*Mozilla Firefox$", "") : "");
+            string t2;
+            url = FirefoxTab(want, out t2);
+            if (title.Length == 0) title = t2;
+        }
+        else
+        {
+            // Chrome, Edge and the like: the address bar of the window whose title is what plays (or the one in front).
+            foreach (string[] u in urls)
+                if (url.Length == 0 || (title.Length > 0 && u[2].StartsWith(title, StringComparison.Ordinal)) || (fg != null && u[1] == fg[1] && u[2] == fg[2]))
+                { url = u[3]; if (title.Length == 0) title = Regex.Replace(u[2], " - [^-]+$", ""); }
+            if (url.Length > 0 && !url.Contains("://")) url = "https://" + url;
+        }
+        if (title.Length == 0 && fg != null) title = fg[2];
+        var b = new StringBuilder("{");
+        b.Append("\"url\":" + Json(url) + ",\"title\":" + Json(title) + ",\"app\":" + Json(firefox ? "Firefox" : AppName(app)));
+        if (best != null)
+            b.Append(",\"artist\":" + Json(best[5]) + ",\"playing\":" + (best[2] == "Playing" ? "true" : "false") +
+                ",\"pos\":" + Dec(best[3]) + ",\"media\":" + Json(best[4]));
+        b.Append(",\"laptop\":" + Json(Environment.MachineName) + "}");
+        return b.ToString();
+    }
+
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern int GetWindowThreadProcessId(IntPtr h, out int pid);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder b, int n);
+
+    /** The window in front: "W", its program's name, its title (the same shape as the script's lines). */
+    static string[] Foreground()
+    {
+        try
+        {
+            IntPtr h = GetForegroundWindow();
+            int pid;
+            GetWindowThreadProcessId(h, out pid);
+            var b = new StringBuilder(512);
+            GetWindowText(h, b, 512);
+            return new string[] { "W", Process.GetProcessById(pid).ProcessName, b.ToString() };
+        }
+        catch { return null; }
+    }
+
+    static bool IsBrowserApp(string aumid)
+    {
+        string a = aumid.ToLowerInvariant();
+        return a == "308046b0af4a39cb" || a.Contains("firefox") || a.Contains("chrome") || a.Contains("msedge") || a.Contains("brave") || a.Contains("opera") || a.Contains("vivaldi");
+    }
+
+    static string AppName(string aumid)
+    {
+        string a = aumid.ToLowerInvariant();
+        if (a.Contains("msedge")) return "Edge";
+        if (a.Contains("chrome")) return "Chrome";
+        if (a.Contains("brave")) return "Brave";
+        if (a.Contains("spotify")) return "Spotify";
+        int bang = aumid.IndexOf('!');
+        return bang > 0 ? aumid.Substring(bang + 1) : aumid;
+    }
+
+    /**
+     * The address of the Firefox tab titled [title] (or the tab in front of the last window used),
+     * from its session file (recovery.jsonlz4, Mozilla's LZ4, kept up to date every 15 s), across
+     * every profile, the most recent first.
+     */
+    static string FirefoxTab(string title, out string tabTitle)
+    {
+        tabTitle = "";
+        try
+        {
+            string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Mozilla\Firefox\Profiles");
+            var files = new List<FileInfo>();
+            foreach (string d in Directory.GetDirectories(root))
+            {
+                var f = new FileInfo(Path.Combine(d, @"sessionstore-backups\recovery.jsonlz4"));
+                if (f.Exists) files.Add(f);
+            }
+            files.Sort(delegate (FileInfo x, FileInfo y) { return y.LastWriteTimeUtc.CompareTo(x.LastWriteTimeUtc); });
+            foreach (FileInfo f in files)
+            {
+                byte[] raw = File.ReadAllBytes(f.FullName);
+                if (raw.Length < 12 || Encoding.ASCII.GetString(raw, 0, 8) != "mozLz40\0") continue;
+                var doc = new MiniJson(Encoding.UTF8.GetString(Lz4Block(raw, 12, BitConverter.ToInt32(raw, 8)))).Value() as Dictionary<string, object>;
+                var windows = doc != null ? doc["windows"] as List<object> : null;
+                if (windows == null) continue;
+                // The window used last first ("selectedWindow" counts from 1); in each, its tabs, the one in front first.
+                int sw = doc.ContainsKey("selectedWindow") ? Convert.ToInt32(doc["selectedWindow"]) - 1 : 0;
+                string first = null, firstTitle = "";
+                for (int wi = -1; wi < windows.Count; wi++)
+                {
+                    int w = wi < 0 ? sw : wi;
+                    if (w < 0 || w >= windows.Count || (wi >= 0 && wi == sw)) continue;
+                    var win = windows[w] as Dictionary<string, object>;
+                    var tabs = win != null ? win["tabs"] as List<object> : null;
+                    if (tabs == null) continue;
+                    int sel = win.ContainsKey("selected") ? Convert.ToInt32(win["selected"]) - 1 : 0;
+                    for (int ti = 0; ti < tabs.Count; ti++)
+                    {
+                        var tab = tabs[ti] as Dictionary<string, object>;
+                        var es = tab != null && tab.ContainsKey("entries") ? tab["entries"] as List<object> : null;
+                        if (es == null || es.Count == 0) continue;
+                        int idx = tab.ContainsKey("index") ? Convert.ToInt32(tab["index"]) - 1 : es.Count - 1;
+                        var e = es[Math.Max(0, Math.Min(idx, es.Count - 1))] as Dictionary<string, object>;
+                        if (e == null) continue;
+                        string u = e.ContainsKey("url") ? e["url"] as string ?? "" : "", t = e.ContainsKey("title") ? e["title"] as string ?? "" : "";
+                        if (title.Length > 0 && t == title) { tabTitle = t; return u; }
+                        if (first == null && ti == sel && u.StartsWith("http")) { first = u; firstTitle = t; }
+                    }
+                }
+                if (first != null && title.Length == 0) { tabTitle = firstTitle; return first; }
+            }
+        }
+        catch (Exception e) { Log("Firefox's tabs: " + e.Message); }
+        return "";
+    }
+
+    /** Just enough JSON: objects as dictionaries, arrays as lists, strings, numbers as doubles, true, false, null. */
+    class MiniJson
+    {
+        readonly string s; int i;
+        public MiniJson(string text) { s = text; }
+        void Ws() { while (i < s.Length && s[i] <= ' ') i++; }
+        public object Value()
+        {
+            Ws();
+            char c = s[i];
+            if (c == '{')
+            {
+                i++; var d = new Dictionary<string, object>();
+                Ws(); if (s[i] == '}') { i++; return d; }
+                while (true)
+                {
+                    Ws(); string k = Str(); Ws(); i++; // ':'
+                    d[k] = Value(); Ws();
+                    if (s[i++] == '}') return d;
+                }
+            }
+            if (c == '[')
+            {
+                i++; var l = new List<object>();
+                Ws(); if (s[i] == ']') { i++; return l; }
+                while (true) { l.Add(Value()); Ws(); if (s[i++] == ']') return l; }
+            }
+            if (c == '"') return Str();
+            if (s.Substring(i, Math.Min(4, s.Length - i)) == "true") { i += 4; return true; }
+            if (s.Substring(i, Math.Min(5, s.Length - i)) == "false") { i += 5; return false; }
+            if (s.Substring(i, Math.Min(4, s.Length - i)) == "null") { i += 4; return null; }
+            int st = i;
+            while (i < s.Length && "+-0123456789.eE".IndexOf(s[i]) >= 0) i++;
+            return double.Parse(s.Substring(st, i - st), System.Globalization.CultureInfo.InvariantCulture);
+        }
+        string Str()
+        {
+            i++; var b = new StringBuilder();
+            while (s[i] != '"')
+            {
+                char c = s[i++];
+                if (c != '\\') { b.Append(c); continue; }
+                char e = s[i++];
+                switch (e)
+                {
+                    case 'n': b.Append('\n'); break;
+                    case 't': b.Append('\t'); break;
+                    case 'r': b.Append('\r'); break;
+                    case 'b': b.Append('\b'); break;
+                    case 'f': b.Append('\f'); break;
+                    case 'u': b.Append((char)Convert.ToInt32(s.Substring(i, 4), 16)); i += 4; break;
+                    default: b.Append(e); break;
+                }
+            }
+            i++;
+            return b.ToString();
+        }
+    }
+
+    /** An LZ4 block (Firefox's .jsonlz4 after its 12-byte header) to its [size] bytes. */
+    static byte[] Lz4Block(byte[] src, int at, int size)
+    {
+        byte[] dst = new byte[size];
+        int o = 0;
+        while (at < src.Length)
+        {
+            int tok = src[at++];
+            int lit = tok >> 4;
+            if (lit == 15) { int b; do { b = src[at++]; lit += b; } while (b == 255); }
+            Buffer.BlockCopy(src, at, dst, o, lit); at += lit; o += lit;
+            if (at >= src.Length) break;
+            int off = src[at] | (src[at + 1] << 8); at += 2;
+            int ml = tok & 15;
+            if (ml == 15) { int b; do { b = src[at++]; ml += b; } while (b == 255); }
+            ml += 4;
+            for (int k = 0; k < ml; k++) { dst[o] = dst[o - off]; o++; }
+        }
+        return dst;
+    }
+
+    static void HandoffAnswer(string id)
+    {
+        string json;
+        try { json = HandoffNow(true); } catch (Exception e) { json = "{\"error\":" + Json(e.Message) + "}"; }
+        PostJson("/api/handoff/answer?id=" + Uri.EscapeDataString(id), json);
+    }
+
+    /** Ctrl+Alt+P: what this laptop is showing or playing goes to the phone, as it is. */
+    static void HandoffPush()
+    {
+        try
+        {
+            string json = HandoffNow(true);
+            PostJson("/api/handoff/open", json);
+            Log("Sent to the phone: " + CallField(json, "title"));
+        }
+        catch (Exception e) { Log("Could not send it to the phone: " + e.Message); }
+    }
+
+    static void PostJson(string path, string json)
+    {
+        try
+        {
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + path);
+            r.Proxy = null; r.Method = "POST"; r.UserAgent = Ua; r.Headers["Cookie"] = session;
+            r.ContentType = "application/json"; r.Timeout = 15000; r.KeepAlive = false;
+            byte[] body = Encoding.UTF8.GetBytes(json);
+            r.ContentLength = body.Length;
+            using (Stream o = r.GetRequestStream()) o.Write(body, 0, body.Length);
+            using (r.GetResponse()) { }
+        }
+        catch (Exception e) { Log("The phone did not take it: " + e.Message); }
+    }
+
+    /** A page sent from the phone ("openurl", base64): opened in the default browser. Web addresses only. */
+    static void OpenFromPhone(string b64)
+    {
+        try
+        {
+            string url = Encoding.UTF8.GetString(Convert.FromBase64String(b64));
+            Uri u;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out u) || (u.Scheme != "http" && u.Scheme != "https")) { Log("Not a web address, not opened: " + url); return; }
+            Process.Start(new ProcessStartInfo(u.AbsoluteUri) { UseShellExecute = true });
+            Log("Opened from the phone: " + u.Host);
+        }
+        catch (Exception e) { Log("Could not open it: " + e.Message); }
+    }
+
+    [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr hWnd, int id, uint mods, uint vk);
+
+    /** Ctrl+Alt+P anywhere on the laptop: handoff to the phone. Its own thread with a message loop. */
+    class HotkeyWindow : System.Windows.Forms.NativeWindow
+    {
+        public HotkeyWindow() { CreateHandle(new System.Windows.Forms.CreateParams()); }
+        protected override void WndProc(ref System.Windows.Forms.Message m)
+        {
+            if (m.Msg == 0x0312)
+            {
+                Thread t = new Thread(HandoffPush);
+                t.IsBackground = true; t.Start();
+            }
+            base.WndProc(ref m);
+        }
+    }
+
+    static void HotkeyLoop()
+    {
+        try
+        {
+            var w = new HotkeyWindow();
+            // MOD_ALT 1 | MOD_CONTROL 2 | MOD_NOREPEAT 0x4000, 'P'.
+            if (!RegisterHotKey(w.Handle, 1, 0x4003, 0x50)) { Log("Ctrl+Alt+P is taken by another program: handoff from the phone still works."); return; }
+            System.Windows.Forms.Application.Run();
+        }
+        catch (Exception e) { Log("No handoff key: " + e.Message); }
     }
 
     // ------------------------------------------------------------------ how the laptop is doing
@@ -2017,6 +2356,15 @@ public static class BlazeItPc
                             }
                             else if (ev == "direct") directPoked = true;
                             // The phone asks how this laptop is doing (its Devices tab, a page): answered at once.
+                            // Handoff (server/Handoff.kt): what this laptop is showing or playing, for the phone to carry on
+                            // (paused here), or a page the phone sends to open here.
+                            else if (ev == "handoff" && !snapshot)
+                            {
+                                string hid = d.Trim();
+                                Thread h = new Thread(delegate () { HandoffAnswer(hid); });
+                                h.IsBackground = true; h.Start();
+                            }
+                            else if (ev == "openurl" && !snapshot) OpenFromPhone(d.Trim());
                             else if (ev == "health" && !snapshot)
                             {
                                 string hid = d.Trim();

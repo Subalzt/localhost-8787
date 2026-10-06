@@ -1291,8 +1291,8 @@ private fun TopRow(index: Int, count: Int, album: String, onClose: () -> Unit, o
             Text("${index + 1}/$count", style = Nm.small.copy(fontFeatureSettings = "tnum"))
             Text(album, style = Nm.medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        // As wide as the close button, so the middle stays in the middle.
-        Spacer(Modifier.size(46.dp))
+        // As wide as the close button, so the middle stays in the middle: carry on on the laptop.
+        HandoffButton()
     }
 }
 

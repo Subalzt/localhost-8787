@@ -2244,6 +2244,45 @@ class BridgeServer(
             withContext(Dispatchers.IO) { DisplaySound.play(call.receiveStream()) }
             call.respond(ApiResult(true))
         }
+        // Handoff (server/Handoff.kt). A laptop's helper says what it is showing or playing: asked for...
+        post("/api/handoff/answer") {
+            val id = call.request.queryParameters["id"].orEmpty()
+            val body = call.receiveText()
+            if (body.length < 64_000) Handoff.answer(id, body)
+            call.respond(ApiResult(true))
+        }
+        // ...or sent (Ctrl+Alt+P on the laptop): it carries on here at once.
+        post("/api/handoff/open") {
+            call.device() ?: return@post
+            val d = Handoff.parse(call.receiveText())
+            val said = withContext(Dispatchers.Main) { Handoff.open(ctx, d) }
+            call.respond(ApiResult(d.error.isEmpty() && d.url.isNotEmpty(), said))
+        }
+        // A page takes the phone's music to carry on ("latest": whatever was offered last); the phone stops.
+        post("/api/handoff/claim") {
+            call.device() ?: return@post
+            val player = ctx.container.player
+            val m = Handoff.claim(call.request.queryParameters["id"].orEmpty()) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post { player.pause() }
+            }
+            if (m == null) call.respond(HttpStatusCode.NotFound, ApiResult(false, "Already taken, or too old"))
+            else call.respond(m)
+        }
+        // A page's music, carried on by the phone's own player from the same moment.
+        post("/api/handoff/music") {
+            call.device() ?: return@post
+            val m = runCatching { call.receive<MusicHandoff>() }.getOrNull()
+            val all = withContext(Dispatchers.IO) { music.tracks() }.associateBy { it.id }
+            val tracks = m?.ids?.mapNotNull { all[it] }.orEmpty()
+            if (m == null || tracks.isEmpty()) { call.respond(HttpStatusCode.BadRequest, ApiResult(false, "Which songs")); return@post }
+            val index = m.index.coerceIn(0, tracks.lastIndex)
+            withContext(Dispatchers.Main) {
+                val player = ctx.container.player
+                player.play(tracks, index)
+                if (m.posMs > 0) player.seekTo(m.posMs + (System.currentTimeMillis() - m.at).coerceIn(0, 10_000))
+            }
+            call.respond(ApiResult(true, "Playing on " + peers.deviceName()))
+        }
         // How a laptop is doing (server/LaptopHealth.kt): its helper's snapshot, asked for just before.
         post("/api/laptop/health/answer") {
             val id = call.request.queryParameters["id"].orEmpty()

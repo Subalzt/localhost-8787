@@ -2009,6 +2009,14 @@ private fun ControlRow(running: Boolean, open: () -> Unit, openFiles: () -> Unit
             detail = if (laptops.isEmpty()) "Needs the helper on the computer" else "Browse and save to this phone",
             icon = BlazeIcons.Folder, iconColor = Color(0xFF0A84FF), onClick = openFiles,
         ) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
+        // Handoff: what the laptop is showing or playing, carried on here (paused there).
+        val hctx = LocalContext.current
+        SettingRow(
+            "Continue from laptop",
+            detail = if (laptops.isEmpty()) "Needs the helper on the computer" else "The page or video it has open, at the same second · Ctrl+Alt+P sends it",
+            icon = BlazeIcons.Laptop, iconColor = Color(0xFFFF9F0A),
+            onClick = { hctx.startActivity(android.content.Intent(hctx, HandoffActivity::class.java)) },
+        ) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
         // How it is doing: battery, CPU, GPU, temperatures, disks.
         SettingRow(
             "Laptop health",
