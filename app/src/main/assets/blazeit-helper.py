@@ -2838,8 +2838,11 @@ def events_loop():
                         fps = max(30, min(120, int(p[4]))) if len(p) >= 5 else 60
                         http_ok = len(p) >= 7 and p[6] == "http"
                         # Another computer's page watching this one: "view=ID" (its stream goes back tagged so).
-                        global screen_view
+                        global screen_view, screen_webcam, screen_listen
                         screen_view = next((x[5:] for x in p[7:] if x.startswith("view=")), None)
+                        # The webcam instead of the screen (a camera in the phone's control centre), and its microphone.
+                        screen_webcam = "webcam" in p[7:]
+                        screen_listen = "listen" in p[7:]
                         threading.Thread(target=start_second_screen, args=(at, int(p[1]), int(p[2]), int(p[3]), fps, http_ok),
                                          daemon=True).start()
                     else:
@@ -3188,6 +3191,8 @@ def capture_tries(geom, w, h, fps, dest, grab=None, remote=False, kbit=700):
 # this computer's own main screen goes, made for the internet's way (FLV, each picture whole, the rate
 # following the link), and without the sound.
 screen_view = None
+screen_webcam = False
+screen_listen = False
 
 
 def pick_screen(main_only=False):
@@ -3724,20 +3729,27 @@ def post_stream(src, addr, gen, path="/api/display/stream", kind="video/h264"):
         conn.close()
 
 
-def stream_x11(at, port, w, h, fps, gen, http_ok=False):
+def stream_x11(at, port, w, h, fps, gen, http_ok=False, webcam=False):
     global stream_proc, shown
     ff = shutil.which("ffmpeg")
     if not ff:
         say("The second screen needs ffmpeg on this computer (%s)." % install_hint("ffmpeg"))
         return
     view = screen_view
-    geom = pick_screen(main_only=view is not None)
+    geom = (0, 0, 1280, 720) if webcam else pick_screen(main_only=view is not None)
     if not geom:
         say("Could not tell this screen's size (xrandr is missing).")
         return
     shown = geom
     grab = None
-    if MAC:
+    if webcam:
+        # The first camera, at 720p where it has it.
+        grab = (["-f", "avfoundation", "-framerate", "30", "-video_size", "1280x720", "-i", "0:none"] if MAC else
+                ["-f", "v4l2", "-framerate", "30", "-video_size", "1280x720", "-i", "/dev/video0"])
+        if not MAC and not os.path.exists("/dev/video0"):
+            say("No webcam found on this computer (/dev/video0).")
+            return
+    elif MAC:
         # avfoundation numbers the screens as CoreGraphics lists them, after the cameras.
         mons = monitors()
         which = next((i for i, m in enumerate(mons) if (m[1], m[2], m[3], m[4]) == geom), 0)
@@ -3752,7 +3764,9 @@ def stream_x11(at, port, w, h, fps, gen, http_ok=False):
                 "-i", "%d:none" % device]
         say_once("mac-screen-rec", "If the phone shows only the wallpaper or a black screen, allow Screen Recording for "
                  "the app this helper runs in (System Settings, Privacy & Security, Screen Recording), and start it again.")
-    if view:
+    if webcam:
+        say("Someone is watching this computer's webcam, through the phone.")
+    elif view:
         say("Another computer is viewing and driving this one, through the phone.")
     else:
         say("Showing this computer's %s on the phone (%dx%d)." % ("extra monitor" if len(monitors()) > 1 else "screen, mirrored,", geom[2], geom[3]))
@@ -3894,10 +3908,33 @@ def start_sound(at, gen, remote, view=None):
                                      p.poll() is None and p.terminate()), daemon=True).start()
 
 
+def start_mic(at, gen, view):
+    """The microphone, as AAC, to someone listening to the webcam."""
+    global sound_proc
+    ff = shutil.which("ffmpeg")
+    if not ff:
+        return
+    src = ["-f", "avfoundation", "-i", ":0"] if MAC else ["-f", "pulse", "-i", "default"]
+    try:
+        p = subprocess.Popen([ff, "-hide_banner", "-loglevel", "error"] + src + ["-ac", "1", "-ar", "48000", "-c:a", "aac", "-b:a", "64k",
+                                                                               "-f", "adts", "pipe:1"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    except OSError:
+        return
+    sound_proc = p
+    path = "/api/display/audio" + ("?v=" + urllib.parse.quote(view) if view else "")
+    threading.Thread(target=lambda: (post_stream(p.stdout, at, gen, path, "audio/aac"), p.poll() is None and p.terminate()), daemon=True).start()
+
+
 def start_second_screen(at, port, w, h, fps, http_ok=False):
     global screen_gen
     stop_second_screen()
     gen = screen_gen
+    if screen_webcam:
+        # The webcam, with its microphone for someone listening: no display needed.
+        if http_ok and screen_listen:
+            start_mic(at, gen, screen_view)
+        stream_x11(at, port, w, h, fps, gen, http_ok, webcam=True)
+        return
     if http_ok and not WSL:
         # The sound goes too: to the phone's screen view, or into the stream of the page watching.
         start_sound(at, gen, bool(screen_view) or (tunnel_local is not None and tuple(at) == tuple(tunnel_local)), screen_view)

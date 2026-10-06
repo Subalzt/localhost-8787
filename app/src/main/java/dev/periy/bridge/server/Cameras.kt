@@ -70,11 +70,20 @@ data class CamState(
     val waking: Boolean = false,
     val battery: Int = -1,
     val charging: Boolean = false,
+    /** Night: a longer exposure, brighter, fewer pictures a second. */
+    val night: Boolean = false,
+    /** Zoom in the camera itself, 1 to [maxZoom]. */
+    val zoom: Float = 1f,
+    val maxZoom: Float = 1f,
 )
 
 /** A camera in the control centre: this phone ("self"), or a linked phone by name. */
 @Serializable
-data class CamDto(val target: String, val name: String, val self: Boolean, val state: CamState? = null, val why: String = "")
+data class CamDto(
+    val target: String, val name: String, val self: Boolean, val state: CamState? = null, val why: String = "",
+    /** "phone", or "laptop": a laptop's webcam (server/LaptopCams.kt), live and listen only. */
+    val kind: String = "phone",
+)
 
 @Serializable
 data class CamList(val me: String, val cams: List<CamDto>)
@@ -93,6 +102,8 @@ data class CamSet(
     val rotate: Int? = null,
     /** Start (true) or stop (false) a clip by hand. */
     val recordNow: Boolean? = null,
+    val night: Boolean? = null,
+    val zoom: Float? = null,
 )
 
 @Serializable
@@ -110,7 +121,11 @@ data class CamAlert(val camera: String, val at: Long, val jpeg: String = "", val
  * phones (sealed) and to this phone's laptops. On a viewing phone: the other cameras through the
  * phones' link, and their alerts as notifications that open the cameras over the lock screen.
  */
-class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere: (String) -> ByteArray) {
+class Cameras(
+    ctx: Context, private val peers: PeerManager, private val keyHere: (String) -> ByteArray,
+    /** The laptops whose helper is running here now: id and name, for their webcams. */
+    private val laptops: () -> List<Pair<String, String>> = { emptyList() },
+) {
     private val app = ctx.applicationContext
     private val prefs = app.getSharedPreferences("cameras", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -128,6 +143,7 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
             on = prefs.getBoolean("on", false), lens = prefs.getString("lens", "back") ?: "back",
             motion = prefs.getBoolean("motion", true), record = prefs.getBoolean("record", true),
             sound = prefs.getBoolean("sound", true), sensitivity = prefs.getInt("sensitivity", 2), rotate = prefs.getInt("rotate", 0),
+            night = prefs.getBoolean("night", false), zoom = prefs.getFloat("zoom", 1f),
         ),
     )
     val state: StateFlow<CamState> = _state.asStateFlow()
@@ -138,7 +154,8 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
         if (s == old) return
         _state.value = s
         prefs.edit().putBoolean("on", s.on).putString("lens", s.lens).putBoolean("motion", s.motion).putBoolean("record", s.record)
-            .putBoolean("sound", s.sound).putInt("sensitivity", s.sensitivity).putInt("rotate", s.rotate).apply()
+            .putBoolean("sound", s.sound).putInt("sensitivity", s.sensitivity).putInt("rotate", s.rotate)
+            .putBoolean("night", s.night).putFloat("zoom", s.zoom).apply()
         EventBus.emit("cams", "self")
     }
 
@@ -166,6 +183,8 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
                 motion = c.motion ?: s.motion, record = c.record ?: s.record, sound = c.sound ?: s.sound,
                 sensitivity = (c.sensitivity ?: s.sensitivity).coerceIn(1, 3), rotate = (((c.rotate ?: s.rotate) % 360) + 360) % 360,
                 error = if (c.on == true) "" else s.error,
+                night = c.night ?: s.night,
+                zoom = (c.zoom ?: s.zoom).coerceIn(1f, maxOf(1f, s.maxZoom)),
             )
         }
         val s = _state.value
@@ -174,6 +193,11 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
             !s.on && wasOn -> stopEngine()
             s.on && (s.lens != before.lens || s.sound != before.sound) -> restart()
             s.on && s.torch != before.torch -> engine?.setTorch(s.torch)
+        }
+        if (s.on && s.night != before.night) { engine?.setNight(s.night); motionReset() }
+        if (s.on && s.zoom != before.zoom) { engine?.setZoom(s.zoom); motionReset() }
+        when {
+            false -> {}
         }
         when (c.recordNow) {
             true -> startClip(motion = false)
@@ -206,7 +230,7 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
         if (engine != null) return
         val e = CamEngine(app, sink)
         engine = e
-        e.start(s.lens, s.torch, s.sound && micAllowed())
+        e.start(s.lens, s.torch, s.sound && micAllowed(), s.night, s.zoom)
     }
 
     /** CameraService could not take the camera from the background. */
@@ -431,11 +455,11 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
             if (why == "background") { scope.launch { wake() }; return }
             change { it.copy(running = false, error = why) }
         }
-        override fun running(sensor: Int) {
+        override fun running(sensor: Int, maxZoom: Float) {
             woke()
             engine?.setBitrate(rate)
             motionReset()
-            change { s -> s.copy(running = true, waking = false, error = "", rotation = (sensor + s.rotate) % 360) }
+            change { s -> s.copy(running = true, waking = false, error = "", rotation = (sensor + s.rotate) % 360, maxZoom = maxZoom, zoom = s.zoom.coerceIn(1f, maxOf(1f, maxZoom))) }
         }
     }
 
@@ -701,7 +725,12 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
                 CamDto(p.name, p.name, false, st, if (st == null) "Not reachable now" else "")
             }
         }.awaitAll()
-        return CamList(peers.deviceName(), listOf(me) + others)
+        // Each running laptop's webcam, on when it is watched.
+        val webcams = laptops().map { (id, name) ->
+            CamDto(LaptopCams.PREFIX + id, "$name webcam", false,
+                CamState(on = true, running = true, lens = "front", motion = false, record = false, rotation = 0), kind = "laptop")
+        }
+        return CamList(peers.deviceName(), listOf(me) + others + webcams)
     }
 
     /** An alert from a linked phone: on to this phone's pages and laptops (no notification here). */

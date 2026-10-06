@@ -1849,14 +1849,17 @@ public static class BlazeItPc
                                     bool http = p.Length >= 7 && p[6] == "http";
                                     // Another laptop's page watching this one: "view=ID" (its stream goes back
                                     // tagged so), "mirror" (this laptop's own screen, no extra display), "far".
-                                    string viewTag = null; bool mirrorTag = false, farTag = false;
+                                    string viewTag = null; bool mirrorTag = false, farTag = false, camTag = false, listenTag = false;
                                     for (int q = 7; q < p.Length; q++)
                                     {
                                         if (p[q].StartsWith("view=")) viewTag = p[q].Substring(5);
                                         else if (p[q] == "mirror") mirrorTag = true;
                                         else if (p[q] == "far") farTag = true;
+                                        // The webcam instead of the screen (a camera in the phone's control centre), and its microphone.
+                                        else if (p[q] == "webcam") camTag = true;
+                                        else if (p[q] == "listen") listenTag = true;
                                     }
-                                    screenView = viewTag; screenMirror = mirrorTag; screenFar = farTag;
+                                    screenView = viewTag; screenMirror = mirrorTag; screenFar = farTag; screenWebcam = camTag; screenListen = listenTag;
                                     Thread s = new Thread(delegate () { StartSecondScreen(at, port, w, h, http); });
                                     s.IsBackground = true;
                                     s.Start();
@@ -2357,7 +2360,7 @@ public static class BlazeItPc
      * internet's size when that page is far away ([screenFar]), and without the sound.
      */
     static volatile string screenView;
-    static volatile bool screenMirror, screenFar;
+    static volatile bool screenMirror, screenFar, screenWebcam, screenListen;
 
     static void StartSecondScreen(string at, int port, int w, int h, bool http)
     {
@@ -2365,7 +2368,8 @@ public static class BlazeItPc
         // A file "screen-far.txt" beside the helper sends the far picture on any link, for trying it out.
         bool remote = http && (at == TunnelHost || screenFar || File.Exists(Path.Combine(Dir, "screen-far.txt")));
         bool mirror = screenMirror;
-        if (screenView != null) Say("Another laptop is viewing and driving this one, through the phone.");
+        if (screenWebcam) Say("Someone is watching this laptop's webcam, through the phone.");
+        else if (screenView != null) Say("Another laptop is viewing and driving this one, through the phone.");
         try
         {
             KillStream();
@@ -2383,8 +2387,10 @@ public static class BlazeItPc
                 int saved;
                 try { if (int.TryParse(File.ReadAllText(RateFile).Trim(), out saved)) remoteKbit = Math.Max(250, Math.Min(MaxKbit, saved * 85 / 100)); } catch { }
             }
-            // The sound goes too: to the phone's screen view, or into the stream of the page watching.
-            if (http) StartSound(ff, at, remote, screenView);
+            // The sound goes too: to the phone's screen view, or into the stream of the page watching;
+            // with the webcam, the microphone, and only to someone listening.
+            if (http && screenWebcam) { if (screenListen) StartMic(ff, at, screenView); }
+            else if (http) StartSound(ff, at, remote, screenView);
             string said = null;
             int failures = 0;
             while (target != null && gen == screenGen)
@@ -2610,6 +2616,85 @@ public static class BlazeItPc
         tries.Add("-hide_banner -loglevel error -f gdigrab -framerate " + fps + " -offset_x " + target.X + " -offset_y " + target.Y +
             " -video_size " + target.W + "x" + target.H + " -draw_mouse 1 -i desktop -vf " + scale + "," + label + ":colorspace=bt470bg:range=tv" + x264 + dest);
         return tries;
+    }
+
+    // ------------------------------------------------------------------ the webcam, as a camera
+
+    /** This laptop's webcam and microphone as DirectShow names them; looked for once. */
+    static string webcamName, micName;
+    static bool webcamLooked;
+
+    static void FindWebcam(string ff)
+    {
+        if (webcamLooked) return;
+        webcamLooked = true;
+        try
+        {
+            var psi = new ProcessStartInfo(ff, "-hide_banner -list_devices true -f dshow -i dummy");
+            psi.UseShellExecute = false; psi.CreateNoWindow = true; psi.RedirectStandardError = true;
+            var p = Process.Start(psi);
+            string err = p.StandardError.ReadToEnd();
+            p.WaitForExit(5000);
+            foreach (Match m in Regex.Matches(err, "\"([^\"]+)\" [(](video|audio)[)]"))
+            {
+                if (m.Groups[2].Value == "video" && webcamName == null) webcamName = m.Groups[1].Value;
+                if (m.Groups[2].Value == "audio" && micName == null) micName = m.Groups[1].Value;
+            }
+        }
+        catch { }
+        if (webcamName == null) Say("No webcam found on this laptop.");
+    }
+
+    /** The ffmpeg command lines that stream the webcam, best first: hardware H.264 when there is an NVIDIA GPU. */
+    static List<string> WebcamTries(string ff, int kbit)
+    {
+        FindWebcam(ff);
+        var tries = new List<string>();
+        if (webcamName == null) return tries;
+        int wide = kbit >= 1800 ? 1280 : kbit >= 800 ? 960 : 640;
+        int fps = kbit >= 600 ? 30 : 15;
+        string cam = "video=\"" + webcamName.Replace("\"", "") + "\"";
+        string open = "-hide_banner -loglevel error -f dshow -rtbufsize 32M ";
+        string vf = " -vf scale=" + wide + ":-2,fps=" + fps + ",format=yuv420p";
+        string rate = " -b:v " + kbit + "k -maxrate " + kbit + "k -bufsize " + Math.Max(100, kbit / 2) + "k -g " + (fps * 2) + " -bf 0";
+        string nv = " -c:v h264_nvenc -preset p4 -tune ll -zerolatency 1 -rc cbr" + rate;
+        string x264 = " -c:v libx264 -preset veryfast -tune zerolatency" + rate;
+        string dest = " -flush_packets 1 -flvflags no_duration_filesize -f flv pipe:1";
+        bool nvidia = false;
+        try { nvidia = Dxgi.List().IndexOf("NVIDIA", StringComparison.OrdinalIgnoreCase) >= 0; } catch { }
+        // At 720p and 30 frames a second when the camera has it; else as the camera gives it.
+        string sized = open + "-video_size 1280x720 -framerate 30 -i " + cam;
+        string plain = open + "-i " + cam;
+        if (nvidia) tries.Add(sized + vf + nv + dest);
+        tries.Add(sized + vf + x264 + dest);
+        tries.Add(plain + vf + x264 + dest);
+        return tries;
+    }
+
+    /** The microphone, as AAC, to someone listening to the webcam. */
+    static void StartMic(string ff, string at, string view)
+    {
+        StopSound();
+        int gen = soundGen;
+        FindWebcam(ff);
+        if (micName == null) return;
+        var t = new Thread(delegate ()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo(ff, "-hide_banner -loglevel error -f dshow -audio_buffer_size 50 -i audio=\"" + micName.Replace("\"", "") +
+                    "\" -ac 1 -ar 48000 -c:a aac -b:a 64k -f adts pipe:1");
+                psi.UseShellExecute = false; psi.CreateNoWindow = true;
+                psi.RedirectStandardOutput = true; psi.RedirectStandardError = true;
+                var p = Process.Start(psi);
+                soundProc = p;
+                var errs = new Thread(delegate () { try { p.StandardError.ReadToEnd(); } catch { } });
+                errs.IsBackground = true; errs.Start();
+                PostSound(p, at, true, gen, view);
+            }
+            catch (Exception e) { Say("The microphone could not be heard (" + e.Message + ")."); }
+        });
+        t.IsBackground = true; t.Start();
     }
 
     /** What the phone says it has had of the screen stream named ackSid. */
@@ -3035,7 +3120,8 @@ public static class BlazeItPc
             localFor = at;
             localKbit = Math.Min(LocalCap(at), Math.Min(80, Math.Max(40, 40 * StreamRate(target) / 60)) * 1000) * 3 / 4;
         }
-        var tries = remote ? RemoteTries(target, remoteKbit) : CaptureTries(target, hdrWhite, dest, http ? localKbit : 0);
+        var tries = screenWebcam ? WebcamTries(ff, remote ? remoteKbit : Math.Min(localKbit > 0 ? localKbit : 2500, 2500)) :
+            remote ? RemoteTries(target, remoteKbit) : CaptureTries(target, hdrWhite, dest, http ? localKbit : 0);
         for (int t = 0; t < tries.Count; t++)
         {
             string args = tries[t];
@@ -3061,7 +3147,7 @@ public static class BlazeItPc
                 Func<int, Process> respawn = delegate (int kbit)
                 {
                     if (gen != screenGen) return null;
-                    var again = remote ? RemoteTries(target, kbit) : CaptureTries(target, hdrWhite, dest, kbit);
+                    var again = screenWebcam ? WebcamTries(ff, Math.Min(kbit, 2500)) : remote ? RemoteTries(target, kbit) : CaptureTries(target, hdrWhite, dest, kbit);
                     if (way >= again.Count) return null;
                     var psi2 = new ProcessStartInfo(ff, again[way]);
                     psi2.UseShellExecute = false; psi2.CreateNoWindow = true; psi2.RedirectStandardError = true;

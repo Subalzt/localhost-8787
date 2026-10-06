@@ -11414,7 +11414,8 @@ function camsWatch(es) {
 }
 
 function camQ(target, extra) {
-  var q = target && target !== "self" ? "peer=" + encodeURIComponent(target) : "";
+  // A laptop's webcam ("laptop:ID"), a linked phone's camera (its name), or this phone's own.
+  var q = !target || target === "self" ? "" : target.indexOf("laptop:") === 0 ? "laptop=" + encodeURIComponent(target.slice(7)) : "peer=" + encodeURIComponent(target);
   if (extra) q += (q ? "&" : "") + extra;
   return q ? "?" + q : "";
 }
@@ -11490,7 +11491,7 @@ function renderCams() {
     tile.querySelector(".cam-info span").textContent = camStatus(st);
     // The switch: on and off from here, this phone's or a linked one's.
     var info = tile.querySelector(".cam-info"), btn = info.querySelector(".cam-btn");
-    if (st) {
+    if (st && c.kind !== "laptop") {
       if (!btn) { btn = document.createElement("button"); btn.type = "button"; btn.className = "cam-btn dim"; info.appendChild(btn);
         btn.addEventListener("click", function () { var cc = camByTarget(c.target); if (cc && cc.state) camSet(c.target, { on: !cc.state.on }); }); }
       btn.textContent = st.on ? "Turn off" : "Turn on";
@@ -11683,12 +11684,17 @@ function camFullStatus(c) {
   $("cf-status").textContent = camStatus(c.state);
   if (f.view && f.view.rot !== (st.rotation || 0)) camFullPlay();
   var b = function (label, on, act, cls) { return '<button class="cam-btn' + (on ? "" : " dim") + (cls ? " " + cls : "") + '" type="button" data-act="' + act + '">' + label + '</button>'; };
-  $("cf-row").innerHTML =
+  // A laptop's webcam: watch and listen only.
+  var laptop = c.kind === "laptop";
+  $("cf-talk").hidden = laptop; $("cf-hint").hidden = laptop;
+  $("cf-row").innerHTML = laptop ? b(f.listen ? "Listening" : "Listen", f.listen, "listen") :
     b(f.listen ? "Listening" : "Listen", f.listen, "listen") +
     b("Torch", st.torch, "torch") +
     b(st.lens === "front" ? "Front camera" : "Back camera", false, "flip") +
     b("Turn", false, "turn") +
     b("Motion alerts", st.motion, "motion") +
+    b("Night", st.night, "night") +
+    (st.maxZoom > 1 ? b((st.zoom || 1) > 1.05 ? (st.zoom || 1).toFixed(1) + "× (back to 1×)" : "Zoom: scroll", (st.zoom || 1) > 1.05, "zoom") : "") +
     (st.recording ? b("Stop recording", true, "rec", "red") : b("Record", false, "rec")) +
     b("Clips", false, "clips") +
     b("Turn off", false, "off");
@@ -11700,6 +11706,8 @@ function camFullStatus(c) {
       else if (a === "flip") camSet(f.target, { lens: s.lens === "front" ? "back" : "front" });
       else if (a === "turn") camSet(f.target, { rotate: (s.rotate || 0) + 90 });
       else if (a === "motion") camSet(f.target, { motion: !s.motion });
+      else if (a === "night") camSet(f.target, { night: !s.night });
+      else if (a === "zoom") { f.zoom = 1; camSet(f.target, { zoom: 1 }); }
       else if (a === "rec") camSet(f.target, { recordNow: !s.recording });
       else if (a === "clips") camClips(f.target);
       else if (a === "off") { camSet(f.target, { on: false }); camClose(); }
@@ -11816,6 +11824,17 @@ function camAlert(a) {
 (function camSetup() {
   var talk = $("cf-talk");
   if (!talk) return;
+  // Zoom with the wheel (or a trackpad's pinch), in the camera itself: sent as it settles.
+  $("cf-canvas").addEventListener("wheel", function (e) {
+    var f = cams.full, c = f && camByTarget(f.target), st = c && c.state;
+    if (!st || c.kind === "laptop" || !(st.maxZoom > 1)) return;
+    e.preventDefault();
+    if (f.zoom == null) f.zoom = st.zoom || 1;
+    f.zoom = Math.max(1, Math.min(st.maxZoom, f.zoom * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015))));
+    $("cf-status").textContent = f.zoom.toFixed(1) + "×";
+    clearTimeout(f.zoomT);
+    f.zoomT = setTimeout(function () { camSet(f.target, { zoom: Math.round(f.zoom * 100) / 100 }); }, 150);
+  }, { passive: false });
   talk.addEventListener("pointerdown", function (e) { e.preventDefault(); try { talk.setPointerCapture(e.pointerId); } catch (x) {} camTalk(true); });
   talk.addEventListener("pointerup", function () { camTalk(false); });
   talk.addEventListener("pointercancel", function () { camTalk(false); });

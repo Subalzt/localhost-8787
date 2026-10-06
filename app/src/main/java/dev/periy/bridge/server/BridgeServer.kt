@@ -1299,6 +1299,24 @@ class BridgeServer(
         get("/api/cams/stream") {
             call.device() ?: return@get
             if (call.request.queryParameters["peer"] != null) { camsAfar(call, "/api/cams/stream"); return@get }
+            // A laptop's webcam, through its helper, for as long as it is watched.
+            call.request.queryParameters["laptop"]?.let { id ->
+                if (id !in Control.online()) { call.respond(HttpStatusCode.NotFound, ApiResult(false, "That laptop's helper is not running")); return@get }
+                val input = LaptopCams.open(id, call.viaTunnel() || call.viaSite(), call.request.queryParameters["listen"] == "1")
+                call.response.header(HttpHeaders.CacheControl, "no-store")
+                call.respondBytesWriter(ContentType("application", "x-l87-frames")) {
+                    val buf = ByteArray(64 * 1024)
+                    try {
+                        while (true) {
+                            val n = withContext(Dispatchers.IO) { input.read(buf) }
+                            if (n < 0) break
+                            writeFully(buf, 0, n); flush(); Monitor.addOut(n)
+                        }
+                    } catch (_: Throwable) {
+                    } finally { runCatching { input.close() } }
+                }
+                return@get
+            }
             if (!cameras().state.value.on) { call.respond(HttpStatusCode.Conflict, ApiResult(false, "Camera mode is off on ${peers.deviceName()}")); return@get }
             val v = cameras().watch(call.request.queryParameters["listen"] == "1", call.request.queryParameters["v"].orEmpty(), call.viaTunnel() || call.viaSite())
             call.response.header(HttpHeaders.CacheControl, "no-store")

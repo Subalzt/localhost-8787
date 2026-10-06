@@ -761,6 +761,13 @@ and **Cameras** on the page: the control centre, every phone's camera live in a 
   shows the pictures at the pace they were taken, a little behind, so an uneven mobile connection
   does not make them jerk. Measured on a link held to 400 kbit/s: 30 pictures a second, within a
   third of a second of live.
+- **Laptops' webcams** are cameras too: every laptop whose helper is running shows in the grid as
+  "NAME webcam", started when you watch it and stopped when you stop (its light says so), with its
+  microphone for **Listen** (Windows through DirectShow, Linux /dev/video0, a Mac's first camera).
+- **Night**: a longer exposure (down to about 5 pictures a second), the brightness raised as far
+  as the camera goes, its own night mode where it has one, and stronger noise reduction.
+- **Zoom** in the camera itself, up to 8×: pinch in the app, scroll on the page. The sensor is
+  cropped rather than the picture enlarged, so a closer look keeps its detail, in clips too.
 - **Full screen**, one camera: **Listen** (its microphone, AAC, a fraction of a second behind),
   **Hold to talk** (your voice out of its speaker; on the page, hold Space too), **Torch**, back or
   front camera, **Turn** the picture, **Motion alerts**, **Record**, **Clips**, **Turn off**.

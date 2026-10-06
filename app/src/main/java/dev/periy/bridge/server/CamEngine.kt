@@ -41,7 +41,7 @@ class CamEngine(ctx: Context, private val out: Out) {
         /** A small picture (YUV), a few times a second: the motion watch, and snapshots. */
         fun frame(img: Image)
         fun failed(why: String)
-        fun running(sensor: Int)
+        fun running(sensor: Int, maxZoom: Float)
     }
 
     private val app = ctx.applicationContext
@@ -54,6 +54,14 @@ class CamEngine(ctx: Context, private val out: Out) {
     private var encSurface: Surface? = null
     private var reader: ImageReader? = null
     private var fps: Range<Int>? = null
+    /** Night: the slowest frame rate the camera allows (a longer exposure for each picture). */
+    private var nightFps: Range<Int>? = null
+    private var evMax = 0
+    private var nightScene = false
+    private var zoomRange: Range<Float>? = null
+    private var sensorArea: android.graphics.Rect? = null
+    @Volatile private var night = false
+    @Volatile private var zoom = 1f
     @Volatile private var torch = false
     @Volatile private var live = false
     @Volatile private var csd: ByteArray? = null
@@ -65,10 +73,12 @@ class CamEngine(ctx: Context, private val out: Out) {
     private fun nowUs(): Long = if (realtime) SystemClock.elapsedRealtimeNanos() / 1000 else System.nanoTime() / 1000
 
     @SuppressLint("MissingPermission")
-    fun start(lens: String, torchOn: Boolean, sound: Boolean) {
+    fun start(lens: String, torchOn: Boolean, sound: Boolean, nightOn: Boolean = false, zoomTo: Float = 1f) {
         if (live) return
         live = true
         torch = torchOn
+        night = nightOn
+        zoom = zoomTo
         val t = HandlerThread("cam").also { it.start() }
         thread = t
         val h = Handler(t.looper)
@@ -86,6 +96,14 @@ class CamEngine(ctx: Context, private val out: Out) {
                 val ranges = ch.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES).orEmpty()
                 fps = ranges.filter { it.upper == FPS }.minByOrNull { it.lower }
                     ?: ranges.filter { it.upper in FPS..30 }.minByOrNull { it.lower }
+                // Night: as slow as it goes, down to about 5 pictures a second, for light.
+                nightFps = ranges.filter { it.upper <= 15 }.minByOrNull { it.lower } ?: ranges.minByOrNull { it.lower }
+                evMax = ch.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE)?.upper ?: 0
+                nightScene = ch.get(CameraCharacteristics.CONTROL_AVAILABLE_SCENE_MODES)?.contains(CaptureRequest.CONTROL_SCENE_MODE_NIGHT) == true
+                zoomRange = if (android.os.Build.VERSION.SDK_INT >= 30) ch.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE) else null
+                sensorArea = ch.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
+                val maxDigital = ch.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM) ?: 1f
+                maxZoom = minOf(8f, zoomRange?.upper ?: maxDigital)
                 startEncoder(size)
                 reader = ImageReader.newInstance(320, 240, ImageFormat.YUV_420_888, 3).apply {
                     setOnImageAvailableListener({ r ->
@@ -106,7 +124,7 @@ class CamEngine(ctx: Context, private val out: Out) {
                                 if (!live) { s.close(); return }
                                 session = s
                                 repeat()
-                                out.running(sensor)
+                                out.running(sensor, maxZoom)
                             }
                             override fun onConfigureFailed(s: CameraCaptureSession) { fail("The camera would not start") }
                         }, h)
@@ -251,8 +269,22 @@ class CamEngine(ctx: Context, private val out: Out) {
             val r = d.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
                 addTarget(encSurface!!)
                 addTarget(reader!!.surface)
-                fps?.let { set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, it) }
-                set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+                (if (night) nightFps ?: fps else fps)?.let { set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, it) }
+                if (night && nightScene) {
+                    set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_USE_SCENE_MODE)
+                    set(CaptureRequest.CONTROL_SCENE_MODE, CaptureRequest.CONTROL_SCENE_MODE_NIGHT)
+                } else set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+                if (night) {
+                    set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, evMax)
+                    set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_HIGH_QUALITY)
+                }
+                // Zoom in the camera itself: the sensor cropped, so a closer look keeps its detail.
+                val z = zoom.coerceIn(1f, maxZoom)
+                if (android.os.Build.VERSION.SDK_INT >= 30 && zoomRange != null) set(CaptureRequest.CONTROL_ZOOM_RATIO, z)
+                else sensorArea?.let { a ->
+                    val w = (a.width() / z).toInt(); val h = (a.height() / z).toInt()
+                    set(CaptureRequest.SCALER_CROP_REGION, android.graphics.Rect(a.centerX() - w / 2, a.centerY() - h / 2, a.centerX() + w / 2, a.centerY() + h / 2))
+                }
                 set(CaptureRequest.FLASH_MODE, if (torch) CaptureRequest.FLASH_MODE_TORCH else CaptureRequest.FLASH_MODE_OFF)
             }.build()
             s.setRepeatingRequest(r, null, handler)
@@ -260,6 +292,10 @@ class CamEngine(ctx: Context, private val out: Out) {
     }
 
     fun setTorch(on: Boolean) { torch = on; handler?.post { repeat() } }
+    fun setNight(on: Boolean) { night = on; handler?.post { repeat() } }
+    fun setZoom(z: Float) { zoom = z; handler?.post { repeat() } }
+    @Volatile var maxZoom = 1f
+        private set
 
     /** The picture's bitrate, changed while it runs: to what the slowest viewer's way carries. */
     fun setBitrate(bps: Int) {

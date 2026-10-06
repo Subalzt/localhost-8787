@@ -111,7 +111,13 @@ class Container(ctx: Context) {
 
     /** Messages with linked phones, each phone the other's server (server/Messages.kt). */
     /** Phones as security cameras (server/Cameras.kt). */
-    val cameras: dev.periy.bridge.server.Cameras by lazy { dev.periy.bridge.server.Cameras(app, peers) { tunnelKeys.psk(it) } }
+    val cameras: dev.periy.bridge.server.Cameras by lazy {
+        dev.periy.bridge.server.Cameras(app, peers, { tunnelKeys.psk(it) }) {
+            val online = dev.periy.bridge.server.Control.online()
+            devices.devices.value.filter { it.id in online && it.name.startsWith(dev.periy.bridge.server.HELPER_PREFIX) }
+                .map { it.id to dev.periy.bridge.server.helperMachine(it.name).removeSuffix(" (website)") }.distinctBy { it.second }
+        }
+    }
 
     val messages by lazy { dev.periy.bridge.server.Messages(app, peers) { tunnelKeys.psk(it) } }
 

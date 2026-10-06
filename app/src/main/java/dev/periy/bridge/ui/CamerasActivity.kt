@@ -35,6 +35,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -369,7 +370,18 @@ private fun CamFull(c: CamDto, onClose: () -> Unit) {
     val mic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        if (s.running) CamVideo(c.target, listen = listen && !talking, rotation = s.rotation, modifier = Modifier.fillMaxSize())
+        // Pinch to zoom, in the camera itself (a laptop's webcam has none): sent as it settles.
+        var zoom by remember(c.target) { mutableStateOf(s.zoom) }
+        LaunchedEffect(zoom) { if (zoom != s.zoom) { delay(150); set(CamSet(zoom = zoom)) } }
+        val pinch = if (c.kind == "laptop" || s.maxZoom <= 1f) Modifier else Modifier.pointerInput(c.target, s.maxZoom) {
+            detectTransformGestures { _, _, z, _ -> zoom = (zoom * z).coerceIn(1f, s.maxZoom) }
+        }
+        if (s.running) CamVideo(c.target, listen = listen && !talking, rotation = s.rotation, modifier = Modifier.fillMaxSize().then(pinch))
+        if (zoom > 1.05f) Text(
+            "%.1f×".format(zoom), style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = Color.White,
+            modifier = Modifier.align(Alignment.Center).padding(top = 140.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.45f))
+                .clickable { zoom = 1f }.padding(horizontal = 10.dp, vertical = 4.dp),
+        )
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(start = 4.dp)) {
                 Text(c.name, style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold), color = Color.White)
@@ -378,8 +390,10 @@ private fun CamFull(c: CamDto, onClose: () -> Unit) {
             RoundIcon(BlazeIcons.Close, "Close", onClick = onClose)
         }
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            // A laptop's webcam: watch and listen only.
+            val laptop = c.kind == "laptop"
             // Hold to talk: this phone's voice out of the camera phone's speaker.
-            Box(
+            if (!laptop) Box(
                 Modifier.size(76.dp).clip(CircleShape).background(if (talking) Color(0xFF34C759) else Color.White.copy(alpha = 0.18f))
                     .pointerInput(c.target) {
                         awaitEachGesture {
@@ -394,16 +408,19 @@ private fun CamFull(c: CamDto, onClose: () -> Unit) {
                     },
                 contentAlignment = Alignment.Center,
             ) { Icon(BlazeIcons.Mic, "Hold to talk", tint = Color.White, modifier = Modifier.size(30.dp)) }
-            Text(if (talking) "Talking…" else "Hold to talk", style = CaptionStyle, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(top = 6.dp, bottom = 14.dp))
+            if (!laptop) Text(if (talking) "Talking…" else "Hold to talk", style = CaptionStyle, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(top = 6.dp, bottom = 14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 RoundIcon(if (listen) BlazeIcons.VolumeUp else BlazeIcons.Mute, "Listen", on = listen) { listen = !listen }
-                RoundIcon(BlazeIcons.Bolt, "Torch", on = s.torch) { set(CamSet(torch = !s.torch)) }
-                RoundIcon(BlazeIcons.FlipCamera, "Flip") { set(CamSet(lens = if (s.lens == "back") "front" else "back")) }
-                RoundIcon(BlazeIcons.Refresh, "Turn the picture") { set(CamSet(rotate = s.rotate + 90)) }
-                RoundIcon(BlazeIcons.Pulse, "Motion alerts", on = s.motion) { set(CamSet(motion = !s.motion)) }
+                if (!laptop) {
+                    RoundIcon(BlazeIcons.Bolt, "Torch", on = s.torch) { set(CamSet(torch = !s.torch)) }
+                    RoundIcon(BlazeIcons.FlipCamera, "Flip") { set(CamSet(lens = if (s.lens == "back") "front" else "back")) }
+                    RoundIcon(BlazeIcons.Refresh, "Turn the picture") { set(CamSet(rotate = s.rotate + 90)) }
+                    RoundIcon(BlazeIcons.Pulse, "Motion alerts", on = s.motion) { set(CamSet(motion = !s.motion)) }
+                    RoundIcon(BlazeIcons.Moon, "Night", on = s.night) { set(CamSet(night = !s.night)) }
+                }
             }
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (!laptop) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Pill(if (s.recording) "Stop recording" else "Record", if (s.recording) Color(0xFFFF3B30) else Color.White.copy(alpha = 0.14f)) { set(CamSet(recordNow = !s.recording)) }
                 Pill("Clips", Color.White.copy(alpha = 0.14f)) { clips = true }
                 Pill("Turn off", Color.White.copy(alpha = 0.14f)) { set(CamSet(on = false)); onClose() }
@@ -549,6 +566,12 @@ private class CamPlayer(private val app: android.content.Context, private val ta
 
     private fun open(): InputStream? {
         if (target == "self") return null
+        // A laptop's webcam: straight from its helper, here.
+        if (target.startsWith(dev.periy.bridge.server.LaptopCams.PREFIX)) {
+            vid = ""
+            got = 0
+            return dev.periy.bridge.server.LaptopCams.open(target.removePrefix(dev.periy.bridge.server.LaptopCams.PREFIX), far = false, listen = listen)
+        }
         val p = app.container.peers.find(target) ?: return null
         vid = java.util.UUID.randomUUID().toString().take(12)
         got = 0
