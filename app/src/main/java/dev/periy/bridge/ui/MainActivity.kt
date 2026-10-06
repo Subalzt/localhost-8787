@@ -2017,6 +2017,20 @@ private fun ControlRow(running: Boolean, open: () -> Unit, openFiles: () -> Unit
             icon = BlazeIcons.Laptop, iconColor = Color(0xFFFF9F0A),
             onClick = { hctx.startActivity(android.content.Intent(hctx, HandoffActivity::class.java)) },
         ) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
+        // The phone as the laptop's webcam (tools/vcam): added once, then any app can pick it.
+        SettingRow(
+            "Phone as webcam",
+            detail = if (laptops.isEmpty()) "Needs the helper on the computer" else "Add once (one admin prompt on the laptop), then pick \"Localhost 8787 Phone Camera\" in any app",
+            icon = BlazeIcons.Video, iconColor = Color(0xFF64D2FF),
+        ) {
+            if (laptops.isNotEmpty()) Text(
+                "Add", style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold), color = Bridge.Accent,
+                modifier = Modifier.clip(RoundedCornerShape(50)).clickable {
+                    dev.periy.bridge.server.Control.laptops().forEach { dev.periy.bridge.server.EventBus.emitTo(it.first, "webcam", "install") }
+                    android.widget.Toast.makeText(hctx, "Approve the prompt on the laptop", android.widget.Toast.LENGTH_LONG).show()
+                }.padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
         // How it is doing: battery, CPU, GPU, temperatures, disks.
         SettingRow(
             "Laptop health",

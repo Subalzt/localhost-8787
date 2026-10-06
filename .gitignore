@@ -21,3 +21,8 @@ __pycache__/
 /tools/lyrics-align/backup/
 /tools/lyrics-align/cache/
 /tools/lyrics-align/verify.json
+tools/vcam/*.obj
+tools/vcam/*.exp
+tools/vcam/*.lib
+tools/vcam/*.exe
+tools/vcam/vcam.dll

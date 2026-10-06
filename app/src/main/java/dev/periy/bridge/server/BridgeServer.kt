@@ -2269,6 +2269,13 @@ class BridgeServer(
             }
             call.respond(ApiResult(true, "Playing on " + peers.deviceName()))
         }
+        // The phone as a laptop's webcam (tools/vcam): the camera's media source, for its helper to add.
+        get("/api/laptop/vcam.dll") {
+            call.device() ?: return@get
+            val bytes = withContext(Dispatchers.IO) { runCatching { ctx.assets.open("vcam.dll").use { it.readBytes() } }.getOrNull() }
+            if (bytes == null) { call.respond(HttpStatusCode.NotFound, ApiResult(false, "This build has no webcam")); return@get }
+            call.respondBytes(bytes, ContentType.Application.OctetStream)
+        }
         // How a laptop is doing (server/LaptopHealth.kt): its helper's snapshot, asked for just before.
         post("/api/laptop/health/answer") {
             val id = call.request.queryParameters["id"].orEmpty()

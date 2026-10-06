@@ -763,6 +763,20 @@ Carry on with what the other one was in the middle of, at the same second.
   a laptop's page from the same moment (an open page takes it; with none, the laptop opens one), and
   the phone at the top right of the page's player hands its song to the phone.
 
+### The phone as the laptop's webcam
+
+**Devices → Phone as webcam → Add** puts a camera called **Localhost 8787 Phone Camera** on a
+Windows 11 laptop, once (one administrator prompt there). Pick it in Zoom, Teams, Meet, OBS or the
+Camera app like any webcam: when an app opens it, the helper turns the phone's front camera on
+(camera mode, without its motion watch or clips), decodes its picture and hands it over upright,
+1280×720; when every app has let it go, the phone's camera goes back to how it was. With the helper
+not running, the camera shows a dark grey picture, so no app hangs on it.
+
+It is a real Windows camera, made the way Windows 11 means it to be (a virtual camera whose media
+source, `tools/vcam`, runs in Windows' own camera service), not a filter that only some apps see.
+The phone's microphone does not come with it: Windows has no way for a program to add a
+microphone without a driver of its own.
+
 ### Laptop health
 
 **Devices → Laptop health** on the phone (and **Health** beside each laptop on the page) shows how

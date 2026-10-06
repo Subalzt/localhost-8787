@@ -143,6 +143,8 @@ public static class BlazeItPc
         clip.SetApartmentState(ApartmentState.STA);
         clip.Start();
 
+        Thread webcam = new Thread(WebcamLoop);
+        webcam.IsBackground = true; webcam.Start();
         Thread hotkey = new Thread(HotkeyLoop);
         hotkey.IsBackground = true; hotkey.SetApartmentState(ApartmentState.STA); hotkey.Start();
         Thread events = new Thread(EventsLoop);
@@ -1048,6 +1050,219 @@ public static class BlazeItPc
             return n;
         }
         catch { return -1; }
+    }
+
+    // ------------------------------------------------------------------ the phone as this laptop's webcam
+    //
+    // "Localhost 8787 Phone Camera" (tools/vcam: a Windows 11 virtual camera, its media source run by
+    // Windows' Frame Server) reads each picture from shared memory it makes. While an app has the
+    // camera open it says so there ([wanted]); this helper then turns the phone's front camera on,
+    // decodes its stream with ffmpeg into NV12 1280x720 (turned upright, filling the frame) and leaves
+    // each picture there. Closed by every app for a few seconds, the phone's camera goes back as it was.
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr OpenFileMapping(uint access, bool inherit, string name);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr MapViewOfFile(IntPtr map, uint access, uint hi, uint lo, UIntPtr bytes);
+    [DllImport("kernel32.dll")] static extern bool UnmapViewOfFile(IntPtr view);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+
+    const int CamW = 1280, CamH = 720, CamHeader = 64, CamFrame = CamW * CamH * 3 / 2;
+
+    static void WebcamLoop()
+    {
+        IntPtr map = IntPtr.Zero, view = IntPtr.Zero;
+        Process ff = null;
+        HttpWebResponse stream = null;
+        string restore = null;
+        long quietSince = 0;
+        while (true)
+        {
+            try
+            {
+                if (view == IntPtr.Zero)
+                {
+                    // Made by the camera's media source the first time an app opens it.
+                    map = OpenFileMapping(0x0002 | 0x0004, false, "Global\\Localhost8787Camera");
+                    if (map != IntPtr.Zero) view = MapViewOfFile(map, 0x0002 | 0x0004, 0, 0, UIntPtr.Zero);
+                    if (view == IntPtr.Zero) { if (map != IntPtr.Zero) { CloseHandle(map); map = IntPtr.Zero; } Thread.Sleep(2000); continue; }
+                }
+                bool wanted = Marshal.ReadInt32(view, 16) == 1;
+                bool running = ff != null && !ff.HasExited;
+                if (wanted && !running && phone != null)
+                {
+                    if (ff != null) { try { ff.Kill(); } catch { } ff = null; }
+                    if (stream != null) { try { stream.Close(); } catch { } stream = null; }
+                    if (restore == null) restore = WebcamPhoneOn();
+                    ff = WebcamStart(view, out stream);
+                    if (ff != null) Log("Phone camera on as this laptop's webcam.");
+                }
+                if (wanted) quietSince = 0;
+                else if (running || restore != null)
+                {
+                    if (quietSince == 0) quietSince = Environment.TickCount;
+                    else if (Environment.TickCount - quietSince > 4000)
+                    {
+                        try { if (ff != null) ff.Kill(); } catch { }
+                        ff = null;
+                        if (stream != null) { try { stream.Close(); } catch { } stream = null; }
+                        if (restore != null) { WebcamPhoneSet(restore); restore = null; }
+                        quietSince = 0;
+                        Log("Phone camera off: no app uses the webcam.");
+                    }
+                }
+            }
+            catch (Exception e) { Log("Webcam: " + e.Message); Thread.Sleep(3000); }
+            Thread.Sleep(500);
+        }
+    }
+
+    /** Camera mode on the phone, front lens, no motion watch or clips while it is a webcam; what to put back after. */
+    static string WebcamPhoneOn()
+    {
+        string st = "";
+        try { st = PhoneGet("/api/cams/state"); } catch { }
+        string back = "{\"on\":" + (st.Contains("\"on\":true") ? "true" : "false") +
+            ",\"lens\":" + Json(CallField(st, "lens").Length > 0 ? CallField(st, "lens") : "back") +
+            ",\"motion\":" + (st.Contains("\"motion\":false") ? "false" : "true") +
+            ",\"record\":" + (st.Contains("\"record\":false") ? "false" : "true") + "}";
+        WebcamPhoneSet("{\"on\":true,\"lens\":\"front\",\"motion\":false,\"record\":false}");
+        return back;
+    }
+
+    static void WebcamPhoneSet(string json) { try { PostJson("/api/cams/set", json); } catch { } }
+
+    static string PhoneGet(string path)
+    {
+        HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + path);
+        r.Proxy = null; r.UserAgent = Ua; r.Headers["Cookie"] = session; r.Timeout = 10000;
+        using (var resp = (HttpWebResponse)r.GetResponse())
+        using (var rd = new StreamReader(resp.GetResponseStream())) return rd.ReadToEnd();
+    }
+
+    /**
+     * The phone camera's stream ("x-l87-frames": each picture with its length and time, sound
+     * frames marked by the top bit and left out) into ffmpeg, and its pictures into [view].
+     */
+    static Process WebcamStart(IntPtr view, out HttpWebResponse resp)
+    {
+        resp = null;
+        string ffx = FindFfmpeg();
+        if (ffx == null) { Log("Webcam: needs ffmpeg."); Thread.Sleep(5000); return null; }
+        // Upright: how far the phone says to turn its picture (once the camera runs on the new lens).
+        int rot = 0;
+        for (int i = 0; i < 20; i++)
+        {
+            string st = "";
+            try { st = PhoneGet("/api/cams/state"); } catch { }
+            if (st.Contains("\"running\":true") && st.Contains("\"lens\":\"front\"")) { int.TryParse(Regex.Match(st, "\"rotation\":(\\d+)").Groups[1].Value, out rot); break; }
+            Thread.Sleep(500);
+        }
+        string turn = rot == 90 ? "transpose=1," : rot == 180 ? "transpose=1,transpose=1," : rot == 270 ? "transpose=2," : "";
+        var psi = new ProcessStartInfo(ffx, "-hide_banner -loglevel error -fflags nobuffer -flags low_delay -probesize 32768 -f h264 -i pipe:0 " +
+            "-vf \"" + turn + "scale=" + CamW + ":" + CamH + ":force_original_aspect_ratio=increase,crop=" + CamW + ":" + CamH + ",format=nv12\" " +
+            "-f rawvideo -pix_fmt nv12 pipe:1");
+        psi.UseShellExecute = false; psi.CreateNoWindow = true;
+        psi.RedirectStandardInput = true; psi.RedirectStandardOutput = true; psi.RedirectStandardError = false;
+        Process ff = Process.Start(psi);
+        string vid = "webcam-" + Environment.TickCount.ToString("x");
+        HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + "/api/cams/stream?v=" + vid);
+        r.Proxy = null; r.UserAgent = Ua; r.Headers["Cookie"] = session; r.Timeout = 15000; r.ReadWriteTimeout = 15000;
+        HttpWebResponse got = (HttpWebResponse)r.GetResponse();
+        resp = got;
+        long[] seen = new long[1];
+        // In: the frames, unwrapped, into ffmpeg; and what has arrived, told back, so the camera paces itself.
+        Thread pump = new Thread(delegate ()
+        {
+            try
+            {
+                Stream src = got.GetResponseStream();
+                Stream dst = ff.StandardInput.BaseStream;
+                byte[] head = new byte[8];
+                while (!ff.HasExited)
+                {
+                    if (!ReadFull(src, head, 8)) break;
+                    uint len = (uint)(head[0] << 24 | head[1] << 16 | head[2] << 8 | head[3]);
+                    bool sound = (len & 0x80000000u) != 0;
+                    int n = (int)(len & 0x7fffffffu);
+                    byte[] body = new byte[n];
+                    if (!ReadFull(src, body, n)) break;
+                    Interlocked.Add(ref seen[0], 8 + n);
+                    if (!sound) { dst.Write(body, 0, n); dst.Flush(); }
+                }
+            }
+            catch { }
+            try { ff.Kill(); } catch { }
+        });
+        pump.IsBackground = true; pump.Start();
+        Thread acks = new Thread(delegate ()
+        {
+            while (!ff.HasExited)
+            {
+                try { PostJson("/api/cams/ack?v=" + vid + "&n=" + Interlocked.Read(ref seen[0]), "{}"); } catch { }
+                Thread.Sleep(300);
+            }
+        });
+        acks.IsBackground = true; acks.Start();
+        // Out: each NV12 picture into the camera's shared memory, its count odd while it is written.
+        Thread outp = new Thread(delegate ()
+        {
+            try
+            {
+                Stream o = ff.StandardOutput.BaseStream;
+                byte[] pic = new byte[CamFrame];
+                while (ReadFull(o, pic, CamFrame))
+                {
+                    int seq = Marshal.ReadInt32(view, 12);
+                    Marshal.WriteInt32(view, 12, seq | 1);
+                    Marshal.Copy(pic, 0, view + CamHeader, CamFrame);
+                    Marshal.WriteInt64(view, 20, (long)GetTickCount64());
+                    Marshal.WriteInt32(view, 12, (seq | 1) + 1);
+                }
+            }
+            catch { }
+        });
+        outp.IsBackground = true; outp.Start();
+        return ff;
+    }
+
+    static bool ReadFull(Stream s, byte[] b, int n)
+    {
+        int got = 0;
+        while (got < n) { int r = s.Read(b, got, n - got); if (r <= 0) return false; got += r; }
+        return true;
+    }
+
+    /**
+     * Adds the camera to this laptop, once: vcam.dll from the phone, copied where Windows' camera
+     * service may load it (Program Files) and registered (one administrator prompt), then the camera
+     * itself made for this user; run again, it puts a newer copy in. Called from the phone's Devices tab ("webcam install").
+     */
+    static void WebcamInstall()
+    {
+        try
+        {
+            string tmp = Path.Combine(Path.GetTempPath(), "vcam.dll");
+            using (var wc = new WebClient())
+            {
+                wc.Proxy = null; wc.Headers["Cookie"] = session; wc.Headers["User-Agent"] = Ua;
+                wc.DownloadFile("http://" + Via(phone) + ":" + PhonePort + "/api/laptop/vcam.dll", tmp);
+            }
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Localhost 8787");
+            string dll = Path.Combine(dir, "vcam.dll");
+            // One prompt: copy it into Program Files and register it for the Frame Server.
+            // Windows' camera service keeps an older copy loaded: stopped first (it starts again when an app wants a camera).
+            string ps = "Stop-Service FrameServer, FrameServerMonitor -Force -ErrorAction SilentlyContinue; Start-Sleep 2; " +
+                "New-Item -ItemType Directory -Force '" + dir + "' | Out-Null; Copy-Item -Force '" + tmp + "' '" + dll + "'; " +
+                "Start-Process regsvr32 -ArgumentList '/s', ('\"' + '" + dll + "' + '\"') -Wait";
+            var psi = new ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " + Convert.ToBase64String(Encoding.Unicode.GetBytes(ps)));
+            psi.Verb = "runas"; psi.UseShellExecute = true; psi.WindowStyle = ProcessWindowStyle.Hidden;
+            Process.Start(psi).WaitForExit();
+            var add = new ProcessStartInfo("rundll32.exe", "\"" + dll + "\",Install");
+            add.UseShellExecute = false; add.CreateNoWindow = true;
+            Process a = Process.Start(add);
+            a.WaitForExit(30000);
+            Log(a.ExitCode == 0 ? "Phone Camera added: pick \"Localhost 8787 Phone Camera\" in any app." : "Could not add the camera (0x" + a.ExitCode.ToString("x8") + ").");
+        }
+        catch (Exception e) { Log("Could not add the camera: " + e.Message); }
     }
 
     // ------------------------------------------------------------------ handoff
@@ -2365,6 +2580,11 @@ foreach ($b in Get-Process chrome, msedge, brave, opera, vivaldi | ? { $_.MainWi
                                 h.IsBackground = true; h.Start();
                             }
                             else if (ev == "openurl" && !snapshot) OpenFromPhone(d.Trim());
+                            else if (ev == "webcam" && !snapshot && d.Trim() == "install")
+                            {
+                                Thread w = new Thread(WebcamInstall);
+                                w.IsBackground = true; w.Start();
+                            }
                             else if (ev == "health" && !snapshot)
                             {
                                 string hid = d.Trim();
