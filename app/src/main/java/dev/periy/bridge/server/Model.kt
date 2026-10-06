@@ -133,7 +133,8 @@ data class PairStatusDto(val state: String)
 
 
 /** The phone's notifications, and whether Localhost 8787 may see them at all. */
-@Serializable data class NotifList(val allowed: Boolean, val items: List<NotifDto>)
+/** [live]: the phone's listener is running now (allowed is not enough: HyperOS can keep it stopped). */
+@Serializable data class NotifList(val allowed: Boolean, val items: List<NotifDto>, val live: Boolean = true)
 
 /** The laptop's master volume, from its helper. */
 @Serializable data class VolumeReport(val level: Float = 0f, val muted: Boolean = false)

@@ -2121,7 +2121,7 @@ class BridgeServer(
     private fun io.ktor.server.routing.Route.notificationRoutes() {
         get("/api/notifications") {
             call.response.header(HttpHeaders.CacheControl, "no-store")
-            call.respond(NotifList(Notifs.allowed(ctx), Notifs.list()))
+            call.respond(NotifList(Notifs.allowed(ctx), Notifs.list(), Notifs.connected))
         }
         get("/api/notifications/icon") {
             val bytes = Notifs.icon(ctx, call.request.queryParameters["pkg"].orEmpty())

@@ -69,7 +69,7 @@ object Notifs {
     fun listJson(): String = json.encodeToString(ListSerializer(NotifDto.serializer()), list())
 
     /** Everything at once, for a page that has just connected or when the listener comes back. */
-    fun snapshotJson(ctx: Context): String = json.encodeToString(NotifList.serializer(), NotifList(allowed(ctx), list()))
+    fun snapshotJson(ctx: Context): String = json.encodeToString(NotifList.serializer(), NotifList(allowed(ctx), list(), connected))
 
     /**
      * The listener is (back) on: what the phone shows now is the whole truth. Taken in quietly

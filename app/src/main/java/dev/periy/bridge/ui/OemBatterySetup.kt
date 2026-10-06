@@ -194,6 +194,27 @@ object OemBatterySetup {
         )
     }
 
+    /**
+     * HyperOS and MIUI keep their own Autostart switch (app-op 10008); off, they refuse to start
+     * the app's notification listener again after an update ("AutoStartManagerService: Reject
+     * service"), so the laptop gets no notifications. False where there is no such switch.
+     */
+    fun autostartBlocked(ctx: Context): Boolean = runCatching {
+        val vendor = (Build.MANUFACTURER.orEmpty() + " " + Build.BRAND.orEmpty()).lowercase()
+        if (listOf("xiaomi", "redmi", "poco").none { it in vendor }) return false
+        val ops = ctx.getSystemService(android.app.AppOpsManager::class.java)
+        val mode = android.app.AppOpsManager::class.java
+            .getMethod("checkOpNoThrow", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, String::class.java)
+            .invoke(ops, 10008, android.os.Process.myUid(), ctx.packageName) as Int
+        mode != android.app.AppOpsManager.MODE_ALLOWED
+    }.getOrDefault(false)
+
+    /** Where Autostart is switched on for the app, on HyperOS and MIUI; app info elsewhere. */
+    fun autostartIntent(ctx: Context): Intent {
+        val i = Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"))
+        return if (resolves(ctx, i)) i else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))
+    }
+
     fun isIgnoringBatteryOptimizations(ctx: Context): Boolean {
         val pm = ctx.getSystemService(PowerManager::class.java) ?: return false
         return pm.isIgnoringBatteryOptimizations(ctx.packageName)

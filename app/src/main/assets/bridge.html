@@ -3924,7 +3924,7 @@ function renderHistory() {
 // (a desktop notification when this page is in the background, a card on it otherwise).
 // Reply, press their own buttons ("Mark as read"), or dismiss them, on the phone too.
 
-var notifs = {}, notifAllowed = true, alertsSeen = false, alertsUnread = 0, notifOpen = {};
+var notifs = {}, notifAllowed = true, notifLive = true, alertsSeen = false, alertsUnread = 0, notifOpen = {};
 var NOTIF_POP_KEY = "blazeit.notifpop";
 
 function notifPopOn() { try { return localStorage.getItem(NOTIF_POP_KEY) !== "0"; } catch (e) { return true; } }
@@ -3932,7 +3932,7 @@ function notifPopOn() { try { return localStorage.getItem(NOTIF_POP_KEY) !== "0"
 async function loadNotifs() {
   var d;
   try { d = await (await api("/api/notifications")).json(); } catch (e) { return; }
-  notifAllowed = d.allowed;
+  notifAllowed = d.allowed; notifLive = d.live !== false;
   notifs = {};
   (d.items || []).forEach(function (n) { notifs[n.key] = n; });
   renderNotifs();
@@ -4040,6 +4040,10 @@ function renderNotifs() {
   host.innerHTML = "";
   if (!notifAllowed) {
     host.innerHTML = '<div class="banner bad">Allow it on the phone: Settings &rarr; Laptop access &rarr; Notifications on the laptop.</div>';
+    return;
+  }
+  if (!notifLive) {
+    host.innerHTML = '<div class="banner bad">The phone has stopped passing its notifications on. On the phone: Settings &rarr; Laptop access &rarr; Notifications on the laptop &rarr; Fix.</div>';
     return;
   }
   if (!list.length) {
@@ -5819,7 +5823,7 @@ function connectEvents() {
   // whenever the phone's listener comes back. Taken as it is, with no pop-ups.
   events.addEventListener("notifs", function (e) {
     var d; try { d = JSON.parse(e.data); } catch (err) { return; }
-    notifAllowed = d.allowed;
+    notifAllowed = d.allowed; notifLive = d.live !== false;
     notifs = {};
     (d.items || []).forEach(function (n) { notifs[n.key] = n; });
     renderNotifs();
@@ -5828,7 +5832,7 @@ function connectEvents() {
     var n; try { n = JSON.parse(e.data); } catch (err) { return; }
     var fresh = !notifs[n.key] || notifs[n.key].at !== n.at || notifs[n.key].text !== n.text;
     // One arriving is proof the phone lets this page see them.
-    notifAllowed = true;
+    notifAllowed = true; notifLive = true;
     notifs[n.key] = n; renderNotifs();
     // An ongoing one (music, a download) changes all the time: listed, never popped up.
     if (fresh && !n.ongoing) popNotif(n);

@@ -2541,12 +2541,21 @@ private fun LazyListScope.settingsTab(
             }
             RemoteRow(state) { vm.setRemote(it) }
             WebsiteRow()
+            // Allowed is not always running: after an update HyperOS starts it again only with Autostart on.
+            val notifCtx = LocalContext.current
             SettingRow(
                 "Notifications on the laptop",
-                if (state.notifAccess) null else "Needs notification access",
+                when {
+                    !state.notifAccess -> "Needs notification access"
+                    state.notifLive -> null
+                    state.autostartBlocked -> "Stopped: HyperOS needs Autostart on for Localhost 8787 to start it again"
+                    else -> "Not running: turn its access off and on again"
+                },
                 icon = BlazeIcons.Message, iconColor = Bridge.Danger,
-                onClick = { openSettings(vm.notifAccessIntent()) },
-            ) { if (state.notifAccess) Check(true) else Action("Allow") }
+                onClick = {
+                    openSettings(if (state.notifAccess && !state.notifLive && state.autostartBlocked) OemBatterySetup.autostartIntent(notifCtx) else vm.notifAccessIntent())
+                },
+            ) { if (state.notifAccess && state.notifLive) Check(true) else Action(if (state.notifAccess) "Fix" else "Allow") }
             SettingRow(
                 "Copies from any app, at once",
                 when {

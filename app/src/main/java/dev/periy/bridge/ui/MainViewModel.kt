@@ -67,6 +67,9 @@ data class UiState(
     val watchOverlay: Boolean = false,
     /** Android's "Notification access" is on for Localhost 8787, so the laptop page shows the phone's notifications. */
     val notifAccess: Boolean = false,
+    /** Allowed, and actually running now; and when not, whether HyperOS's Autostart switch is why. */
+    val notifLive: Boolean = false,
+    val autostartBlocked: Boolean = false,
     /** Music permission granted, and how many tracks the library holds. */
     val musicGranted: Boolean = false,
     val musicTracks: Int = 0,
@@ -170,6 +173,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 watchLogs = dev.periy.bridge.server.ClipWatch.canReadLogs(app),
                 watchOverlay = dev.periy.bridge.server.ClipWatch.canOverlay(app),
                 notifAccess = androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(app).contains(app.packageName),
+                notifLive = dev.periy.bridge.server.Notifs.connected,
+                autostartBlocked = OemBatterySetup.autostartBlocked(app),
                 musicTracks = withContext(Dispatchers.IO) { app.container.music.tracks(refresh = true).size },
             )
         }
