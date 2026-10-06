@@ -704,32 +704,12 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
         return CamList(peers.deviceName(), listOf(me) + others)
     }
 
-    /** An alert from a linked phone: a notification with its picture, which opens the cameras (over the lock screen too). */
+    /** An alert from a linked phone: on to this phone's pages and laptops (no notification here). */
     fun alertFrom(deviceId: String, from: String, w: CallWire): Boolean {
         val text = WhereCrypto.open(keyHere(deviceId), w, WhereCrypto.L_CAM) ?: return false
         val a = runCatching { json.decodeFromString<CamAlert>(text) }.getOrNull() ?: return false
         val alert = a.copy(target = from)
         EventBus.emit("camalert", json.encodeToString(alert))
-        val nm = app.getSystemService(NotificationManager::class.java) ?: return true
-        nm.createNotificationChannel(NotificationChannel(ALERT_CHANNEL, "Camera alerts", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "Movement seen by one of your phones in camera mode."
-            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-        })
-        val open = PendingIntent.getActivity(app, 8510 + (from.hashCode() and 0xFF),
-            Intent(app, dev.periy.bridge.ui.CamerasActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("camera", from),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val pic = a.jpeg.takeIf { it.isNotEmpty() }?.let { runCatching { Base64.decode(it, Base64.NO_WRAP) }.getOrNull() }?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
-        val b = NotificationCompat.Builder(app, ALERT_CHANNEL)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Movement: ${a.camera}")
-            .setContentText("Seen at " + java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(a.at)) + ". Tap to watch.")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_EVENT)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(open)
-            .setAutoCancel(true)
-        if (pic != null) b.setLargeIcon(pic).setStyle(NotificationCompat.BigPictureStyle().bigPicture(pic).bigLargeIcon(null as Bitmap?))
-        runCatching { nm.notify(ALERT_ID + (from.hashCode() and 0xFF), b.build()) }
         return true
     }
 

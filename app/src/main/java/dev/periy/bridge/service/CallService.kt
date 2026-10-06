@@ -82,7 +82,7 @@ class CallService : Service() {
 
     companion object {
         private const val RING_CHANNEL = "calls-ring"
-        private const val ONGOING_CHANNEL = "calls"
+        private const val ONGOING_CHANNEL = "calls-quiet"
         private const val RING_ID = 8101
         private const val ONGOING_ID = 8102
         const val ACTION_DECLINE = "dev.periy.bridge.CALL_DECLINE"
@@ -132,7 +132,7 @@ class CallService : Service() {
                 },
             )
             if (nm.getNotificationChannel(ONGOING_CHANNEL) == null) nm.createNotificationChannel(
-                NotificationChannel(ONGOING_CHANNEL, "Calls", NotificationManager.IMPORTANCE_LOW).apply { description = "A call under way." },
+                NotificationChannel(ONGOING_CHANNEL, "Calls", NotificationManager.IMPORTANCE_MIN).apply { description = "A call under way." },
             )
         }
 

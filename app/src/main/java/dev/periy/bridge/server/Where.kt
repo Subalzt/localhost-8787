@@ -323,27 +323,12 @@ class Where(
                 else -> was ?: continue
             }
             inside[key] = now
-            if (was != null && was != now) say(if (now) "$name arrived at ${z.name}" else "$name left ${z.name}", fix)
+            if (was != null && was != now) say(if (now) "$name arrived at ${z.name}" else "$name left ${z.name}")
         }
     }
 
-    private fun say(text: String, fix: Fix) {
-        val nm = app.getSystemService(android.app.NotificationManager::class.java) ?: return
-        if (nm.getNotificationChannel(PLACES) == null) nm.createNotificationChannel(
-            android.app.NotificationChannel(PLACES, "Arriving and leaving", android.app.NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Your phones and laptops arriving at and leaving the places marked on the map."
-            },
-        )
-        val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(fix.at))
-        val n = androidx.core.app.NotificationCompat.Builder(app, PLACES)
-            .setSmallIcon(dev.periy.bridge.R.drawable.ic_notification)
-            .setContentTitle(text)
-            .setContentText("At $time, within ${fix.acc.toInt()} m")
-            .setAutoCancel(true)
-            .build()
-        runCatching { nm.notify(text.hashCode(), n) }
-        EventBus.emit("place", text)
-    }
+    /** Arriving or leaving: to this phone's pages and the map (no notification). */
+    private fun say(text: String) = EventBus.emit("place", text)
 
     /** A phone or laptop taken off the map. */
     fun forget(id: String) {

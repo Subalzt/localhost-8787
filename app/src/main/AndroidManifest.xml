@@ -146,7 +146,6 @@
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.PhoneBridge" />
-        <receiver android:name=".server.FindMe$Stop" android:exported="false" />
 
         <activity
             android:name=".ui.MainActivity"

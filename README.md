@@ -647,7 +647,7 @@ IPv4, and nothing else ever holds it. No account, no number, no company.
 - **Waits instead of failing.** When the other phone cannot be reached, the message stays on
   yours, marked *Waiting*, and goes the moment it can (tried every 20 seconds).
 - **Delivered and Read** under the newest of yours; a red count on *Phones* for what you have not
-  read; a notification with the text, which opens the conversation.
+  read.
 - **Unlink** sits in the conversation's header, and asks first.
 - **Hold a message** (on the page: its arrow, or a right-click) for the quick reactions, **Reply**,
   **Copy** and, on your own, **Delete for everyone**. A reply carries a quote of what it answers (a
@@ -766,9 +766,8 @@ and **Cameras** on the page: the control centre, every phone's camera live in a 
   front camera, **Turn** the picture, **Motion alerts**, **Record**, **Clips**, **Turn off**.
 - **Motion alerts**: the camera phone watches a small copy of the picture for movement (a whole
   picture getting lighter or darker, a light switched on, is not movement; something that comes and
-  stays becomes part of the scene). Your other phones get a notification with what it saw, which
-  opens the camera over the lock screen; laptops get a Windows notification with the picture (Linux
-  and Mac: a notification), and the page a card. At most one a minute per camera.
+  stays becomes part of the scene). Laptops get a Windows notification with what it saw (Linux and
+  Mac: a notification), and the page a card with the picture. At most one a minute per camera.
 - **Clips**: movement records a clip, from a few seconds before it to 20 s after the last movement
   (five minutes at most); **Record** records by hand. MP4 with sound, kept on the camera phone (2 GB,
   the oldest go first), played, downloaded and deleted from any device.
@@ -1001,6 +1000,9 @@ player, `net/` for addresses, the direct link, STUN, the tunnel, hole punching a
   WSL the Windows helper runs both.
 - The Mac helper is written to Apple's documented tools and checked piece by piece, but has not
   yet run on a real Mac. On a Mac the helper does not switch Wi-Fi itself.
+- The app shows only three kinds of notification: the music controls, an incoming call, and a
+  device asking to pair. While something runs (the server, camera mode, a call) Android requires
+  a notification for it: those are silent and folded away, with no icon in the status bar.
 - Lyrics need internet on the laptop the first time a song is played; after that they are on
   the phone.
 - Protected video cannot be shown on the laptop's screen on the phone.

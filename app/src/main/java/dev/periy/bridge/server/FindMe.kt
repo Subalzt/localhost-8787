@@ -69,7 +69,6 @@ class FindMe(ctx: Context) {
             if (volumeWas >= 0) runCatching { am.setStreamVolume(AudioManager.STREAM_ALARM, volumeWas, 0) }
             volumeWas = -1
             runCatching { app.getSystemService(VibratorManager::class.java).defaultVibrator.cancel() }
-            app.getSystemService(NotificationManager::class.java)?.cancel(RING_ID)
             _ringing.value = false
             return
         }
@@ -93,7 +92,6 @@ class FindMe(ctx: Context) {
             app.getSystemService(VibratorManager::class.java).defaultVibrator
                 .vibrate(VibrationEffect.createWaveform(longArrayOf(0, 700, 400), 0))
         }
-        notify(RING_ID, "Ringing so you can find it", "Tap Stop when you have it.", stopAction = true)
         _ringing.value = true
         main.postDelayed({ ring(false) }, RING_MS)
     }
@@ -105,49 +103,13 @@ class FindMe(ctx: Context) {
         _lost.value = s
         onLost()
         prefs.edit().putBoolean("on", s.on).putString("message", s.message).putString("contact", s.contact).putLong("since", s.since).apply()
-        val nm = app.getSystemService(NotificationManager::class.java)
-        if (!s.on) { nm?.cancel(LOST_ID); return }
+        if (!s.on) return
         ring(true)
-        notify(LOST_ID, "This phone is lost", s.message.ifEmpty { "Please call its owner." } + (if (s.contact.isNotEmpty()) "  Call ${s.contact}" else ""), fullScreen = true)
-    }
-
-    private fun notify(id: Int, title: String, text: String, stopAction: Boolean = false, fullScreen: Boolean = false) {
-        val nm = app.getSystemService(NotificationManager::class.java) ?: return
-        if (nm.getNotificationChannel(CHANNEL) == null) nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Finding this phone", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Ringing and lost mode, from the map on your other devices."
-                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-                setSound(null, null)
-            },
-        )
-        val show = PendingIntent.getActivity(app, 8301, Intent(app, dev.periy.bridge.ui.LostActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val b = NotificationCompat.Builder(app, CHANNEL)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setOngoing(true)
-            .setContentIntent(show)
-        if (fullScreen) b.setFullScreenIntent(show, true)
-        if (stopAction) b.addAction(0, "Stop", PendingIntent.getBroadcast(app, 8302, Intent(app, Stop::class.java), PendingIntent.FLAG_IMMUTABLE))
-        runCatching { nm.notify(id, b.build()) }
-    }
-
-    /** Stop, from the ringing notification. */
-    class Stop : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            (context.applicationContext as dev.periy.bridge.BridgeApp).container.findMe.handle(FindCmd("stop"))
-        }
+        // Its screen over the lock screen, straight away (the app may open over others).
+        runCatching { app.startActivity(Intent(app, dev.periy.bridge.ui.LostActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
     companion object {
-        private const val CHANNEL = "find-me"
-        private const val RING_ID = 8401
-        private const val LOST_ID = 8402
         private const val RING_MS = 120_000L
     }
 }

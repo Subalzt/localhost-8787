@@ -461,7 +461,7 @@ class Messages(
         }
         // Whoever was writing has written.
         _typing.value[key]?.let { t -> _typing.value = _typing.value + (key to (t - author.ifEmpty { from })) }
-        if (seen && body.group.isEmpty()) sendRead(key) else if (!seen && body.kind != "event") notify(key, author, body)
+        if (seen && body.group.isEmpty()) sendRead(key)
         if (relayTo.isNotEmpty()) flush(key)
         return true
     }
@@ -488,7 +488,6 @@ class Messages(
     fun markRead(key: String) {
         if (thread(key).none { !it.mine && it.state == "new" }) return
         change(key) { l -> l.map { if (!it.mine && it.state == "new") it.copy(state = "read") else it } }
-        app.getSystemService(NotificationManager::class.java)?.cancel(notificationId(key))
         if (group(key) == null) sendRead(key)
     }
 
@@ -530,44 +529,6 @@ class Messages(
     }.getOrDefault(emptyMap())
 
     private fun saveGroups() = runCatching { groupsFile.writeText(json.encodeToString(_groups.value)) }
-
-    // ------------------------------------------------------------------ notification
-
-    private fun notify(key: String, author: String, body: MsgBody) {
-        val nm = app.getSystemService(NotificationManager::class.java) ?: return
-        nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Messages", NotificationManager.IMPORTANCE_HIGH)
-                .apply { description = "Messages from your linked phones." },
-        )
-        val open = PendingIntent.getActivity(
-            app, notificationId(key),
-            Intent(app, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                .putExtra(MainActivity.EXTRA_CHAT, key),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        val what = when (body.kind) {
-            "image" -> "Photo" + (if (body.text.isNotEmpty()) ": " + body.text else "")
-            "voice" -> "Voice note"
-            "file" -> "File: " + body.name
-            else -> body.text
-        }
-        val line = if (author.isNotEmpty()) "$author: $what" else what
-        val n = NotificationCompat.Builder(app, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title(key))
-            .setContentText(line)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(line))
-            .setNumber(unread(key))
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setContentIntent(open)
-            .build()
-        runCatching { nm.notify(notificationId(key), n) }
-    }
-
-    private fun notificationId(name: String) = 7000 + (name.hashCode() and 0xFFF)
 
     companion object {
         const val CHANNEL_ID = "messages"

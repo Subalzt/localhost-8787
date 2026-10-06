@@ -2174,16 +2174,6 @@ private fun RecentCalls(calls: List<dev.periy.bridge.server.CallRecord>, startCa
     }
 }
 
-/** Whether to be told when the laptop drops off. */
-@Composable
-private fun LaptopAlertsRow() {
-    val c = LocalContext.current.container
-    var on by remember { mutableStateOf(c.prefs.laptopAlerts) }
-    SettingRow("Tell me when the laptop goes offline", "After two minutes with nothing from its helper", icon = BlazeIcons.Laptop, iconColor = Bridge.Orange) {
-        Toggle(on) { on = it; c.prefs.laptopAlerts = it }
-    }
-}
-
 /**
  * A test call: this phone's voice and picture through a whole call and back, to hear and see how a
  * call sounds and looks with nobody on the other end. Voice, or video.
@@ -2483,7 +2473,6 @@ private fun LazyListScope.settingsTab(
                 Toggle(state.clipSync) { vm.setClipSync(it) }
             }
             RemoteRow(state) { vm.setRemote(it) }
-            LaptopAlertsRow()
             WebsiteRow()
             SettingRow(
                 "Notifications on the laptop",

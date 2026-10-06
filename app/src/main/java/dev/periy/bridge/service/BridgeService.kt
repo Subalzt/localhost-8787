@@ -214,13 +214,15 @@ class BridgeService : Service() {
         val channel = NotificationChannel(
             CHANNEL_ID,
             getString(R.string.channel_server_name),
-            // LOW: ongoing and useful to glance at, never worth a sound.
-            NotificationManager.IMPORTANCE_LOW,
+            // MIN: Android requires it while the server runs; folded away, no icon, never a sound.
+            NotificationManager.IMPORTANCE_MIN,
         ).apply {
             description = getString(R.string.channel_server_desc)
             setShowBadge(false)
         }
         nm.createNotificationChannel(channel)
+        // Notifications of earlier versions this one no longer posts, or posts quieter: gone.
+        OLD_CHANNELS.forEach { runCatching { nm.deleteNotificationChannel(it) } }
     }
 
     private fun buildNotification(): Notification {
@@ -343,7 +345,10 @@ class BridgeService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "bridge_server"
+        private const val CHANNEL_ID = "bridge_server_quiet"
+        private val OLD_CHANNELS = listOf(
+            "bridge_server", "camera-mode", "calls", "messages", "calls-missed", "laptop-offline", "camera-alerts", "find-me", "places",
+        )
         private const val NOTIF_ID = 1001
         private const val ACTION_STOP = "dev.periy.bridge.STOP"
         const val ACTION_APPROVE = "dev.periy.bridge.PAIR_APPROVE"

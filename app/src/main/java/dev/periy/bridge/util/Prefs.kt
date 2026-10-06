@@ -98,9 +98,6 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("location_asked", false)
         set(v) = sp.edit { putBoolean("location_asked", v) }
 
-    var laptopAlerts: Boolean
-        get() = sp.getBoolean("laptop_alerts", true)
-        set(v) = sp.edit { putBoolean("laptop_alerts", v) }
 
     /** Paired laptops and phones may reach this phone from other networks, through the tunnel. */
     var remote: Boolean

@@ -35,7 +35,8 @@ class CameraService : Service() {
         val cams = container.cameras
         if (intent?.action == STOP) { cams.set(CamSet(on = false)); stopSelf(); return START_NOT_STICKY }
         val nm = getSystemService(NotificationManager::class.java)
-        nm?.createNotificationChannel(NotificationChannel(CHANNEL, "Camera mode", NotificationManager.IMPORTANCE_LOW).apply {
+        // Android requires it while the camera runs: folded away, no icon, never a sound.
+        nm?.createNotificationChannel(NotificationChannel(CHANNEL, "Camera mode", NotificationManager.IMPORTANCE_MIN).apply {
             description = "While this phone is a camera for your other devices."
         })
         val stop = PendingIntent.getService(this, 8520, Intent(this, CameraService::class.java).setAction(STOP), PendingIntent.FLAG_IMMUTABLE)
@@ -72,7 +73,7 @@ class CameraService : Service() {
 
     companion object {
         private const val TAG = "CameraService"
-        private const val CHANNEL = "camera-mode"
+        private const val CHANNEL = "camera-mode-quiet"
         private const val ID = 8503
         const val STOP = "dev.periy.bridge.CAMERA_STOP"
     }

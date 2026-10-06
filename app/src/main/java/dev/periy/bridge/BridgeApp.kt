@@ -54,7 +54,6 @@ class Container(ctx: Context) {
 
     init {
         background.launch(kotlinx.coroutines.Dispatchers.Main) { eq.state.collect { player.applyEq(it) } }
-        background.launch { while (true) { kotlinx.coroutines.delay(15_000); runCatching { laptopWatch.check() } } }
         background.launch {
             player.state.map { it.current }.distinctUntilChangedBy { it?.id }.collectLatest { t ->
                 if (t == null) return@collectLatest
@@ -103,7 +102,6 @@ class Container(ctx: Context) {
     val callLog = dev.periy.bridge.server.CallLog(app)
 
     /** Says when the laptop with the helper drops off. */
-    private val laptopWatch = dev.periy.bridge.server.LaptopWatch(app) { prefs.laptopAlerts }
 
     /** Where your phones and laptops are (server/Where.kt). */
     val where: dev.periy.bridge.server.Where by lazy { dev.periy.bridge.server.Where(app, peers) { tunnelKeys.psk(it) }.also { w -> w.lostNow = { findMe.lost.value.on } } }
