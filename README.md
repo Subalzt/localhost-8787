@@ -752,6 +752,24 @@ at all does the call say so.
   the phone. Needs the page at `localhost:8787` (through the helper) or the website, where a
   browser lets a page use the microphone.
 
+### Handoff
+
+Carry on with what the other one was in the middle of, at the same second.
+
+- **Laptop to phone**: **Devices → Continue from laptop**, the **Handoff** tile in the phone's
+  quick settings, or **Ctrl+Alt+P** on the laptop. The page the laptop has open goes to the phone,
+  in its own app where there is one (YouTube, Prime Video, Spotify...), and what was playing is
+  paused on the laptop; a YouTube video carries on at the same second (Prime Video and Netflix keep
+  the place themselves). The helper reads the page from Firefox's own session file (so it works in
+  full screen), or Chrome's and Edge's address bar, and what plays and where from Windows' media
+  sessions, in about half a second. On Linux it asks the media players themselves (MPRIS, through
+  `playerctl`); on a Mac, the front Safari or Chrome tab.
+- **Phone to laptop**: share a link to **Open on laptop** and it opens in the laptop's browser; a
+  YouTube video playing on the phone goes at the second it is at, and stops on the phone.
+- **Music, both ways**: the laptop at the top right of the phone's player carries the song on in
+  a laptop's page from the same moment (an open page takes it; with none, the laptop opens one), and
+  the phone at the top right of the page's player hands its song to the phone.
+
 ### Laptop health
 
 **Devices → Laptop health** on the phone (and **Health** beside each laptop on the page) shows how
