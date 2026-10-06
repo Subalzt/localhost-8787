@@ -1048,6 +1048,146 @@ public static class BlazeItPc
         catch { return -1; }
     }
 
+    // ------------------------------------------------------------------ how the laptop is doing
+
+    [StructLayout(LayoutKind.Sequential)] struct FileTime64 { public uint Low, High; public ulong V { get { return ((ulong)High << 32) | Low; } } }
+    [DllImport("kernel32.dll")] static extern bool GetSystemTimes(out FileTime64 idle, out FileTime64 kernel, out FileTime64 user);
+    [StructLayout(LayoutKind.Sequential)] class MemStatus
+    {
+        public uint dwLength = (uint)Marshal.SizeOf(typeof(MemStatus)); public uint dwMemoryLoad;
+        public ulong ullTotalPhys, ullAvailPhys, ullTotalPageFile, ullAvailPageFile, ullTotalVirtual, ullAvailVirtual, ullAvailExtendedVirtual;
+    }
+    [DllImport("kernel32.dll")] static extern bool GlobalMemoryStatusEx([In, Out] MemStatus m);
+
+    [DllImport("kernel32.dll")] static extern ulong GetTickCount64();
+    static string cpuName;
+    static bool noZones;
+
+    /**
+     * A snapshot of the laptop for the phone (server/LaptopHealth.kt): CPU (its use over a third of
+     * a second), memory, each NVIDIA GPU (nvidia-smi), the temperatures Windows tells without admin
+     * (its thermal zones), battery, each fixed disk, and the busiest programs. JSON, posted back.
+     */
+    static string Health()
+    {
+        var b = new StringBuilder("{");
+        b.Append("\"name\":" + Json(Environment.MachineName) + ",\"os\":" + Json(Environment.OSVersion.VersionString));
+        b.Append(",\"uptime\":" + (GetTickCount64() / 1000));
+        // CPU: the share not idle, over 300 ms; and per program, the busiest five over the same time.
+        var before = new Dictionary<int, TimeSpan>();
+        foreach (Process pr in Process.GetProcesses()) { try { before[pr.Id] = pr.TotalProcessorTime; } catch { } }
+        FileTime64 i1, k1, u1, i2, k2, u2;
+        GetSystemTimes(out i1, out k1, out u1);
+        Thread.Sleep(300);
+        GetSystemTimes(out i2, out k2, out u2);
+        ulong idle = i2.V - i1.V, total = (k2.V - k1.V) + (u2.V - u1.V);
+        double cpu = total > 0 ? 100.0 * (total - idle) / total : 0;
+        if (cpuName == null)
+            try { cpuName = ((string)Microsoft.Win32.Registry.GetValue(@"HKEY_LOCAL_MACHINE\HARDWARE\DESCRIPTION\System\CentralProcessor\0", "ProcessorNameString", "")).Trim(); } catch { cpuName = ""; }
+        b.Append(",\"cpu\":{\"use\":" + cpu.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + ",\"name\":" + Json(cpuName) + ",\"cores\":" + Environment.ProcessorCount + "}");
+        var top = new List<KeyValuePair<double, string>>();
+        int cores = Environment.ProcessorCount;
+        foreach (Process pr in Process.GetProcesses())
+        {
+            try
+            {
+                TimeSpan was;
+                if (!before.TryGetValue(pr.Id, out was)) continue;
+                double share = (pr.TotalProcessorTime - was).TotalMilliseconds / 300.0 / cores * 100;
+                if (share >= 0.5) top.Add(new KeyValuePair<double, string>(share, "{\"name\":" + Json(pr.ProcessName) + ",\"cpu\":" +
+                    share.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + ",\"mem\":" + pr.WorkingSet64 + "}"));
+            }
+            catch { }
+        }
+        top.Sort(delegate (KeyValuePair<double, string> x, KeyValuePair<double, string> y) { return y.Key.CompareTo(x.Key); });
+        var busiest = new List<string>();
+        for (int i = 0; i < top.Count && i < 5; i++) busiest.Add(top[i].Value);
+        b.Append(",\"top\":[" + string.Join(",", busiest.ToArray()) + "]");
+        var m = new MemStatus();
+        if (GlobalMemoryStatusEx(m)) b.Append(",\"mem\":{\"used\":" + (m.ullTotalPhys - m.ullAvailPhys) + ",\"total\":" + m.ullTotalPhys + "}");
+        // The GPUs NVIDIA's own tool reports (each: name, use, memory, temperature, power).
+        var gpus = new List<string>();
+        try
+        {
+            string smi = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "nvidia-smi.exe");
+            if (File.Exists(smi))
+            {
+                string o = RunOut(smi, "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw --format=csv,noheader,nounits");
+                foreach (string line in o.Split('\n'))
+                {
+                    string[] f = line.Split(',');
+                    if (f.Length < 6) continue;
+                    gpus.Add("{\"name\":" + Json(f[0].Trim()) + ",\"use\":" + Dec(f[1]) + ",\"memUsed\":" + Dec(f[2]) + ",\"memTotal\":" + Dec(f[3]) +
+                        ",\"temp\":" + Dec(f[4]) + ",\"power\":" + Dec(f[5]) + "}");
+                }
+            }
+        }
+        catch { }
+        b.Append(",\"gpus\":[" + string.Join(",", gpus.ToArray()) + "]");
+        // Temperatures Windows gives without admin: its ACPI thermal zones (tenths of a kelvin).
+        var temps = new List<string>();
+        if (!noZones) try
+        {
+            string o = RunOut("powershell.exe", "-NoProfile -NonInteractive -Command \"Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation | ForEach-Object { $_.Name + '|' + $_.HighPrecisionTemperature }\"");
+            foreach (string line in o.Split('\n'))
+            {
+                string[] f = line.Trim().Split('|');
+                double k;
+                if (f.Length == 2 && double.TryParse(f[1], out k) && k > 2000)
+                    temps.Add("{\"name\":" + Json(f[0].Replace("\\_TZ.", "")) + ",\"c\":" + (k / 10 - 273.15).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "}");
+            }
+        }
+        catch { }
+        // Many laptops expose none: asked once, then only the GPU's own temperature (2.5 s saved each time).
+        if (temps.Count == 0) noZones = true;
+        b.Append(",\"temps\":[" + string.Join(",", temps.ToArray()) + "]");
+        try
+        {
+            var pw = System.Windows.Forms.SystemInformation.PowerStatus;
+            if (pw.BatteryChargeStatus != System.Windows.Forms.BatteryChargeStatus.NoSystemBattery)
+                b.Append(",\"battery\":{\"percent\":" + Math.Round(pw.BatteryLifePercent * 100) + ",\"plugged\":" + (pw.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Online ? "true" : "false") +
+                    ",\"charging\":" + ((pw.BatteryChargeStatus & System.Windows.Forms.BatteryChargeStatus.Charging) != 0 ? "true" : "false") +
+                    ",\"minutes\":" + (pw.BatteryLifeRemaining > 0 ? pw.BatteryLifeRemaining / 60 : -1) + "}");
+        }
+        catch { }
+        var disks = new List<string>();
+        foreach (DriveInfo dr in DriveInfo.GetDrives())
+        {
+            try
+            {
+                if (dr.DriveType != DriveType.Fixed || !dr.IsReady) continue;
+                disks.Add("{\"name\":" + Json(dr.Name.TrimEnd('\\') + (dr.VolumeLabel.Length > 0 ? " " + dr.VolumeLabel : "")) + ",\"used\":" + (dr.TotalSize - dr.TotalFreeSpace) + ",\"total\":" + dr.TotalSize + "}");
+            }
+            catch { }
+        }
+        b.Append(",\"disks\":[" + string.Join(",", disks.ToArray()) + "]}");
+        return b.ToString();
+    }
+
+    static string Dec(string v)
+    {
+        double d;
+        return double.TryParse(v.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out d)
+            ? d.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "null";
+    }
+
+    static void HealthAnswer(string id)
+    {
+        string json;
+        try { json = Health(); } catch (Exception e) { json = "{\"error\":" + Json(e.Message) + "}"; }
+        try
+        {
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + "/api/laptop/health/answer?id=" + Uri.EscapeDataString(id));
+            r.Proxy = null; r.Method = "POST"; r.UserAgent = Ua; r.Headers["Cookie"] = session;
+            r.ContentType = "application/json"; r.Timeout = 15000; r.KeepAlive = false;
+            byte[] body = Encoding.UTF8.GetBytes(json);
+            r.ContentLength = body.Length;
+            using (Stream o = r.GetRequestStream()) o.Write(body, 0, body.Length);
+            using (r.GetResponse()) { }
+        }
+        catch { }
+    }
+
     static void LaptopList(string id, string path)
     {
         var items = new List<string>();
@@ -1876,6 +2016,13 @@ public static class BlazeItPc
                                 if (q.Length >= 2 && long.TryParse(q[1], out n)) lock (ackLock) { ackSid = q[0]; ackBytes = n; }
                             }
                             else if (ev == "direct") directPoked = true;
+                            // The phone asks how this laptop is doing (its Devices tab, a page): answered at once.
+                            else if (ev == "health" && !snapshot)
+                            {
+                                string hid = d.Trim();
+                                Thread h = new Thread(delegate () { HealthAnswer(hid); });
+                                h.IsBackground = true; h.Start();
+                            }
                             else if (ev == "laptopfs" && !snapshot)
                             {
                                 // The phone asks for a folder here, or a file from it (LaptopFiles on the phone).

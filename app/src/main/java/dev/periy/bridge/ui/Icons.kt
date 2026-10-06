@@ -357,6 +357,8 @@ object BlazeIcons {
 
     /** A chevron pointing back. */
     val Back: ImageVector = stroked("back", "M14.5 5.5 8 12l6.5 6.5")
+    /** A pushpin: something kept, in the clipboard's history. */
+    val Pushpin: ImageVector = stroked("pushpin", "M9 3.5h6l-1 6 3.5 3.5h-11L10 9.5ZM12 13v7.5")
     val Pin: ImageVector = stroked("pin", "M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11ZM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z")
 
     /** An arrow going round: look again. */

@@ -77,6 +77,10 @@ object Control {
     /** The helpers listening now, by device id. */
     fun online(): Set<String> = byDevice.values.toSet()
 
+    /** The helpers listening now: each laptop's device id and its machine's name, once each. */
+    fun laptops(): List<Pair<String, String>> =
+        names.mapNotNull { (ch, name) -> byDevice[ch]?.let { it to helperMachine(name).removeSuffix(" (website)") } }.distinctBy { it.first }
+
     fun attach(name: String, deviceId: String? = null): Channel<String> {
         // Unlimited: a stalled laptop must never block the touch thread. The writer
         // drains whatever has piled up in one go, so a backlog clears in one flush.

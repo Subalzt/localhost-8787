@@ -558,6 +558,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         flashClip("Back on the clipboard")
     }
 
+    fun pinClip(v: Long, on: Boolean) { getApplication<Application>().container.clipboard.pin(v, on) }
+
     fun forgetClip(v: Long) {
         val app = getApplication<Application>()
         val wasCurrent = app.container.clipboard.meta.value.v == v

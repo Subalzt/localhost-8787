@@ -428,6 +428,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     var controlOpen by remember { mutableStateOf(false) }
     // The laptop's files, open over the app.
     var laptopFilesOpen by remember { mutableStateOf(false) }
+    var healthOpen by remember { mutableStateOf(false) }
     // Where your phones and laptops are, on a map, open over the app.
     var mapOpen by remember { mutableStateOf(false) }
     // Location, asked for once on the first start (then all the time, as Android has it asked
@@ -466,7 +467,7 @@ private fun BlazeItUi(vm: MainViewModel) {
     // lyrics do the same in their own screens.)
     val oemSwipe = rememberBackSwipe(enabled = showOem) { showOem = false }
     // A tab goes back to Home: the pages slide towards it with the swipe, a little under half way.
-    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !mapOpen && tab != TAB_HOME && !shelf.showing) { events ->
+    androidx.activity.compose.PredictiveBackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !healthOpen && !mapOpen && tab != TAB_HOME && !shelf.showing) { events ->
         val from = pager.currentPage
         val toward = if (from > TAB_HOME) -1 else 1
         try {
@@ -478,14 +479,14 @@ private fun BlazeItUi(vm: MainViewModel) {
     }
     // At Home, from Android 12 on the system takes back itself (and, from 14, shows it coming):
     // the app goes to the background, as it does below 12 here.
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !mapOpen && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !healthOpen && !mapOpen && tab == TAB_HOME && Build.VERSION.SDK_INT < 31) {
         (ctx as? android.app.Activity)?.moveTaskToBack(true)
     }
     // Music, open: a search closes, then an album (in Music's own screen), then Music itself, back
     // to the app, following the finger. The player, open over it, goes back down a step first.
-    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !mapOpen && shelf.showing) { shelf.back() }
+    androidx.activity.compose.BackHandler(enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !healthOpen && !mapOpen && shelf.showing) { shelf.back() }
     val musicSwipe = rememberBackSwipe(
-        enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !mapOpen && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
+        enabled = !showOem && browsePeer == null && chatWith == null && !controlOpen && !laptopFilesOpen && !healthOpen && !mapOpen && shelf.showing && shelf.open == null && !shelf.searching && !playerOpen,
     ) { shelf.showing = false }
     // A linked phone's files, at their top folder (a folder inside goes up a folder first, in its screen).
     val peerSwipe = rememberBackSwipe(enabled = browsePeer != null) { browsePeer = null }
@@ -661,6 +662,7 @@ private fun BlazeItUi(vm: MainViewModel) {
                                     running, transfers, paired, devices, live, vm,
                                     openControl = { controlOpen = true },
                                     openLaptopFiles = { laptopFilesOpen = true },
+                                    openHealth = { healthOpen = true },
                                     openMap = { mapOpen = true },
                                 )
                                 TAB_PHONES -> phonesTab(
@@ -797,6 +799,15 @@ private fun BlazeItUi(vm: MainViewModel) {
             exit = androidx.compose.animation.slideOutHorizontally(tween(260)) { it } + androidx.compose.animation.fadeOut(tween(200)),
         ) {
             LaptopFilesScreen { laptopFilesOpen = false }
+        }
+
+        // How the laptops are doing, the same way in.
+        androidx.compose.animation.AnimatedVisibility(
+            healthOpen,
+            enter = androidx.compose.animation.slideInHorizontally(tween(300)) { it } + androidx.compose.animation.fadeIn(tween(200)),
+            exit = androidx.compose.animation.slideOutHorizontally(tween(260)) { it } + androidx.compose.animation.fadeOut(tween(200)),
+        ) {
+            LaptopHealthScreen { healthOpen = false }
         }
 
         // The map of your phones and laptops rises in over the app.
@@ -1661,7 +1672,8 @@ private fun ClipboardPanel(shared: String, status: String, vm: MainViewModel, sh
 
 /**
  * Recent clipboard items, newest first, like a keyboard's clipboard: tap one to put it back
- * (on the computer too), the cross to remove it.
+ * (on the computer too), the pin to keep it however much is copied after, the cross to remove it.
+ * Pinned ones come first; a search box narrows the list to what has some words in it.
  */
 @Composable
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -1674,7 +1686,27 @@ private fun ClipHistory(
             Text("Nothing copied yet.", style = BodyStyle, color = Bridge.Muted, modifier = Modifier.padding(4.dp))
             return@Column
         }
-        items.forEach { m ->
+        var query by remember { mutableStateOf("") }
+        Box(
+            Modifier.fillMaxWidth().padding(bottom = 4.dp).clip(RoundedCornerShape(10.dp)).background(Bridge.Chip)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            if (query.isEmpty()) Text("Search copies", style = BodyStyle.copy(fontSize = 15.sp), color = Bridge.Faint)
+            BasicTextField(
+                value = query, onValueChange = { query = it }, singleLine = true,
+                textStyle = BodyStyle.copy(fontSize = 15.sp, color = Bridge.Text), cursorBrush = SolidColor(Bridge.Blue),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        val needle = query.trim()
+        val shown = items.filter { needle.isEmpty() || (if (it.kind == "text") it.text else it.name).contains(needle, ignoreCase = true) }
+        if (shown.isEmpty()) Text("Nothing copied has that in it.", style = BodyStyle, color = Bridge.Muted, modifier = Modifier.padding(6.dp))
+        val pinned = shown.filter { it.pinned }
+        val rest = shown.filterNot { it.pinned }
+        val kicker = @Composable { t: String -> Text(t.uppercase(), style = KickerStyle, color = Bridge.Muted, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp)) }
+        (pinned + rest).forEachIndexed { i, m ->
+            if (i == 0 && pinned.isNotEmpty()) kicker("Pinned")
+            if (i == pinned.size && pinned.isNotEmpty() && rest.isNotEmpty()) kicker("Recent")
             Row(
                 Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(10.dp))
                     .background(if (m.v == current) Bridge.Accent.copy(alpha = 0.16f) else Bridge.Chip)
@@ -1701,6 +1733,9 @@ private fun ClipHistory(
                     )
                 }
                 Spacer(Modifier.width(6.dp))
+                Box(Modifier.size(30.dp).clip(CircleShape).clickable { vm.pinClip(m.v, !m.pinned) }, contentAlignment = Alignment.Center) {
+                    Icon(BlazeIcons.Pushpin, if (m.pinned) "Unpin" else "Pin", tint = if (m.pinned) Bridge.Accent else Bridge.Faint, modifier = Modifier.size(17.dp))
+                }
                 Box(Modifier.size(30.dp).clip(CircleShape).clickable { vm.forgetClip(m.v) }, contentAlignment = Alignment.Center) {
                     Icon(BlazeIcons.Close, "Remove", tint = Bridge.Muted, modifier = Modifier.size(16.dp))
                 }
@@ -1751,6 +1786,7 @@ private fun LazyListScope.devicesTab(
     vm: MainViewModel,
     openControl: () -> Unit,
     openLaptopFiles: () -> Unit,
+    openHealth: () -> Unit,
     openMap: () -> Unit,
 ) {
     // Linked phones are on Phones: their ways in here (the one each was let in by, and the one it
@@ -1776,7 +1812,7 @@ private fun LazyListScope.devicesTab(
     }
     item { ComputersCard(computers, devices, live) { vm.removeDevice(it) } }
     item { Spacer(Modifier.height(12.dp)) }
-    item { ControlRow(running, openControl, openLaptopFiles) }
+    item { ControlRow(running, openControl, openLaptopFiles, openHealth) }
 
     transfersSection(transfers)
 
@@ -1943,7 +1979,7 @@ private fun ComputersCard(computers: List<PairedDevice>, all: List<PairedDevice>
 
 /** Control: the trackpad and keys for the computer running the helper, on a screen of its own. */
 @Composable
-private fun ControlRow(running: Boolean, open: () -> Unit, openFiles: () -> Unit) {
+private fun ControlRow(running: Boolean, open: () -> Unit, openFiles: () -> Unit, openHealth: () -> Unit) {
     val laptops by dev.periy.bridge.server.Control.connected.collectAsStateWithLifecycle()
     GroupCard {
         SettingRow(
@@ -1960,6 +1996,12 @@ private fun ControlRow(running: Boolean, open: () -> Unit, openFiles: () -> Unit
             "Files on the laptop",
             detail = if (laptops.isEmpty()) "Needs the helper on the computer" else "Browse and save to this phone",
             icon = BlazeIcons.Folder, iconColor = Color(0xFF0A84FF), onClick = openFiles,
+        ) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
+        // How it is doing: battery, CPU, GPU, temperatures, disks.
+        SettingRow(
+            "Laptop health",
+            detail = if (laptops.isEmpty()) "Needs the helper on the computer" else "Battery, CPU, GPU, temperatures and disks",
+            icon = BlazeIcons.Pulse, iconColor = Color(0xFF30D158), onClick = openHealth,
         ) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
     }
 }

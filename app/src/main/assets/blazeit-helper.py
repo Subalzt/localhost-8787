@@ -2932,6 +2932,9 @@ def events_loop():
                             ack["sid"], ack["bytes"] = q[0], int(q[1])
                 elif ev == "direct":
                     direct_poked[0] = True
+                elif ev == "health" and not snapshot:
+                    # The phone asks how this computer is doing (LaptopHealth on the phone).
+                    threading.Thread(target=health_answer, args=(d.strip(),), daemon=True).start()
                 elif ev == "laptopfs" and not snapshot:
                     # The phone asks for a folder here, or a file from it (LaptopFiles on the phone).
                     q = d.split(" ")
@@ -3307,6 +3310,173 @@ def count_items(path):
         return n
     except OSError:
         return -1
+
+
+def _cpu_times():
+    """Busy and total CPU time so far: /proc/stat on Linux; None elsewhere."""
+    try:
+        with open("/proc/stat") as f:
+            v = [int(x) for x in f.readline().split()[1:]]
+        idle = v[3] + (v[4] if len(v) > 4 else 0)
+        return sum(v) - idle, sum(v)
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _cpu_name():
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    if sys.platform == "darwin":
+        try:
+            return subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True, timeout=3).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return ""
+
+
+def _num(v):
+    try:
+        return float(v.strip())
+    except ValueError:
+        return None
+
+
+def _read(path):
+    with open(path) as f:
+        return f.read().strip()
+
+
+def health():
+    """A snapshot of this computer for the phone (server/LaptopHealth.kt), as the Windows helper's Health()."""
+    out = {"name": machine_name(), "os": " ".join(os.uname()[0:3:2]) if hasattr(os, "uname") else sys.platform}
+    try:
+        out["uptime"] = int(float(_read("/proc/uptime").split()[0]))
+    except (OSError, ValueError):
+        try:
+            boot = subprocess.run(["sysctl", "-n", "kern.boottime"], capture_output=True, text=True, timeout=3).stdout
+            out["uptime"] = int(time.time()) - int(re.search(r"sec = (\d+)", boot).group(1))
+        except (OSError, subprocess.SubprocessError, AttributeError):
+            out["uptime"] = 0
+    cores = os.cpu_count() or 1
+    a = _cpu_times()
+    time.sleep(0.3)
+    b = _cpu_times()
+    if a and b and b[1] > a[1]:
+        use = 100.0 * (b[0] - a[0]) / (b[1] - a[1])
+    else:
+        use = min(100.0, os.getloadavg()[0] * 100 / cores) if hasattr(os, "getloadavg") else 0.0
+    out["cpu"] = {"use": round(use, 1), "name": _cpu_name(), "cores": cores}
+    # The busiest programs: ps knows on both Linux and macOS.
+    try:
+        ps = subprocess.run(["ps", "-Ao", "pcpu=,rss=,comm="], capture_output=True, text=True, timeout=5).stdout
+        top = []
+        for line in ps.splitlines():
+            f = line.split(None, 2)
+            if len(f) == 3 and _num(f[0]) is not None:
+                top.append({"name": os.path.basename(f[2].strip()), "cpu": round(_num(f[0]) / cores, 1), "mem": int(f[1]) * 1024})
+        out["top"] = [t for t in sorted(top, key=lambda t: -t["cpu"]) if t["cpu"] >= 0.5][:5]
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    try:
+        info = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                k, v = line.split(":", 1)
+                info[k] = int(v.split()[0]) * 1024
+        out["mem"] = {"used": info["MemTotal"] - info.get("MemAvailable", info.get("MemFree", 0)), "total": info["MemTotal"]}
+    except (OSError, KeyError, ValueError):
+        if sys.platform == "darwin":
+            try:
+                total = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, timeout=3).stdout)
+                vm = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=3).stdout
+                page = int(re.search(r"page size of (\d+)", vm).group(1))
+                free = sum(int(re.search(k + r":\s+(\d+)", vm).group(1)) for k in ("Pages free", "Pages inactive", "Pages speculative"))
+                out["mem"] = {"used": total - free * page, "total": total}
+            except (OSError, subprocess.SubprocessError, AttributeError, ValueError):
+                pass
+    gpus = []
+    smi = shutil.which("nvidia-smi")
+    if smi:
+        try:
+            o = subprocess.run([smi, "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
+                                "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=5).stdout
+            for line in o.splitlines():
+                f = line.split(",")
+                if len(f) >= 6:
+                    gpus.append({"name": f[0].strip(), "use": _num(f[1]), "memUsed": _num(f[2]), "memTotal": _num(f[3]),
+                                 "temp": _num(f[4]), "power": _num(f[5])})
+        except (OSError, subprocess.SubprocessError):
+            pass
+    out["gpus"] = gpus
+    # Temperatures: Linux's hardware monitors (the CPU package and the like), each label once.
+    temps, seen = [], set()
+    base = "/sys/class/hwmon"
+    for hw in sorted(os.listdir(base)) if os.path.isdir(base) else []:
+        d = os.path.join(base, hw)
+        try:
+            chip = _read(os.path.join(d, "name"))
+        except OSError:
+            continue
+        for fn in sorted(os.listdir(d)):
+            if not (fn.startswith("temp") and fn.endswith("_input")):
+                continue
+            try:
+                c = int(_read(os.path.join(d, fn))) / 1000
+                lab = os.path.join(d, fn.replace("_input", "_label"))
+                label = _read(lab) if os.path.exists(lab) else chip
+            except (OSError, ValueError):
+                continue
+            if 0 < c < 150 and label not in seen and len(temps) < 8:
+                seen.add(label)
+                temps.append({"name": label, "c": round(c, 1)})
+    out["temps"] = temps
+    # Battery: Linux's power supplies, or macOS's pmset.
+    try:
+        ps = "/sys/class/power_supply"
+        for n in os.listdir(ps) if os.path.isdir(ps) else []:
+            p = os.path.join(ps, n)
+            if _read(os.path.join(p, "type")) == "Battery":
+                status = _read(os.path.join(p, "status"))
+                out["battery"] = {"percent": int(_read(os.path.join(p, "capacity"))), "charging": status == "Charging",
+                                  "plugged": status in ("Charging", "Full", "Not charging"), "minutes": -1}
+                break
+        if "battery" not in out and sys.platform == "darwin":
+            o = subprocess.run(["pmset", "-g", "batt"], capture_output=True, text=True, timeout=3).stdout
+            m = re.search(r"(\d+)%;\s*([^;]+);\s*(?:(\d+):(\d+))?", o)
+            if m:
+                out["battery"] = {"percent": int(m.group(1)), "charging": m.group(2).strip() == "charging",
+                                  "plugged": "AC Power" in o,
+                                  "minutes": int(m.group(3)) * 60 + int(m.group(4)) if m.group(3) else -1}
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    disks = []
+    vols = [os.path.join("/Volumes", v) for v in os.listdir("/Volumes")] if os.path.isdir("/Volumes") else []
+    for mount in ["/", os.path.expanduser("~")] + vols:
+        try:
+            u = shutil.disk_usage(mount)
+        except OSError:
+            continue
+        if not any(x["total"] == u.total and x["used"] == u.used for x in disks):
+            disks.append({"name": mount, "used": u.used, "total": u.total})
+    out["disks"] = disks
+    return out
+
+
+def health_answer(rid):
+    try:
+        body = json.dumps(health())
+    except Exception as e:  # noqa: BLE001 - the phone hears why rather than waiting
+        body = json.dumps({"error": str(e)})
+    try:
+        request("POST", "/api/laptop/health/answer?id=" + urllib.parse.quote(rid), body=body,
+                headers={"Content-Type": "application/json"}, timeout=15)
+    except OSError:
+        pass
 
 
 def laptop_list(rid, path):

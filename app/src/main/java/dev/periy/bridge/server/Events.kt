@@ -162,6 +162,14 @@ class ClipboardStore(ctx: Context) {
         return old.copy(v = nv, at = now()).also { publish(it) }
     }
 
+    /** Pins an item so it stays however much is copied after it (or unpins it). False if it is gone. */
+    @Synchronized
+    fun pin(v: Long, on: Boolean): Boolean {
+        if (_history.value.none { it.v == v }) return false
+        saveHistory(_history.value.map { if (it.v == v) it.copy(pinned = on) else it })
+        return true
+    }
+
     /** Removes one item from the history (and from the clipboard, if it is the current one). */
     @Synchronized
     fun forget(v: Long) {
@@ -169,11 +177,11 @@ class ClipboardStore(ctx: Context) {
         saveHistory(_history.value.filter { it.v != v })
     }
 
-    /** Empties the history and the clipboard with it: the one way to clear it, everywhere. */
+    /** Empties the history, all but what is pinned, and the clipboard with it: the one way to clear it, everywhere. */
     @Synchronized
     fun forgetAll() {
         if (_meta.value.kind != "empty") publish(ClipMeta(v = nextV(), at = now()), record = false)
-        saveHistory(emptyList())
+        saveHistory(_history.value.filter { it.pinned })
     }
 
     private fun publish(m: ClipMeta, record: Boolean = true) {
@@ -182,19 +190,26 @@ class ClipboardStore(ctx: Context) {
         sp.edit { putString(KEY_META, json.encodeToString(ClipMeta.serializer(), m)); putString(KEY, m.text) }
         // Newest first; the same text copied again moves up instead of appearing twice.
         if (record && m.kind != "empty") {
-            saveHistory(listOf(m) + _history.value.filter {
-                it.v != m.v && !(m.kind == "text" && it.kind == "text" && it.text == m.text)
-            })
+            val same = { it: ClipMeta -> it.v == m.v || (m.kind == "text" && it.kind == "text" && it.text == m.text) }
+            // Copied again, a pinned one stays pinned.
+            val pinned = m.pinned || _history.value.any { same(it) && it.pinned }
+            saveHistory(listOf(m.copy(pinned = pinned)) + _history.value.filterNot(same))
         }
         // "clipboard" carries the text, for laptop helpers older than pictures; "clip" says everything.
         EventBus.emit("clipboard", m.text)
         EventBus.emit("clip", json.encodeToString(ClipMeta.serializer(), m))
     }
 
-    /** Keeps the history within [HISTORY_MAX] items and [HISTORY_BYTES] of pictures and files. */
+    /**
+     * Keeps the history within [HISTORY_MAX] items and [HISTORY_BYTES] of pictures and files;
+     * pinned ones are kept whatever comes after them and count toward neither.
+     */
     private fun saveHistory(list: List<ClipMeta>) {
         var bytes = 0L
-        val kept = list.take(HISTORY_MAX).filter { m ->
+        var n = 0
+        val kept = list.filter { m ->
+            if (m.pinned) return@filter true
+            if (++n > HISTORY_MAX) return@filter false
             if (m.kind == "text" || m.v == _meta.value.v) return@filter true
             bytes += m.size
             bytes <= HISTORY_BYTES
@@ -222,8 +237,8 @@ class ClipboardStore(ctx: Context) {
         const val MAX_CHARS = 256 * 1024
         /** A copied picture or file: 50 MB, plenty for a screenshot, a photo or a document. */
         const val MAX_BYTES = 50L * 1024 * 1024
-        /** The history: the last 30 items, and at most 300 MB of pictures and files among them. */
-        const val HISTORY_MAX = 30
+        /** The history: the last 50 items (and any pinned), at most 300 MB of pictures and files among them. */
+        const val HISTORY_MAX = 50
         const val HISTORY_BYTES = 300L * 1024 * 1024
         private const val KEY = "text"
         private const val KEY_META = "meta"
@@ -245,4 +260,6 @@ data class ClipMeta(
     val size: Long = 0,
     val v: Long = 0,
     val at: Long = 0,
+    /** Kept in the history until unpinned, however much is copied after it. */
+    val pinned: Boolean = false,
 )

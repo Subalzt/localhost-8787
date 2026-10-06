@@ -998,6 +998,16 @@ class BridgeServer(
                 tmp.delete()
             }
         }
+        // A laptop's battery, CPU, memory, GPU, temperatures, disks and busiest programs, measured now.
+        get("/api/laptops/health") {
+            call.device() ?: return@get
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            val id = call.request.queryParameters["id"].orEmpty()
+            if (id !in Control.online()) { call.respond(HttpStatusCode.NotFound, ApiResult(false, "That laptop's helper is not running")); return@get }
+            val r = LaptopHealth.raw(id)
+            if (r == null) call.respond(HttpStatusCode.GatewayTimeout, ApiResult(false, "The laptop did not answer"))
+            else call.respondText(r, ContentType.Application.Json)
+        }
         post("/api/laptops/input") {
             call.device() ?: return@post
             val id = call.request.queryParameters["id"].orEmpty()
@@ -2219,6 +2229,13 @@ class BridgeServer(
             withContext(Dispatchers.IO) { DisplaySound.play(call.receiveStream()) }
             call.respond(ApiResult(true))
         }
+        // How a laptop is doing (server/LaptopHealth.kt): its helper's snapshot, asked for just before.
+        post("/api/laptop/health/answer") {
+            val id = call.request.queryParameters["id"].orEmpty()
+            val body = call.receiveText()
+            if (body.length < 64_000) LaptopHealth.answer(id, body)
+            call.respond(ApiResult(true))
+        }
         // The laptop's files (server/LaptopFiles.kt): its helper's answer to "what is in this folder".
         post("/api/laptop/fs/answer") {
             val id = call.request.queryParameters["id"].orEmpty()
@@ -2709,6 +2726,11 @@ class BridgeServer(
             }
             mirrorToPhone()
             call.respond(m)
+        }
+        // Pins an item (on=0 unpins): it stays in the history however much is copied after it.
+        post("/api/clipboard/history/{v}/pin") {
+            val ok = clipboard.pin(call.parameters["v"]?.toLongOrNull() ?: -1, call.request.queryParameters["on"] != "0")
+            call.respond(if (ok) HttpStatusCode.OK else HttpStatusCode.NotFound, ApiResult(ok, if (ok) "" else "Not in the history"))
         }
         delete("/api/clipboard/history/{v}") {
             val v = call.parameters["v"]?.toLongOrNull() ?: -1
