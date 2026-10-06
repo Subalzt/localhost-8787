@@ -47,6 +47,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- The alarm: Android's own alarm clock, exact (granted to an alarm on 13 and later; asked for before). -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Music streaming reads the audio library only. READ_MEDIA_AUDIO covers audio and
          nothing else on Android 13+; older versions need the broader storage read. -->
@@ -109,6 +113,25 @@
             android:taskAffinity="dev.periy.bridge.cameras"
             android:excludeFromRecents="false"
             android:theme="@style/Theme.PhoneBridge" />
+        <activity
+            android:name=".ui.AlarmActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="dev.periy.bridge.alarm"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.PhoneBridge" />
+        <receiver
+            android:name=".ui.AlarmBoot"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
         <activity
             android:name=".ui.CamWakeActivity"
             android:exported="false"

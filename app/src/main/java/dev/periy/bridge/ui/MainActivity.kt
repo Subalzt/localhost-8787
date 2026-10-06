@@ -142,7 +142,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val theme by vm.theme.collectAsStateWithLifecycle()
             val look by vm.look.collectAsStateWithLifecycle()
-            BlazeTheme(theme, look) { BlazeItUi(vm) }
+            BlazeTheme(theme, look) {
+                BlazeItUi(vm)
+                if (AlarmsUi.open) AlarmsDialog { AlarmsUi.open = false }
+            }
         }
     }
 
@@ -179,6 +182,8 @@ class MainActivity : ComponentActivity() {
         if (intent == null) return
         // Tapping the music notification opens the player.
         if (intent.action == dev.periy.bridge.music.MusicService.ACTION_OPEN_PLAYER) { openPlayer.value = true; intent.action = null; return }
+        // The alarm clock in the status bar opens the alarms.
+        if (intent.getBooleanExtra("openAlarms", false)) { AlarmsUi.open = true; intent.removeExtra("openAlarms") }
         // Tapping a message opens its conversation.
         intent.getStringExtra(EXTRA_CHAT)?.let { openChat.value = it; intent.removeExtra(EXTRA_CHAT) }
         // A call: shown over the lock screen too, and answered when that was the button pressed.
@@ -232,6 +237,13 @@ class MainActivity : ComponentActivity() {
                 android.util.Log.i("LinkPake", "test wrong: ${bad.exceptionOrNull()?.message ?: "GOT A SECRET"}")
                 door.stop()
             }.start()
+            // Alarms without a sound or a tap: `--ez alarmsilent true` mutes rings (false undoes it),
+            // `--ei alarmsnoozesec N` rings through Android's alarm clock in N seconds, `--ez alarmstop true`.
+            if (intent.hasExtra("alarmsilent")) c.ringer.silent = intent.getBooleanExtra("alarmsilent", false)
+            if (intent.hasExtra("alarmsnoozesec")) c.alarms.snoozeAtForTest(System.currentTimeMillis() + intent.getIntExtra("alarmsnoozesec", 30) * 1000L)
+            if (intent.getBooleanExtra("alarmstop", false)) c.ringer.stop()
+            // Sleep timer: `--ei sleepsec N` stops the music in N seconds (fading over the last 30).
+            if (intent.hasExtra("sleepsec")) c.sleep.startMs(intent.getIntExtra("sleepsec", 60) * 1000L)
             // Calls: `--es callto <name>`, `--ez callanswer true`, `--ez callend true`.
             intent.getStringExtra("callto")?.let { c.calls.call(it, intent.getBooleanExtra("video", false)) }
             intent.getStringExtra("calladd")?.let { c.calls.add(it) }

@@ -1332,6 +1332,7 @@ private fun BottomRow(
             )
         }
         RepeatButton(state.repeat, state.repeatTimes, onRepeat, onRepeatTimes)
+        SleepButton()
         RowButton(Iconsax.Sound, "Sound: pitch, speed and volume", size = 21.dp, onClick = onSound)
         // The lyrics button, after the sound controls: opens the lyrics, full screen.
         Box(

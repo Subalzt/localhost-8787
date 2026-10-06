@@ -43,6 +43,10 @@ class Container(ctx: Context) {
     val player = dev.periy.bridge.music.PhonePlayer(app, music)
     val loudness = dev.periy.bridge.music.Loudness(app, music)
     val favourites = dev.periy.bridge.music.Favourites(app)
+    /** The sleep timer, the alarms (Android's alarm clock) and the alarm sounding with your own music. */
+    val sleep = dev.periy.bridge.music.SleepTimer(player)
+    val alarms = dev.periy.bridge.music.Alarms(app)
+    val ringer = dev.periy.bridge.music.AlarmRinger(app, music, favourites, player)
     /** The equalizer, the same for the phone's player and every page's. */
     val eq = dev.periy.bridge.music.EqStore(app)
     /**
@@ -53,6 +57,8 @@ class Container(ctx: Context) {
     private val background = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
     init {
+        // Android forgets alarms when the app is updated or killed hard: the next one, set again.
+        runCatching { alarms.arm() }
         background.launch(kotlinx.coroutines.Dispatchers.Main) { eq.state.collect { player.applyEq(it) } }
         background.launch {
             player.state.map { it.current }.distinctUntilChangedBy { it?.id }.collectLatest { t ->

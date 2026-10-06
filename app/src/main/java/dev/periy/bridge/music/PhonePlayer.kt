@@ -406,7 +406,25 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         get() = prefs.getBoolean(K_LINK_PITCH, false)
         set(v) { prefs.edit().putBoolean(K_LINK_PITCH, v).apply() }
 
-    private fun outVolume() = _state.value.volume * (if (ducked) DUCK else 1f)
+    private fun outVolume() = _state.value.volume * (if (ducked) DUCK else 1f) * fade
+
+    /** The sleep timer's fade (1 as set, down to 0 as it ends); not kept, not the song's volume. */
+    private var fade = 1f
+
+    fun setFade(f: Float) {
+        val v = f.coerceIn(0f, 1f)
+        if (v == fade) return
+        fade = v
+        applyVolume()
+    }
+
+    /**
+     * The sleep timer's "end of this song": the next is not chained on, and when this one ends
+     * the music stops there; [onStoppedAfter] is told. Cleared by itself once it has stopped.
+     */
+    var stopAfterThis: Boolean = false
+        set(v) { field = v; chainNext() }
+    var onStoppedAfter: (() -> Unit)? = null
 
     private fun applyVolume() {
         val v = outVolume()
@@ -492,6 +510,17 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
      */
     private fun completed() {
         val s = _state.value
+        if (stopAfterThis) {
+            stopAfterThis = false
+            wantPlay = false
+            set { it.copy(playing = false, positionMs = 0, at = now()) }
+            runCatching { mp?.seekTo(0) }
+            dropFocus()
+            unregisterNoisy()
+            save()
+            onStoppedAfter?.invoke()
+            return
+        }
         if (s.repeat.holds) {
             runCatching { mp?.seekTo(0); mp?.start() }
             applyParams()
@@ -546,7 +575,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         if (!prepared) return
         val s = _state.value
         val n = when {
-            s.repeat.holds -> -1
+            stopAfterThis || s.repeat.holds -> -1
             s.index + 1 < s.queue.size -> s.index + 1
             s.repeat.loops && s.queue.size > 1 -> 0
             else -> -1
