@@ -435,13 +435,6 @@ buttons working.
 - **The queue**: Namida's sheet, rising under the song as the cover shrinks to the top. Tap to
   play, drag by the handle to move, swipe away to take off; the broom and **Shuffle** as on the page.
 - Pull the mini player down under itself to stop and put it away. The queue is kept for next time.
-- **Mixes**, across the top of Songs (on the page too): **Most played**, **Not heard in a while**
-  (a month or more, or never), **Loudest**, **Quietest**, and one for each mood the library falls
-  into: **Energetic**, **Upbeat**, **Chill**, **Melancholy**, **Dark and heavy**. The phone listens
-  to every song once in the background, a minute of each, and measures how loud it is, its beat
-  (tempo from its onsets), how much it jumps and how bright it sounds; moods come from where a song
-  sits in your own library, so a library of loud rock still has its calm ones. A play counts once
-  half the song, or 30 s, has played, on the phone or on the page. Each mix opens like an album.
 - **Sleep timer**: the clock beside the sound controls. 15 minutes to an hour and a half, or the
   end of this song; the music fades out over its last 30 seconds and stops. The button shows the
   minutes left; **15 minutes more** or **Turn off** from the same menu.

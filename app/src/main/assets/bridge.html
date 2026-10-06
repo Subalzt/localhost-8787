@@ -1775,24 +1775,9 @@
   /* An album's card: on the card colour, rounded 12, the cover with the year frosted into its
      corner and a play button in the other; its words sized to the card. */
   .nml-albums { display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); row-gap: 8px; padding: 8px 4px 0; }
-  .mx-mixes { padding: 6px 0 14px; }
   .handoff-go { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 90; border: 0; border-radius: 999px;
     padding: 14px 22px; font: inherit; font-size: 15px; font-weight: 600; background: var(--accent); color: #fff; cursor: pointer;
     box-shadow: 0 10px 30px rgba(0,0,0,.3); max-width: calc(100vw - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mx-mixes-head { display: flex; align-items: baseline; gap: 12px; padding: 0 16px 8px; }
-  .mx-mixes-head b { font-size: 20px; font-weight: 700; flex: 1; }
-  .mx-mixes-head span { font-size: 12px; opacity: .6; }
-  .mx-mixes-row { display: flex; gap: 12px; overflow-x: auto; padding: 0 16px 4px; scrollbar-width: none; }
-  .mx-mixes-row::-webkit-scrollbar { display: none; }
-  .mx-mix { flex: 0 0 150px; border: 0; padding: 0; background: none; color: inherit; text-align: left; cursor: pointer; font: inherit; }
-  .mx-mix-art { position: relative; width: 150px; height: 150px; border-radius: 10px; overflow: hidden; display: grid; }
-  .mx-mix-art.four { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-  .mx-mix-art .mx-mix-c { width: 100%; height: 100%; }
-  .mx-mix-art .mx-mix-c img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .mx-mix-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 45%, rgba(0,0,0,.7)); }
-  .mx-mix-art b { position: absolute; left: 10px; right: 10px; bottom: 9px; z-index: 1; color: #fff; font-size: 15px; font-weight: 700; text-shadow: 0 2px 8px rgba(0,0,0,.4); }
-  .mx-mix > span { display: block; margin-top: 6px; font-size: 12px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mx-mix:active .mx-mix-art { transform: scale(.97); }
   @media (max-width: 600px) { .nml-albums { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   .nc { padding: 0 4px; container-type: inline-size; }
   .nc-card { width: 100%; aspect-ratio: .75; display: flex; flex-direction: column; padding: 0; border: 0; border-radius: 12px; overflow: hidden; cursor: pointer;
@@ -6349,7 +6334,6 @@ async function musicLoad(refresh) {
     music.tracks = body.tracks || [];
     indexAlbums();
     music.loaded = true;
-    loadMixes();
   } catch (e) {
     $("music-list").innerHTML = '<p class="empty">Could not load the library.</p>';
   }
@@ -6543,70 +6527,6 @@ async function handoffToPhone() {
   } catch (e) { nmlToast("The phone did not take it"); }
 }
 
-// ------------------------------------------------------------------ mixes
-//
-// Made on the phone (music/SmartMixes.kt) from what is played and what each song sounds like:
-// most played, not heard in a while, loudest, quietest, and one per mood. Each is an album of its
-// own here (key "mix:..."), so it opens, plays and shuffles as one.
-
-var mixes = { list: [], done: -1, all: -1, timer: 0 };
-
-async function loadMixes() {
-  clearTimeout(mixes.timer);
-  try {
-    var d = await (await api("/api/music/mixes")).json();
-    mixes.done = d.done; mixes.all = d.all;
-    var byId = {};
-    music.tracks.forEach(function (t) { byId[t.id] = t; });
-    Object.keys(music.albumByKey).forEach(function (k) { if (k.indexOf("mix:") === 0) delete music.albumByKey[k]; });
-    mixes.list = (d.mixes || []).map(function (m) {
-      var tracks = m.ids.map(function (id) { return byId[id]; }).filter(Boolean);
-      var a = { key: "mix:" + m.key, mix: true, album: m.title, artist: m.line, tracks: tracks, year: 0,
-        coverId: tracks.length ? (music.albumByKey[tracks[0].ak] || {}).coverId || tracks[0].albumId : "" };
-      music.albumByKey[a.key] = a;
-      return a;
-    }).filter(function (a) { return a.tracks.length; });
-    // Still listening to the library: look again in a while.
-    if (mixes.done >= 0) mixes.timer = setTimeout(loadMixes, 20000);
-  } catch (e) { return; }
-  if (music.view === "songs" && music.album === null && !music.filter.trim()) nmlRedrawAlbum();
-}
-
-/** The mixes across the top of Songs: four covers (or one) with the name over their foot, a line under. */
-function renderMixes(host) {
-  if (!mixes.list.length && mixes.done < 0) return;
-  var box = document.createElement("div");
-  box.className = "mx-mixes";
-  var head = document.createElement("div");
-  head.className = "mx-mixes-head";
-  head.innerHTML = "<b>Mixes</b><span></span>";
-  if (mixes.done >= 0) head.lastChild.textContent = "Listening to your library · " + mixes.done + " of " + mixes.all;
-  box.appendChild(head);
-  var row = document.createElement("div");
-  row.className = "mx-mixes-row";
-  mixes.list.forEach(function (a) {
-    var card = document.createElement("button");
-    card.type = "button";
-    card.className = "mx-mix";
-    var art = document.createElement("div");
-    art.className = "mx-mix-art";
-    var covers = [];
-    a.tracks.forEach(function (t) { var c = (music.albumByKey[t.ak] || {}).coverId || t.albumId; if (covers.indexOf(c) < 0) covers.push(c); });
-    (covers.length >= 4 ? covers.slice(0, 4) : covers.slice(0, 1)).forEach(function (c) { art.appendChild(coverEl("mx-mix-c", c, a.album)); });
-    if (covers.length >= 4) art.classList.add("four");
-    var name = document.createElement("b");
-    name.textContent = a.album;
-    art.appendChild(name);
-    var line = document.createElement("span");
-    line.textContent = a.artist + " · " + a.tracks.length;
-    card.appendChild(art); card.appendChild(line);
-    card.onclick = function () { openAlbum(a.key); };
-    row.appendChild(card);
-  });
-  box.appendChild(row);
-  host.appendChild(box);
-}
-
 /** Draws the page under the app bar: the view picked, or the album pushed over it. */
 function renderMusic() {
   $("music-perm").hidden = music.granted;
@@ -6623,7 +6543,6 @@ function renderMusic() {
     var liked = music.view === "liked", list = liked ? likedMatches() : musicMatches();
     if (!list.length) nmlNote(host, liked && !music.filter.trim() ? "No liked songs yet. Tap the heart on a song to keep it here." : "Nothing matches");
     else {
-      if (!liked && !music.filter.trim()) renderMixes(host);
       renderTracks(host, list.slice(0, music.shown), list, songsSource());
       if (list.length > music.shown) {
         var btn = document.createElement("button");
@@ -7003,9 +6922,8 @@ function renderAlbumPage(host) {
 
   var songs = nmlAlbumSongs(a);
   if (!songs.length) { nmlNote(host, "Nothing matches"); return; }
-  var discs = !a.mix && nml.asort === 0 && songs.some(function (t) { return t.disc !== songs[0].disc; });
-  if (a.mix) renderTracks(host, songs, songs, { kind: "album", key: a.key, label: a.album });
-  else renderTracks(host, songs, songs, { kind: "album", key: a.key, label: a.album },
+  var discs = nml.asort === 0 && songs.some(function (t) { return t.disc !== songs[0].disc; });
+  renderTracks(host, songs, songs, { kind: "album", key: a.key, label: a.album },
     function (t) { return t.track > 0 ? t.track : a.tracks.indexOf(t) + 1; }, true, discs);
   var foot = document.createElement("p");
   foot.className = "mx-foot";
@@ -7019,7 +6937,6 @@ function mxAlbumMeta() {
   var el = $("mx-ameta"), a = music.album !== null ? music.albumByKey[music.album] : null;
   if (!el || !a || !a.tracks.length) return;
   var first = a.tracks[0], info = np.info[first.id];
-  if (a.mix) { el.textContent = ""; return; }
   if (info === undefined) npInfo(first.id);
   el.textContent = [first.genre, a.year > 0 ? a.year : "", mxFormat(first, info || null, false)].filter(Boolean).join(" · ");
 }
@@ -8331,12 +8248,6 @@ function setupPlayer() {
   audio.addEventListener("timeupdate", function () {
     var t = currentTrack();
     var dur = audio.duration && isFinite(audio.duration) ? audio.duration : (t ? t.durationMs / 1000 : 0);
-    // Half the song, or 30 s, counts as a play (for the mixes), again if it starts over.
-    if (t && audio.currentTime < 3) player.counted = null;
-    if (t && player.counted !== t.id && dur > 4 && audio.currentTime >= Math.min(30, dur / 2)) {
-      player.counted = t.id;
-      api("/api/music/played/" + t.id, { method: "POST" }).catch(function () {});
-    }
     $("pl-time").textContent = fmtTime(audio.currentTime) + " / " + fmtTime(dur);
     $("pl-cur").textContent = fmtTime(audio.currentTime);
     $("pl-dur").textContent = fmtTime(dur);
