@@ -541,14 +541,48 @@ private class CamPlayer(private val app: android.content.Context, private val ta
         v.setTransform(Matrix().apply { setScale(w * k / W, h * k / H, W / 2, H / 2); postRotate(rotation.toFloat(), W / 2, H / 2) })
     }
 
+    /** This stream's name at the camera, for saying what has arrived; and how much has. */
+    @Volatile private var vid = ""
+    /** When the picture being decoded was taken (the camera's clock, µs). */
+    private var pts = 0L
+    @Volatile private var got = 0L
+
     private fun open(): InputStream? {
-        val listenQ = if (listen) "?listen=1" else ""
         if (target == "self") return null
         val p = app.container.peers.find(target) ?: return null
-        val c = app.container.peers.openGet(p, "/api/cams/stream$listenQ", null)
+        vid = java.util.UUID.randomUUID().toString().take(12)
+        got = 0
+        val c = app.container.peers.openGet(p, "/api/cams/stream?v=$vid" + if (listen) "&listen=1" else "", null)
         c.readTimeout = 15_000
         conn = c
         return if (c.responseCode == 200) c.inputStream else { c.disconnect(); null }
+    }
+
+    /** Says what has reached here, a few times a second, so the camera never lets this fall behind. */
+    private fun acks(session: String) = Thread({
+        var last = -1L
+        val p = app.container.peers.find(target) ?: return@Thread
+        while (running && vid == session) {
+            runCatching { Thread.sleep(300) }
+            val n = got
+            if (n != last) { last = n; runCatching { app.container.peers.deliverBytes(p, "/api/cams/ack?v=$session&n=$n", ByteArray(0)) } }
+        }
+    }, "cam-ack").apply { isDaemon = true; start() }
+
+    /**
+     * When each picture shows: at the pace it was taken, a little behind, the delay growing only as
+     * far as the way's unevenness needs and shrinking again when it calms.
+     */
+    private var base = 0L
+    private fun due(ptsUs: Long): Long {
+        val now = System.nanoTime()
+        val pts = ptsUs * 1000
+        if (base == 0L) base = now + 100_000_000L - pts
+        var due = base + pts
+        if (due < now) { base += now - due + 30_000_000L; due = base + pts }
+        else if (due - now > 800_000_000L) { base -= due - now - 150_000_000L; due = base + pts }
+        else if (due - now > 200_000_000L) { base -= 1_000_000L; due -= 1_000_000L }
+        return due
     }
 
     private fun run() {
@@ -558,16 +592,21 @@ private class CamPlayer(private val app: android.content.Context, private val ta
             try {
                 val wantListen = listen
                 val input = DataInputStream(open() ?: run { Thread.sleep(2000); return@run null } ?: continue)
+                acks(vid)
+                base = 0L
                 var configured = false
                 val info = MediaCodec.BufferInfo()
                 while (running) {
                     if (listen != wantListen) break
                     val n0 = input.readInt()
+                    val ms = input.readInt().toLong() and 0xFFFFFFFFL
                     val audio = n0 < 0
                     val n = n0 and Int.MAX_VALUE
                     if (n > 8 * 1024 * 1024) break
                     val b = ByteArray(n)
                     input.readFully(b)
+                    got += 8 + n
+                    pts = ms * 1000
                     if (audio) { if (listen) sound.play(b); continue }
                     if (!configured) {
                         val cut = configEnd(b) ?: continue
@@ -589,7 +628,7 @@ private class CamPlayer(private val app: android.content.Context, private val ta
                             continue
                         }
                         if (o < 0) break
-                        d.releaseOutputBuffer(o, true)
+                        d.releaseOutputBuffer(o, due(info.presentationTimeUs))
                     }
                 }
             } catch (_: Exception) {
@@ -609,7 +648,7 @@ private class CamPlayer(private val app: android.content.Context, private val ta
         if (i < 0) return
         val buf = d.getInputBuffer(i) ?: return
         buf.clear(); buf.put(b, off, n)
-        d.queueInputBuffer(i, 0, n, System.nanoTime() / 1000, flags)
+        d.queueInputBuffer(i, 0, n, pts, flags)
     }
 
     /** Where the settings (SPS, PPS) at the head of a key picture end; null when it does not start with them. */

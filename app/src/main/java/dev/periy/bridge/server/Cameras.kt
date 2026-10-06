@@ -220,6 +220,9 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
     private fun stopEngine(keepOn: Boolean = false) {
         engine?.stop()
         engine = null
+        // Off: every viewer's stream ends (nothing more will come to show they have gone). A restart
+        // (the other lens) keeps them: their pictures go on from the next key picture.
+        if (!keepOn) viewers.toList().forEach { it.close() }
         stopClip()
         motionReset()
         change { it.copy(running = false, recording = false, torch = if (keepOn) it.torch else false) }
@@ -270,18 +273,123 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
     private val viewers = CopyOnWriteArrayList<Viewer>()
 
     /** One viewer's stream: frames as they come, the oldest let go (then on to the next key picture) when it falls behind. */
-    inner class Viewer(val listen: Boolean) {
-        val ch = Channel<ByteArray>(200)
+    /**
+     * One viewer's stream. A viewer that says what has reached it ([ack], by its [id]) is never let
+     * fall more than about half a second behind: past that its pictures wait for the next key picture
+     * (asked for as soon as it has caught up), and the picture's bitrate comes down for everyone, back
+     * up when every viewer keeps up. One that says nothing is cut off past a few seconds' worth.
+     */
+    inner class Viewer(val listen: Boolean, val id: String, val far: Boolean) {
+        val ch = Channel<ByteArray>(60)
         @Volatile var needKey = true
-        fun close() { viewers.remove(this); ch.close(); change { it.copy(viewers = viewers.size) } }
+        /** Bytes handed to it, and what it says has arrived. */
+        @Volatile var sent = 0L
+        @Volatile var acked = 0L
+        @Volatile var acking = false
+        /** Behind: waiting for a key picture before more pictures go. */
+        @Volatile var skipping = false
+        @Volatile var drops = 0
+        /** Where each frame given ends in the stream, and when it was given (ms): what an ack says arrived, in time. */
+        private val marks = ArrayDeque<LongArray>()
+        /** What it said had arrived over the last two seconds: what its way carries now. */
+        private val heard = ArrayDeque<LongArray>()
+        fun inflight() = sent - acked
+        fun mark() = synchronized(marks) {
+            marks.addLast(longArrayOf(sent, System.currentTimeMillis()))
+            while (marks.size > 4000) marks.removeFirst()
+        }
+        fun acked(bytes: Long) = synchronized(marks) {
+            acked = bytes
+            while (marks.isNotEmpty() && marks.first()[0] <= bytes) marks.removeFirst()
+            val now = System.currentTimeMillis()
+            heard.addLast(longArrayOf(now, bytes))
+            while (heard.size > 2 && now - heard.first()[0] > 2000) heard.removeFirst()
+        }
+        /** How long the oldest frame not yet arrived has been on its way (ms): how far behind it is. */
+        fun age(): Long = synchronized(marks) { if (marks.isEmpty()) 0 else System.currentTimeMillis() - marks.first()[1] }
+        /** Bytes it may have on their way: about what its way carried in the last 0.7 s, never under 48 KB. */
+        fun cap(): Long = synchronized(marks) {
+            // Before it has said anything: a key picture and little more, so a slow way starts clear.
+            if (!acking || heard.size < 2) return 16_000
+            val a = heard.first(); val b = heard.last()
+            val bps = if (b[0] > a[0]) (b[1] - a[1]) * 1000 / (b[0] - a[0]) else 0
+            maxOf(48_000L, bps * 7 / 10)
+        }
+        /** Too far behind for another picture now. */
+        fun full(): Boolean = age() > BEHIND_MS || inflight() > cap()
+        fun close() { viewers.remove(this); ch.close(); change { it.copy(viewers = viewers.size) }; if (viewers.isEmpty()) setRate(CamEngine.BITRATE) }
     }
 
-    fun watch(listen: Boolean): Viewer {
-        val v = Viewer(listen)
+    fun watch(listen: Boolean, id: String = "", far: Boolean = false): Viewer {
+        val v = Viewer(listen, id, far)
         viewers += v
         change { it.copy(viewers = viewers.size) }
+        // From afar it starts gently, and climbs as the way allows.
+        if (far && rate > FAR_START) setRate(FAR_START)
         engine?.keyNow()
+        rateLoop()
         return v
+    }
+
+    /** How much of viewer [id]'s stream has reached it. */
+    fun ack(id: String, bytes: Long) {
+        val v = viewers.firstOrNull { it.id == id } ?: return
+        v.acking = true
+        if (bytes > v.acked) v.acked(bytes)
+        if (v.skipping && v.inflight() == 0L) engine?.keyNow()
+    }
+
+    @Volatile private var rate = CamEngine.BITRATE
+
+    private fun setRate(bps: Int) {
+        val r = bps.coerceIn(MIN_RATE, CamEngine.BITRATE)
+        if (r == rate) return
+        rate = r
+        engine?.setBitrate(r)
+    }
+
+    @Volatile private var rating: kotlinx.coroutines.Job? = null
+    private var calm = 0
+
+    /** Once a second while anyone watches: down when a viewer fell behind, up after a few calm seconds. */
+    private fun rateLoop() {
+        if (rating?.isActive == true) return
+        rating = scope.launch {
+            var lastDrops = 0
+            while (viewers.isNotEmpty()) {
+                kotlinx.coroutines.delay(1000)
+                // A viewer gone without a word (nothing arrives while it waits for a key picture, so
+                // its stream never fails): let go after 15 s of silence.
+                for (v in viewers) if (v.age() > 15_000) { Log.i(TAG, "Viewer ${v.id} went quiet"); v.close() }
+                val drops = viewers.sumOf { it.drops }
+                if (dev.periy.bridge.BuildConfig.DEBUG) for (v in viewers) Log.i(TAG, "viewer ${v.id}: age ${v.age()} ms, on its way ${v.inflight()} of ${v.cap()}, skipping ${v.skipping}, drops ${v.drops}, rate $rate")
+                val tight = viewers.any { it.skipping || it.age() > CATCH_UP_MS }
+                when {
+                    drops > lastDrops -> { setRate(rate * 6 / 10); calm = 0 }
+                    tight -> { setRate(rate * 85 / 100); calm = 0 }
+                    else -> if (++calm >= 3) { setRate(rate * 120 / 100); calm = 1 }
+                }
+                lastDrops = drops
+            }
+        }
+    }
+
+    /** A frame for viewers: its length (the top bit set for sound), when it was taken (ms), then it. */
+    private fun frame(data: ByteArray, ptsUs: Long, sound: Boolean): ByteArray {
+        val n = if (sound) data.size or Int.MIN_VALUE else data.size
+        val ms = (ptsUs / 1000).toInt()
+        val f = ByteArray(8 + data.size)
+        f[0] = (n ushr 24).toByte(); f[1] = (n ushr 16).toByte(); f[2] = (n ushr 8).toByte(); f[3] = n.toByte()
+        f[4] = (ms ushr 24).toByte(); f[5] = (ms ushr 16).toByte(); f[6] = (ms ushr 8).toByte(); f[7] = ms.toByte()
+        System.arraycopy(data, 0, f, 8, data.size)
+        return f
+    }
+
+    private fun give(v: Viewer, f: ByteArray, ptsUs: Long): Boolean {
+        if (v.ch.trySend(f).isFailure) return false
+        v.sent += f.size
+        v.mark()
+        return true
     }
 
     @Volatile private var videoFormat: MediaFormat? = null
@@ -293,15 +401,16 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
 
     private val sink = object : CamEngine.Out {
         override fun video(au: ByteArray, key: Boolean, ptsUs: Long) {
-            val frame = ByteArray(4 + au.size)
-            val n = au.size
-            frame[0] = (n ushr 24).toByte(); frame[1] = (n ushr 16).toByte(); frame[2] = (n ushr 8).toByte(); frame[3] = n.toByte()
-            System.arraycopy(au, 0, frame, 4, n)
+            val frame = frame(au, ptsUs, false)
             var behind = false
             for (v in viewers) {
                 if (v.needKey && !key) continue
                 v.needKey = false
-                if (v.ch.trySend(frame).isFailure) { v.needKey = true; behind = true }
+                // Behind (what is on its way older than its way's delay, or more of it than its way
+                // carries in a moment): no more pictures until all has arrived, then from a key picture.
+                if (v.skipping) { if (key && v.inflight() == 0L) v.skipping = false else continue }
+                else if (v.full()) { v.skipping = true; v.drops++; continue }
+                if (!give(v, frame, ptsUs)) { v.needKey = true; v.drops++; behind = true }
             }
             if (behind) engine?.keyNow()
             keep(Au(au, key, ptsUs, false))
@@ -309,12 +418,9 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
         }
         override fun videoFormat(f: MediaFormat) { videoFormat = f }
         override fun audio(raw: ByteArray, ptsUs: Long) {
-            val a = adts(raw)
-            val n = a.size or Int.MIN_VALUE
-            val frame = ByteArray(4 + a.size)
-            frame[0] = (n ushr 24).toByte(); frame[1] = (n ushr 16).toByte(); frame[2] = (n ushr 8).toByte(); frame[3] = n.toByte()
-            System.arraycopy(a, 0, frame, 4, a.size)
-            for (v in viewers) if (v.listen && !v.needKey) v.ch.trySend(frame)
+            val frame = frame(adts(raw), ptsUs, true)
+            // The sound goes on while the picture waits to catch up, unless the way is choked.
+            for (v in viewers) if (v.listen && !v.needKey && v.age() < 2 * BEHIND_MS) give(v, frame, ptsUs)
             keep(Au(raw, true, ptsUs, true))
             clip?.audio(raw, ptsUs)
         }
@@ -327,6 +433,7 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
         }
         override fun running(sensor: Int) {
             woke()
+            engine?.setBitrate(rate)
             motionReset()
             change { s -> s.copy(running = true, waking = false, error = "", rotation = (sensor + s.rotate) % 360) }
         }
@@ -635,6 +742,12 @@ class Cameras(ctx: Context, private val peers: PeerManager, private val keyHere:
         private const val PRE_US = 3_000_000L
         private const val ALERT_GAP_MS = 60_000L
         private const val MAX_BYTES = 2L * 1024 * 1024 * 1024
+        private const val MIN_RATE = 90_000
+        private const val FAR_START = 600_000
+        /** A viewer whose oldest frame on its way is this old (ms) gets no more pictures until all has arrived. */
+        private const val BEHIND_MS = 900L
+        /** Older than this, the bitrate comes down. */
+        private const val CATCH_UP_MS = 600L
 
         /** An AAC frame with its ADTS header (48 kHz, mono, LC), as a browser's or the phone's decoder takes it alone. */
         fun adts(raw: ByteArray): ByteArray {

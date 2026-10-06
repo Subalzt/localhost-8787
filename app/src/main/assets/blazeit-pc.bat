@@ -3531,6 +3531,18 @@ public static class BlazeItPc
         }
         relayReady.Set();
         if (l == null) return;
+        // "localhost" is tried as IPv6 (::1) first: answered there too, a browser's new connection does
+        // not wait a quarter of a second (and other programs two) to fall back to 127.0.0.1.
+        try
+        {
+            TcpListener l6 = new TcpListener(IPAddress.IPv6Loopback, localPort);
+            l6.Start();
+            KeepToSelf(l6.Server);
+            Thread a6 = new Thread(delegate () { AcceptLoop(l6); });
+            a6.IsBackground = true;
+            a6.Start();
+        }
+        catch (SocketException) { }
         Thread sweep = new Thread(SweepLoop);
         sweep.IsBackground = true;
         sweep.Start();

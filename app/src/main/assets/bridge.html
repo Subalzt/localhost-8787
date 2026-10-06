@@ -11172,6 +11172,7 @@ function lapPicture(v, au, canvas, ctx) {
       v.codec = codec;
       v.dec = new VideoDecoder({
         output: function (frame) {
+          if (v.smooth) { camQueue(v, frame); return; }
           // Turned upright when it comes on its side (a phone's camera).
           var r = v.rot || 0, fw = frame.displayWidth, fh = frame.displayHeight;
           var sw = r % 180 ? fh : fw, sh = r % 180 ? fw : fh;
@@ -11191,7 +11192,7 @@ function lapPicture(v, au, canvas, ctx) {
   if (!v.dec || v.dec.state !== "configured") return;
   // Falling behind (a slow decoder): what piles up is not worth showing late.
   if (!key && v.dec.decodeQueueSize > 6) { v.dropped++; return; }
-  v.ts += 16667;
+  v.ts = v.pts != null ? v.pts : v.ts + 16667;
   v.dec.decode(new EncodedVideoChunk({ type: key ? "key" : "delta", timestamp: v.ts, data: au }));
 }
 
@@ -11521,13 +11522,21 @@ function camByTarget(t) { return cams.list.filter(function (c) { return c.target
 
 /** One camera's stream onto [canvas]: pictures through WebCodecs, the sound when [o.listen]. */
 function camPlay(target, canvas, o) {
-  var v = { target: target, ctrl: new AbortController(), dec: null, codec: "", ts: 0, frames: 0, rot: o.rot || 0, note: o.note || null, channels: 1, listen: !!o.listen };
+  var v = { target: target, ctrl: new AbortController(), dec: null, codec: "", ts: 0, frames: 0, rot: o.rot || 0, note: o.note || null, channels: 1, listen: !!o.listen,
+    id: Math.random().toString(36).slice(2, 12), got: 0, smooth: true, q: [], canvas: canvas, off: null };
   if (!window.VideoDecoder) { if (v.note) v.note.textContent = "This browser cannot show the cameras: it needs WebCodecs (Chrome, Edge, Firefox 130 and later)."; return v; }
   if (o.listen) { try { v.ac = new AudioContext({ latencyHint: "interactive", sampleRate: 48000 }); v.gain = v.ac.createGain(); v.gain.connect(v.ac.destination); } catch (e) { v.ac = null; } }
-  var ctx = canvas.getContext("2d");
+  var ctx = v.ctx = canvas.getContext("2d");
+  // What has reached here, a few times a second: the camera keeps this from falling behind by it.
+  var said = -1;
+  v.acker = setInterval(function () {
+    if (v.got === said) return;
+    said = v.got;
+    api("/api/cams/ack" + camQ(target, "v=" + v.id + "&n=" + v.got), { method: "POST" }).catch(function () {});
+  }, 300);
   (async function () {
     try {
-      var res = await fetch("/api/cams/stream" + camQ(target, o.listen ? "listen=1" : ""), { signal: v.ctrl.signal, cache: "no-store", credentials: "same-origin" });
+      var res = await fetch("/api/cams/stream" + camQ(target, "v=" + v.id + (o.listen ? "&listen=1" : "")), { signal: v.ctrl.signal, cache: "no-store", credentials: "same-origin" });
       if (!res.ok) { var d = await res.json().catch(function () { return {}; }); if (v.note) v.note.textContent = d.message || "Could not watch it."; return; }
       var reader = res.body.getReader(), buf = new Uint8Array(0);
       while (!v.stopped) {
@@ -11537,14 +11546,17 @@ function camPlay(target, canvas, o) {
         joined.set(buf); joined.set(part.value, buf.length);
         buf = joined;
         var at = 0;
-        while (buf.length - at >= 4) {
+        // Each: its length (top bit: sound), when it was taken (ms, the camera's clock), then it.
+        while (buf.length - at >= 8) {
           var n = ((buf[at] << 24) | (buf[at + 1] << 16) | (buf[at + 2] << 8) | buf[at + 3]) >>> 0;
           var sound = n >= 0x80000000;
           if (sound) n -= 0x80000000;
-          if (buf.length - at < 4 + n) break;
-          if (sound) { if (v.ac) lapSound(v, buf.slice(at + 4, at + 4 + n)); }
-          else lapPicture(v, buf.subarray(at + 4, at + 4 + n), canvas, ctx);
-          at += 4 + n;
+          if (buf.length - at < 8 + n) break;
+          var ms = ((buf[at + 4] << 24) | (buf[at + 5] << 16) | (buf[at + 6] << 8) | buf[at + 7]) >>> 0;
+          if (sound) { if (v.ac) lapSound(v, buf.slice(at + 8, at + 8 + n)); }
+          else { v.pts = ms * 1000; lapPicture(v, buf.subarray(at + 8, at + 8 + n), canvas, ctx); }
+          at += 8 + n;
+          v.got += 8 + n;
         }
         buf = buf.slice(at);
       }
@@ -11559,9 +11571,56 @@ function camPlay(target, canvas, o) {
   return v;
 }
 
+/**
+ * A camera's pictures, shown at the pace they were taken: a little behind, the delay growing only as
+ * far as the way's unevenness needs (a picture that would be late moves the clock back) and easing
+ * off again when it calms; behind by more than one, the older are let go.
+ */
+function camQueue(v, frame) {
+  // Not shown (a hidden tab, a minimised window): let go at once, so the decoder never runs out of pictures.
+  if (v.stopped || document.visibilityState !== "visible") { frame.close(); v.off = null; return; }
+  var now = performance.now(), t = frame.timestamp / 1000;
+  if (v.off == null) v.off = now + 100 - t;
+  var due = t + v.off;
+  if (due < now) v.off += now - due + 30;
+  else if (due - now > 800) v.off -= due - now - 150;
+  else if (due - now > 200) v.off -= 1;
+  v.q.push(frame);
+  // Never more than a few held: past that the oldest goes, unshown.
+  while (v.q.length > 6) v.q.shift().close();
+  camTick(v);
+}
+
+/** The next picture due, on a timer (an animation frame waits while the tab is hidden; this does not). */
+function camTick(v) {
+  clearTimeout(v.tick);
+  camDraw(v);
+  if (v.stopped || !v.q.length) return;
+  var wait = v.q[0].timestamp / 1000 + v.off - performance.now();
+  v.tick = setTimeout(function () { camTick(v); }, Math.max(4, Math.min(500, wait)));
+}
+
+function camDraw(v) {
+  var now = performance.now(), show = null;
+  while (v.q.length && v.q[0].timestamp / 1000 + v.off <= now) { if (show) show.close(); show = v.q.shift(); }
+  if (!show) return;
+  var canvas = v.canvas, ctx = v.ctx, r = v.rot || 0, fw = show.displayWidth, fh = show.displayHeight;
+  var sw = r % 180 ? fh : fw, sh = r % 180 ? fw : fh;
+  if (canvas.width !== sw || canvas.height !== sh) { canvas.width = sw; canvas.height = sh; }
+  if (r) { ctx.save(); ctx.translate(sw / 2, sh / 2); ctx.rotate(r * Math.PI / 180); ctx.drawImage(show, -fw / 2, -fh / 2); ctx.restore(); }
+  else ctx.drawImage(show, 0, 0);
+  show.close();
+  v.frames++;
+  if (v.note) v.note.textContent = "";
+}
+
 function camStop(v) {
   if (!v) return;
   v.stopped = true;
+  clearInterval(v.acker);
+  clearTimeout(v.tick);
+  (v.q || []).forEach(function (f) { try { f.close(); } catch (e) {} });
+  v.q = [];
   try { v.ctrl.abort(); } catch (e) {}
   if (v.dec) try { v.dec.close(); } catch (e) {}
   if (v.adec) try { v.adec.close(); } catch (e) {}

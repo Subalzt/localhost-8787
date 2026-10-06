@@ -1300,7 +1300,7 @@ class BridgeServer(
             call.device() ?: return@get
             if (call.request.queryParameters["peer"] != null) { camsAfar(call, "/api/cams/stream"); return@get }
             if (!cameras().state.value.on) { call.respond(HttpStatusCode.Conflict, ApiResult(false, "Camera mode is off on ${peers.deviceName()}")); return@get }
-            val v = cameras().watch(call.request.queryParameters["listen"] == "1")
+            val v = cameras().watch(call.request.queryParameters["listen"] == "1", call.request.queryParameters["v"].orEmpty(), call.viaTunnel() || call.viaSite())
             call.response.header(HttpHeaders.CacheControl, "no-store")
             call.respondBytesWriter(ContentType("application", "x-l87-frames")) {
                 try {
@@ -1308,6 +1308,19 @@ class BridgeServer(
                 } catch (_: Throwable) {
                 } finally { v.close() }
             }
+        }
+        // What has reached a viewer of the stream (v=its id, n=bytes), a few times a second: how the
+        // camera keeps it from falling behind (server/Cameras.kt). On to a linked phone's camera too.
+        post("/api/cams/ack") {
+            val me = call.device() ?: return@post
+            val q = call.request.queryParameters
+            val to = q["peer"]
+            if (to == null) { cameras().ack(q["v"].orEmpty(), q["n"]?.toLongOrNull() ?: 0); call.respond(ApiResult(true)); return@post }
+            if (peers.byDevice(me.id) != null) { call.respond(HttpStatusCode.Forbidden, ApiResult(false, "Only this phone's own camera")); return@post }
+            val peer = peers.find(to) ?: run { call.respond(HttpStatusCode.NotFound, ApiResult(false, "$to is not linked")); return@post }
+            val path = "/api/cams/ack?v=" + java.net.URLEncoder.encode(q["v"].orEmpty(), "UTF-8") + "&n=" + (q["n"]?.toLongOrNull() ?: 0)
+            withContext(Dispatchers.IO) { peers.deliverBytes(peer, path, ByteArray(0)) }
+            call.respond(ApiResult(true))
         }
         // A viewer's voice, out of the camera phone's speaker: 16 kHz mono 16-bit, a piece at a time.
         post("/api/cams/talk") {

@@ -261,6 +261,11 @@ class CamEngine(ctx: Context, private val out: Out) {
 
     fun setTorch(on: Boolean) { torch = on; handler?.post { repeat() } }
 
+    /** The picture's bitrate, changed while it runs: to what the slowest viewer's way carries. */
+    fun setBitrate(bps: Int) {
+        runCatching { encoder?.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, bps) }) }
+    }
+
     /** A key picture now, for a viewer that has just come. */
     fun keyNow() { runCatching { encoder?.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0) }) } }
 
