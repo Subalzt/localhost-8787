@@ -122,7 +122,7 @@ class Container(ctx: Context) {
     val messages by lazy { dev.periy.bridge.server.Messages(app, peers) { tunnelKeys.psk(it) } }
 
     /** The phone as a website, NAME.dedyn.io:8443 with a PIN (docs/website.md). */
-    val site = dev.periy.bridge.net.Site(app) { prefs.port }
+    val site = dev.periy.bridge.net.Site(app) { prefs.port }.also { s -> dev.periy.bridge.net.Punch.zone = { s.boardZone() } }
 
     /** From other networks: paired devices reach the phone through its tunnel (docs/tunnel-protocol.md). */
     val tunnelKeys = dev.periy.bridge.net.TunnelKeys(app.filesDir)

@@ -988,6 +988,11 @@ class PeerManager(
                 addrs, tport, tid, psk, deviceName(),
                 onInfo = { info -> info["addrs"]?.let { na -> update(peer.name) { p -> p.copy(tunnel = mergeAddrs(p.tunnel, na)) } } },
                 onAddrs = { na -> update(peer.name) { p -> p.copy(tunnel = mergeAddrs(p.tunnel, kotlinx.serialization.json.JsonArray(na.map { kotlinx.serialization.json.JsonPrimitive(it) }))) } },
+                // Its website's zone: where punch notes are left for it, and its name says where it is.
+                zone = (t["site"] as? JsonObject)?.let { s ->
+                    val n = s["name"]?.jsonPrimitive?.content; val k = s["token"]?.jsonPrimitive?.content
+                    if (n.isNullOrEmpty() || k.isNullOrEmpty()) null else n to k
+                },
             )
         }.onFailure { Log.i(TAG, "Tunnel to ${peer.name}: ${it.message}") }.getOrNull() ?: return null
         val port = dev.periy.bridge.net.TunnelClient.serve(conn, peer.port)

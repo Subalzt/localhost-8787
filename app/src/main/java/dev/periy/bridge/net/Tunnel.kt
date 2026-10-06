@@ -663,12 +663,14 @@ object TunnelClient {
         addrs: List<String>, port: Int, tid: ByteArray, psk: ByteArray, name: String,
         onInfo: (JsonObject) -> Unit = {}, onAddrs: (List<String>) -> Unit = {},
         onClosed: (TunnelConnection) -> Unit = {},
+        /** The other phone's website zone and token, where punch notes are left; null: the board. */
+        zone: Pair<String, String>? = null,
     ): TunnelConnection {
         var why: Exception? = null
         for (a in addrs) {
             try { return dial(a, port, tid, psk, name, onInfo, onClosed) } catch (e: Exception) { why = e }
         }
-        val fresh = Punch.where(psk).filter { it !in addrs }
+        val fresh = Punch.where(psk, zone).filter { it !in addrs }
         if (fresh.isNotEmpty()) {
             onAddrs(fresh)
             for (a in fresh) {
@@ -676,7 +678,7 @@ object TunnelClient {
             }
         }
         try {
-            val link = Punch.dial(psk)
+            val link = Punch.dial(psk, zone)
             return handshake(link, "UDP", tid, psk, name, onInfo, onClosed, 10_000)
         } catch (e: Exception) {
             throw IOException(e.message ?: why?.message ?: "could not reach the other phone", e)

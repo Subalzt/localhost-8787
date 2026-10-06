@@ -1702,9 +1702,74 @@ def punch_post(topic, text):
     urllib.request.urlopen(r, timeout=10).read()
 
 
-def punch_ask(psk, note, wait=12):
-    """Leaves note for the phone on the board and returns its answer (same "t" and "s"), or None.
-    Listens before posting, so the answer cannot be missed. OSError when the board is unreachable."""
+# ---------------------------------------------------------------------- the phone's own zone as the meeting place
+#
+# A phone with a website takes punch notes in its own DNS zone (dynv6), not on a public board: the
+# note goes in as a TXT record over HTTPS (through this computer's web proxy when it has one), and
+# the phone's answer is read back the same way. Both are sealed as on the board.
+
+DYNV6 = "https://dynv6.com/api/v2"
+zone_ids = {}
+
+
+def zone_http(method, path, token, body=None):
+    r = urllib.request.Request(DYNV6 + path, data=json.dumps(body).encode() if body is not None else None, method=method,
+                               headers={"Authorization": "Bearer " + token, "Accept": "application/json", "Content-Type": "application/json"})
+    with urllib.request.urlopen(r, timeout=15) as resp:
+        text = resp.read().decode("utf-8", "replace")
+    return json.loads(text) if text.strip() else None
+
+
+def zone_id(zone, token):
+    if zone not in zone_ids:
+        zone_ids[zone] = zone_http("GET", "/zones/by-name/" + zone, token)["id"]
+    return zone_ids[zone]
+
+
+def zone_records(zone, token, topic):
+    return [r for r in zone_http("GET", "/zones/%s/records" % zone_id(zone, token), token) or []
+            if r.get("type") == "TXT" and r.get("name") == topic]
+
+
+def zone_clear(zone, token, topic):
+    try:
+        for r in zone_records(zone, token, topic):
+            zone_http("DELETE", "/zones/%s/records/%s" % (zone_id(zone, token), r["id"]), token)
+    except (OSError, ValueError, KeyError, urllib.error.URLError):
+        pass
+
+
+def zone_ask(psk, note, wait, zone, token):
+    up, down = punch_topic(psk, b"L87P/1 up"), punch_topic(psk, b"L87P/1 down")
+    try:
+        zone_clear(zone, token, up)
+        zone_http("POST", "/zones/%s/records" % zone_id(zone, token), token,
+                  {"name": up, "type": "TXT", "data": punch_seal(psk, json.dumps(note, separators=(",", ":")))})
+    except (ValueError, KeyError, urllib.error.URLError) as e:
+        raise OSError("could not leave a note in %s (%s)" % (zone, e))
+    try:
+        # The phone looks in its zone every 15 s; its answer is read back until it comes.
+        end = time.time() + max(wait, 35)
+        while time.time() < end:
+            for r in zone_records(zone, token, down):
+                try:
+                    a = json.loads(punch_open(psk, r.get("data")) or "null")
+                except ValueError:
+                    continue
+                if a and a.get("t") == note["t"] and a.get("s") == note["s"]:
+                    return a
+            time.sleep(1.5)
+        return None
+    finally:
+        zone_clear(zone, token, up)
+
+
+def punch_ask(psk, note, wait=12, zone=None, token=None):
+    """Leaves note for the phone (in its website's zone, else on the board) and returns its answer
+    (same "t" and "s"), or None. Listens before posting, so the answer cannot be missed. OSError when
+    neither can be reached."""
+    if zone and token:
+        return zone_ask(psk, note, wait, zone, token)
     try:
         board = urllib.request.urlopen(P_BOARD + "/" + punch_topic(psk, b"L87P/1 down") + "/json", timeout=wait + 1)
     except (OSError, urllib.error.URLError) as e:
@@ -1732,8 +1797,14 @@ def punch_ask(psk, note, wait=12):
 
 
 def tunnel_where(c):
-    """The phone's current addresses, asked through the board (its IPv6 changes when mobile data
-    reconnects). [] when it does not answer."""
+    """The phone's current addresses: its website's name when it has one, else asked through the board
+    (its IPv6 changes when mobile data reconnects). [] when it does not answer."""
+    site = (c.get("site") or {}).get("name")
+    if site:
+        try:
+            return sorted({a[4][0] for a in socket.getaddrinfo(site, None, socket.AF_INET6) if not a[4][0].startswith("fe80")})
+        except OSError:
+            return []
     try:
         a = punch_ask(base64.b64decode(c["key"]), {"t": "where", "s": os.urandom(8).hex(), "at": int(time.time())}, wait=6)
     except OSError:
@@ -1753,11 +1824,17 @@ def punch_dial(c):
             raise OSError("this network gives no public IPv4 address to punch from (STUN did not answer)")
         session = os.urandom(8)
         lan = punch_lan_ip()
-        note = {"t": "punch", "s": session.hex(), "at": int(time.time()), "addr": "%s:%d" % me[0],
-                "hard": me[1], "lan": ["%s:%d" % (lan, sock.getsockname()[1])] if lan else []}
-        answer = punch_ask(psk, note)
+        site = c.get("site") or {}
+        zone, token = site.get("name"), site.get("token")
+        note = {"t": "punch", "s": session.hex(), "at": int(time.time()), "addr": "%s:%d" % me[0], "hard": me[1]}
+        if not zone:
+            # A DNS note holds 255 characters: the local address only on the board.
+            note["lan"] = ["%s:%d" % (lan, sock.getsockname()[1])] if lan else []
+        else:
+            log("Asking the phone through its website's zone (%s)" % zone)
+        answer = punch_ask(psk, note, zone=zone, token=token)
         if not answer:
-            raise OSError("the phone did not answer through the board (is it on, with From other networks on?)")
+            raise OSError("the phone did not answer (is it on, with From other networks on?)")
         theirs = [a for a in [punch_addr(answer.get("addr"))] + [punch_addr(x) for x in answer.get("lan") or []] if a]
         if not theirs:
             raise OSError("the phone could not see its own public address")

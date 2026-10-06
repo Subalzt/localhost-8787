@@ -32,13 +32,19 @@ import javax.crypto.spec.SecretKeySpec
 
 /**
  * The tunnel across IPv4 (docs/tunnel-protocol.md, "Across IPv4"): when a device cannot reach the
- * phone's IPv6, both ends swap their public IPv4 addresses through a public message board, punch
- * through their NATs over UDP, and run the tunnel over a reliable stream on that path
- * ([UdpCarrier]). The board carries two sealed notes, a few hundred bytes; nothing else passes
- * through anything but the two ends.
+ * phone's IPv6, both ends swap their public IPv4 addresses, punch through their NATs over UDP, and
+ * run the tunnel over a reliable stream on that path ([UdpCarrier]). The two sealed notes they swap
+ * are left in the phone's own website's DNS zone ([DnsBoard]); only a phone with no website uses a
+ * public message board (ntfy.sh) for them. Nothing else passes through anything but the two ends.
  */
 object Punch {
     const val BOARD = "https://ntfy.sh"
+    /** This phone's website zone and its dynv6 token, where notes are left; null without a website (set by the app). */
+    @Volatile var zone: () -> Pair<String, String>? = { null }
+    /** How often the phone looks in its zone for a note. */
+    const val ZONE_POLL_MS = 15_000L
+    /** The phone punches from this port where it can: a network that lets UDP out only to STUN's port can still reach it. */
+    const val PUNCH_PORT = 3478
     val STUN = listOf("stun.l.google.com" to 19302, "stun.cloudflare.com" to 3478)
     /** A hard (symmetric) NAT's side opens this many sockets, each its own mapping. */
     const val SOCKETS = 256
@@ -272,6 +278,20 @@ object Punch {
             while (running) {
                 val ids = deviceIds()
                 if (ids.isEmpty()) { Thread.sleep(10_000); continue }
+                // In the website's own zone: each paired device's note, looked for every 15 s.
+                val z = zone()
+                if (z != null) {
+                    for (id in ids) {
+                        if (!running) break
+                        val psk = keys.psk(id)
+                        for (text in DnsBoard.read(z.first, topicUp(psk))) {
+                            val sHex = open(psk, text)?.let { runCatching { Json.parseToJsonElement(it).jsonObject["s"]?.jsonPrimitive?.content }.getOrNull() }
+                            if (sHex != null && !seen.containsKey(sHex)) TunnelConnection.thread("punch-answer") { answer(id, text) }
+                        }
+                    }
+                    Thread.sleep(ZONE_POLL_MS)
+                    continue
+                }
                 val topics = ids.associateBy { topicUp(keys.psk(it)) }
                 try {
                     val c = URL("$BOARD/${topics.keys.joinToString(",")}/json").openConnection() as HttpURLConnection
@@ -310,7 +330,10 @@ object Punch {
             if (seen.putIfAbsent(sHex, at) != null) return
             if (seen.size > 200) seen.entries.removeIf { System.currentTimeMillis() / 1000 - it.value > NOTE_AGE_S }
             val phone = runCatching { Json.parseToJsonElement(info()).jsonObject }.getOrNull()
+            val z = zone()
+            if (z != null) TunnelConnection.thread("punch-tidy") { DnsBoard.clear(z.first, z.second, topicUp(psk)) }
             if (kind == "where") {
+                if (z != null) return   // the website's own name says where the phone is
                 val reply = buildJsonObject {
                     put("t", JsonPrimitive("where"))
                     put("s", JsonPrimitive(sHex))
@@ -324,17 +347,22 @@ object Punch {
             val theirs = listOfNotNull(parseAddr(note["addr"]?.jsonPrimitive?.content)) +
                 (note["lan"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { parseAddr(it.jsonPrimitive.content) }
             val hardThere = note["hard"]?.jsonPrimitive?.booleanOrNull ?: false
-            val sock = DatagramSocket(0)
+            val sock = punchSocket()
             val me = mapped(sock)
             val reply = buildJsonObject {
                 put("t", JsonPrimitive("punch"))
                 put("s", JsonPrimitive(sHex))
                 put("at", JsonPrimitive(System.currentTimeMillis() / 1000))
                 me?.let { put("addr", JsonPrimitive(addr(it.first))); put("hard", JsonPrimitive(it.second)) }
-                put("lan", kotlinx.serialization.json.JsonArray(lanAddresses().map { JsonPrimitive("${it.hostAddress}:${sock.localPort}") }))
-                phone?.get("addrs")?.let { put("addrs", it) }
+                // A DNS note holds 255 characters: the rest only on the board.
+                if (z == null) {
+                    put("lan", kotlinx.serialization.json.JsonArray(lanAddresses().map { JsonPrimitive("${it.hostAddress}:${sock.localPort}") }))
+                    phone?.get("addrs")?.let { put("addrs", it) }
+                }
             }.toString()
-            if (!post(topicDown(psk), seal(psk, reply))) { sock.close(); return }
+            val sent = if (z != null) DnsBoard.post(z.first, z.second, topicDown(psk), seal(psk, reply)) else post(topicDown(psk), seal(psk, reply))
+            if (!sent) { sock.close(); return }
+            if (z != null) TunnelConnection.thread("punch-tidy") { Thread.sleep(120_000); DnsBoard.clear(z.first, z.second, topicDown(psk)) }
             Log.i(TAG, "Punching to ${theirs.joinToString { addr(it) }} (here ${me?.first?.let(::addr)}, hard here ${me?.second}, there $hardThere)")
             val (toPhone, toDevice) = udpKeys(psk, session)
             val path = knock(sock, me?.second ?: false, theirs, hardThere, tx = toDevice, rx = toPhone, role = 1)
@@ -356,7 +384,25 @@ object Punch {
      * Leaves [note] for the other phone on the board and returns its opened answer of the same
      * [kind] and session [sHex], or null. Listens before posting, so the answer cannot be missed.
      */
-    fun ask(psk: ByteArray, note: String, kind: String, sHex: String, waitMs: Int): String? {
+    fun ask(psk: ByteArray, note: String, kind: String, sHex: String, waitMs: Int, zone: Pair<String, String>? = null): String? {
+        if (zone != null) {
+            // In the other phone's zone: the note, then its answer looked for until it comes.
+            if (!DnsBoard.post(zone.first, zone.second, topicUp(psk), seal(psk, note))) return null
+            try {
+                val end = System.currentTimeMillis() + maxOf(waitMs, (ZONE_POLL_MS + 15_000).toInt())
+                while (System.currentTimeMillis() < end) {
+                    for (t in DnsBoard.read(zone.first, topicDown(psk))) {
+                        val text = open(psk, t) ?: continue
+                        val a = runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull() ?: continue
+                        if (a["t"]?.jsonPrimitive?.content == kind && a["s"]?.jsonPrimitive?.content == sHex) return text
+                    }
+                    Thread.sleep(1_500)
+                }
+                return null
+            } finally {
+                DnsBoard.clear(zone.first, zone.second, topicUp(psk))
+            }
+        }
         val c = URL("$BOARD/${topicDown(psk)}/json").openConnection() as HttpURLConnection
         c.connectTimeout = 10_000
         c.readTimeout = waitMs + 1_000
@@ -381,10 +427,24 @@ object Punch {
 
     private fun newSession(): String = hex(ByteArray(8).also(rng::nextBytes))
 
+    /** A socket to punch from: on [PUNCH_PORT] when it is free (a mobile network keeps the port), else any. */
+    @Synchronized
+    fun punchSocket(): DatagramSocket {
+        // One punch at a time on it: a path still running there keeps it, and the next takes any port.
+        if (onPort?.isClosed == false) return DatagramSocket(0)
+        val s = runCatching { DatagramSocket(null).apply { reuseAddress = true; bind(java.net.InetSocketAddress(PUNCH_PORT)) } }
+            .getOrElse { Log.i("Punch", "Port $PUNCH_PORT: ${it.message}"); return DatagramSocket(0) }
+        onPort = s
+        return s
+    }
+    @Volatile private var onPort: DatagramSocket? = null
+
     private fun now() = System.currentTimeMillis() / 1000
 
     /** The other phone's current addresses, asked through the board (mobile IPv6 changes). Empty when it does not answer. */
-    fun where(psk: ByteArray): List<String> = runCatching {
+    fun where(psk: ByteArray, zone: Pair<String, String>? = null): List<String> = runCatching {
+        // A phone with a website: its name says where it is.
+        if (zone != null) return InetAddress.getAllByName(zone.first).filter { it is java.net.Inet6Address && !it.isLinkLocalAddress }.mapNotNull { it.hostAddress }
         val s = newSession()
         val note = buildJsonObject { put("t", JsonPrimitive("where")); put("s", JsonPrimitive(s)); put("at", JsonPrimitive(now())) }.toString()
         val a = ask(psk, note, "where", s, 6_000) ?: return emptyList()
@@ -396,7 +456,7 @@ object Punch {
      * reliable stream on the path found ([UdpCarrier], as the device: role 0). Throws IOException
      * with the reason when it cannot.
      */
-    fun dial(psk: ByteArray): TunnelLink {
+    fun dial(psk: ByteArray, zone: Pair<String, String>? = null): TunnelLink {
         val sock = DatagramSocket(0)
         try {
             val me = mapped(sock) ?: throw IOException("this network gives no public IPv4 address to punch from")
@@ -408,9 +468,9 @@ object Punch {
                 put("at", JsonPrimitive(now()))
                 put("addr", JsonPrimitive(addr(me.first)))
                 put("hard", JsonPrimitive(me.second))
-                put("lan", kotlinx.serialization.json.JsonArray(lanAddresses().map { JsonPrimitive("${it.hostAddress}:${sock.localPort}") }))
+                if (zone == null) put("lan", kotlinx.serialization.json.JsonArray(lanAddresses().map { JsonPrimitive("${it.hostAddress}:${sock.localPort}") }))
             }.toString()
-            val answer = ask(psk, note, "punch", s, 12_000)?.let { Json.parseToJsonElement(it).jsonObject }
+            val answer = ask(psk, note, "punch", s, 12_000, zone)?.let { Json.parseToJsonElement(it).jsonObject }
                 ?: throw IOException("the other phone did not answer through the board")
             val theirs = listOfNotNull(parseAddr(answer["addr"]?.jsonPrimitive?.content)) +
                 (answer["lan"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { parseAddr(it.jsonPrimitive.content) }

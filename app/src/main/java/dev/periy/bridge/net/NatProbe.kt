@@ -16,7 +16,7 @@ import java.net.SocketTimeoutException
 object NatProbe {
     private const val TAG = "NatProbe"
 
-    fun run() = Thread({
+    fun run(sendTo: String? = null) = Thread({
         val socks = listOfNotNull(
             runCatching { DatagramSocket(null).apply { reuseAddress = true; bind(InetSocketAddress(3478)) } }
                 .onFailure { Log.e(TAG, "local port 3478: ${it.message}") }.getOrNull(),
@@ -25,6 +25,11 @@ object NatProbe {
         for (s in socks) {
             val seen = Punch.STUN.map { (h, p) -> h to Punch.stun(s, h, p) }
             Log.e(TAG, "local ${s.localPort}: " + seen.joinToString("; ") { (h, a) -> "$h saw ${a?.let(Punch::addr) ?: "nothing"}" })
+        }
+        // Opening the way to one address: a packet to it from each socket (port 9, which nobody answers).
+        sendTo?.let { ip ->
+            for (s in socks) repeat(3) { runCatching { s.send(DatagramPacket(byteArrayOf(1), 1, InetSocketAddress(ip, 9))) } }
+            Log.e(TAG, "sent to $ip:9 from each socket")
         }
         val until = System.currentTimeMillis() + 180_000
         var kept = 0L

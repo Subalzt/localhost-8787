@@ -228,13 +228,18 @@ does.
 
 - **Over IPv6**, straight to the phone's mobile-data address over TCP.
 - **Over IPv4**, from a network with no IPv6: the laptop (or the other phone) and the phone swap their public IPv4
-  addresses as two small sealed notes on a public message board ([ntfy.sh](https://ntfy.sh), which
-  keeps nothing), then **punch through both NATs** over UDP and run the same tunnel on that path,
-  with its own delivery and congestion control (CUBIC). Nothing but those notes goes through anyone
-  else. It works unless both networks have the hard kind of NAT (a new port for every
-  destination); from Airtel home broadband to a phone on Jio data it takes 5 to 9 s.
+  addresses as two small sealed notes **in the phone's own website's DNS zone** (TXT records through
+  dynv6, which already serves the website; the laptop writes over HTTPS, through a web proxy if the
+  network has one, and the phone looks there every 15 s), then **punch through both NATs** over UDP
+  and run the same tunnel on that path, with its own delivery and congestion control (CUBIC). No
+  public message board: only a phone with no website falls back to one ([ntfy.sh](https://ntfy.sh)).
+  The phone punches from port 3478, which Jio keeps as the public port, so a network that lets UDP
+  out only to STUN's port (a campus lab's) can still reach it. It works unless both networks have
+  the hard kind of NAT (a new port for every destination); from Airtel home broadband to a phone on
+  Jio data it takes about 20 s (most of it the phone's 15-second look).
 - **When the phone's address changes** (mobile IPv6 changes whenever the phone reconnects), the
-  helper asks the phone where it is now through the same message board and is back in about 3 s.
+  helper looks up the phone's website name, which the phone keeps pointing at itself, and is back
+  in a few seconds.
 - **On the page** the link shows as *Internet · IPv6 tunnel* or *Internet · IPv4, punched through*,
   and the page goes easy on it: the next song waits until the playing one has fully arrived.
 
@@ -596,8 +601,8 @@ code closes. Both phones turn on *From other networks*. [How it works](docs/tunn
 <br>
 
 When a linked phone does not answer on the local network, the other reaches it through its
-tunnel: its known IPv6 addresses first, then the ones it gives through the message board now
-(mobile IPv6 changes), then a path punched across IPv4, the same three steps the laptop helper
+tunnel: its known IPv6 addresses first, then its website name's (mobile IPv6 changes), then a path
+punched across IPv4 through notes in its website's zone, the same three steps the laptop helper
 takes. The phone moves back to the local network as soon as the other answers there.
 
 </details>
@@ -922,7 +927,8 @@ For hotspot mode, checked on 26 September 2026:
 - **The tunnel** ([protocol](docs/tunnel-protocol.md)): X25519 keys, HKDF, a SHAKE256 stream cipher
   with HMAC, and streams multiplexed with credit-based flow control, over TCP (IPv6) or over UDP
   after hole punching, where it runs its own sequence numbers, selective acks, RACK loss detection
-  and CUBIC. The two sides meet through sealed notes on ntfy.sh and STUN.
+  and CUBIC. The two sides meet through sealed notes in the phone's own DNS zone (ntfy.sh only
+  without a website) and STUN.
 - **The website** ([how it works](docs/website.md)): dynv6 for the name (its update URL and REST
   API), Let's Encrypt over ACME with DNS checks (the phone writes the TXT records itself and asks
   dynv6's own nameservers until they have them), a certificate for the name and `lan.` together,

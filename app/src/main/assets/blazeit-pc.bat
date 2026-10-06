@@ -3990,7 +3990,8 @@ public static class BlazeItPc
                     TunnelSaveAddrs(all);
                     foreach (string a in moved) { race.Add(a); saved.Add(a); }
                 }
-                List<string> now = Tunnel87.Where(psk), fresh = new List<string>();
+                // With a website, its name has already said where the phone is: no public board asked.
+                List<string> now = conf.Contains("\"site\"") ? new List<string>() : Tunnel87.Where(psk), fresh = new List<string>();
                 foreach (string a in now) if (!saved.Contains(a)) fresh.Add(a);
                 if (fresh.Count > 0)
                 {
@@ -4007,7 +4008,10 @@ public static class BlazeItPc
             // No IPv6 way to it: across IPv4, punched through both NATs.
             try
             {
-                tunnel = Tunnel87.DialPunched(tid, psk, Environment.MachineName, TunnelSaveAddrs, Log);
+                // The phone's website zone, when it has one: the notes go there, not on a public board.
+                Match zm = Regex.Match(conf, "\"site\"\\s*:\\s*\\{\\s*\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"token\"\\s*:\\s*\"([^\"]+)\"");
+                tunnel = Tunnel87.DialPunched(tid, psk, Environment.MachineName, TunnelSaveAddrs, Log,
+                    zm.Success ? zm.Groups[1].Value : null, zm.Success ? zm.Groups[2].Value : null);
                 Log("Tunnel to the phone over UDP, punched through");
                 farFails = 0;
                 return TunnelHost;
@@ -4678,9 +4682,10 @@ public static class Tunnel87
      * session), or null. Listens before posting, so the answer cannot be missed. Throws IOException
      * when the board cannot be reached.
      */
-    static string Ask(byte[] psk, string note, string kind, string sHex, int waitMs)
+    static string Ask(byte[] psk, string note, string kind, string sHex, int waitMs, string zone = null, string token = null)
     {
         ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+        if (zone != null) return AskZone(psk, note, kind, sHex, waitMs, zone, token);
         string answer = null;
         HttpWebRequest sub = (HttpWebRequest)WebRequest.Create(Board + "/" + Topic(psk, "L87P/1 down") + "/json");
         sub.Timeout = waitMs + 1000;
@@ -4718,6 +4723,98 @@ public static class Tunnel87
         return answer;
     }
 
+    // ------------------------------------------------------------------ the phone's own zone as the meeting place
+    //
+    // A phone with a website takes punch notes in its own DNS zone (dynv6), not on a public board:
+    // the note goes in as a TXT record over HTTPS (through this laptop's web proxy when it has one,
+    // as at a lab), and the phone's answer is read back the same way. Both are sealed as on the board.
+
+    const string Dynv6 = "https://dynv6.com/api/v2";
+    static readonly Dictionary<string, string> zoneIds = new Dictionary<string, string>();
+
+    static string ZoneHttp(string method, string url, string token, string body)
+    {
+        HttpWebRequest r = (HttpWebRequest)WebRequest.Create(url);
+        r.Method = method;
+        r.Timeout = 15000;
+        r.Headers["Authorization"] = "Bearer " + token;
+        r.Accept = "application/json";
+        // The system's proxy, if this network has one (a lab's): dynv6 is only HTTPS on 443.
+        r.Proxy = WebRequest.GetSystemWebProxy();
+        if (body != null)
+        {
+            r.ContentType = "application/json";
+            byte[] b = Encoding.UTF8.GetBytes(body);
+            using (Stream w = r.GetRequestStream()) w.Write(b, 0, b.Length);
+        }
+        try
+        {
+            using (HttpWebResponse resp = (HttpWebResponse)r.GetResponse())
+            using (StreamReader rd = new StreamReader(resp.GetResponseStream(), Encoding.UTF8)) return rd.ReadToEnd();
+        }
+        catch (WebException e)
+        {
+            throw new IOException("dynv6: " + e.Message);
+        }
+    }
+
+    static string ZoneId(string zone, string token)
+    {
+        lock (zoneIds)
+        {
+            string id;
+            if (zoneIds.TryGetValue(zone, out id)) return id;
+            Match m = Regex.Match(ZoneHttp("GET", Dynv6 + "/zones/by-name/" + zone, token, null), "\"id\"\\s*:\\s*(\\d+)");
+            if (!m.Success) throw new IOException("dynv6 does not know the zone " + zone);
+            zoneIds[zone] = m.Groups[1].Value;
+            return m.Groups[1].Value;
+        }
+    }
+
+    /** The TXT records named [topic] in the zone: each one's id and text. */
+    static List<string[]> ZoneRecords(string zone, string token, string topic)
+    {
+        var list = new List<string[]>();
+        string text = ZoneHttp("GET", Dynv6 + "/zones/" + ZoneId(zone, token) + "/records", token, null);
+        foreach (Match o in Regex.Matches(text, "\\{[^{}]*\\}"))
+        {
+            string rec = o.Value;
+            if (!Regex.IsMatch(rec, "\"type\"\\s*:\\s*\"TXT\"")) continue;
+            if (Regex.Match(rec, "\"name\"\\s*:\\s*\"([^\"]*)\"").Groups[1].Value != topic) continue;
+            list.Add(new string[] { Regex.Match(rec, "\"id\"\\s*:\\s*(\\d+)").Groups[1].Value, Regex.Match(rec, "\"data\"\\s*:\\s*\"([^\"]*)\"").Groups[1].Value });
+        }
+        return list;
+    }
+
+    static void ZoneClear(string zone, string token, string topic)
+    {
+        try { foreach (string[] r in ZoneRecords(zone, token, topic)) ZoneHttp("DELETE", Dynv6 + "/zones/" + ZoneId(zone, token) + "/records/" + r[0], token, null); } catch { }
+    }
+
+    static string AskZone(byte[] psk, string note, string kind, string sHex, int waitMs, string zone, string token)
+    {
+        string up = Topic(psk, "L87P/1 up"), down = Topic(psk, "L87P/1 down");
+        ZoneClear(zone, token, up);
+        ZoneHttp("POST", Dynv6 + "/zones/" + ZoneId(zone, token) + "/records", token,
+            "{\"name\":\"" + up + "\",\"type\":\"TXT\",\"data\":\"" + Seal(psk, note) + "\"}");
+        try
+        {
+            // The phone looks in its zone every 15 s; its answer is read back until it comes.
+            int end = Environment.TickCount + Math.Max(waitMs, 35000);
+            while (unchecked(Environment.TickCount - end) < 0)
+            {
+                foreach (string[] r in ZoneRecords(zone, token, down))
+                {
+                    string a = Unseal(psk, r[1]);
+                    if (a != null && a.Contains("\"t\":\"" + kind + "\"") && a.Contains("\"s\":\"" + sHex + "\"")) return a;
+                }
+                Thread.Sleep(1500);
+            }
+            return null;
+        }
+        finally { ZoneClear(zone, token, up); }
+    }
+
     static string NewSession()
     {
         byte[] session = new byte[8];
@@ -4747,7 +4844,7 @@ public static class Tunnel87
      * Across IPv4: a note to the phone through the board, its answer, then the punch, then the same
      * handshake as Dial over the punched path. Throws IOException with the reason when it cannot.
      */
-    public static Conn DialPunched(byte[] tid, byte[] psk, string name, Action<List<string>> onAddrs, Action<string> log)
+    public static Conn DialPunched(byte[] tid, byte[] psk, string name, Action<List<string>> onAddrs, Action<string> log, string zone = null, string token = null)
     {
         ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
         Socket sock = NewUdp();
@@ -4762,10 +4859,12 @@ public static class Tunnel87
             for (int i = 0; i < 8; i++) session[i] = Convert.ToByte(sHex.Substring(i * 2, 2), 16);
             string lan = LanIp();
             int at = Now();
+            // A DNS note holds 255 characters: the local address only on the board.
             string note = "{\"t\":\"punch\",\"s\":\"" + sHex + "\",\"at\":" + at + ",\"addr\":\"" + me + "\",\"hard\":" + (hard ? "true" : "false") +
-                ",\"lan\":[" + (lan != null ? "\"" + lan + ":" + ((IPEndPoint)sock.LocalEndPoint).Port + "\"" : "") + "]}";
-            string answer = Ask(psk, note, "punch", sHex, 12000);
-            if (answer == null) throw new IOException("the phone did not answer through the board (is it on, with From other networks on?)");
+                (zone != null ? "" : ",\"lan\":[" + (lan != null ? "\"" + lan + ":" + ((IPEndPoint)sock.LocalEndPoint).Port + "\"" : "") + "]") + "}";
+            if (log != null && zone != null) log("Asking the phone through its website's zone (" + zone + ")");
+            string answer = Ask(psk, note, "punch", sHex, 12000, zone, token);
+            if (answer == null) throw new IOException("the phone did not answer (is it on, with From other networks on?)");
             List<IPEndPoint> theirs = new List<IPEndPoint>();
             IPEndPoint pub = ParseAddr(Regex.Match(answer, "\"addr\"\\s*:\\s*\"([^\"]+)\"").Groups[1].Value);
             if (pub != null) theirs.Add(pub);

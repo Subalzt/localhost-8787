@@ -240,8 +240,10 @@ class MainActivity : ComponentActivity() {
             if (intent.hasExtra("callpipeonly")) c.calls.pipeOnly = intent.getBooleanExtra("callpipeonly", false)
             if (intent.getBooleanExtra("calltest", false)) c.calls.testCall(intent.getBooleanExtra("video", false))
             if (intent.getBooleanExtra("callstate", false)) c.calls.logState()
+            // `--ez dnsboardtest true`: how long a punch note takes to reach the website's nameservers (logcat DnsBoard).
+            if (intent.getBooleanExtra("dnsboardtest", false)) c.site.boardZone()?.let { (n, t) -> dev.periy.bridge.net.DnsBoard.timeIt(n, t) }
             // `--ez natprobe true`: how this network's NAT treats UDP (logcat NatProbe), for 3 minutes.
-            if (intent.getBooleanExtra("natprobe", false)) dev.periy.bridge.net.NatProbe.run()
+            if (intent.getBooleanExtra("natprobe", false)) dev.periy.bridge.net.NatProbe.run(intent.getStringExtra("natsend"))
             // Cameras: `--ez camon true|false` (this phone's camera mode), `--ez camrec true|false`.
             if (intent.hasExtra("camon")) c.cameras.set(dev.periy.bridge.server.CamSet(on = intent.getBooleanExtra("camon", false)))
             if (intent.hasExtra("camrec")) c.cameras.set(dev.periy.bridge.server.CamSet(recordNow = intent.getBooleanExtra("camrec", false)))

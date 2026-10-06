@@ -127,7 +127,12 @@ class RemoteDoor(
                 "id" to kotlinx.serialization.json.JsonPrimitive(keys.tid(deviceId).joinToString("") { "%02x".format(it) }),
                 "key" to kotlinx.serialization.json.JsonPrimitive(android.util.Base64.encodeToString(keys.psk(deviceId), android.util.Base64.NO_WRAP)),
                 "on" to kotlinx.serialization.json.JsonPrimitive(enabled()),
-            )
+            ) + (dev.periy.bridge.net.Punch.zone()?.let { (name, token) ->
+                // Where to leave a punch note for this phone: its website's own DNS zone (net/DnsBoard.kt).
+                mapOf("site" to kotlinx.serialization.json.JsonObject(mapOf(
+                    "name" to kotlinx.serialization.json.JsonPrimitive(name), "token" to kotlinx.serialization.json.JsonPrimitive(token),
+                )))
+            } ?: emptyMap())
         ).toString()
     }
 

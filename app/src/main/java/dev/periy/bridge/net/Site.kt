@@ -303,6 +303,9 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         if (code !in 200..299) throw dynv6Error(code, text)
     }
 
+    /** The website's zone and its dynv6 token, for leaving punch notes in it (Punch.kt), or null without a website. */
+    fun boardZone(): Pair<String, String>? = conf.takeIf { it.ready && it.on }?.let { it.name to it.token }
+
     private fun zoneId(): Long {
         val (code, text) = http("GET", "$DYNV6/zones/by-name/${conf.name}", null, mapOf("Authorization" to "Bearer ${conf.token}"))
         if (code !in 200..299) throw dynv6Error(code, text)
@@ -578,12 +581,18 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
 }
 
 /** Just enough DNS to ask dynv6's nameservers for a TXT record directly (no cache in between). */
-private object Dns {
+internal object Dns {
     private val servers = listOf("ns1.dynv6.com", "ns2.dynv6.com", "ns3.dynv6.com")
 
     /** True when every nameserver answers [name] with a TXT record holding [value]. */
     fun everywhere(name: String, value: String): Boolean = servers.all { ns ->
         runCatching { txt(InetAddress.getByName(ns), name).any { it == value } }.getOrDefault(false)
+    }
+
+    /** [name]'s TXT records as the first of dynv6's nameservers to answer has them (empty when none does). */
+    fun first(name: String): List<String> {
+        for (ns in servers) runCatching { return txt(InetAddress.getByName(ns), name) }
+        return emptyList()
     }
 
     private fun txt(server: InetAddress, name: String): List<String> {
