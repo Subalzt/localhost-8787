@@ -1504,6 +1504,50 @@ foreach ($b in Get-Process chrome, msedge, brave, opera, vivaldi | ? { $_.MainWi
         }
     }
 
+    /**
+     * Whether a browser here already has the page open: a Firefox tab at it (its session file),
+     * or any window titled with it (the tab in front, in Chrome, Edge and the rest).
+     */
+    static bool PageOpen(int port)
+    {
+        try
+        {
+            foreach (Process p in Process.GetProcesses())
+                try { if (p.MainWindowTitle.StartsWith("Localhost 8787")) return true; } catch { }
+            string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Mozilla\Firefox\Profiles");
+            if (!Directory.Exists(root)) return false;
+            string[] want = { "http://localhost:" + port + "/", "http://127.0.0.1:" + port + "/", "http://[::1]:" + port + "/" };
+            foreach (string d in Directory.GetDirectories(root))
+            {
+                string f = Path.Combine(d, @"sessionstore-backups\recovery.jsonlz4");
+                // Only a session Firefox has written lately: one left from long ago says nothing about now.
+                if (!File.Exists(f) || DateTime.UtcNow - File.GetLastWriteTimeUtc(f) > TimeSpan.FromMinutes(10)) continue;
+                byte[] raw = File.ReadAllBytes(f);
+                if (raw.Length < 12 || Encoding.ASCII.GetString(raw, 0, 8) != "mozLz40\0") continue;
+                var doc = new MiniJson(Encoding.UTF8.GetString(Lz4Block(raw, 12, BitConverter.ToInt32(raw, 8)))).Value() as Dictionary<string, object>;
+                var windows = doc != null && doc.ContainsKey("windows") ? doc["windows"] as List<object> : null;
+                if (windows == null) continue;
+                foreach (object w in windows)
+                {
+                    var tabs = (w as Dictionary<string, object>) != null && ((Dictionary<string, object>)w).ContainsKey("tabs") ? ((Dictionary<string, object>)w)["tabs"] as List<object> : null;
+                    if (tabs == null) continue;
+                    foreach (object t in tabs)
+                    {
+                        var tab = t as Dictionary<string, object>;
+                        var es = tab != null && tab.ContainsKey("entries") ? tab["entries"] as List<object> : null;
+                        if (es == null || es.Count == 0) continue;
+                        int idx = tab.ContainsKey("index") ? Convert.ToInt32(tab["index"]) - 1 : es.Count - 1;
+                        var e = es[Math.Max(0, Math.Min(idx, es.Count - 1))] as Dictionary<string, object>;
+                        string u = e != null && e.ContainsKey("url") ? e["url"] as string ?? "" : "";
+                        foreach (string x in want) if (u.StartsWith(x)) return true;
+                    }
+                }
+            }
+        }
+        catch { }
+        return false;
+    }
+
     /** An LZ4 block (Firefox's .jsonlz4 after its 12-byte header) to its [size] bytes. */
     static byte[] Lz4Block(byte[] src, int at, int size)
     {
@@ -2717,8 +2761,13 @@ foreach ($b in Get-Process chrome, msedge, brave, opera, vivaldi | ? { $_.MainWi
                         relayReady.WaitOne(3000);
                         if (localPort > 0)
                         {
-                            Say("Opening the Localhost 8787 page at http://localhost:" + localPort + "/ for full-speed transfers.");
-                            try { Process.Start("http://localhost:" + localPort + "/"); } catch { }
+                            // Not again when it is already open (the helper restarted, the laptop woke).
+                            if (PageOpen(localPort)) Say("The Localhost 8787 page is open at http://localhost:" + localPort + "/.");
+                            else
+                            {
+                                Say("Opening the Localhost 8787 page at http://localhost:" + localPort + "/ for full-speed transfers.");
+                                try { Process.Start("http://localhost:" + localPort + "/"); } catch { }
+                            }
                         }
                         announced = true;
                     }

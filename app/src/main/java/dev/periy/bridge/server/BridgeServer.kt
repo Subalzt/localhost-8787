@@ -314,6 +314,8 @@ class BridgeServer(
         install(SSE)
         install(StatusPages) {
             exception<Throwable> { call, cause ->
+                // A stream whose reader went away (a page closed, a helper restarted) is not an error.
+                if (cause is kotlinx.coroutines.CancellationException) return@exception
                 Log.w(TAG, "Unhandled error on ${call.request.path()}", cause)
                 // Keep Tus-Resumable on error responses too, or a client is within its
                 // rights to treat the upload as unresumable and start over.

@@ -99,6 +99,9 @@ class CamEngine(ctx: Context, private val out: Out) {
                 // Night: as slow as it goes, down to about 5 pictures a second, for light.
                 nightFps = ranges.filter { it.upper <= 15 }.minByOrNull { it.lower } ?: ranges.minByOrNull { it.lower }
                 evMax = ch.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE)?.upper ?: 0
+                // +1.3 EV, not the most it goes (+4 here): the most turns a lit room white (measured 168 -> 255).
+                val step = ch.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP)?.toFloat() ?: 0f
+                if (step > 0f) evMax = minOf(evMax, kotlin.math.round(1.3f / step).toInt())
                 nightScene = ch.get(CameraCharacteristics.CONTROL_AVAILABLE_SCENE_MODES)?.contains(CaptureRequest.CONTROL_SCENE_MODE_NIGHT) == true
                 zoomRange = if (android.os.Build.VERSION.SDK_INT >= 30) ch.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE) else null
                 sensorArea = ch.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
@@ -270,10 +273,9 @@ class CamEngine(ctx: Context, private val out: Out) {
                 addTarget(encSurface!!)
                 addTarget(reader!!.surface)
                 (if (night) nightFps ?: fps else fps)?.let { set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, it) }
-                if (night && nightScene) {
-                    set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_USE_SCENE_MODE)
-                    set(CaptureRequest.CONTROL_SCENE_MODE, CaptureRequest.CONTROL_SCENE_MODE_NIGHT)
-                } else set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+                // Auto, not the night scene: with the scene on, cameras like this one's ignore the
+                // brightening below (measured: a touch darker, not lighter), as a night scene keeps the dark.
+                set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
                 if (night) {
                     set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, evMax)
                     set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_HIGH_QUALITY)
