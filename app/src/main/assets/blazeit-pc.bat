@@ -1295,6 +1295,12 @@ foreach ($b in Get-Process chrome, msedge, brave, opera, vivaldi | ? { $_.MainWi
   $e = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $c)
   if ($e) { $v = $e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value; if ($v) { 'U' + [char]9 + $b.ProcessName + [char]9 + $b.MainWindowTitle + [char]9 + $v } }
 }
+foreach ($b in Get-Process firefox | ? { $_.MainWindowHandle -ne 0 }) {
+  $root = [System.Windows.Automation.AutomationElement]::FromHandle($b.MainWindowHandle)
+  $c = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'urlbar-input')
+  $e = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $c)
+  if ($e) { $v = $e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value; if ($v) { 'U' + [char]9 + 'firefox' + [char]9 + $b.MainWindowTitle + [char]9 + $v } }
+}
 ";
 
     /**
@@ -1331,8 +1337,22 @@ foreach ($b in Get-Process chrome, msedge, brave, opera, vivaldi | ? { $_.MainWi
         {
             // Firefox's address bar is hidden in full screen: its session file says the same, for every window.
             string want = title.Length > 0 ? title : (fg != null ? Regex.Replace(fg[2], " [\u2014-] .*Mozilla Firefox$", "") : "");
-            string t2;
-            url = FirefoxTab(want, out t2);
+            string t2 = "";
+            // Its own address bar first, when its window shows what plays (not in full screen, where it hides).
+            foreach (string[] u in urls)
+                if (u[1] == "firefox" && (want.Length == 0 || u[2].StartsWith(want)))
+                { url = u[3].Contains("://") ? u[3] : "https://" + u[3]; break; }
+            if (url.Length == 0)
+            {
+                DateTime was = FirefoxSessionTime();
+                url = FirefoxTab(want, out t2);
+                // Not in the session yet (Firefox writes it every 15 s): once more after its next write.
+                if (want.Length > 0 && t2 != want && !t2.StartsWith(want + " "))
+                {
+                    for (int i = 0; i < 34 && FirefoxSessionTime() == was; i++) Thread.Sleep(500);
+                    url = FirefoxTab(want, out t2);
+                }
+            }
             if (title.Length == 0) title = t2;
         }
         else
@@ -1416,7 +1436,7 @@ foreach ($b in Get-Process chrome, msedge, brave, opera, vivaldi | ? { $_.MainWi
                 if (windows == null) continue;
                 // The window used last first ("selectedWindow" counts from 1); in each, its tabs, the one in front first.
                 int sw = doc.ContainsKey("selectedWindow") ? Convert.ToInt32(doc["selectedWindow"]) - 1 : 0;
-                string first = null, firstTitle = "";
+                string first = null, firstTitle = "", named = null, namedTitle = "";
                 for (int wi = -1; wi < windows.Count; wi++)
                 {
                     int w = wi < 0 ? sw : wi;
@@ -1435,14 +1455,35 @@ foreach ($b in Get-Process chrome, msedge, brave, opera, vivaldi | ? { $_.MainWi
                         if (e == null) continue;
                         string u = e.ContainsKey("url") ? e["url"] as string ?? "" : "", t = e.ContainsKey("title") ? e["title"] as string ?? "" : "";
                         if (title.Length > 0 && t == title) { tabTitle = t; return u; }
+                        // The page's title is the media's with the site after it ("... - YouTube").
+                        if (title.Length > 0 && named == null && (t.StartsWith(title + " - ") || t.StartsWith(title + " — ") || t.StartsWith(title + " | "))) { named = u; namedTitle = t; }
                         if (first == null && ti == sel && u.StartsWith("http")) { first = u; firstTitle = t; }
                     }
                 }
-                if (first != null && title.Length == 0) { tabTitle = firstTitle; return first; }
+                if (named != null) { tabTitle = namedTitle; return named; }
+                // Nothing by its name: the tab in front of the window used last.
+                if (first != null) { tabTitle = firstTitle; return first; }
             }
         }
         catch (Exception e) { Log("Firefox's tabs: " + e.Message); }
         return "";
+    }
+
+    /** When Firefox last wrote its session (the newest profile's); MinValue without Firefox. */
+    static DateTime FirefoxSessionTime()
+    {
+        DateTime best = DateTime.MinValue;
+        try
+        {
+            string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Mozilla\Firefox\Profiles");
+            foreach (string d in Directory.GetDirectories(root))
+            {
+                var f = new FileInfo(Path.Combine(d, @"sessionstore-backups\recovery.jsonlz4"));
+                if (f.Exists && f.LastWriteTimeUtc > best) best = f.LastWriteTimeUtc;
+            }
+        }
+        catch { }
+        return best;
     }
 
     /** Just enough JSON: objects as dictionaries, arrays as lists, strings, numbers as doubles, true, false, null. */

@@ -75,10 +75,25 @@ object Handoff {
         if (d.url.isEmpty()) return if (d.media.isNotEmpty()) "${d.laptop.ifEmpty { "The laptop" }} is playing ${d.media} in ${d.app}, which has no web address" else "Nothing open on the laptop to carry on"
         val url = withTime(d.url, if (d.pos >= 0) d.pos else null)
         return runCatching {
-            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            val i = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // In the site's own app where it is installed (the phone may hand its links to the browser).
+            appFor(Uri.parse(url).host.orEmpty())?.takeIf { ctx.packageManager.getLaunchIntentForPackage(it) != null }?.let { i.setPackage(it) }
+            runCatching { ctx.startActivity(i) }.getOrElse { i.setPackage(null); ctx.startActivity(i) }
             Log.i(TAG, "opened ${Uri.parse(url).host} from the laptop")
             "Carrying on: " + d.title.ifEmpty { Uri.parse(url).host.orEmpty() }
         }.getOrElse { "Could not open it on the phone: ${it.message}" }
+    }
+
+    private fun appFor(host: String): String? {
+        val h = host.removePrefix("www.").removePrefix("m.")
+        return when {
+            h == "music.youtube.com" -> "com.google.android.apps.youtube.music"
+            h == "youtube.com" || h == "youtu.be" -> "com.google.android.youtube"
+            h.endsWith("primevideo.com") -> "com.amazon.avod.thirdpartyclient"
+            h.endsWith("netflix.com") -> "com.netflix.mediaclient"
+            h == "open.spotify.com" -> "com.spotify.music"
+            else -> null
+        }
     }
 
     /** [url] to start at [sec]: YouTube's own t= (other sites keep their address; Prime and Netflix remember the place themselves). */
