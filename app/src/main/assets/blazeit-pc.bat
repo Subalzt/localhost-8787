@@ -1085,7 +1085,10 @@ public static class BlazeItPc
                     if (map != IntPtr.Zero) view = MapViewOfFile(map, 0x0002 | 0x0004, 0, 0, UIntPtr.Zero);
                     if (view == IntPtr.Zero) { if (map != IntPtr.Zero) { CloseHandle(map); map = IntPtr.Zero; } Thread.Sleep(2000); continue; }
                 }
-                bool wanted = Marshal.ReadInt32(view, 16) == 1;
+                // Wanted, and asked for a picture in the last 3 s: a flag left set by an app that died (or a
+                // service that kept the camera) must never keep the phone's camera on.
+                long asked = Marshal.ReadInt64(view, 28);
+                bool wanted = Marshal.ReadInt32(view, 16) == 1 && asked > 0 && (long)GetTickCount64() - asked < 3000;
                 bool running = ff != null && !ff.HasExited;
                 if (wanted && !running && phone != null)
                 {
@@ -1123,8 +1126,10 @@ public static class BlazeItPc
         string back = "{\"on\":" + (st.Contains("\"on\":true") ? "true" : "false") +
             ",\"lens\":" + Json(CallField(st, "lens").Length > 0 ? CallField(st, "lens") : "back") +
             ",\"motion\":" + (st.Contains("\"motion\":false") ? "false" : "true") +
-            ",\"record\":" + (st.Contains("\"record\":false") ? "false" : "true") + "}";
-        WebcamPhoneSet("{\"on\":true,\"lens\":\"front\",\"motion\":false,\"record\":false}");
+            ",\"record\":" + (st.Contains("\"record\":false") ? "false" : "true") +
+            ",\"sound\":" + (st.Contains("\"sound\":false") ? "false" : "true") + "}";
+        // The microphone on too, for the laptop's "CABLE Input" (VB-CABLE) when it has one.
+        WebcamPhoneSet("{\"on\":true,\"lens\":\"front\",\"motion\":false,\"record\":false" + (CableOut() >= 0 ? ",\"sound\":true" : "") + "}");
         return back;
     }
 
@@ -1157,14 +1162,26 @@ public static class BlazeItPc
             Thread.Sleep(500);
         }
         string turn = rot == 90 ? "transpose=1," : rot == 180 ? "transpose=1,transpose=1," : rot == 270 ? "transpose=2," : "";
-        var psi = new ProcessStartInfo(ffx, "-hide_banner -loglevel error -fflags nobuffer -flags low_delay -probesize 32768 -f h264 -i pipe:0 " +
+        var psi = new ProcessStartInfo(ffx, "-hide_banner -loglevel error -fflags nobuffer -flags low_delay -probesize 32 -analyzeduration 0 -threads 1 -f h264 -i pipe:0 " +
             "-vf \"" + turn + "scale=" + CamW + ":" + CamH + ":force_original_aspect_ratio=increase,crop=" + CamW + ":" + CamH + ",format=nv12\" " +
-            "-f rawvideo -pix_fmt nv12 pipe:1");
+            "-fps_mode passthrough -f rawvideo -pix_fmt nv12 pipe:1");
         psi.UseShellExecute = false; psi.CreateNoWindow = true;
         psi.RedirectStandardInput = true; psi.RedirectStandardOutput = true; psi.RedirectStandardError = false;
         Process ff = Process.Start(psi);
         string vid = "webcam-" + Environment.TickCount.ToString("x");
-        HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + "/api/cams/stream?v=" + vid);
+        // The phone's microphone too, into VB-CABLE, where there is one: apps take "CABLE Output" as the microphone.
+        int cable = CableOut();
+        Process aff = null;
+        if (cable >= 0)
+        {
+            var api = new ProcessStartInfo(ffx, "-hide_banner -loglevel error -fflags nobuffer -f aac -i pipe:0 -f s16le -ar 48000 -ac 1 pipe:1");
+            api.UseShellExecute = false; api.CreateNoWindow = true; api.RedirectStandardInput = true; api.RedirectStandardOutput = true;
+            aff = Process.Start(api);
+            Process af = aff;
+            Thread play = new Thread(delegate () { CablePlay(cable, af); });
+            play.IsBackground = true; play.Start();
+        }
+        HttpWebRequest r = (HttpWebRequest)WebRequest.Create("http://" + Via(phone) + ":" + PhonePort + "/api/cams/stream?v=" + vid + (aff != null ? "&listen=1" : ""));
         r.Proxy = null; r.UserAgent = Ua; r.Headers["Cookie"] = session; r.Timeout = 15000; r.ReadWriteTimeout = 15000;
         HttpWebResponse got = (HttpWebResponse)r.GetResponse();
         resp = got;
@@ -1187,10 +1204,12 @@ public static class BlazeItPc
                     if (!ReadFull(src, body, n)) break;
                     Interlocked.Add(ref seen[0], 8 + n);
                     if (!sound) { dst.Write(body, 0, n); dst.Flush(); }
+                    else if (aff != null) { try { aff.StandardInput.BaseStream.Write(body, 0, n); aff.StandardInput.BaseStream.Flush(); } catch { } }
                 }
             }
             catch { }
             try { ff.Kill(); } catch { }
+            try { if (aff != null) aff.Kill(); } catch { }
         });
         pump.IsBackground = true; pump.Start();
         Thread acks = new Thread(delegate ()
@@ -1222,6 +1241,84 @@ public static class BlazeItPc
         });
         outp.IsBackground = true; outp.Start();
         return ff;
+    }
+
+    // ---- the phone's microphone into VB-CABLE: 48 kHz mono 16-bit through Windows' waveOut
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct WaveOutCaps { public ushort mid, pid; public uint driverVersion; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string name; public uint formats; public ushort channels, reserved; public uint support; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct WaveFormat { public ushort tag, channels; public uint rate, bytesPerSec; public ushort align, bits, extra; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct WaveHdr { public IntPtr data; public uint length, recorded; public IntPtr user; public uint flags, loops; public IntPtr next, reserved; }
+    [DllImport("winmm.dll")] static extern int waveOutGetNumDevs();
+    [DllImport("winmm.dll", CharSet = CharSet.Unicode)] static extern int waveOutGetDevCaps(IntPtr id, ref WaveOutCaps caps, int size);
+    [DllImport("winmm.dll")] static extern int waveOutOpen(out IntPtr h, IntPtr id, ref WaveFormat f, IntPtr cb, IntPtr inst, int flags);
+    [DllImport("winmm.dll")] static extern int waveOutPrepareHeader(IntPtr h, IntPtr hdr, int size);
+    [DllImport("winmm.dll")] static extern int waveOutUnprepareHeader(IntPtr h, IntPtr hdr, int size);
+    [DllImport("winmm.dll")] static extern int waveOutWrite(IntPtr h, IntPtr hdr, int size);
+    [DllImport("winmm.dll")] static extern int waveOutReset(IntPtr h);
+    [DllImport("winmm.dll")] static extern int waveOutClose(IntPtr h);
+
+    /** VB-CABLE's playback side ("CABLE Input"), or -1 when it is not installed. */
+    static int CableOut()
+    {
+        int n = waveOutGetNumDevs();
+        for (int i = 0; i < n; i++)
+        {
+            var c = new WaveOutCaps();
+            if (waveOutGetDevCaps((IntPtr)i, ref c, Marshal.SizeOf(typeof(WaveOutCaps))) == 0 && c.name != null && c.name.StartsWith("CABLE Input")) return i;
+        }
+        return -1;
+    }
+
+    /** ffmpeg's PCM into the cable, 20 ms at a time, eight pieces queued at most (160 ms behind, no more). */
+    static void CablePlay(int dev, Process ff)
+    {
+        const int Piece = 48000 * 2 / 50, Pieces = 8;
+        var f = new WaveFormat { tag = 1, channels = 1, rate = 48000, bytesPerSec = 96000, align = 2, bits = 16, extra = 0 };
+        IntPtr h;
+        if (waveOutOpen(out h, (IntPtr)dev, ref f, IntPtr.Zero, IntPtr.Zero, 0) != 0) { Log("Webcam: could not open CABLE Input."); return; }
+        int hsz = Marshal.SizeOf(typeof(WaveHdr));
+        var hdrs = new IntPtr[Pieces];
+        for (int i = 0; i < Pieces; i++)
+        {
+            hdrs[i] = Marshal.AllocHGlobal(hsz);
+            var w = new WaveHdr { data = Marshal.AllocHGlobal(Piece), length = Piece, flags = 1 }; // WHDR_DONE: free to fill
+            Marshal.StructureToPtr(w, hdrs[i], false);
+        }
+        try
+        {
+            Stream src = ff.StandardOutput.BaseStream;
+            byte[] buf = new byte[Piece];
+            int k = 0;
+            while (ReadFull(src, buf, Piece))
+            {
+                IntPtr hp = hdrs[k];
+                var w = (WaveHdr)Marshal.PtrToStructure(hp, typeof(WaveHdr));
+                // Every piece queued: too far behind, so this one is let go rather than lag.
+                if ((w.flags & 1) == 0) continue;
+                if ((w.flags & 2) != 0) waveOutUnprepareHeader(h, hp, hsz);
+                Marshal.Copy(buf, 0, w.data, Piece);
+                w.flags = 0; w.length = Piece;
+                Marshal.StructureToPtr(w, hp, false);
+                waveOutPrepareHeader(h, hp, hsz);
+                waveOutWrite(h, hp, hsz);
+                k = (k + 1) % Pieces;
+            }
+        }
+        catch { }
+        finally
+        {
+            waveOutReset(h);
+            for (int i = 0; i < Pieces; i++)
+            {
+                waveOutUnprepareHeader(h, hdrs[i], hsz);
+                var w = (WaveHdr)Marshal.PtrToStructure(hdrs[i], typeof(WaveHdr));
+                Marshal.FreeHGlobal(w.data); Marshal.FreeHGlobal(hdrs[i]);
+            }
+            waveOutClose(h);
+        }
     }
 
     static bool ReadFull(Stream s, byte[] b, int n)

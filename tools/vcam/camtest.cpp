@@ -12,6 +12,7 @@
 #pragma comment(lib, "ole32.lib")
 
 int wmain(int argc, wchar_t** argv) {
+    setvbuf(stdout, nullptr, _IONBF, 0);
     int frames = argc > 1 ? _wtoi(argv[1]) : 30;
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     MFStartup(MF_VERSION);

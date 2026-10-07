@@ -774,8 +774,12 @@ not running, the camera shows a dark grey picture, so no app hangs on it.
 
 It is a real Windows camera, made the way Windows 11 means it to be (a virtual camera whose media
 source, `tools/vcam`, runs in Windows' own camera service), not a filter that only some apps see.
-The phone's microphone does not come with it: Windows has no way for a program to add a
-microphone without a driver of its own.
+The phone's microphone comes too where [VB-CABLE](https://vb-audio.com/Cable/) (a free, signed
+virtual audio cable) is installed: pick **CABLE Output** as the microphone. Windows has no way for a
+program to add a microphone of its own without a driver. (VB-CABLE's installer makes itself the
+default speaker; set your speakers back in Sound settings.) The camera only takes the phone's
+camera while an app is actually asking it for pictures: a camera left open by an app that died
+never keeps it on.
 
 ### Laptop health
 

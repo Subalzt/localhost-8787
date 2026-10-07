@@ -46,7 +46,10 @@ struct Shared {
     volatile LONG seq;
     volatile LONG wanted;
     volatile LONGLONG wroteAt; // GetTickCount64 of the last picture
-    BYTE pad[64 - 4 * 5 - 8];
+    // GetTickCount64 of the last picture an app asked for: the helper feeds only while this is fresh,
+    // so a camera left "wanted" (an app that died, a service that kept it) never keeps the phone's camera on.
+    volatile LONGLONG askedAt;
+    BYTE pad[64 - 4 * 5 - 8 - 8];
 };
 #pragma pack(pop)
 static const UINT32 MAGIC = 0x4337384C;
@@ -89,6 +92,7 @@ public:
         if (map) { CloseHandle(map); map = nullptr; }
     }
     void Want(bool on) { if (view) InterlockedExchange(&view->wanted, on ? 1 : 0); }
+    void Asked() { if (view) view->askedAt = (LONGLONG)GetTickCount64(); }
     // The latest whole picture into [dst]; false (a placeholder instead) when the helper has not fed one lately.
     bool Copy(BYTE* dst) {
         if (!view) return false;
@@ -230,6 +234,7 @@ public:
             BYTE* line = nullptr; BYTE* start = nullptr; LONG pitch = 0; DWORD len = 0;
             if (SUCCEEDED(hr)) hr = b2->Lock2DSize(MF2DBuffer_LockFlags_Write, &line, &pitch, &start, &len);
             if (SUCCEEDED(hr)) {
+                feed->Asked();
                 if (!frame) frame = (BYTE*)malloc(FRAME_BYTES);
                 if (frame && !feed->Copy(frame)) Placeholder(frame, GetTickCount64());
                 if (frame) {
