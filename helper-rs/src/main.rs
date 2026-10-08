@@ -20,6 +20,7 @@ mod phone;
 mod relay;
 mod tunnel;
 mod util;
+mod volume;
 
 use std::thread::spawn;
 use util::say;
@@ -68,6 +69,17 @@ fn main() {
         println!("{}", health::snapshot());
         return;
     }
+    if let Some(i) = args.iter().position(|a| a == "--volume") {
+        // --volume reports the level; --volume 0.4 sets it first (a check, as --health is).
+        if let Some(l) = args.get(i + 1).and_then(|v| v.parse::<f32>().ok()) {
+            volume::set(l);
+        }
+        match volume::get() {
+            Some((l, m)) => println!("{{\"level\":{},\"muted\":{}}}", l, m),
+            None => println!("no volume control here"),
+        }
+        return;
+    }
     if !single_instance() {
         say("Another Localhost 8787 helper is running here. Close it, then start this one again.");
         std::thread::sleep(std::time::Duration::from_secs(5));
@@ -80,5 +92,6 @@ fn main() {
     spawn(events::events_loop);
     spawn(clip::clip_loop);
     spawn(far::tunnel_loop);
+    spawn(volume::volume_loop);
     control::control_loop(no_browser);
 }

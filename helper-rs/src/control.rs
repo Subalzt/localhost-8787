@@ -47,7 +47,9 @@ pub fn handle(p: &mut Option<Box<dyn Pointer>>, line: &str) {
             for k in keys.iter().rev() { p.key(k, false); }
         },
         "t" if line.len() > 2 => p.type_text(&unescape(&line[2..])),
-        _ => {} // "p" (keep-alive), and what this helper does not do yet (the volume, pointing at a spot)
+        "v" => if let Some(l) = a.get(1).and_then(|v| v.parse::<f32>().ok()) { crate::volume::set(l) },
+        "vm" => crate::volume::toggle_mute(),
+        _ => {} // "p" (keep-alive), and pointing at a spot (the second screen's, not here yet)
     }
 }
 
