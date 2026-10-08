@@ -2,6 +2,7 @@
 //! (GET /api/tunnel); when no local path answers, every saved IPv6 address dialled at once with the
 //! ones its website name points to now, the first tunnel up served on a loopback address.
 
+use crate::punch;
 use crate::tunnel::{self, Tunnel};
 use crate::util::{conf_dir, log, read_conf, say, write_conf};
 use base64::Engine;
@@ -101,12 +102,52 @@ fn bind_local() -> Option<(String, u16)> {
     None
 }
 
-fn failed() {
+fn failed(why: &str) {
     let mut f = FAILS.lock().unwrap();
     *f += 1;
-    let wait = (15u64 << (*f - 1).min(6)).min(600);
+    // The board says it is asked too often: ten minutes at once.
+    let wait = if why.contains("429") { 600 } else { (15u64 << (*f - 1).min(6)).min(600) };
     *NEXT_TRY.lock().unwrap() = Some(Instant::now() + Duration::from_secs(wait));
-    log(&format!("From afar: trying again in {} s.", wait));
+    log(&format!("From afar: trying again in {}.", if wait >= 60 { format!("{} min", wait / 60) } else { format!("{} s", wait) }));
+}
+
+/// While waiting to try from afar again: the website name says the phone has moved (looked at every 30 s).
+fn site_moved(c: &serde_json::Value) -> bool {
+    static LOOKED: Mutex<Option<Instant>> = Mutex::new(None);
+    {
+        let mut l = LOOKED.lock().unwrap();
+        if l.map_or(false, |t| t.elapsed() < Duration::from_secs(30)) {
+            return false;
+        }
+        *l = Some(Instant::now());
+    }
+    let saved: Vec<String> = c["addrs"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+    site_addrs(c).iter().any(|a| !saved.contains(a))
+}
+
+/// Every address at once; the first tunnel up wins, the others are closed.
+fn race(addrs: &[String], port: u16, tid: &[u8], psk: &[u8]) -> Option<Tunnel> {
+    let (tx, rx) = mpsc::channel::<(String, std::io::Result<Tunnel>)>();
+    for a in addrs {
+        let (a, tid, psk, tx) = (a.clone(), tid.to_vec(), psk.to_vec(), tx.clone());
+        spawn(move || {
+            let r = tunnel::dial(&a, port, &tid, &psk, Duration::from_secs(4));
+            let _ = tx.send((a, r));
+        });
+    }
+    drop(tx);
+    let mut won: Option<Tunnel> = None;
+    while let Ok((a, r)) = rx.recv_timeout(Duration::from_secs(20)) {
+        match r {
+            Ok(t) if won.is_none() => {
+                log(&format!("Tunnel to [{}]:{}", a, port));
+                won = Some(t);
+            }
+            Ok(t) => t.close("another address answered first"),
+            Err(e) => say(&format!("Could not reach the phone at {} over the internet ({}).", a, e)),
+        }
+    }
+    won
 }
 
 /// The last way in, from another network. Where the tunnel is served here, or None.
@@ -117,7 +158,7 @@ pub fn path() -> Option<(String, u16)> {
         }
     }
     let c = conf()?;
-    if NEXT_TRY.lock().unwrap().map(|t| Instant::now() < t).unwrap_or(false) {
+    if NEXT_TRY.lock().unwrap().map(|t| Instant::now() < t).unwrap_or(false) && !site_moved(&c) {
         return None;
     }
     let at = bind_local()?;
@@ -136,28 +177,30 @@ pub fn path() -> Option<(String, u16)> {
             addrs.insert(0, a);
         }
     }
-    if addrs.is_empty() {
-        return None;
+    let site = c["site"]["name"].as_str().zip(c["site"]["token"].as_str());
+    let mut won = if addrs.is_empty() { None } else { race(&addrs, port, &tid, &psk) };
+    if won.is_none() && site.is_none() {
+        // No website to say where the phone is: the board is asked, in case its IPv6 changed.
+        let now = punch::where_addrs(&psk);
+        let fresh: Vec<String> = now.iter().filter(|a| !addrs.contains(a)).cloned().collect();
+        if !fresh.is_empty() {
+            log(&format!("The phone's addresses changed: {}", fresh.join(", ")));
+            save_addrs(&serde_json::json!(now));
+            won = race(&fresh, port, &tid, &psk);
+        }
     }
-    // Every address at once; the first tunnel up wins, the others are closed.
-    let (tx, rx) = mpsc::channel::<(String, std::io::Result<Tunnel>)>();
-    for a in &addrs {
-        let (a, tid, psk, tx) = (a.clone(), tid.clone(), psk.clone(), tx.clone());
-        spawn(move || {
-            let r = tunnel::dial(&a, port, &tid, &psk, Duration::from_secs(4));
-            let _ = tx.send((a, r));
-        });
-    }
-    drop(tx);
-    let mut won: Option<Tunnel> = None;
-    while let Ok((a, r)) = rx.recv_timeout(Duration::from_secs(20)) {
-        match r {
-            Ok(t) if won.is_none() => {
-                log(&format!("Tunnel to [{}]:{}", a, port));
+    if won.is_none() {
+        // No IPv6 way to it: across IPv4, punched through both NATs.
+        match punch::dial_punched(&tid, &psk, site) {
+            Ok(t) => {
+                log("Tunnel to the phone over UDP, punched through");
                 won = Some(t);
             }
-            Ok(t) => t.close("another address answered first"),
-            Err(e) => say(&format!("Could not reach the phone at {} over the internet ({}).", a, e)),
+            Err(e) => {
+                say(&format!("Could not reach the phone across IPv4 ({}).", e));
+                failed(&e.to_string());
+                return None;
+            }
         }
     }
     match won {
@@ -167,7 +210,7 @@ pub fn path() -> Option<(String, u16)> {
             Some(at)
         }
         None => {
-            failed();
+            failed("");
             None
         }
     }

@@ -34,7 +34,7 @@ const CREDIT_STEP: usize = 128 * 1024;
 const IDLE_PING_MS: u64 = 20_000;
 const DEAD_MS: u64 = 60_000;
 
-fn hmac(key: &[u8], parts: &[&[u8]]) -> [u8; 32] {
+pub(crate) fn hmac(key: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     let mut m = HmacSha256::new_from_slice(key).expect("any key length");
     for p in parts {
         Mac::update(&mut m, p);
@@ -42,13 +42,13 @@ fn hmac(key: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     m.finalize().into_bytes().into()
 }
 
-fn hmac16(key: &[u8], parts: &[&[u8]]) -> [u8; 16] {
+pub(crate) fn hmac16(key: &[u8], parts: &[&[u8]]) -> [u8; 16] {
     let mut o = [0u8; 16];
     o.copy_from_slice(&hmac(key, parts)[..16]);
     o
 }
 
-fn same(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn same(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |d, (x, y)| d | (x ^ y)) == 0
 }
 
@@ -484,4 +484,10 @@ pub fn serve(listener: TcpListener, get: fn() -> Option<Tunnel>) {
             }
         }
     });
+}
+
+/// The handshake (version 2) over a connection made by someone else: the punched UDP path, which
+/// punch.rs hands over as a local socket.
+pub fn dial_over(s: TcpStream, tid: &[u8], psk: &[u8], timeout: Duration) -> io::Result<Tunnel> {
+    handshake(s, tid, psk, 2, timeout)
 }

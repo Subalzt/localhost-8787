@@ -5,7 +5,7 @@
 //!
 //! From another network it reaches the phone through the L87 tunnel over IPv6 (tunnel.rs, far.rs).
 //!
-//! Not yet here (the earlier helpers still do them): punching through IPv4 NATs, the second screen,
+//! Not yet here (the earlier helpers still do them): the second screen,
 //! the laptop's sound, the webcam and calls.
 
 mod clip;
@@ -16,9 +16,11 @@ mod files;
 mod handoff;
 mod health;
 mod http;
+mod https;
 mod input;
 mod notify;
 mod phone;
+mod punch;
 mod relay;
 mod tunnel;
 mod util;
@@ -66,6 +68,13 @@ fn main() {
     if args.iter().any(|a| a == "--cable-check") {
         phone::cable_report();
         return;
+    }
+    if args.first().map_or(false, |a| a == "--seal" || a == "--unseal") {
+        punch::seal_check(&args);
+        return;
+    }
+    if args.iter().any(|a| a == "--punch-selftest") {
+        std::process::exit(if punch::selftest() { 0 } else { 1 });
     }
     if args.iter().any(|a| a == "--ring-test") {
         // A call ringing here for three seconds, then stopped: to see the notification works.
