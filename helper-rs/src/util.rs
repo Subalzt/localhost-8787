@@ -50,7 +50,7 @@ pub fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
-fn stamp() -> String {
+pub fn stamp() -> String {
     // Local time without a time-zone crate: what the clock says, as hours:minutes:seconds.
     let s = now_ms() / 1000 + local_offset_secs();
     format!("{:02}:{:02}:{:02}", (s / 3600) % 24, (s / 60) % 60, s % 60)

@@ -17,6 +17,7 @@ mod handoff;
 mod health;
 mod http;
 mod input;
+mod notify;
 mod phone;
 mod relay;
 mod tunnel;
@@ -64,6 +65,14 @@ fn main() {
     let typed = args.iter().position(|a| a == "--phone").and_then(|i| args.get(i + 1)).cloned();
     if args.iter().any(|a| a == "--cable-check") {
         phone::cable_report();
+        return;
+    }
+    if args.iter().any(|a| a == "--ring-test") {
+        // A call ringing here for three seconds, then stopped: to see the notification works.
+        notify::call_event(r#"{"id":"test","phase":"ringing","outgoing":false,"video":false,"members":[{"name":"Test"}]}"#);
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        notify::call_event("null");
+        std::thread::sleep(std::time::Duration::from_secs(1));
         return;
     }
     if args.iter().any(|a| a == "--handoff") {
