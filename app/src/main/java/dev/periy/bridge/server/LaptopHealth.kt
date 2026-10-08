@@ -38,12 +38,11 @@ object LaptopHealth {
 
     /** The helper's JSON as it sent it, or null when it did not answer in time. */
     suspend fun raw(laptopId: String): String? {
-        if (laptopId !in Control.online()) return null
+        if (laptopId !in Control.online() && !LaptopFiles.helperBack()) return null
         val id = UUID.randomUUID().toString()
         val wait = CompletableDeferred<String>()
         waits[id] = wait
-        EventBus.emitTo(laptopId, "health", id)
-        return try { withTimeoutOrNull(12_000) { wait.await() } } finally { waits.remove(id) }
+        return try { LaptopFiles.askUntil(wait, 14_000) { EventBus.emitTo(laptopId, "health", id) } } finally { waits.remove(id) }
     }
 
     suspend fun ask(laptopId: String): LaptopHealthDto {

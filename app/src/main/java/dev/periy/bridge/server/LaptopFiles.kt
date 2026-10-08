@@ -2,6 +2,7 @@ package dev.periy.bridge.server
 
 import android.util.Base64
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import java.util.UUID
@@ -27,17 +28,37 @@ object LaptopFiles {
 
     private fun b64(s: String) = Base64.encodeToString(s.toByteArray(), Base64.NO_WRAP)
 
-    /** The folder at [path] on the laptop (the top when empty). */
+    /**
+     * The folder at [path] on the laptop (the top when empty). Over a link that drops now and
+     * then (the phone's Wi-Fi idling), it waits for the helper to be back and asks again; asking
+     * twice is harmless, the first answer is taken.
+     */
     suspend fun list(path: String): LaptopListing {
-        if (Control.connected.value.isEmpty()) return LaptopListing(path, error = "The laptop helper is not running")
+        if (!helperBack()) return LaptopListing(path, error = "The laptop helper is not running")
         val id = UUID.randomUUID().toString()
         val wait = CompletableDeferred<LaptopListing>()
         listings[id] = wait
-        EventBus.emit("laptopfs", "list $id ${b64(path)}")
         return try {
-            withTimeoutOrNull(20_000) { wait.await() } ?: LaptopListing(path, error = "The laptop did not answer")
+            askUntil(wait, 24_000) { EventBus.emit("laptopfs", "list $id ${b64(path)}") }
+                ?: LaptopListing(path, error = "The laptop did not answer")
         } finally {
             listings.remove(id)
+        }
+    }
+
+    /** A helper connected, now or within [ms] (it reconnects in a second or two after a drop). */
+    internal suspend fun helperBack(ms: Long = 10_000): Boolean =
+        Control.connected.value.isNotEmpty() ||
+            withTimeoutOrNull(ms) { Control.connected.first { it.isNotEmpty() } } != null
+
+    /** Sends with [send] and waits for [wait]; with no answer in 7 s (a request lost in a drop), sends again, until [totalMs]. */
+    internal suspend fun <T> askUntil(wait: CompletableDeferred<T>, totalMs: Long, send: () -> Unit): T? {
+        val end = System.currentTimeMillis() + totalMs
+        while (true) {
+            val left = end - System.currentTimeMillis()
+            if (left <= 0 || !helperBack(minOf(left, 10_000))) return null
+            send()
+            withTimeoutOrNull(minOf(7_000L, end - System.currentTimeMillis()).coerceAtLeast(1)) { wait.await() }?.let { return it }
         }
     }
 
@@ -48,7 +69,7 @@ object LaptopFiles {
 
     /** Saves the file at [path] on the laptop into this phone's folder for received files: its name there, or why not. */
     suspend fun save(path: String): Result<String> {
-        if (Control.connected.value.isEmpty()) return Result.failure(IllegalStateException("The laptop helper is not running"))
+        if (!helperBack()) return Result.failure(IllegalStateException("The laptop helper is not running"))
         val id = UUID.randomUUID().toString()
         val wait = CompletableDeferred<String>()
         saves[id] = wait
@@ -78,7 +99,7 @@ object LaptopFiles {
      * device id), else whichever is running; [folder] [DROP]: its Downloads, shown there once in.
      */
     suspend fun put(uri: android.net.Uri, name: String, size: Long, folder: String, to: String? = null): Result<String> {
-        if (Control.connected.value.isEmpty()) return Result.failure(IllegalStateException("The laptop helper is not running"))
+        if (!helperBack()) return Result.failure(IllegalStateException("The laptop helper is not running"))
         val id = UUID.randomUUID().toString()
         val wait = CompletableDeferred<String>()
         saves[id] = wait

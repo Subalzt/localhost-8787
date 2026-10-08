@@ -3315,7 +3315,11 @@ foreach ($b in Get-Process firefox | ? { $_.MainWindowHandle -ne 0 }) {
                 // the laptop's screens back rather than leave a display nobody sees.
                 if (end == "phone") { StopSecondScreen(); return; }
                 if (end == "relayout") failures = 0;
-                else if (++failures >= 3) { Say("Could not stream this screen to the phone."); StopSecondScreen(); return; }
+                else if (++failures >= 3)
+                {
+                    Say("Could not stream this screen to the phone (" + target.W + "x" + target.H + "; " + (captureErr.Length > 0 ? captureErr : "no word from ffmpeg") + ").");
+                    StopSecondScreen(); return;
+                }
                 // The monitors changed, or the capture broke on a change: look again.
                 Thread.Sleep(300);
                 if (gen != screenGen) return;
@@ -4013,6 +4017,9 @@ foreach ($b in Get-Process firefox | ? { $_.MainWindowHandle -ne 0 }) {
     }
 
     /** One go at streaming a monitor: "phone" (the phone closed it), "relayout", "ended", "failed" or "stopped". */
+    /** What ffmpeg last said when a way of capturing the screen stopped at once. */
+    static string captureErr = "";
+
     static string Capture(string ff, Displays.Mon target, string at, int port, int gen, bool http, bool remote)
     {
         shown = target;
@@ -4082,6 +4089,10 @@ foreach ($b in Get-Process firefox | ? { $_.MainWindowHandle -ne 0 }) {
             if (sent == "phone") return "phone";
             if (err.Contains("Connection refused") || err.Contains("Connection reset") || err.Contains("Broken pipe")) return "phone";
             if (!quick) return "ended";
+            // Kept for the log, if every way fails: what ffmpeg said about this one.
+            string[] lines = err.Trim().Split('\n');
+            captureErr = "way " + (way + 1) + " of " + tries.Count + ": " + (lines.Length > 0 ? lines[lines.Length - 1].Trim() : "(nothing)");
+            Log("Second screen, " + captureErr);
         }
         return "failed";
     }
