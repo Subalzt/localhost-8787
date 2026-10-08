@@ -60,6 +60,10 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let no_browser = args.iter().any(|a| a == "--no-browser");
     let typed = args.iter().position(|a| a == "--phone").and_then(|i| args.get(i + 1)).cloned();
+    if args.iter().any(|a| a == "--cable-check") {
+        phone::cable_report();
+        return;
+    }
     if args.iter().any(|a| a == "--health") {
         println!("{}", health::snapshot());
         return;

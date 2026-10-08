@@ -144,6 +144,7 @@ impl Tunnel {
         self.0.alive.load(Ordering::Relaxed)
     }
 
+    #[allow(dead_code)]
     /// The phone's HELLO and ADDR: its name, addresses and port.
     pub fn info(&self) -> serde_json::Value {
         self.0.info.lock().map(|i| i.clone()).unwrap_or_default()

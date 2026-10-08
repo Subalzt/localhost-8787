@@ -160,9 +160,71 @@ fn candidates() -> Vec<String> {
     list
 }
 
-/// The first local way to the phone that answers: the saved address, the gateway, the network's answer.
-pub fn local_candidate() -> Option<String> {
-    candidates().into_iter().find(|c| !c.is_empty() && ping(c))
+/// Where adb is: the Android SDK's, scrcpy's beside the helper or where the earlier helper keeps it,
+/// else the one on the PATH.
+fn adb_exe() -> Option<std::path::PathBuf> {
+    let exe = if cfg!(windows) { "adb.exe" } else { "adb" };
+    let mut tries: Vec<std::path::PathBuf> = Vec::new();
+    if cfg!(windows) {
+        if let Ok(l) = std::env::var("LOCALAPPDATA") {
+            let l = std::path::PathBuf::from(l);
+            tries.push(l.join("Android/Sdk/platform-tools").join(exe));
+            tries.push(l.join("BlazeIt/scrcpy").join(exe));
+        }
+    } else {
+        let h = crate::util::home();
+        tries.push(h.join("Android/Sdk/platform-tools").join(exe));
+        tries.push(h.join("Library/Android/sdk/platform-tools").join(exe));
+    }
+    if let Some(d) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
+        tries.push(d.join("scrcpy").join(exe));
+    }
+    if let Some(p) = tries.into_iter().find(|p| p.is_file()) {
+        return Some(p);
+    }
+    std::env::var_os("PATH").and_then(|paths| std::env::split_paths(&paths).map(|d| d.join(exe)).find(|p| p.is_file()))
+}
+
+/// The forward adb keeps to the phone's page: this computer's port.
+pub const ADB_FORWARD_PORT: u16 = 18787;
+
+/// The last way in: the cable with USB debugging on, through adb's port forward to the phone's page.
+/// It needs no network at all. None when adb or a phone on it is not there.
+fn adb_path() -> Option<(String, u16)> {
+    // For trying the internet path with the cable still in: "no-cable.txt" in the helper's folder.
+    if crate::util::conf_dir().join("no-cable.txt").exists() {
+        return None;
+    }
+    let adb = adb_exe()?;
+    let adb = adb.to_string_lossy();
+    let devices = run(&adb, &["devices"]);
+    if !devices.lines().skip(1).any(|l| l.split_whitespace().nth(1) == Some("device")) {
+        return None;
+    }
+    let fwd = format!("tcp:{}", ADB_FORWARD_PORT);
+    let to = format!("tcp:{}", PHONE_PORT);
+    run(&adb, &["forward", &fwd, &to]);
+    Some(("127.0.0.1".to_string(), ADB_FORWARD_PORT))
+}
+
+/// The first local way to the phone that answers: the saved address, the gateway (its hotspot, or USB
+/// tethering), the network's answer to XOOSH?, and last the cable over USB debugging.
+pub fn local_candidate() -> Option<(String, u16)> {
+    if let Some(c) = candidates().into_iter().find(|c| !c.is_empty() && ping(c)) {
+        return Some((c, PHONE_PORT));
+    }
+    adb_path().filter(|(h, p)| ping_at(h, *p))
+}
+
+/// What to call where the phone was found.
+pub fn link_name(host: &str, port: u16) -> String {
+    if port == ADB_FORWARD_PORT && host == "127.0.0.1" {
+        "over the USB cable's debugging (turn on USB tethering on the phone for full speed)".into()
+    } else if gateways().iter().any(|g| g == host) {
+        "on its hotspot or the cable's USB tethering".into()
+    } else {
+        "over Wi-Fi".into()
+    }
 }
 
 /// Looks for the phone until it answers; [first_time]: say so while waiting.
@@ -177,13 +239,16 @@ pub fn find_phone(first_time: bool, typed: Option<&str>) {
     }
     let mut told = false;
     loop {
-        if let Some(c) = local_candidate() {
-            let moved = phone().as_deref() != Some(c.as_str());
-            set_phone(&c);
+        if let Some((c, p)) = local_candidate() {
+            let moved = phone().as_deref() != Some(c.as_str()) || port() != p;
+            move_to(&c, p);
             if moved {
-                say(&format!("Found the phone at {}.", c));
+                say(&format!("Found the phone at {}, {}.", if p == PHONE_PORT { c.clone() } else { "the cable".into() }, link_name(&c, p)));
             }
-            write_conf("phone.txt", &c);
+            if p == PHONE_PORT {
+                write_conf("phone.txt", &c);
+                check_cable(&c);
+            }
             return;
         }
         // From another network, through the tunnel to the phone's saved addresses.
@@ -213,7 +278,7 @@ pub fn find_phone(first_time: bool, typed: Option<&str>) {
 pub fn pair() -> String {
     loop {
         let host = phone().unwrap_or_default();
-        let r = match http::request(&host, PHONE_PORT, "POST", "/api/pair", &[], &[], Duration::from_secs(5)) {
+        let r = match http::request(&host, port(), "POST", "/api/pair", &[], &[], Duration::from_secs(5)) {
             Ok(r) => r,
             Err(e) => {
                 say(&format!("Could not reach the phone to pair ({}).", e));
@@ -233,7 +298,7 @@ pub fn pair() -> String {
         say(&format!("On the phone, allow \"Laptop control on {}\". Code: {}", crate::util::machine_name(), code));
         for _ in 0..125 {
             sleep(Duration::from_secs(1));
-            let Ok(r) = http::request(&host, PHONE_PORT, "GET", &format!("/api/pair/{}", id), &[], &[], Duration::from_secs(5)) else { continue };
+            let Ok(r) = http::request(&host, port(), "GET", &format!("/api/pair/{}", id), &[], &[], Duration::from_secs(5)) else { continue };
             let t = r.text();
             if t.contains("APPROVED") {
                 if let Some(c) = r.session_cookie() {
@@ -285,4 +350,60 @@ pub fn report(path: &str, json: &str) {
 #[allow(dead_code)]
 pub fn quoted(s: &str) -> String {
     json_str(s)
+}
+
+/// The adapter the phone is a gateway on, when it is a USB one: its description and speed (Mbit/s).
+#[cfg(windows)]
+fn usb_adapter(gateway: &str) -> Option<(String, u64)> {
+    let script = format!(
+        "Get-NetIPConfiguration | ? {{ $_.IPv4DefaultGateway.NextHop -eq '{}' }} | % {{ $_.NetAdapter.InterfaceDescription + '|' + $_.NetAdapter.Speed }}",
+        gateway.replace('\'', "")
+    );
+    let out = run("powershell", &["-NoProfile", "-NonInteractive", "-Command", &script]);
+    let line = out.lines().next()?.trim().to_string();
+    let (desc, speed) = line.rsplit_once('|')?;
+    let usb = ["NDIS", "USB", "Android"].iter().any(|k| desc.contains(k));
+    usb.then(|| (desc.to_string(), speed.trim().parse::<u64>().unwrap_or(0) / 1_000_000))
+}
+
+/// On the cable's USB tethering at USB 2 speed: said once, with what to do about it.
+pub fn check_cable(host: &str) {
+    #[cfg(windows)]
+    {
+        static SAID: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+        if SAID.lock().unwrap().as_deref() == Some(host) {
+            return;
+        }
+        if let Some((_, mbps)) = usb_adapter(host) {
+            *SAID.lock().unwrap() = Some(host.to_string());
+            if mbps > 0 && mbps < 600 {
+                say("The cable is running at USB 2 speed (about 40 MB/s). A USB 3 cable, in a USB-C port on this laptop, gives about 250 MB/s. Charging cables are usually USB 2.");
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = host;
+}
+
+/// --cable-check: what the helper sees of the phone on a cable.
+pub fn cable_report() {
+    match adb_exe() {
+        Some(a) => {
+            println!("adb: {}", a.display());
+            print!("{}", run(&a.to_string_lossy(), &["devices"]));
+        }
+        None => println!("adb: not found (the Android SDK's platform-tools, or scrcpy beside the helper)"),
+    }
+    let gws = gateways();
+    println!("gateways: {:?}", gws);
+    #[cfg(windows)]
+    for g in &gws {
+        if let Some((d, s)) = usb_adapter(g) {
+            println!("  {} is on a USB adapter: {} at {} Mbit/s", g, d, s);
+        }
+    }
+    match adb_path() {
+        Some((h, p)) => println!("adb forward: {}:{} -> phone:{}, answers: {}", h, p, PHONE_PORT, ping_at(&h, p)),
+        None => println!("adb forward: none (no phone on USB debugging)"),
+    }
 }

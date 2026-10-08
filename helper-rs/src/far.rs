@@ -181,7 +181,7 @@ pub fn tunnel_loop() {
         if crate::phone::session().is_none() {
             continue;
         }
-        let on_tunnel = local().map(|l| Some(l.0) == crate::phone::phone()).unwrap_or(false);
+        let on_tunnel = local().map(|l| Some(l.0) == crate::phone::phone() && l.1 == crate::phone::port()).unwrap_or(false);
         if !on_tunnel {
             let due = last_learn.map(|t| t.elapsed().map(|e| e > Duration::from_secs(600)).unwrap_or(true)).unwrap_or(true)
                 || (stale() && last_learn.map(|t| t.elapsed().map(|e| e > Duration::from_secs(30)).unwrap_or(true)).unwrap_or(true));
@@ -198,9 +198,9 @@ pub fn tunnel_loop() {
             }
             continue;
         }
-        if let Some(c) = crate::phone::local_candidate() {
-            say(&format!("The phone is close again: {}.", c));
-            crate::phone::move_to(&c, crate::util::PHONE_PORT);
+        if let Some((c, p)) = crate::phone::local_candidate() {
+            say(&format!("The phone is close again, {}.", crate::phone::link_name(&c, p)));
+            crate::phone::move_to(&c, p);
             last_learn = None;
         }
     }
