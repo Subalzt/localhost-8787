@@ -60,6 +60,8 @@ pub fn opened(no_browser: bool) {
     let url = format!("http://localhost:{}/", port);
     if no_browser {
         say(&format!("The page: {}", url));
+    } else if crate::handoff::page_open(port) {
+        say(&format!("The Localhost 8787 page is open at {}.", url));
     } else {
         say(&format!("Opening the Localhost 8787 page at {} for full-speed transfers.", url));
         let _ = open::that(&url);

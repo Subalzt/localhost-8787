@@ -6,13 +6,14 @@
 //! From another network it reaches the phone through the L87 tunnel over IPv6 (tunnel.rs, far.rs).
 //!
 //! Not yet here (the earlier helpers still do them): punching through IPv4 NATs, the second screen,
-//! the laptop's sound, the webcam, Handoff and calls.
+//! the laptop's sound, the webcam and calls.
 
 mod clip;
 mod control;
 mod far;
 mod events;
 mod files;
+mod handoff;
 mod health;
 mod http;
 mod input;
@@ -65,6 +66,10 @@ fn main() {
         phone::cable_report();
         return;
     }
+    if args.iter().any(|a| a == "--handoff") {
+        println!("{}", handoff::snapshot());
+        return;
+    }
     if args.iter().any(|a| a == "--health") {
         println!("{}", health::snapshot());
         return;
@@ -93,5 +98,7 @@ fn main() {
     spawn(clip::clip_loop);
     spawn(far::tunnel_loop);
     spawn(volume::volume_loop);
+    #[cfg(windows)]
+    spawn(handoff::hotkey_loop);
     control::control_loop(no_browser);
 }

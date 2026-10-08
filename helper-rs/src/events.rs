@@ -3,7 +3,7 @@
 
 use crate::phone;
 use crate::util::log;
-use crate::{clip, files, health, http};
+use crate::{clip, files, handoff, health, http};
 use base64::Engine;
 use std::io::BufRead;
 use std::thread::{sleep, spawn};
@@ -41,6 +41,7 @@ fn dispatch(ev: &str, d: &str, snapshot: &mut bool, clip_snapshot: &mut bool) {
             clip::phone_text(d, first);
         }
         "health" if !*snapshot => { let id = d.trim().to_string(); spawn(move || health::answer(&id)); }
+        "handoff" if !*snapshot => { let id = d.trim().to_string(); spawn(move || handoff::answer(&id)); }
         "openurl" if !*snapshot => open_url(d),
         "laptopfs" if !*snapshot => {
             let q: Vec<String> = d.split(' ').map(|s| s.to_string()).collect();
@@ -58,7 +59,7 @@ fn dispatch(ev: &str, d: &str, snapshot: &mut bool, clip_snapshot: &mut bool) {
                 spawn(move || if get { files::send(&rid, &path) } else { files::list(&rid, &path) });
             }
         }
-        _ => {} // what this helper does not do yet: the second screen, sound, webcam, handoff, calls
+        _ => {} // what this helper does not do yet: the second screen, sound, webcam, calls
     }
 }
 
