@@ -67,3 +67,55 @@ pub fn opened(no_browser: bool) {
         let _ = open::that(&url);
     }
 }
+
+// ---- calls on the page, from afar
+//
+// A call on this computer's page while the phone is far away: the page's WebRTC may find no way
+// straight to the phone (no IPv6 on one side, a network that lets nothing in). The phone then
+// offers this relay (127.0.0.1:8790, on this computer alone, so nothing is open to the network) as
+// a last way: WebRTC over TCP, which the browser opens to it and this helper carries to the phone
+// (/api/call/pipe), through the sealed tunnel when the phone is far, as it does everything else.
+
+const CALL_RELAY_PORT: u16 = 8790;
+
+fn call_relay(browser: TcpStream) {
+    let (Some(host), Some(cookie)) = (phone::phone(), phone::session()) else { return };
+    let port = phone::port();
+    let addr = if host.contains(':') { format!("[{}]:{}", host, port) } else { format!("{}:{}", host, port) };
+    let Ok(a) = addr.parse() else { return };
+    let Ok(mut up) = TcpStream::connect_timeout(&a, Duration::from_secs(10)) else { return };
+    let _ = up.set_nodelay(true);
+    let _ = browser.set_nodelay(true);
+    let req = format!(
+        "GET /api/call/pipe HTTP/1.1\r\nHost: phone\r\nUser-Agent: {}\r\nCookie: {}\r\nConnection: Upgrade\r\nUpgrade: l87-pipe\r\n\r\n",
+        crate::util::user_agent(), cookie
+    );
+    if up.write_all(req.as_bytes()).is_err() { return; }
+    // The answer's head, up to its blank line; what follows is the call's own.
+    let mut head = Vec::new();
+    let mut b = [0u8; 1];
+    while !head.ends_with(b"\r\n\r\n") {
+        if up.read(&mut b).unwrap_or(0) == 0 || head.len() > 8192 { return; }
+        head.push(b[0]);
+    }
+    let head = String::from_utf8_lossy(&head);
+    if !head.starts_with("HTTP/1.1 101") {
+        crate::util::log(&format!("Call relay: the phone said {}", head.lines().next().unwrap_or("")));
+        return;
+    }
+    crate::util::log("A call on the page goes through the tunnel (WebRTC over TCP).");
+    let (Ok(b2), Ok(u2)) = (browser.try_clone(), up.try_clone()) else { return };
+    let t = spawn(move || pump(b2, u2));
+    pump(up, browser);
+    let _ = t.join();
+}
+
+pub fn call_relay_loop() {
+    let l = match TcpListener::bind(("127.0.0.1", CALL_RELAY_PORT)) {
+        Ok(l) => l,
+        Err(e) => { crate::util::log(&format!("Call relay: {}", e)); return; }
+    };
+    for c in l.incoming().flatten() {
+        spawn(move || call_relay(c));
+    }
+}

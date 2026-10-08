@@ -103,6 +103,7 @@ fn main() {
     say(&format!("Localhost 8787 laptop helper (Rust {}) for {}. Keep this window open; close it to stop.", env!("CARGO_PKG_VERSION"), util::machine_name()));
     phone::find_phone(true, typed.as_deref());
     spawn(relay::relay_loop);
+    spawn(relay::call_relay_loop);
     spawn(events::events_loop);
     spawn(clip::clip_loop);
     spawn(far::tunnel_loop);
