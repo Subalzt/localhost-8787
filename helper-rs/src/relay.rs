@@ -2,7 +2,7 @@
 //! it is, so the page's own pairing, uploads and downloads work unchanged, at the link's full speed.
 
 use crate::phone;
-use crate::util::{say, PHONE_PORT};
+use crate::util::say;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU16, Ordering};
@@ -24,7 +24,8 @@ fn pump(mut from: TcpStream, mut to: TcpStream) {
 
 fn bridge(browser: TcpStream) {
     let Some(host) = phone::phone() else { return };
-    let addr = if host.contains(':') { format!("[{}]:{}", host, PHONE_PORT) } else { format!("{}:{}", host, PHONE_PORT) };
+    let port = phone::port();
+    let addr = if host.contains(':') { format!("[{}]:{}", host, port) } else { format!("{}:{}", host, port) };
     let Ok(a) = addr.parse() else { return };
     let Ok(to) = TcpStream::connect_timeout(&a, Duration::from_secs(10)) else { return };
     let _ = to.set_nodelay(true);

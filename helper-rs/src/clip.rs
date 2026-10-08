@@ -107,7 +107,7 @@ fn send_text(t: &str) {
     let body = format!("{{\"text\":{}}}", crate::util::json_str(t));
     let host = phone::phone().unwrap_or_default();
     let h = vec![("Cookie", phone::session().unwrap_or_default()), ("Content-Type", "application/json".into()), ("Bridge-Auto", "1".into())];
-    let _ = crate::http::request(&host, crate::util::PHONE_PORT, "POST", "/api/clipboard", &h, body.as_bytes(), Duration::from_secs(4));
+    let _ = crate::http::request(&host, crate::phone::port(), "POST", "/api/clipboard", &h, body.as_bytes(), Duration::from_secs(4));
 }
 
 fn send_picture(png: Vec<u8>) {
@@ -115,7 +115,7 @@ fn send_picture(png: Vec<u8>) {
     let host = phone::phone().unwrap_or_default();
     let h = vec![("Cookie", phone::session().unwrap_or_default()), ("Content-Type", "image/png".into()), ("Bridge-Auto", "1".into())];
     let name = format!("Picture {}.png", crate::util::now_ms() / 1000);
-    match crate::http::request(&host, crate::util::PHONE_PORT, "POST", &format!("/api/clipboard/blob?name={}", quote(&name)), &h, &png, Duration::from_secs(30)) {
+    match crate::http::request(&host, crate::phone::port(), "POST", &format!("/api/clipboard/blob?name={}", quote(&name)), &h, &png, Duration::from_secs(30)) {
         Ok(r) => {
             let v: serde_json::Value = serde_json::from_slice(&r.body).unwrap_or_default();
             if let Some(v) = v["v"].as_i64() { LAST_V.store(v, Ordering::Relaxed); }

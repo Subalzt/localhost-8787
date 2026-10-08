@@ -16,6 +16,14 @@ arboard = { version = "3", default-features = false, features = ["image-data"] }
 png = "0.17"
 sysinfo = { version = "0.32", default-features = false, features = ["system", "disk"] }
 open = "5"
+x25519-dalek = "2"
+hmac = "0.12"
+sha2 = "0.10"
+hkdf = "0.12"
+aes = "0.8"
+ctr = "0.9"
+sha3 = "0.10"
+getrandom = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [

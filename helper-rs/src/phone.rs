@@ -9,11 +9,16 @@ use std::sync::RwLock;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-static PHONE: RwLock<Option<String>> = RwLock::new(None);
+/// Where the phone is reached now: its address and port (the page's, or the tunnel's loopback here).
+static PHONE: RwLock<Option<(String, u16)>> = RwLock::new(None);
 static SESSION: RwLock<Option<String>> = RwLock::new(None);
 
 pub fn phone() -> Option<String> {
-    PHONE.read().ok().and_then(|p| p.clone())
+    PHONE.read().ok().and_then(|p| p.as_ref().map(|p| p.0.clone()))
+}
+
+pub fn port() -> u16 {
+    PHONE.read().ok().and_then(|p| p.as_ref().map(|p| p.1)).unwrap_or(PHONE_PORT)
 }
 
 pub fn session() -> Option<String> {
@@ -27,8 +32,13 @@ pub fn set_session(s: Option<String>) {
 }
 
 fn set_phone(p: &str) {
+    move_to(p, PHONE_PORT);
+}
+
+/// From now on the phone is at [host]:[port]; the streams on the old link reconnect on this one.
+pub fn move_to(host: &str, port: u16) {
     if let Ok(mut w) = PHONE.write() {
-        *w = Some(p.to_string());
+        *w = Some((host.to_string(), port));
     }
 }
 
@@ -42,7 +52,7 @@ pub fn request(method: &str, path: &str, content_type: Option<&str>, body: &[u8]
     if let Some(t) = content_type {
         h.push(("Content-Type", t.to_string()));
     }
-    http::request(&host, PHONE_PORT, method, path, &h, body, Duration::from_millis(timeout_ms))
+    http::request(&host, port(), method, path, &h, body, Duration::from_millis(timeout_ms))
 }
 
 pub fn post_json(path: &str, json: &str) -> std::io::Result<http::Response> {
@@ -50,7 +60,11 @@ pub fn post_json(path: &str, json: &str) -> std::io::Result<http::Response> {
 }
 
 pub fn ping(host: &str) -> bool {
-    http::request(host, PHONE_PORT, "GET", "/api/ping", &[], &[], Duration::from_millis(1500))
+    ping_at(host, PHONE_PORT)
+}
+
+pub fn ping_at(host: &str, port: u16) -> bool {
+    http::request(host, port, "GET", "/api/ping", &[], &[], Duration::from_millis(1500))
         .map(|r| r.status == 200 && r.text().contains("\"ok\":true"))
         .unwrap_or(false)
 }
@@ -146,6 +160,11 @@ fn candidates() -> Vec<String> {
     list
 }
 
+/// The first local way to the phone that answers: the saved address, the gateway, the network's answer.
+pub fn local_candidate() -> Option<String> {
+    candidates().into_iter().find(|c| !c.is_empty() && ping(c))
+}
+
 /// Looks for the phone until it answers; [first_time]: say so while waiting.
 pub fn find_phone(first_time: bool, typed: Option<&str>) {
     if let Some(t) = typed {
@@ -158,14 +177,23 @@ pub fn find_phone(first_time: bool, typed: Option<&str>) {
     }
     let mut told = false;
     loop {
-        for c in candidates() {
-            if !c.is_empty() && ping(&c) {
-                let moved = phone().as_deref() != Some(c.as_str());
-                set_phone(&c);
+        if let Some(c) = local_candidate() {
+            let moved = phone().as_deref() != Some(c.as_str());
+            set_phone(&c);
+            if moved {
+                say(&format!("Found the phone at {}.", c));
+            }
+            write_conf("phone.txt", &c);
+            return;
+        }
+        // From another network, through the tunnel to the phone's saved addresses.
+        if let Some((h, p)) = crate::far::path() {
+            if ping_at(&h, p) {
+                let moved = phone().as_deref() != Some(h.as_str());
+                move_to(&h, p);
                 if moved {
-                    say(&format!("Found the phone at {}.", c));
+                    say("Found the phone over the internet, through the tunnel.");
                 }
-                write_conf("phone.txt", &c);
                 return;
             }
         }
@@ -231,6 +259,9 @@ pub fn pair() -> String {
 /// This computer's address on the link to the phone, for the phone to know its pages are on it.
 pub fn own_addr() -> Option<String> {
     let host = phone()?;
+    if host.starts_with("127.") {
+        return None; // through the tunnel: the phone knows this computer by the tunnel's keys
+    }
     let target: SocketAddr = format!("{}:{}", host, PHONE_PORT).parse().ok()?;
     let u = UdpSocket::bind(if target.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }).ok()?;
     u.connect(target).ok()?;

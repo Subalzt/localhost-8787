@@ -2,7 +2,7 @@
 //! links to open. The first events after connecting are the phone's state, not requests.
 
 use crate::phone;
-use crate::util::{log, PHONE_PORT};
+use crate::util::log;
 use crate::{clip, files, health, http};
 use base64::Engine;
 use std::io::BufRead;
@@ -69,7 +69,7 @@ pub fn events_loop() {
             clip::SYNC.store(!r.text().contains("\"clipSync\":false"), std::sync::atomic::Ordering::Relaxed);
         }
         let h = vec![("Cookie", cookie), ("Accept", "text/event-stream".to_string())];
-        match http::open(&at, PHONE_PORT, "GET", "/events", &h, &[], Duration::from_secs(5), Some(Duration::from_secs(40))) {
+        match http::open(&at, crate::phone::port(), "GET", "/events", &h, &[], Duration::from_secs(5), Some(Duration::from_secs(40))) {
             Ok(mut st) if st.status == 200 => {
                 let (mut ev, mut data) = (String::new(), Vec::<String>::new());
                 let (mut snapshot, mut clip_snapshot) = (true, true);

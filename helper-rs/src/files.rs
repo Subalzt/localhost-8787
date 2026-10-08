@@ -4,7 +4,7 @@
 
 use crate::http::{self, quote};
 use crate::phone;
-use crate::util::{json_str, machine_name, say, PHONE_PORT};
+use crate::util::{json_str, machine_name, say};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
@@ -97,7 +97,7 @@ pub fn send(rid: &str, path: &str) {
     let size = f.metadata().map(|m| m.len()).unwrap_or(0);
     let host = phone::phone().unwrap_or_default();
     let h = vec![("Cookie", phone::session().unwrap_or_default()), ("Content-Type", "application/octet-stream".to_string())];
-    match http::post_from(&host, PHONE_PORT, &format!("{}&size={}", q, size), &h, size, &mut f, Duration::from_secs(20)) {
+    match http::post_from(&host, crate::phone::port(), &format!("{}&size={}", q, size), &h, size, &mut f, Duration::from_secs(20)) {
         Ok(_) => say(&format!("Sent {} to the phone.", name)),
         Err(e) => say(&format!("Could not send {} to the phone: {}", name, e)),
     }
@@ -125,7 +125,7 @@ pub fn receive(rid: &str, folder: &str, name: &str, size: i64, show: bool) {
         let part = PathBuf::from(format!("{}.part", target.to_string_lossy()));
         let host = phone::phone().unwrap_or_default();
         let h = vec![("Cookie", phone::session().unwrap_or_default())];
-        let mut st = http::open(&host, PHONE_PORT, "GET", &format!("/api/laptop/fs/out/{}", quote(rid)), &h, &[], Duration::from_secs(20), Some(Duration::from_secs(60)))
+        let mut st = http::open(&host, crate::phone::port(), "GET", &format!("/api/laptop/fs/out/{}", quote(rid)), &h, &[], Duration::from_secs(20), Some(Duration::from_secs(60)))
             .map_err(|e| e.to_string())?;
         if st.status != 200 { return Err(format!("the phone said {}", st.status)); }
         let copied = (|| -> std::io::Result<u64> { let mut f = fs::File::create(&part)?; std::io::copy(&mut st.body, &mut f) })();

@@ -3,11 +3,14 @@
 //! Wi-Fi), pairs once, and then lets the phone drive this computer: the trackpad and keys, one
 //! clipboard, this computer's files, its health, and the page at http://localhost:8787.
 //!
-//! Not yet here (the earlier helpers still do them): the second screen, the laptop's sound, the
-//! webcam, Handoff, calls, and the tunnel from another network.
+//! From another network it reaches the phone through the L87 tunnel over IPv6 (tunnel.rs, far.rs).
+//!
+//! Not yet here (the earlier helpers still do them): punching through IPv4 NATs, the second screen,
+//! the laptop's sound, the webcam, Handoff and calls.
 
 mod clip;
 mod control;
+mod far;
 mod events;
 mod files;
 mod health;
@@ -15,6 +18,7 @@ mod http;
 mod input;
 mod phone;
 mod relay;
+mod tunnel;
 mod util;
 
 use std::thread::spawn;
@@ -71,5 +75,6 @@ fn main() {
     spawn(relay::relay_loop);
     spawn(events::events_loop);
     spawn(clip::clip_loop);
+    spawn(far::tunnel_loop);
     control::control_loop(no_browser);
 }

@@ -2,8 +2,8 @@
 //! for as long as the helper runs; and reconnecting when the phone moves or drops off for a moment.
 
 use crate::input::Pointer;
-use crate::phone::{self, find_phone, pair, ping};
-use crate::util::{log, read_conf, say, PHONE_PORT};
+use crate::phone::{self, find_phone, pair};
+use crate::util::{log, read_conf, say};
 use crate::http;
 use std::io::BufRead;
 use std::thread::sleep;
@@ -71,7 +71,7 @@ pub fn control_loop(no_browser: bool) {
                 heads.push(("Bridge-Addrs", a));
             }
             // The phone says something at least every 25 s; 40 s of silence is the phone gone.
-            let mut st = http::open(&host, PHONE_PORT, "GET", "/api/control/stream", &heads, &[], Duration::from_secs(5), Some(Duration::from_secs(40)))?;
+            let mut st = http::open(&host, crate::phone::port(), "GET", "/api/control/stream", &heads, &[], Duration::from_secs(5), Some(Duration::from_secs(40)))?;
             if st.status == 401 {
                 say("The phone no longer knows this computer; asking again.");
                 cookie = None;
@@ -110,7 +110,7 @@ pub fn control_loop(no_browser: bool) {
         }
         sleep(Duration::from_millis(800));
         match phone::phone() {
-            Some(p) if ping(&p) => {}
+            Some(p) if phone::ping_at(&p, phone::port()) => {}
             _ => find_phone(false, None),
         }
     }
