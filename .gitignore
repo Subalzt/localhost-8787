@@ -26,3 +26,4 @@ tools/vcam/*.exp
 tools/vcam/*.lib
 tools/vcam/*.exe
 tools/vcam/vcam.dll
+helper-rs/target/
