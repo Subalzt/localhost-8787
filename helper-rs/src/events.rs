@@ -45,6 +45,14 @@ fn dispatch(ev: &str, d: &str, snapshot: &mut bool, clip_snapshot: &mut bool) {
         "camalert" => { let d = d.to_string(); spawn(move || notify::cam_alert(&d)); }
         "handoff" if !*snapshot => { let id = d.trim().to_string(); spawn(move || handoff::answer(&id)); }
         "openurl" if !*snapshot => open_url(d),
+        // The phone as a second screen (Windows; Linux and the Mac use the Python helper for it).
+        #[cfg(windows)]
+        "display" => match crate::screen::parse(d.trim()) {
+            Some(s) => { let at = phone::phone().unwrap_or_default(); spawn(move || crate::screen::start(at, s)); }
+            None => crate::screen::stop(),
+        },
+        #[cfg(windows)]
+        "displayack" => crate::screen::ack(d.trim()),
         "direct" => crate::direct::POKED.store(true, std::sync::atomic::Ordering::Relaxed),
         "webcam" if !*snapshot && d.trim() == "install" => { spawn(crate::webcam::install); }
         "mirror" if !*snapshot => { spawn(crate::mirror::open_phone_screen); }

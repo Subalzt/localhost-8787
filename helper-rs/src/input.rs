@@ -88,6 +88,11 @@ mod imp {
     }
 
     pub fn backend() -> Option<Box<dyn Pointer>> { Some(Box::new(Win)) }
+
+    /// The pointer to a place on the whole desktop, as 0..65535 of its width and height.
+    pub fn move_absolute(dx: i32, dy: i32) {
+        mouse(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, dx, dy, 0);
+    }
 }
 
 #[cfg(not(windows))]
@@ -141,3 +146,5 @@ mod imp {
 }
 
 pub use imp::backend;
+#[cfg(windows)]
+pub use imp::move_absolute;

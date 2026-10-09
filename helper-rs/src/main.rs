@@ -5,13 +5,15 @@
 //!
 //! From another network it reaches the phone through the L87 tunnel over IPv6 (tunnel.rs, far.rs).
 //!
-//! Not yet here (the earlier helpers still do them): the second screen,
+//! Not yet here (the earlier helpers still do them): the Linux and Mac second screen,
 //! the laptop's sound, the webcam and calls.
 
 mod awake;
 mod clip;
 mod control;
 mod direct;
+#[cfg(windows)]
+mod displays;
 mod far;
 mod events;
 mod files;
@@ -21,12 +23,16 @@ mod http;
 mod https;
 mod input;
 mod link;
+#[cfg(windows)]
+mod loopback;
 mod lyrics;
 mod mirror;
 mod notify;
 mod phone;
 mod punch;
 mod relay;
+#[cfg(windows)]
+mod screen;
 mod tunnel;
 mod util;
 mod volume;
@@ -59,6 +65,10 @@ fn on_close() {
         // Ctrl+C, Ctrl+Break, the window closed: tell the phone this is on purpose.
         if kind <= 2 {
             phone::bye();
+        }
+        // Close, log off, shut down: the phone's screen is taken off the desktop, not left there.
+        if kind == 2 || kind == 5 || kind == 6 {
+            screen::on_exit();
         }
         0
     }
@@ -96,6 +106,16 @@ fn main() {
         println!("{}", link::report(args.get(i + 1).map(|s| s.as_str()).unwrap_or("192.168.1.1"), 8787));
         return;
     }
+    #[cfg(windows)]
+    if let Some(i) = args.iter().position(|a| a == "--screen-selftest") {
+        screen::selftest(args.get(i + 1).and_then(|p| p.parse().ok()).unwrap_or(18799));
+        return;
+    }
+    #[cfg(windows)]
+    if args.iter().any(|a| a == "--screen-check") {
+        screen::check();
+        return;
+    }
     if args.iter().any(|a| a == "--webcam-check") {
         webcam::check();
         return;
@@ -126,6 +146,8 @@ fn main() {
     }
     on_close();
     say(&format!("Localhost 8787 laptop helper (Rust {}) for {}. Keep this window open; close it to stop.", env!("CARGO_PKG_VERSION"), util::machine_name()));
+    #[cfg(windows)]
+    screen::recover();
     phone::find_phone(true, typed.as_deref());
     spawn(relay::relay_loop);
     spawn(relay::call_relay_loop);

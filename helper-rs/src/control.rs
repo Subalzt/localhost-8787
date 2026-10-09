@@ -49,6 +49,9 @@ pub fn handle(p: &mut Option<Box<dyn Pointer>>, line: &str) {
         "t" if line.len() > 2 => p.type_text(&unescape(&line[2..])),
         "v" => if let Some(l) = a.get(1).and_then(|v| v.parse::<f32>().ok()) { crate::volume::set(l) },
         "vm" => crate::volume::toggle_mute(),
+        // Touch on the second screen: where on the monitor shown, as fractions of its width and height.
+        #[cfg(windows)]
+        "da" => if let (Some(x), Some(y)) = (a.get(1).and_then(|v| v.parse::<f32>().ok()), a.get(2).and_then(|v| v.parse::<f32>().ok())) { crate::screen::point_at(x, y) },
         _ => {} // "p" (keep-alive), and pointing at a spot (the second screen's, not here yet)
     }
 }
