@@ -5,8 +5,9 @@
 //!
 //! From another network it reaches the phone through the L87 tunnel over IPv6 (tunnel.rs, far.rs).
 //!
-//! Not yet here (the earlier helpers still do them): the Linux and Mac second screen,
-//! the laptop's sound, the webcam and calls.
+//! Windows-only here, so far: the second screen with the computer's sound, the phone as the
+//! computer's webcam, the location on the map, and Wi-Fi joining of the phone's direct link by
+//! netsh. On Linux and macOS the Python helper still does the second screen and the webcam.
 
 mod awake;
 mod clip;
