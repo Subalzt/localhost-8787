@@ -130,3 +130,47 @@ pub fn user_agent() -> String {
 pub fn json_str(s: &str) -> String {
     serde_json::Value::String(s.to_string()).to_string()
 }
+
+/// Where ffmpeg is: beside the helper, winget's link or package folder, else on the PATH.
+pub fn find_ffmpeg() -> Option<PathBuf> {
+    let exe = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+    if let Some(d) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
+        let p = d.join("ffmpeg").join(exe);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    if cfg!(windows) {
+        if let Ok(l) = std::env::var("LOCALAPPDATA") {
+            let l = PathBuf::from(l).join("Microsoft").join("WinGet");
+            let link = l.join("Links").join(exe);
+            if link.is_file() {
+                return Some(link);
+            }
+        }
+    }
+    if let Some(p) = std::env::var_os("PATH").and_then(|paths| std::env::split_paths(&paths).map(|d| d.join(exe)).find(|p| p.is_file())) {
+        return Some(p);
+    }
+    if cfg!(windows) {
+        // winget's package folders: ffmpeg.exe somewhere under them.
+        fn walk(d: &std::path::Path, depth: u32) -> Option<PathBuf> {
+            for e in fs::read_dir(d).ok()?.flatten() {
+                let p = e.path();
+                if p.is_file() && p.file_name().map_or(false, |n| n.eq_ignore_ascii_case("ffmpeg.exe")) {
+                    return Some(p);
+                }
+                if depth > 0 && p.is_dir() {
+                    if let Some(f) = walk(&p, depth - 1) {
+                        return Some(f);
+                    }
+                }
+            }
+            None
+        }
+        if let Ok(l) = std::env::var("LOCALAPPDATA") {
+            return walk(&PathBuf::from(l).join("Microsoft").join("WinGet").join("Packages"), 6);
+        }
+    }
+    None
+}

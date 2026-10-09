@@ -30,6 +30,7 @@ mod relay;
 mod tunnel;
 mod util;
 mod volume;
+mod webcam;
 mod where_at;
 
 use std::thread::spawn;
@@ -95,6 +96,10 @@ fn main() {
         println!("{}", link::report(args.get(i + 1).map(|s| s.as_str()).unwrap_or("192.168.1.1"), 8787));
         return;
     }
+    if args.iter().any(|a| a == "--webcam-check") {
+        webcam::check();
+        return;
+    }
     if args.iter().any(|a| a == "--handoff") {
         println!("{}", handoff::snapshot());
         return;
@@ -131,6 +136,7 @@ fn main() {
     spawn(awake::awake_loop);
     spawn(link::link_loop);
     spawn(lyrics::lyrics_loop);
+    spawn(webcam::webcam_loop);
     spawn(direct::direct_loop);
     spawn(where_at::where_loop);
     spawn(phone::follow_cable);

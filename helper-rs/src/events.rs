@@ -46,6 +46,7 @@ fn dispatch(ev: &str, d: &str, snapshot: &mut bool, clip_snapshot: &mut bool) {
         "handoff" if !*snapshot => { let id = d.trim().to_string(); spawn(move || handoff::answer(&id)); }
         "openurl" if !*snapshot => open_url(d),
         "direct" => crate::direct::POKED.store(true, std::sync::atomic::Ordering::Relaxed),
+        "webcam" if !*snapshot && d.trim() == "install" => { spawn(crate::webcam::install); }
         "mirror" if !*snapshot => { spawn(crate::mirror::open_phone_screen); }
         "laptopfs" if !*snapshot => {
             let q: Vec<String> = d.split(' ').map(|s| s.to_string()).collect();
