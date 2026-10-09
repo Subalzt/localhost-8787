@@ -11,6 +11,7 @@
 mod awake;
 mod clip;
 mod control;
+mod direct;
 mod far;
 mod events;
 mod files;
@@ -130,6 +131,7 @@ fn main() {
     spawn(awake::awake_loop);
     spawn(link::link_loop);
     spawn(lyrics::lyrics_loop);
+    spawn(direct::direct_loop);
     spawn(where_at::where_loop);
     spawn(phone::follow_cable);
     #[cfg(windows)]

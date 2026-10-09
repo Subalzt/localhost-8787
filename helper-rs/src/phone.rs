@@ -484,6 +484,7 @@ pub fn follow_cable() {
         if let Some(g) = usb.iter().find(|g| ping(g)) {
             misses = 0;
             if phone().as_deref() != Some(g.as_str()) || port() != PHONE_PORT {
+                crate::direct::leave_for_cable();
                 move_to(g, PHONE_PORT);
                 write_conf("phone.txt", g);
                 say("USB cable to the phone found: using it. It is several times faster than any Wi-Fi link.");

@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 /// The "Name : value" lines of netsh's description of the Wi-Fi connection.
 #[cfg(windows)]
-fn wifi() -> std::collections::HashMap<String, String> {
+pub fn wifi() -> std::collections::HashMap<String, String> {
     use std::os::windows::process::CommandExt;
     let mut kv = std::collections::HashMap::new();
     let Ok(o) = Command::new("netsh").args(["wlan", "show", "interfaces"]).creation_flags(0x0800_0000).output() else { return kv };
@@ -25,7 +25,7 @@ fn wifi() -> std::collections::HashMap<String, String> {
 }
 
 #[cfg(not(windows))]
-fn wifi() -> std::collections::HashMap<String, String> {
+pub fn wifi() -> std::collections::HashMap<String, String> {
     Default::default()
 }
 
