@@ -1,8 +1,14 @@
 package dev.periy.bridge.music
 
 import android.content.Context
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.media.audiofx.DynamicsProcessing
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import dev.periy.bridge.server.EventBus
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -184,13 +190,108 @@ class EqStore(ctx: Context) {
  * session, its band gains following the curve closely (64 bands from 20 Hz up, each set to the
  * curve at its middle), its input brought down by the curve's peak. Off, it is released, so the
  * sound goes out untouched.
+ *
+ * When it is made matters. An effect made on a session that has no track yet (the setting is
+ * applied as the app opens, long before a song plays) is moved by Android onto the real output
+ * when the song starts, and on some phones it comes out of that move misconfigured: static, until
+ * the equalizer is switched off and on again, which makes it afresh while a song is playing. So
+ * the effect is made only once sound is really flowing (the song's position moving), and again
+ * after the phone has been idle for a while or the output changes (headphones, a speaker). A skip
+ * from one song to the next keeps it: the session never leaves its output for long.
  */
-class EqEngine(private val session: Int) {
+class EqEngine(private val session: Int, audio: AudioManager) {
+    private val main = Handler(Looper.getMainLooper())
     private var dp: DynamicsProcessing? = null
     private var failed = false
+    private var want = EqState()
 
-    fun apply(s: EqState) {
+    /** A song has been started on the session and not let go: there is a track for the effect to sit on. */
+    private var live = false
+    /** The effect may be made: its track is there and sound is flowing through it. */
+    private var settled = false
+    /** When the last track was let go, so a quick skip is told from the phone having been idle. */
+    private var goneAt = 0L
+    /** Bumped each time a start or a stop is seen, so a wait for sound that was overtaken does nothing. */
+    private var gen = 0
+
+    private val routeMoved = Runnable {
+        if (live && settled && dp != null) {
+            Log.i(TAG, "The output changed: making the equalizer afresh")
+            release()
+            refresh()
+        }
+    }
+
+    init {
+        // Headphones or a speaker coming or going moves the sound to another output, and the effect with it.
+        audio.registerAudioDeviceCallback(object : AudioDeviceCallback() {
+            override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>?) = moved()
+            override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>?) = moved()
+        }, main)
+    }
+
+    private fun moved() {
+        if (!live || !settled) return
+        main.removeCallbacks(routeMoved)
+        main.postDelayed(routeMoved, ROUTE_SETTLE_MS)
+    }
+
+    /** The curve to play through, now (the equalizer switched, a band moved). */
+    fun apply(s: EqState) { main.post { want = s; refresh() } }
+
+    /**
+     * A song has been started. [sounding] says when sound is flowing (its position has moved):
+     * the effect is made then, not before.
+     */
+    fun trackStarted(sounding: () -> Boolean) {
+        main.post {
+            if (live) return@post
+            live = true
+            failed = false
+            val g = ++gen
+            if (dp != null && SystemClock.elapsedRealtime() - goneAt < KEEP_MS) {
+                // A skip: the session is still on its output and the effect with it.
+                settled = true
+                return@post
+            }
+            settled = false
+            release()
+            waitForSound(sounding, g, 0)
+        }
+    }
+
+    /** The song was let go (another is about to start, or the queue was cleared). */
+    fun trackGone() {
+        main.post {
+            if (!live) return@post
+            live = false
+            settled = false
+            gen++
+            goneAt = SystemClock.elapsedRealtime()
+            // The effect stays for a moment: a skip starts the next song on the same session.
+            main.postDelayed({ if (!live && SystemClock.elapsedRealtime() - goneAt >= KEEP_MS) release() }, KEEP_MS + 200)
+        }
+    }
+
+    private fun waitForSound(sounding: () -> Boolean, g: Int, tries: Int) {
+        main.postDelayed({
+            if (g != gen || !live) return@postDelayed
+            if (sounding() || tries >= MAX_TRIES) {
+                settled = true
+                if (tries >= MAX_TRIES) Log.i(TAG, "No sound seen after ${MAX_TRIES * STEP_MS} ms; making the equalizer anyway")
+                refresh()
+            } else waitForSound(sounding, g, tries + 1)
+        }, STEP_MS)
+    }
+
+    private fun refresh() {
+        val s = want
         if (!s.on || s.gains.all { it == 0f }) { release(); return }
+        // Not yet: it is made when the sound is flowing (see the class's note).
+        if (settled) build(s)
+    }
+
+    private fun build(s: EqState) {
         if (failed || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
         val curve = EqMath.Curve(s.gains)
         val eq = DynamicsProcessing.Eq(true, true, N)
@@ -203,6 +304,7 @@ class EqEngine(private val session: Int) {
         }
         val preamp = -curve.peak().toFloat()
         try {
+            val fresh = dp == null
             val d = dp ?: DynamicsProcessing(
                 0, session,
                 DynamicsProcessing.Config.Builder(
@@ -213,8 +315,9 @@ class EqEngine(private val session: Int) {
             d.setPreEqAllChannelsTo(eq)
             d.setInputGainAllChannelsTo(preamp)
             d.enabled = true
+            if (fresh) Log.i(TAG, "The equalizer is on the session (control ${d.hasControl()})")
         } catch (e: Exception) {
-            Log.w("Eq", "DynamicsProcessing is not available", e)
+            Log.w(TAG, "DynamicsProcessing is not available", e)
             failed = true
             release()
         }
@@ -225,5 +328,15 @@ class EqEngine(private val session: Int) {
         dp = null
     }
 
-    private companion object { const val N = 64 }
+    private companion object {
+        const val TAG = "Eq"
+        const val N = 64
+        /** How often sound is looked for after a song starts, and how long to look (1.2 s) before making the effect anyway. */
+        const val STEP_MS = 40L
+        const val MAX_TRIES = 30
+        /** A song started within this long of the last one ending is a skip: the effect stays. */
+        const val KEEP_MS = 8_000L
+        /** A new output takes a moment to settle before the effect is made on it. */
+        const val ROUTE_SETTLE_MS = 700L
+    }
 }

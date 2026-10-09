@@ -98,7 +98,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
 
     /** One audio session for every player made here, so the equalizer on it carries from song to song. */
     private val session = audio.generateAudioSessionId()
-    private val eq = EqEngine(session)
+    private val eq = EqEngine(session, audio)
 
     /** The equalizer's curve (EqStore), applied to the phone's music from now on. */
     fun applyEq(s: EqState) { if (session > 0) eq.apply(s) }
@@ -210,6 +210,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         if (!prepared) return
         if (!gainFocus()) return
         runCatching { mp?.start() }
+        eqTrackStarted()
         applyParams()
         set { it.copy(playing = true, positionMs = currentPos(), at = now()) }
     }
@@ -514,6 +515,7 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         applyVolume()
         if (wantPlay && gainFocus()) {
             runCatching { p.start() }
+            eqTrackStarted()
             applyParams()
             set { it.copy(playing = true, durationMs = dur, positionMs = currentPos(), at = now()) }
         } else {
@@ -640,6 +642,13 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         mp?.let { runCatching { it.setNextMediaPlayer(null) }; runCatching { it.release() } }
         mp = null
         prepared = false
+        eq.trackGone()
+    }
+
+    /** A song has started: the equalizer is made once its sound is flowing (the position moving), not before. */
+    private fun eqTrackStarted() {
+        val at = currentPos()
+        eq.trackStarted { currentPos() != at }
     }
 
     private fun releaseNext() {
