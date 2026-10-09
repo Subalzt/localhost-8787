@@ -5987,6 +5987,18 @@ async function setLook(change) {
   } catch (e) {}
 }
 
+/** The device's own gap at the foot (a phone's home indicator or gesture bar), in pixels; 0 where there is none. */
+function safeBottom() {
+  var p = document.getElementById("sab-probe");
+  if (!p) {
+    p = document.createElement("div");
+    p.id = "sab-probe";
+    p.style.cssText = "position:fixed;left:0;bottom:0;width:0;height:0;visibility:hidden;pointer-events:none;padding-bottom:env(safe-area-inset-bottom,0px)";
+    document.body.appendChild(p);
+  }
+  return parseFloat(getComputedStyle(p).paddingBottom) || 0;
+}
+
 /** What the player takes from the bottom, for the sidebar, the dock and the page. */
 function setPlayerSpace() {
   var pl = $("player"), root = document.documentElement;
@@ -5998,7 +6010,9 @@ function setPlayerSpace() {
     root.style.setProperty("--player-h", pl.offsetHeight + "px");
     return;
   }
-  var H = window.innerHeight, bottom = 12;
+  // On a phone or another small screen it floats well up from the foot, over the device's own gap there,
+  // rather than sitting on the edge.
+  var H = window.innerHeight, bottom = (window.innerWidth < 700 ? 24 : 12) + safeBottom();
   var side = document.querySelector(".side"), sr = side && side.getBoundingClientRect();
   if (sr && sr.height && sr.top > H / 2 && sr.width > window.innerWidth / 2) bottom = sr.height + 8;
   var mb = $("music-view"), mr = mb && document.body.dataset.tab === "music" ? mb.getBoundingClientRect() : null;

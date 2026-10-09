@@ -376,7 +376,7 @@ private val HeaderHeight = 60.dp
 private val TabsHeight = 74.dp
 
 /** The mini player (Namida's, 82 high), and the gap over it: what every page leaves free at its foot while music is queued. */
-private val MiniRoom = 82.dp + 12.dp
+private val MiniRoom = 82.dp + 20.dp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -765,7 +765,8 @@ private fun BlazeItUi(vm: MainViewModel) {
         // What is playing: the mini player over the tabs, or close to the foot in Music, on a foot
         // of its own there (it glides between the two), dragged up to full screen and on to the queue.
         val miniLift by androidx.compose.animation.core.animateDpAsState(
-            if (shelf.showing) bottomInset + 4.dp else bottomInset + 66.dp, tween(320), label = "lift",
+            // In Music: lifted 16 off the system's bottom (it sat 4 off, nearly on the edge), as a mini player floats.
+            if (shelf.showing) bottomInset + 16.dp else bottomInset + 66.dp, tween(320), label = "lift",
         )
         if (hasPlayer) NowPlaying(
             player, now, motion, ctx.container.loudness,
