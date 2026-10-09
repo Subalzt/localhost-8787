@@ -18,8 +18,8 @@ android {
         // WebRTC carries native code for each kind of processor; only 64-bit ARM, which every
         // phone this app is for has, keeps the app about 10 MB larger instead of 40.
         ndk { abiFilters += listOf("arm64-v8a") }
-        versionCode = 35
-        versionName = "2.14.1"
+        versionCode = 36
+        versionName = "2.14.2"
 
         // Default listen port.
         buildConfigField("int", "DEFAULT_PORT", "8787")
