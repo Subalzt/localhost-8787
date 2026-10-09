@@ -124,3 +124,15 @@ pub fn stream(url: &str, timeout: Duration) -> io::Result<Lines> {
     });
     Ok(Lines { child, rx })
 }
+
+/// A file fetched to `dest` (redirects followed, as GitHub's downloads need).
+pub fn download(url: &str, dest: &std::path::Path, timeout: Duration) -> io::Result<()> {
+    let mut c = curl();
+    c.args(["-L", "--fail", "--max-time", &timeout.as_secs().max(1).to_string(), "-o"]).arg(dest).arg(url);
+    let o = c.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped()).output().map_err(|e| io::Error::new(e.kind(), format!("curl could not be run ({})", e)))?;
+    if o.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(String::from_utf8_lossy(&o.stderr).trim().to_string()))
+    }
+}

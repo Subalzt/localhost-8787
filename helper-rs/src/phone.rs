@@ -170,7 +170,7 @@ fn candidates() -> Vec<String> {
 
 /// Where adb is: the Android SDK's, scrcpy's beside the helper or where the earlier helper keeps it,
 /// else the one on the PATH.
-fn adb_exe() -> Option<std::path::PathBuf> {
+pub fn adb_exe() -> Option<std::path::PathBuf> {
     let exe = if cfg!(windows) { "adb.exe" } else { "adb" };
     let mut tries: Vec<std::path::PathBuf> = Vec::new();
     if cfg!(windows) {

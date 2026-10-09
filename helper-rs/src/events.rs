@@ -45,6 +45,7 @@ fn dispatch(ev: &str, d: &str, snapshot: &mut bool, clip_snapshot: &mut bool) {
         "camalert" => { let d = d.to_string(); spawn(move || notify::cam_alert(&d)); }
         "handoff" if !*snapshot => { let id = d.trim().to_string(); spawn(move || handoff::answer(&id)); }
         "openurl" if !*snapshot => open_url(d),
+        "mirror" if !*snapshot => { spawn(crate::mirror::open_phone_screen); }
         "laptopfs" if !*snapshot => {
             let q: Vec<String> = d.split(' ').map(|s| s.to_string()).collect();
             if q.first().map(|s| s.as_str()) == Some("put") && q.len() >= 5 {

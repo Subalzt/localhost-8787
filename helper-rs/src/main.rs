@@ -20,6 +20,8 @@ mod http;
 mod https;
 mod input;
 mod link;
+mod lyrics;
+mod mirror;
 mod notify;
 mod phone;
 mod punch;
@@ -27,6 +29,7 @@ mod relay;
 mod tunnel;
 mod util;
 mod volume;
+mod where_at;
 
 use std::thread::spawn;
 use util::say;
@@ -126,6 +129,8 @@ fn main() {
     spawn(volume::volume_loop);
     spawn(awake::awake_loop);
     spawn(link::link_loop);
+    spawn(lyrics::lyrics_loop);
+    spawn(where_at::where_loop);
     spawn(phone::follow_cable);
     #[cfg(windows)]
     spawn(handoff::hotkey_loop);
