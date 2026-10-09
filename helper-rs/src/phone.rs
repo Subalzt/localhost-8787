@@ -505,3 +505,17 @@ pub fn follow_cable() {
         }
     }
 }
+
+/// The speed the phone's USB tethering adapter reports, in Mbit/s: about 426 on USB 2 (which moves
+/// about 40 MB/s), 852 or more on USB 3 (225 to 270 MB/s). 0 when not known.
+pub fn usb_mbps(gateway: &str) -> u64 {
+    #[cfg(windows)]
+    {
+        usb_adapter(gateway).map(|a| a.1).unwrap_or(0)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = gateway;
+        0
+    }
+}

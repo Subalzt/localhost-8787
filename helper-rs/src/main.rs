@@ -19,6 +19,7 @@ mod health;
 mod http;
 mod https;
 mod input;
+mod link;
 mod notify;
 mod phone;
 mod punch;
@@ -85,6 +86,11 @@ fn main() {
         std::thread::sleep(std::time::Duration::from_secs(1));
         return;
     }
+    if let Some(i) = args.iter().position(|a| a == "--link-check") {
+        // --link-check HOST: what the Monitor tab would be told of the link to HOST.
+        println!("{}", link::report(args.get(i + 1).map(|s| s.as_str()).unwrap_or("192.168.1.1"), 8787));
+        return;
+    }
     if args.iter().any(|a| a == "--handoff") {
         println!("{}", handoff::snapshot());
         return;
@@ -119,6 +125,7 @@ fn main() {
     spawn(far::tunnel_loop);
     spawn(volume::volume_loop);
     spawn(awake::awake_loop);
+    spawn(link::link_loop);
     spawn(phone::follow_cable);
     #[cfg(windows)]
     spawn(handoff::hotkey_loop);

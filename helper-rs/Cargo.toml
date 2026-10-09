@@ -14,7 +14,7 @@ serde_json = "1"
 base64 = "0.22"
 arboard = { version = "3", default-features = false, features = ["image-data"] }
 png = "0.17"
-sysinfo = { version = "0.32", default-features = false, features = ["system", "disk"] }
+sysinfo = { version = "0.32", default-features = false, features = ["system", "disk", "network"] }
 open = "5"
 x25519-dalek = "2"
 hmac = "0.12"
