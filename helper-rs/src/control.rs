@@ -74,6 +74,7 @@ pub fn control_loop(no_browser: bool) {
             }
             // The phone says something at least every 25 s; 40 s of silence is the phone gone.
             let mut st = http::open(&host, crate::phone::port(), "GET", "/api/control/stream", &heads, &[], Duration::from_secs(5), Some(Duration::from_secs(40)))?;
+            phone::track(&st.socket);
             if st.status == 401 {
                 say("The phone no longer knows this computer; asking again.");
                 cookie = None;

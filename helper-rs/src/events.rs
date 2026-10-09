@@ -74,6 +74,7 @@ pub fn events_loop() {
         let h = vec![("Cookie", cookie), ("Accept", "text/event-stream".to_string())];
         match http::open(&at, crate::phone::port(), "GET", "/events", &h, &[], Duration::from_secs(5), Some(Duration::from_secs(40))) {
             Ok(mut st) if st.status == 200 => {
+                phone::track(&st.socket);
                 let (mut ev, mut data) = (String::new(), Vec::<String>::new());
                 let (mut snapshot, mut clip_snapshot) = (true, true);
                 let mut line = String::new();

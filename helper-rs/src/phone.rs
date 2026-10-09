@@ -37,8 +37,16 @@ fn set_phone(p: &str) {
 
 /// From now on the phone is at [host]:[port]; the streams on the old link reconnect on this one.
 pub fn move_to(host: &str, port: u16) {
-    if let Ok(mut w) = PHONE.write() {
-        *w = Some((host.to_string(), port));
+    let changed = match PHONE.write() {
+        Ok(mut w) => {
+            let changed = w.as_ref().map_or(true, |p| p.0 != host || p.1 != port);
+            *w = Some((host.to_string(), port));
+            changed
+        }
+        Err(_) => false,
+    };
+    if changed {
+        cut_tracked();
     }
 }
 
@@ -396,6 +404,7 @@ pub fn cable_report() {
     }
     let gws = gateways();
     println!("gateways: {:?}", gws);
+    println!("on a USB adapter: {:?}", usb_gateways());
     #[cfg(windows)]
     for g in &gws {
         if let Some((d, s)) = usb_adapter(g) {
@@ -405,5 +414,94 @@ pub fn cable_report() {
     match adb_path() {
         Some((h, p)) => println!("adb forward: {}:{} -> phone:{}, answers: {}", h, p, PHONE_PORT, ping_at(&h, p)),
         None => println!("adb forward: none (no phone on USB debugging)"),
+    }
+}
+
+// ---- following the best way
+
+static TRACKED: std::sync::Mutex<Vec<std::net::TcpStream>> = std::sync::Mutex::new(Vec::new());
+
+/// Remembers a long-lived connection to the phone (the control and event streams), so moving to
+/// another link cuts it and it reconnects there, rather than waiting out the old link's timeout.
+pub fn track(s: &std::net::TcpStream) {
+    if let Ok(c) = s.try_clone() {
+        let mut t = TRACKED.lock().unwrap();
+        t.retain(|x| x.peer_addr().is_ok());
+        t.push(c);
+    }
+}
+
+fn cut_tracked() {
+    for s in TRACKED.lock().unwrap().drain(..) {
+        let _ = s.shutdown(std::net::Shutdown::Both);
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn linux_usb(gateway: &str) -> bool {
+    let out = run("ip", &["-4", "route", "get", gateway]);
+    let Some(dev) = out.split_whitespace().skip_while(|w| *w != "dev").nth(1) else { return false };
+    std::fs::canonicalize(format!("/sys/class/net/{}", dev)).map(|p| p.to_string_lossy().contains("/usb")).unwrap_or(false)
+}
+
+/// Whether the gateway is on a USB network adapter (the phone's USB tethering). Looked up once a
+/// minute for each: Windows answers through PowerShell, which is slow.
+fn is_usb(gateway: &str) -> bool {
+    static CACHE: std::sync::Mutex<Vec<(String, bool, Instant)>> = std::sync::Mutex::new(Vec::new());
+    if let Some((_, usb, at)) = CACHE.lock().unwrap().iter().find(|c| c.0 == gateway) {
+        if at.elapsed() < Duration::from_secs(60) {
+            return *usb;
+        }
+    }
+    #[cfg(windows)]
+    let usb = usb_adapter(gateway).is_some();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let usb = linux_usb(gateway);
+    #[cfg(target_os = "macos")]
+    let usb = false;
+    let mut c = CACHE.lock().unwrap();
+    c.retain(|x| x.0 != gateway);
+    c.push((gateway.to_string(), usb, Instant::now()));
+    usb
+}
+
+/// The default gateways that are on a USB adapter now.
+pub fn usb_gateways() -> Vec<String> {
+    gateways().into_iter().filter(|g| is_usb(g)).collect()
+}
+
+/// A cable beats every Wi-Fi link: while connected some other way and the phone answers on the
+/// cable's USB tethering, move to it; when the cable goes, look for the phone again.
+pub fn follow_cable() {
+    let mut misses = 0;
+    let mut on_cable: Option<String> = None;
+    loop {
+        sleep(Duration::from_millis(2500));
+        if session().is_none() || phone().is_none() {
+            continue;
+        }
+        let usb = usb_gateways();
+        if let Some(g) = usb.iter().find(|g| ping(g)) {
+            misses = 0;
+            if phone().as_deref() != Some(g.as_str()) || port() != PHONE_PORT {
+                move_to(g, PHONE_PORT);
+                write_conf("phone.txt", g);
+                say("USB cable to the phone found: using it. It is several times faster than any Wi-Fi link.");
+                check_cable(g);
+            }
+            on_cable = Some(g.clone());
+            continue;
+        }
+        // Unplugged, or USB tethering switched off: a cable still listed gets one more look.
+        if let Some(c) = &on_cable {
+            if phone().as_deref() == Some(c.as_str()) && (!usb.contains(c) || { misses += 1; misses >= 2 }) {
+                say("The USB cable is gone; looking for the phone over Wi-Fi.");
+                on_cable = None;
+                misses = 0;
+                find_phone(false, None);
+            } else if phone().as_deref() != Some(c.as_str()) {
+                on_cable = None;
+            }
+        }
     }
 }

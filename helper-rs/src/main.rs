@@ -8,6 +8,7 @@
 //! Not yet here (the earlier helpers still do them): the second screen,
 //! the laptop's sound, the webcam and calls.
 
+mod awake;
 mod clip;
 mod control;
 mod far;
@@ -117,6 +118,8 @@ fn main() {
     spawn(clip::clip_loop);
     spawn(far::tunnel_loop);
     spawn(volume::volume_loop);
+    spawn(awake::awake_loop);
+    spawn(phone::follow_cable);
     #[cfg(windows)]
     spawn(handoff::hotkey_loop);
     control::control_loop(no_browser);
