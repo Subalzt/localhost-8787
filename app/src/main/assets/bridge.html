@@ -5705,7 +5705,7 @@ var HELPER_OS = /Android|iPhone|iPad/.test(navigator.userAgent) || (/Macintosh/.
 
 function renderHelperState() {
   // Windows also has the Rust helper, one program that does what the .bat does.
-  helper-rs-row.hidden = HELPER_OS || !/Windows/.test(navigator.userAgent);
+  $("helper-rs-row").hidden = !!HELPER_OS || !/Windows/.test(navigator.userAgent);
   if (HELPER_OS) {
     var file = "blazeit-" + HELPER_OS + ".py";
     $("helper-file").textContent = file;
