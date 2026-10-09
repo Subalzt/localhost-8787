@@ -2461,6 +2461,19 @@ class BridgeServer(
             call.response.header(HttpHeaders.CacheControl, "private, max-age=31536000, immutable")
             call.respondBytes(bytes, ContentType.parse("font/woff2"))
         }
+        // The Windows helper written in Rust (one program, no .bat), the same as the one on the release page.
+        get("/localhost8787-helper.exe") {
+            val bytes = withContext(Dispatchers.IO) { runCatching { ctx.assets.open("localhost8787-helper.exe").use { it.readBytes() } }.getOrNull() }
+            if (bytes == null) {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+            call.response.header(
+                HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, "localhost8787-helper.exe").toString(),
+            )
+            call.respondBytes(bytes, ContentType.Application.OctetStream)
+        }
         // The laptop helpers, offered from the page itself so any paired laptop can get one:
         // Windows's, and one Python file for Linux and the Mac, named for each.
         for ((helper, asset) in listOf(

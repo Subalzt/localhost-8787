@@ -1058,7 +1058,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 Kotlin and Jetpack Compose on the phone (Android 10+), Ktor 3 for the server; the page has no
 build step and no dependencies. The code lives in `app/src/main/`: `assets/bridge.html` (the
 page), `assets/blazeit-pc.bat` and `assets/blazeit-helper.py` (the helpers: Windows's, and one for
-Linux and the Mac), and `java/dev/periy/bridge/` (`server/` for the routes, uploads, music, lyrics,
+Linux and the Mac), `assets/localhost8787-helper.exe` (the Windows helper in Rust, built in `helper-rs/` with `cargo build --release` and copied here: the phone serves it from the page's Settings), and `java/dev/periy/bridge/` (`server/` for the routes, uploads, music, lyrics,
 linked phones, pipes and notifications, `ui/` for the app's screens, `music/` for the phone's own
 player, `net/` for addresses, the direct link, STUN, the tunnel, hole punching and the website).
 

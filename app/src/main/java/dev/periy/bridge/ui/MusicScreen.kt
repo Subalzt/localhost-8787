@@ -470,8 +470,8 @@ private fun AlbumsPage(
                 },
             state = grid,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = bottom),
-            horizontalArrangement = Arrangement.spacedBy(if (cols == 2) 14.dp else 10.dp),
-            verticalArrangement = Arrangement.spacedBy(if (cols == 2) 18.dp else 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (cols == 2) 12.dp else 10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (cols == 2) 12.dp else 10.dp),
         ) {
             noteFor(shelf, albums.isEmpty())?.let { n -> item(key = "note", span = { GridItemSpan(maxLineSpan) }) { LibraryNote(n, requestMusic) } }
             itemsIndexed(albums, key = { _, a -> a.key }) { i, a ->
@@ -479,7 +479,7 @@ private fun AlbumsPage(
                 // how many across slides each card to its new place.
                 val first = grid.firstVisibleItemIndex
                 AlbumCard(
-                    a, shelf, playing = a.key == playingKey, sounding = now.playing, small = cols > 2,
+                    a, shelf, playing = a.key == playingKey, sounding = now.playing, cols = cols,
                     modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = tween(320, easing = PageEase))
                         .entrance(shelf.albumEntrance, (i / cols - first / cols) + i % cols, duration = 400 / 3),
                 )
@@ -829,37 +829,44 @@ private fun TrackTile(
 }
 
 /**
- * An album in the grid: the cover, square with a hairline round it, and under it the name and who
- * it is by. The one playing is lifted onto a card (drawn round it, so nothing moves), its name bold.
+ * An album in the grid, on a card of its own (Namida's): the cover, square with a hairline round
+ * it, and under it the name and who it is by. The cards sit on the page's surface colour with a
+ * gap between them, so albums never run into each other; the one playing has an outline in the
+ * accent and its name in bold. The type and the card's padding follow how many are across: 14 sp
+ * with two, 12 with three, 10 with four, so a small grid keeps its names readable.
  */
 @Composable
-private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: Boolean, small: Boolean = false, modifier: Modifier = Modifier) {
+private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: Boolean, cols: Int = 3, modifier: Modifier = Modifier) {
     val nc = Nm.c
     val line = hairline()
     // Where the cover is, for the hero when it is tapped; it hides while its hero is flying.
     val where = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
     val onOpen = { shelf.openAlbum(a, where[0]) }
-    val out = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.toPx() }
+    val pad = when { cols <= 2 -> 8.dp; cols == 3 -> 6.dp; else -> 5.dp }
+    val name = when { cols <= 2 -> 14.sp; cols == 3 -> 12.sp; else -> 10.sp }
+    val by = when { cols <= 2 -> 12.sp; cols == 3 -> 11.sp; else -> 9.sp }
+    val card = RoundedCornerShape(if (cols <= 2) 18.dp else 14.dp)
     Column(modifier.fillMaxWidth()
-        .drawBehind { if (playing) playingCard(nc, 1f, inset = -out, top = -out) }
-        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen)) {
-        val shape = RoundedCornerShape(8.dp)
+        .clip(card)
+        .background(nc.cardColor)
+        .then(if (playing) Modifier.border(1.5.dp, nc.main, card) else Modifier.border(0.5.dp, line, card))
+        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen)
+        .padding(pad)) {
+        val inner = if (cols <= 2) 12.dp else 9.dp
         Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
             Cover(a.coverId, a.title, Modifier.fillMaxSize()
                 .onGloballyPositioned { where[0] = it.boundsInRoot() }
                 .graphicsLayer { alpha = if (shelf.heroFlying && shelf.heroKey == a.key) 0f else 1f }
-                .border(0.5.dp, line, shape), radius = 8.dp)
+                .border(0.5.dp, line, RoundedCornerShape(inner)), radius = inner)
         }
-        Spacer(Modifier.height(7.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(a.title, style = TextStyle(fontFamily = MusicType, fontSize = if (small) 12.sp else 14.sp,
-                fontWeight = if (playing) FontWeight.Bold else FontWeight.Medium, color = nc.large),
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Text(a.artist, style = Nm.small.copy(fontSize = if (small) 12.sp else 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(if (cols >= 4) 5.dp else 7.dp))
+        Text(a.title, style = TextStyle(fontFamily = MusicType, fontSize = name,
+            fontWeight = if (playing) FontWeight.Bold else FontWeight.Medium, color = nc.large),
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 2.dp))
+        Text(a.artist, style = Nm.small.copy(fontSize = by), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp, vertical = 1.dp))
     }
 }
-
 /**
  * The top of an album's page: the cover in the middle with a hairline round it, the name under it,
  * who it is by, and a line of what it is (genre, year, and the file: FLAC · 16-bit · 44.1 kHz);

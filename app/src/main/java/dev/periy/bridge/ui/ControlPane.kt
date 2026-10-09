@@ -135,7 +135,7 @@ fun ControlPane(running: Boolean, onStart: () -> Unit, modifier: Modifier = Modi
                     BridgeButton("Start", Modifier.padding(top = 10.dp), onClick = onStart)
                 } else {
                     Text(
-                        "Run blazeit-pc.bat on the laptop (the page's Laptop control has it), then allow it here once.",
+                        "Run blazeit-pc.bat or localhost8787-helper.exe on the laptop (the page's Settings has both), then allow it here once.",
                         style = BodyStyle, color = Bridge.Text,
                     )
                 }

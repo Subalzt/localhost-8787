@@ -1987,14 +1987,18 @@
 
   /* Albums: covers on the black with a hairline edge (a black cover keeps its shape), the name
      and who it is by under each. Play shows on a cover under the pointer, and stays while it plays. */
-  .nml-albums { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 24px 20px; padding: 6px 16px 0; row-gap: 24px; }
+  .nml-albums { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; padding: 6px 16px 0; }
   @media (min-width: 1000px) { .nml-albums { padding: 4px 40px 0; } }
-  @media (max-width: 600px) { .nml-albums { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; } }
+  @media (max-width: 600px) { .nml-albums { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } }
   .nc { padding: 0; }
-  .nc-card { aspect-ratio: auto; display: block; border-radius: 0; overflow: visible; background: none; box-shadow: none; transition: none; }
-  .nc-card:hover { transform: none; box-shadow: none; }
+  /* Each album on a card (Namida's): the page's surface colour round the cover and the words, so
+     albums never run into each other; the one playing is outlined. */
+  .nc-card { aspect-ratio: auto; display: block; border-radius: 16px; overflow: hidden; padding: 8px; background: var(--surface); box-shadow: 0 0 0 1px var(--mx-edge); transition: none; }
+  .nc.playing .nc-card { box-shadow: 0 0 0 1.5px var(--txt); }
+  .nc-card:hover { transform: none; box-shadow: 0 0 0 1px color-mix(in srgb, var(--txt) 22%, transparent); }
+  .nc.playing .nc-card:hover { box-shadow: 0 0 0 1.5px var(--txt); }
   .nc-card:active { transform: scale(.98); }
-  .nc-art { border-radius: 8px; box-shadow: 0 0 0 1px var(--mx-edge); }
+  .nc-art { border-radius: 11px; box-shadow: 0 0 0 1px var(--mx-edge); }
   .nc-art.gen { font-size: 26cqw; }
   .nc-play { left: 8px; right: auto; bottom: 8px; width: 34px; height: 34px; padding: 0; border-radius: 50%; color: #fff; background: rgba(0,0,0,.55);
     -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); box-shadow: none; opacity: 0; transition: opacity .15s, transform .15s; }
@@ -2006,9 +2010,11 @@
   body:not(.music-on) .bars i { animation: none !important; height: 55% !important; }
   body:not(.music-on) .bars i:nth-child(2) { height: 100% !important; }
   body:not(.music-on) .bars i:nth-child(3) { height: 75% !important; }
-  .nc-cap { display: block; padding: 7px 0 0; }
-  .nc-cap b { display: block; font-size: 13.5px; font-weight: 500; color: var(--txt); line-height: 1.3; }
-  .nc-cap span { display: block; font-size: 13.5px; color: var(--mx-dim); line-height: 1.35; }
+  /* The type follows the card's width (cqw): a narrow card in a small grid has smaller words, as
+     Namida's do, rather than the same size cut short. */
+  .nc-cap { display: block; padding: 7px 2px 1px; }
+  .nc-cap b { display: block; font-size: clamp(10px, 8.6cqw, 13.5px); font-weight: 500; color: var(--txt); line-height: 1.3; }
+  .nc-cap span { display: block; font-size: clamp(9px, 7.4cqw, 12.5px); color: var(--mx-dim); line-height: 1.35; }
   .nc.playing .nc-cap b { color: var(--txt); font-weight: 700; }
 
   /* Songs: one row each on a hairline; a small cover, or the number on an album's page. */
@@ -2948,6 +2954,11 @@
         <a class="sr-action" id="helper-dl" href="/blazeit-pc.bat" download="blazeit-pc.bat">Download</a>
       </div>
       <div class="set-row sr-note" id="helper-note">Full speed, the fastest link, and the phone as a trackpad. Nothing is installed; close its window to stop it.</div>
+      <div class="set-row" id="helper-rs-row" hidden>
+        <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V16h-15V6.5a1 1 0 0 1 1-1Z"/><path d="M2.5 18.5h19"/></svg></span>
+        <div class="sr-text"><b>localhost8787-helper.exe</b><span>The same helper in one small program (new): close the .bat one first</span></div>
+        <a class="sr-action" href="/localhost8787-helper.exe" download="localhost8787-helper.exe">Download</a>
+      </div>
       <div class="set-row" id="link-row" hidden>
         <span class="sq blue" id="link-icon"></span>
         <div class="sr-text"><b id="link-name"></b><span id="link-detail"></span></div>
@@ -5693,6 +5704,8 @@ var HELPER_OS = /Android|iPhone|iPad/.test(navigator.userAgent) || (/Macintosh/.
   /Macintosh|Mac OS X/.test(navigator.userAgent) ? "mac" : /Linux|X11|CrOS/.test(navigator.userAgent) ? "linux" : "";
 
 function renderHelperState() {
+  // Windows also has the Rust helper, one program that does what the .bat does.
+  helper-rs-row.hidden = HELPER_OS || !/Windows/.test(navigator.userAgent);
   if (HELPER_OS) {
     var file = "blazeit-" + HELPER_OS + ".py";
     $("helper-file").textContent = file;
@@ -8295,8 +8308,11 @@ function setupPlayer() {
   }
   try { var sv = localStorage.getItem("blazeit.volume"); if (sv !== null) audio.volume = Math.max(0, Math.min(1, sv / 100)); } catch (e) {}
   vol.addEventListener("input", function () {
+    var was = audio.muted ? 0 : audio.volume;
     audio.muted = false;
     audio.volume = vol.value / 100;
+    // Down to nothing: the music stops (only the step down to 0 counts, not starting at 0).
+    if (audio.volume === 0 && was > 0 && !audio.paused) audio.pause();
     try { localStorage.setItem("blazeit.volume", vol.value); } catch (e) {}
     paintVol();
   });

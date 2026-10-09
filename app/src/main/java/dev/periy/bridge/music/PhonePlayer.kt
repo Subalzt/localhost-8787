@@ -138,6 +138,22 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
     }
     private var noisyRegistered = false
 
+    /**
+     * The phone's music volume brought down to nothing (the volume keys, the panel, a headset's
+     * buttons): the music stops, as a player that is left playing to itself at zero would be
+     * pointless. Only the step down to 0 counts: starting a song with the volume already at 0 is
+     * left to the person who pressed play.
+     */
+    private var lastSystemVolume = -1
+    private val volumeWatch = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != VOLUME_CHANGED || intent.getIntExtra(EXTRA_VOLUME_STREAM_TYPE, -1) != AudioManager.STREAM_MUSIC) return
+            val now = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+            val before = lastSystemVolume
+            lastSystemVolume = now
+            if (now == 0 && before != 0 && _state.value.playing) pause()
+        }
+    }
     // ------------------------------------------------------------------ the queue
 
     /** Plays [list] from [start]; with [shuffle], that song first and the rest shuffled behind it. */
@@ -391,11 +407,14 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         val sp = speed.coerceIn(SPEED_MIN, SPEED_MAX)
         val pi = pitch.coerceIn(PITCH_MIN, PITCH_MAX)
         val vo = volume.coerceIn(0f, 1f)
+        val before = _state.value.volume
         // Where the song is, at the old speed, before the new one takes over the reckoning.
         set { it.copy(positionMs = it.positionNow(), at = now(), speed = sp, pitch = pi, volume = vo) }
         prefs.edit().putFloat(K_SPEED, sp).putFloat(K_PITCH, pi).putFloat(K_VOLUME, vo).apply()
         applyVolume()
         applyParams()
+        // The player's own volume brought down to nothing stops it the same way.
+        if (vo == 0f && _state.value.playing && before > 0f) pause()
     }
 
     /** Namida's two choices in the sound dialog: pitch counted in semitones, and speed carrying pitch with it. */
@@ -649,12 +668,15 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
     private fun registerNoisy() {
         if (noisyRegistered) return
         app.registerReceiver(noisy, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        lastSystemVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        app.registerReceiver(volumeWatch, IntentFilter(VOLUME_CHANGED))
         noisyRegistered = true
     }
 
     private fun unregisterNoisy() {
         if (!noisyRegistered) return
         runCatching { app.unregisterReceiver(noisy) }
+        runCatching { app.unregisterReceiver(volumeWatch) }
         noisyRegistered = false
     }
 
@@ -702,6 +724,9 @@ class PhonePlayer(ctx: Context, private val music: MusicLibrary) {
         const val K_SPEED = "speed"
         const val K_PITCH = "pitch"
         const val K_VOLUME = "volume"
+        /** The broadcast Android sends when a volume changes (not in the SDK's constants, but long stable). */
+        const val VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION"
+        const val EXTRA_VOLUME_STREAM_TYPE = "android.media.EXTRA_VOLUME_STREAM_TYPE"
         const val K_SEMITONES = "pitchInSemitones"
         const val K_LINK_PITCH = "speedCarriesPitch"
         // The dialog's sliders run from 0 to 2, as Namida's; the sound itself stops short of 0.
