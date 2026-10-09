@@ -857,6 +857,20 @@ class BridgeServer(
             val w = where()
             call.respond(WhereDto(w.places(), w.allowed(), w.allowedAlways(), w.zones.value))
         }
+        // The timeline: a place's days, one day's positions, or all of them (server/WhereHistory.kt).
+        get("/api/where/history") {
+            call.device() ?: return@get
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            val id = call.request.queryParameters["id"].orEmpty()
+            val day = call.request.queryParameters["day"]
+            call.respondText(withContext(Dispatchers.IO) { where().historyJson(id, day) }, ContentType.Application.Json)
+        }
+        post("/api/where/history/clear") {
+            call.device() ?: return@post
+            val id = runCatching { call.receive<ChatKey>() }.getOrNull()?.key.orEmpty()
+            if (id.isNotEmpty()) withContext(Dispatchers.IO) { where().historyClear(id) }
+            call.respond(ApiResult(true))
+        }
         post("/api/where/laptop") {
             val me = call.device() ?: return@post
             val f = runCatching { call.receive<LaptopFix>() }.getOrNull()

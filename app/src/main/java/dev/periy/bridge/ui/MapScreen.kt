@@ -121,6 +121,18 @@ fun MapScreen(onClose: () -> Unit) {
 
                         @android.webkit.JavascriptInterface
                         fun unzone(id: String) = where.deleteZone(id)
+
+                        /** The timeline: a place's days, one day or all of them, handed back to historyIn. */
+                        @android.webkit.JavascriptInterface
+                        fun history(id: String, day: String, token: String) {
+                            Thread {
+                                val body = runCatching { where.historyJson(id, day.ifEmpty { null }) }.getOrDefault("{}")
+                                post { evaluateJavascript("historyIn(" + org.json.JSONObject.quote(token) + "," + org.json.JSONObject.quote(body) + ")", null) }
+                            }.start()
+                        }
+
+                        @android.webkit.JavascriptInterface
+                        fun clearHistory(id: String) = where.historyClear(id)
                     }, "Phone")
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(w: WebView?, url: String?) { ready = true; asked++ }

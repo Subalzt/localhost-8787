@@ -91,6 +91,23 @@
   .fab button { width: 44px; height: 44px; border-radius: 12px; border: 0; background: var(--sheet); color: var(--txt); box-shadow: var(--shadow);
     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); display: grid; place-items: center; cursor: pointer; }
   .fab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  /* The timeline: a day strip (Overall, then each day), what the chosen one covers, and a slider along its route. */
+  .tl-head { display: flex; align-items: center; gap: 10px; margin: 6px 6px 2px; }
+  .tl-head b { flex: 1; min-width: 0; font-size: 17px; font-weight: 750; letter-spacing: -.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tl-days { display: flex; gap: 8px; overflow-x: auto; padding: 6px 6px 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .tl-days::-webkit-scrollbar { display: none; }
+  .tl-day { flex: 0 0 auto; min-width: 68px; padding: 8px 12px; border: 0; border-radius: 14px; background: var(--chip); color: var(--txt); font: inherit; text-align: center; cursor: pointer; line-height: 1.25; }
+  .tl-day b { display: block; font-size: 14.5px; font-weight: 700; white-space: nowrap; }
+  .tl-day span { display: block; font-size: 11.5px; color: var(--sub); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tl-day.on { background: var(--blue); color: #fff; }
+  .tl-day.on span { color: rgba(255,255,255,.82); }
+  .tl-stats { margin: 2px 12px 8px; font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .tl-stats strong { display: block; color: var(--txt); font-size: 24px; font-weight: 750; letter-spacing: -.5px; line-height: 1.15; }
+  .tl-scrub { margin: 0 12px 6px; }
+  .tl-scrub input { width: 100%; margin: 6px 0 2px; accent-color: var(--blue); }
+  .tl-now { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tl-foot { display: flex; align-items: center; gap: 10px; margin: 6px 12px 10px; font-size: 12.5px; color: var(--sub); }
+  .tl-foot .btn { padding: 6px 12px; font-size: 12.5px; }
 </style>
 </head>
 <body>
@@ -105,6 +122,13 @@
     <label>Size <input type="range" id="zrad" min="50" max="1000" step="25" value="150"><span id="zradv">150 m</span></label>
     <div style="display:flex;gap:8px;margin-top:8px"><button class="btn blue" type="button" id="zsave">Save</button><button class="btn" type="button" id="zcancel">Cancel</button></div></div>
   <div id="zlist"></div><p class="hint" style="margin-top:6px">Your phone tells you when a phone or laptop arrives at or leaves one.</p></div>
+<div class="sheet" id="tl" hidden>
+  <div class="tl-head"><button class="btn" type="button" id="tl-back">‹ Devices</button><b id="tl-who"></b></div>
+  <div class="tl-days" id="tl-days"></div>
+  <div class="tl-stats" id="tl-stats"></div>
+  <div class="tl-scrub" id="tl-scrub-wrap" hidden><input type="range" id="tl-scrub" min="0" max="0" value="0" aria-label="Move along the day's route"><div class="tl-now" id="tl-now"></div></div>
+  <div class="tl-foot"><button class="btn" type="button" id="tl-clear">Clear history</button><span>Kept on the phone for 90 days.</span></div>
+</div>
 <div class="ztip" id="ztip">Tap the map where the place is</div>
 <script>
 var map = L.map("map", { zoomControl: false, attributionControl: true, worldCopyJump: true }).setView([20, 78], 4);
@@ -194,7 +218,7 @@ function list_() {
       (f.alt != null ? '<dt>Height</dt><dd>' + Math.round(f.alt) + ' m</dd>' : "") + (f.speed != null && f.speed > 0.5 ? '<dt>Moving</dt><dd>' + Math.round(f.speed * 3.6) + ' km/h</dd>' : "") +
       '<dt>Seen</dt><dd>' + esc(new Date(f.at).toLocaleString()) + '</dd><dt>From</dt><dd>' + esc(f.src || "") + '</dd></dl>' +
       '<div class="acts"><a class="btn blue" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=' + f.lat + "," + f.lon + '">Directions</a>' +
-      '<button class="btn" type="button" data-trail="' + esc(p.id) + '">' + ((p.trail || []).length > 1 ? "Trail (" + p.trail.length + ")" : "No trail yet") + '</button>' +
+      '<button class="btn" type="button" data-trail="' + esc(p.id) + '">Timeline</button>' +
       (p.kind === "phone" ? '<button class="btn" type="button" data-find="ring" data-to="' + esc(target(p)) + '">Play sound</button>' +
         (p.lost ? '<button class="btn red" type="button" data-find="found" data-to="' + esc(target(p)) + '">End lost mode</button>'
                 : '<button class="btn red" type="button" data-lost="' + esc(p.id) + '">Lost mode…</button>') : "") + '</div>' +
@@ -203,7 +227,7 @@ function list_() {
       '<div class="said" id="said-' + esc(p.id) + '"></div></div>';
   }).join("");
   host.querySelectorAll(".row").forEach(function (r) { r.onclick = function () { choose(r.dataset.id === chosen ? null : r.dataset.id, true); }; });
-  host.querySelectorAll("[data-trail]").forEach(function (b) { b.onclick = function () { showTrail = !showTrail; drawTrail(); }; });
+  host.querySelectorAll("[data-trail]").forEach(function (b) { b.onclick = function () { openTimeline(b.dataset.trail); }; });
   host.querySelectorAll("[data-lost]").forEach(function (b) { b.onclick = function () { var f = document.getElementById("lf-" + b.dataset.lost); if (f) f.classList.toggle("on"); }; });
   host.querySelectorAll("[data-find]").forEach(function (b) {
     b.onclick = function () {
@@ -282,6 +306,169 @@ document.getElementById("zsave").onclick = function () {
   zoneDone();
 };
 document.getElementById("zcancel").onclick = zoneDone;
+
+// ---- the timeline: the overall trail, and each day on its own, from the phone's history (server/WhereHistory.kt).
+// In the app the phone hands the history in (Phone.history, answered to historyIn); the page asks /api/where/history.
+var tl = { id: null, open: false, days: [], sel: "all", pts: [], recent: null, layers: [], dot: null, seq: 0, armed: 0 };
+var histCbs = {};
+function historyIn(token, body) {
+  var cb = histCbs[token]; delete histCbs[token];
+  var d = null; try { d = JSON.parse(body); } catch (e) {}
+  if (cb) cb(d);
+}
+function loadHistory(id, day, cb) {
+  if (window.Phone && Phone.history) { var tk = "h" + (++tl.seq); histCbs[tk] = cb; Phone.history(id, day || "", tk); return; }
+  fetch("/api/where/history?id=" + encodeURIComponent(id) + (day ? "&day=" + encodeURIComponent(day) : ""), { credentials: "same-origin", cache: "no-store" })
+    .then(function (r) { return r.ok ? r.json() : null; }).then(cb).catch(function () { cb(null); });
+}
+function pad2(n) { return (n < 10 ? "0" : "") + n; }
+function dayKey(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+function dayDate(k) { var s = k.split("-"); return new Date(+s[0], +s[1] - 1, +s[2]); }
+function dayName(k) {
+  var now = new Date(), yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  if (k === dayKey(now)) return "Today";
+  if (k === dayKey(yest)) return "Yesterday";
+  return dayDate(k).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+}
+function clockOf(at) { return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+function spanOf(ms) { var m = Math.round(ms / 60000); return m < 60 ? m + " min" : Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : ""); }
+function ll(f) { return [f.lat, f.lon]; }
+/** How far a trail goes, as the phone counts it: a step under 12 m is a still phone wobbling, one over 324 km/h a jump. */
+function trailMetres(p) {
+  var d = 0;
+  for (var i = 1; i < p.length; i++) {
+    var m = metres(p[i - 1], p[i]), s = (p[i].at - p[i - 1].at) / 1000;
+    if (m < 12 || (s > 0 && m / s > 90)) continue;
+    d += m;
+  }
+  return d;
+}
+function tlHue() { var p = places.filter(function (x) { return x.id === tl.id; })[0]; return p ? hue(p.name) : 210; }
+function tlStats(big, small) { document.getElementById("tl-stats").innerHTML = "<strong>" + esc(big) + "</strong>" + esc(small); }
+function tlClear() {
+  tl.layers.forEach(function (l) { map.removeLayer(l); });
+  tl.layers = [];
+  if (tl.dot) { map.removeLayer(tl.dot); tl.dot = null; }
+  document.getElementById("tl-scrub-wrap").hidden = true;
+}
+
+function openTimeline(id) {
+  var p = places.filter(function (x) { return x.id === id; })[0];
+  if (!p) return;
+  tl.id = id; tl.open = true; tl.days = []; tl.sel = "all"; tl.pts = [];
+  // A place the phone keeps no history for (another phone's) still has the trail it was told.
+  tl.recent = p.trail && p.trail.length > 1 ? p.trail : null;
+  tlClear();
+  document.getElementById("sheet").hidden = true;
+  document.getElementById("tl").hidden = false;
+  document.getElementById("tl-who").textContent = p.name;
+  tlStats("Loading…", "");
+  drawDays();
+  loadHistory(id, "", function (d) {
+    if (!tl.open || tl.id !== id) return;
+    tl.days = d && d.days ? d.days : [];
+    selectDay(tl.days.length ? "all" : tl.recent ? "recent" : "all");
+  });
+}
+
+function drawDays() {
+  var host = document.getElementById("tl-days"), n = tl.days.length, html = "";
+  var first = n ? "all" : tl.recent ? "recent" : "";
+  if (first) html += '<button type="button" class="tl-day' + (tl.sel === first ? " on" : "") + '" data-d="' + first + '"><b>' + (n ? "Overall" : "Recent") + "</b><span>" +
+    (n ? n + (n === 1 ? " day" : " days") : "last 2 days") + "</span></button>";
+  tl.days.slice().reverse().forEach(function (d) {
+    var k = d.day, nm = dayName(k), today = nm === "Today" || nm === "Yesterday";
+    var top = today ? nm : dayDate(k).toLocaleDateString([], { day: "numeric", month: "short" });
+    var sub = (today ? "" : dayDate(k).toLocaleDateString([], { weekday: "short" }) + " · ") + far(d.metres);
+    html += '<button type="button" class="tl-day' + (tl.sel === k ? " on" : "") + '" data-d="' + esc(k) + '"><b>' + esc(top) + "</b><span>" + esc(sub) + "</span></button>";
+  });
+  host.innerHTML = html;
+  host.querySelectorAll(".tl-day").forEach(function (b) { b.onclick = function () { selectDay(b.dataset.d); }; });
+  var on = host.querySelector(".on");
+  if (on) host.scrollLeft = on.offsetLeft - host.clientWidth / 2 + on.clientWidth / 2;
+}
+
+function selectDay(sel) {
+  tl.sel = sel; tl.pts = [];
+  tlClear();
+  drawDays();
+  if (sel === "recent") { tl.pts = tl.recent || []; showDay(); return; }
+  tlStats("Loading…", "");
+  loadHistory(tl.id, sel, function (d) {
+    if (!tl.open || tl.sel !== sel) return;
+    tl.pts = d && d.points ? d.points : [];
+    if (sel === "all") showAll(); else showDay();
+  });
+}
+
+/** Every kept day at once: a line for each, the older ones fainter and thinner, the newest bold. */
+function showAll() {
+  var pts = tl.pts;
+  if (pts.length < 2) { tlStats("No history yet", "From now on, where it goes is kept here, a day at a time."); return; }
+  var by = {}, order = [];
+  pts.forEach(function (f) { var k = dayKey(new Date(f.at)); if (!by[k]) { by[k] = []; order.push(k); } by[k].push(f); });
+  var n = order.length, h = tlHue(), box = L.latLngBounds([]);
+  order.forEach(function (k, i) {
+    if (by[k].length < 2) return;
+    var t = n === 1 ? 1 : i / (n - 1);
+    var pl = L.polyline(by[k].map(ll), { color: "hsl(" + h + " 70% " + Math.round(68 - 20 * t) + "%)", weight: 3 + t * 2, opacity: .3 + .6 * t, lineJoin: "round" }).addTo(map);
+    tl.layers.push(pl);
+    box.extend(pl.getBounds());
+  });
+  if (box.isValid()) map.fitBounds(box, { padding: [60, 60], maxZoom: 16 });
+  var total = tl.days.reduce(function (s, d) { return s + d.metres; }, 0);
+  tlStats(far(total), tl.days.length + (tl.days.length === 1 ? " day" : " days") + ", " + dayName(tl.days[0].day) + " to " + dayName(tl.days[tl.days.length - 1].day) + ". Tap a day to see it on its own.");
+}
+
+/** One day: its route with where it began (green) and ended (red), and a slider that moves along it. */
+function showDay() {
+  var pts = tl.pts, key = tl.sel;
+  if (pts.length < 2) { tlStats("No trail", key === "recent" ? "It has not moved yet." : "Nothing was recorded this day."); return; }
+  var line = L.polyline(pts.map(ll), { color: "hsl(" + tlHue() + " 70% 50%)", weight: 5, opacity: .9, lineJoin: "round" }).addTo(map);
+  var a = pts[0], z = pts[pts.length - 1];
+  tl.layers.push(line);
+  tl.layers.push(L.circleMarker(ll(a), { radius: 7, color: "#fff", weight: 3, fillColor: "#34C759", fillOpacity: 1 }).addTo(map));
+  tl.layers.push(L.circleMarker(ll(z), { radius: 7, color: "#fff", weight: 3, fillColor: "#FF3B30", fillOpacity: 1 }).addTo(map));
+  tl.dot = L.circleMarker(ll(a), { radius: 9, color: "#fff", weight: 3, fillColor: "#007AFF", fillOpacity: 1 }).addTo(map);
+  map.fitBounds(line.getBounds(), { padding: [60, 60], maxZoom: 18 });
+  var sum = tl.days.filter(function (d) { return d.day === key; })[0];
+  tlStats(far(sum ? sum.metres : trailMetres(pts)),
+    (key === "recent" ? "Recent trail" : dayName(key)) + " · " + clockOf(a.at) + " – " + clockOf(z.at) + " (" + spanOf(z.at - a.at) + ") · " + pts.length + " positions");
+  var sl = document.getElementById("tl-scrub");
+  sl.max = pts.length - 1; sl.value = 0;
+  document.getElementById("tl-scrub-wrap").hidden = false;
+  scrubTo(0);
+}
+function scrubTo(i) {
+  var pts = tl.pts, f = pts[i];
+  if (!f || !tl.dot) return;
+  tl.dot.setLatLng(ll(f));
+  if (!map.getBounds().contains(ll(f))) map.panTo(ll(f));
+  var v = f.speed != null ? f.speed * 3.6 : i > 0 && f.at > pts[i - 1].at ? metres(pts[i - 1], f) / ((f.at - pts[i - 1].at) / 1000) * 3.6 : 0;
+  document.getElementById("tl-now").textContent = clockOf(f.at) + (v >= 1 ? " · " + Math.round(v) + " km/h" : " · stopped");
+}
+document.getElementById("tl-scrub").oninput = function () { scrubTo(+this.value); };
+
+function closeTimeline() {
+  tl.open = false; tl.pts = [];
+  tlClear();
+  document.getElementById("tl").hidden = true;
+  document.getElementById("sheet").hidden = false;
+  list_();
+  fit();
+}
+document.getElementById("tl-back").onclick = closeTimeline;
+document.getElementById("tl-clear").onclick = function () {
+  var b = this;
+  // Two taps: a dialog is not there in the app's view of this page.
+  if (!tl.armed) { b.textContent = "Tap again to clear it"; tl.armed = setTimeout(function () { tl.armed = 0; b.textContent = "Clear history"; }, 4000); return; }
+  clearTimeout(tl.armed); tl.armed = 0; b.textContent = "Clear history";
+  if (window.Phone && Phone.clearHistory) Phone.clearHistory(tl.id);
+  else fetch("/api/where/history/clear", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: tl.id }) }).catch(function () {});
+  tl.days = []; tl.recent = null; tl.pts = [];
+  tlClear(); drawDays();
+  tlStats("No history yet", "From now on, where it goes is kept here, a day at a time.");
+};
 
 var showTrail = false;
 function choose(id, fly) {

@@ -99,6 +99,17 @@ class Where(
 
     private val kept = runCatching { json.decodeFromString<Kept>(file.readText()) }.getOrDefault(Kept())
 
+    /** Every day's positions, for the map's timeline (WhereHistory): the overall trail and each day on its own. */
+    private val history = WhereHistory(File(app.filesDir, "where-history"))
+    init {
+        scope.launch {
+            history.prune()
+            // The two days the phone already holds are the first of it.
+            history.seed("self", kept.self)
+            kept.others.filter { it.kind == "laptop" && it.via.isEmpty() }.forEach { history.seed(it.id, it.trail) }
+        }
+    }
+
     private val _self = MutableStateFlow(kept.self)
     /** This phone's trail, the newest last. */
     val selfTrail: StateFlow<List<Fix>> = _self.asStateFlow()
@@ -202,6 +213,7 @@ class Where(
         val moved = last == null || metres(last, fix) >= TRAIL_METRES || fix.at - last.at >= TRAIL_MS
         val next = (if (moved) trail + fix else trail.dropLast(1) + fix).filter { fix.at - it.at <= KEEP_MS }.takeLast(KEEP_POINTS)
         _self.value = next
+        if (moved) history.record("self", fix)
         checkZones("self", peers.deviceName(), fix)
         changed()
         share(fix)
@@ -215,6 +227,7 @@ class Where(
         val last = trail.lastOrNull()
         val moved = last == null || metres(last, fix) >= TRAIL_METRES || fix.at - last.at >= TRAIL_MS
         val next = (if (moved) trail + fix else trail.dropLast(1) + fix).filter { fix.at - it.at <= KEEP_MS }.takeLast(KEEP_POINTS)
+        if (moved) history.record(id, fix)
         _others.value = _others.value + (id to Place(id, name, "laptop", fix, next))
         checkZones(id, name, fix)
         changed()
@@ -333,8 +346,15 @@ class Where(
     /** A phone or laptop taken off the map. */
     fun forget(id: String) {
         _others.value = _others.value - id
+        history.clear(id)
         changed()
     }
+
+    /** The timeline's data for a place ("self" for this phone): its days, one day, or "all" of them, as JSON. */
+    fun historyJson(id: String, day: String?): String = history.body(id, day)
+
+    /** All of a place's history, gone. */
+    fun historyClear(id: String) = history.clear(id)
 
     private fun changed() {
         scope.launch { runCatching { file.writeText(json.encodeToString(Kept(_self.value, _others.value.values.toList(), _zones.value, HashMap(inside)))) } }

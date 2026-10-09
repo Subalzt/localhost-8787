@@ -6,6 +6,7 @@ plugins {
 }
 
 android {
+    testOptions { unitTests.isReturnDefaultValues = true }
     namespace = "dev.periy.bridge"
     compileSdk = 36
 
@@ -83,6 +84,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     implementation(libs.androidx.core.ktx)

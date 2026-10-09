@@ -795,9 +795,15 @@ Linux and macOS helpers all answer.
 ### Where your phones and laptops are
 
 **Devices → Where they are** on the phone, and **Map** on the page: every phone and laptop on a map,
-each with a circle as wide as its position is sure, how long ago it was seen, its battery, and its
-trail over the last two days; tap one for its exact position, height and speed, directions, and the
-trail. Satellite at a tap.
+each with a circle as wide as its position is sure, how long ago it was seen and its battery; tap one
+for its exact position, height and speed, directions, and its **Timeline**. Satellite at a tap.
+
+- **Timeline**: a strip of days, as Google's has: **Overall** draws every kept day at once (the older
+  ones fainter, the newest bold) with the distance in all, and each day on its own shows its route
+  (green where it began, red where it ended), how far, from when to when and how many positions, with
+  a slider that moves a dot along it and says the time and speed there. The phone keeps 90 days of
+  each of its own phones' and laptops' positions, one small file a day, only on the phone (not in any
+  backup); **Clear history** empties one device's, and taking a device off the map does too.
 
 - **This phone**: Android's own fused location (GPS, Wi-Fi and cells together, no Google services),
   high accuracy, every 20 s or 5 m while it moves, kept going in the background by the app's service

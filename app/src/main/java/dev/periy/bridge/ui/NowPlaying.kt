@@ -566,7 +566,7 @@ fun NowPlaying(
     // A seek being dragged on the waveform: where it would go. Read only by the label, so a
     // scrub redraws the label and nothing else.
     val seek = remember { mutableStateOf<Long?>(null) }
-    // A seek being dragged along the mini player's foot: how far through the song, or null.
+    // A seek being dragged along the mini player's top edge: how far through the song, or null.
     val miniSeek = remember { mutableStateOf<Float?>(null) }
     // The sound controls, opened from the bottom row.
     var sound by remember { mutableStateOf(false) }
@@ -774,7 +774,8 @@ fun NowPlaying(
                     val r = panelRect(g, t)
                     val l = r.left + g.miniRadius; val w = r.width - g.miniRadius * 2
                     val th = g.dp(3f)
-                    val cy = r.bottom - g.dp(6f)
+                    // Along the card's top edge, as a phone's mini player has it (it was along the foot).
+                    val cy = r.top + g.dp(6f)
                     drawRoundRect(nc.onSurface.copy(alpha = 0.14f * a), Offset(l, cy - th / 2), Size(w, th), CornerRadius(th / 2))
                     drawRoundRect(nc.onSurface.copy(alpha = 0.85f * a), Offset(l, cy - th / 2), Size(w * f, th), CornerRadius(th / 2))
                     val bw = g.dp(if (dragging != null) 4f else 3f)
@@ -792,7 +793,7 @@ fun NowPlaying(
                     }
                 },
             )
-            // Where a finger takes the timeline: a strip along the mini player's foot. A drag along
+            // Where a finger takes the timeline: a strip along the mini player's top edge. A drag along
             // it moves through the song (let go, and it goes there); a tap past the cover goes
             // straight there. A drag up from it still opens the player. Out of the way otherwise.
             Box(
@@ -801,7 +802,7 @@ fun NowPlaying(
                         val t = Terms(motion.p, motion.bounceUp)
                         val g = geo.value
                         if (t.cp > 0.02f || t.under > 0f) floatArrayOf(0f, g.h * 3f, 1f, 0f)
-                        else { val r = panelRect(g, t); floatArrayOf(r.left, r.bottom - g.dp(MINI_SCRUB_DP), 1f, 1f) }
+                        else { val r = panelRect(g, t); floatArrayOf(r.left, r.top, 1f, 1f) }
                     }
                     .pointerInput(Unit) { miniScrub(geo, motion, miniSeek, { live.value.let { it.durationMs.takeIf { d -> d > 0 } ?: it.current?.durationMs ?: 0L } }, { ms -> player.seekTo(ms) }, { motion.haptic() }) },
             )
@@ -1103,7 +1104,7 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.playerGe
     }
 }
 
-/** How tall the strip along the mini player's foot that takes the timeline is. */
+/** How tall the strip along the mini player's top edge that takes the timeline is. */
 private const val MINI_SCRUB_DP = 18f
 
 /**

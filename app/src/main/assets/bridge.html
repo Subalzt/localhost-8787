@@ -1644,8 +1644,8 @@
   #player .pl-btn.play:hover { transform: none; filter: brightness(1.05); }
   #player .pl-btn.play:active { transform: scale(.97); }
   #player .pl-btn.play svg { width: 22px; height: 22px; }
-  /* The progress: a hairline along the foot, from one round corner to the other; it only shows. */
-  #player #pl-seek { position: absolute; left: 20px; right: 20px; top: auto; bottom: 0; width: auto; height: 2.5px; margin: 0; padding: 0;
+  /* The progress: a hairline along the top edge (as a phone's mini player has it), from one round corner to the other; it only shows. */
+  #player #pl-seek { position: absolute; left: 20px; right: 20px; top: 0; bottom: auto; width: auto; height: 2.5px; margin: 0; padding: 0;
     border-radius: 2px; pointer-events: none; transition: none;
     background: linear-gradient(to right, var(--nm-mini-fill, var(--txt)) var(--p, 0%), var(--nm-mini-track, var(--surface-3)) var(--p, 0%)); }
   #player #pl-seek::-webkit-slider-thumb { opacity: 0; width: 0; height: 0; box-shadow: none; }
