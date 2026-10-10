@@ -176,9 +176,9 @@ the one that comes with scrcpy.
 
 **Path:** browser → the helper on the laptop → whichever way is fastest → phone.
 
-On Windows, double-click **blazeit-pc.bat**; on Linux, run `python3 blazeit-linux.py` in a
-terminal; on a Mac, `python3 blazeit-mac.py` in Terminal. The page's Settings offers the one for
-the computer it is open on, and nothing is installed. The helper finds the phone by itself, over
+On Windows, double-click **localhost8787-helper.exe** (or its older form, **blazeit-pc.bat**: use one,
+not both); on Linux, run `python3 blazeit-linux.py` in a terminal; on a Mac, `python3 blazeit-mac.py`
+in Terminal. The page's Settings offers the one for the computer it is open on, and nothing is installed. The helper finds the phone by itself, over
 the cable, the hotspot, the direct link, Wi-Fi, USB debugging, and from far away over the tunnel
 (section 4), and moves to a faster way the moment one appears and back when it goes. The page stays
 at `http://localhost:8787` whichever it is, so bookmarks and open tabs never change. Starting it
@@ -963,7 +963,7 @@ or purple. **Light, dark or automatic** sits underneath.
    notifications (and music, if you want the Music tab).
 3. Flip the switch on **Home** and open the address it shows on the laptop. Tap **Allow**.
 4. For full speed and the extras, get the laptop helper from the page's **Settings** and run it:
-   **blazeit-pc.bat** on Windows, **blazeit-linux.py** on Linux (`python3 blazeit-linux.py`),
+   **localhost8787-helper.exe** on Windows, **blazeit-linux.py** on Linux (`python3 blazeit-linux.py`),
    **blazeit-mac.py** on a Mac (`python3 blazeit-mac.py`). Other computers need only the browser.
 5. For the most speed, plug in a USB-C cable and turn on USB tethering, or use the hotspot.
 6. For from anywhere: the helper does it by itself once paired. For a browser with nothing
