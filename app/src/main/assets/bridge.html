@@ -10500,6 +10500,9 @@ async function siteLogin() {
 async function siteHop() {
   var d; try { d = await (await fetch("/api/site", { credentials: "same-origin", cache: "no-store" })).json(); } catch (e) { return; }
   if (!d) return;
+  // The laptop helper running on this very computer is the best place there is: it reaches the phone the
+  // fastest way (the cable, the hotspot, the same Wi-Fi) or, from far away, through the phone's own tunnel.
+  if (await helperHop()) return;
   // Came over the internet from the phone's Wi-Fi: first see that the Wi-Fi way answers.
   if (d.near && d.lan && location.hostname !== d.lan) {
     var base = "https://" + d.lan + ":" + location.port, ctl = new AbortController();
@@ -10526,7 +10529,9 @@ async function plainHop(url) {
   } catch (e) {}
   try { localStorage.setItem("blazeit.plainHop", String(Date.now())); } catch (e) {}
   // assign, not replace: if the plain address does not open, Back comes here, and this stays.
-  location.assign(url + "/" + (code ? "#handoff=" + code : ""));
+  // "#signin", not "#handoff": that one is the phone's music going to a laptop (handoffClaim), which
+  // takes the address first and emptied it, so the sign-in never arrived and the plain address asked again.
+  location.assign(url + "/" + (code ? "#signin=" + code : ""));
 }
 
 /** Moved to the plain address a moment ago and came back: it did not open, so stay. */
@@ -10535,17 +10540,67 @@ function plainHopFailed() {
   return Date.now() - at < 120000;
 }
 
-/** Arrived from the website with a sign-in to take over. */
-async function takeHandoff() {
-  var m = /[#&]handoff=([\w-]+)/.exec(location.hash);
-  if (!m) return;
-  history.replaceState(null, "", location.pathname + location.search);
+/**
+ * Whether something answers on this computer's own port (the laptop helper serves the page at
+ * localhost:8787, or 8797 or 8807 when that one is taken). Only that it answers: the answer itself is
+ * not readable from another site, so which phone it is for is checked on arrival (takeHandoff).
+ */
+function helperProbe(port) {
+  return new Promise(function (done) {
+    var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 1200);
+    fetch("http://localhost:" + port + "/api/ping", { mode: "no-cors", cache: "no-store", signal: ctl.signal })
+      .then(function () { clearTimeout(timer); done(port); }, function () { clearTimeout(timer); done(0); });
+  });
+}
+
+/**
+ * Through the website on a computer that is running the laptop helper: move to the helper's page
+ * (http://localhost:8787), signed in by a one-time code as the plain address is, with the phone's id so
+ * the other end can tell it is the same phone. Moves like plainHop does, so Back returns here and
+ * this stays for two minutes if it did not open. True when it moved.
+ */
+async function helperHop() {
+  if (helperHopFailed() || !window.AbortController) return false;
+  var ports = await Promise.all([8787, 8797, 8807].map(helperProbe));
+  var port = ports.filter(Boolean)[0];
+  if (!port) return false;
+  var id = "", code = "";
+  try { id = (await (await fetch("/api/ping", { cache: "no-store" })).json()).id || ""; } catch (e) {}
   try {
-    await fetch("/api/site/handoff/use", {
-      method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: m[1] }),
-    });
+    var r = await fetch("/api/site/handoff", { method: "POST", credentials: "same-origin" });
+    if (r.ok) code = (await r.json()).code || "";
   } catch (e) {}
+  try { localStorage.setItem("blazeit.helperHop", String(Date.now())); } catch (e) {}
+  location.assign("http://localhost:" + port + "/#" + (code ? "signin=" + code : "") + (id ? (code ? "&" : "") + "p=" + id : ""));
+  return true;
+}
+
+/** Moved to the helper's page a moment ago and came back: it did not open, or it is another phone's, so stay. */
+function helperHopFailed() {
+  var at = 0; try { at = +localStorage.getItem("blazeit.helperHop") || 0; } catch (e) {}
+  return Date.now() - at < 120000;
+}
+
+/** Arrived from the website with a sign-in to take over (#signin=CODE, and the phone's id as p). */
+async function takeHandoff() {
+  var m = /[#&]signin=([\w-]+)/.exec(location.hash);
+  var want = (/[#&]p=([\w-]+)/.exec(location.hash) || [])[1] || "";
+  if (!m && !want) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  if (m) {
+    try {
+      await fetch("/api/site/handoff/use", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: m[1] }),
+      });
+    } catch (e) {}
+  }
+  // Sent here by the website: the helper on this computer may be for another phone (two phones, two
+  // helpers), in which case this is not the phone that sent it, and Back is the website again.
+  if (want) {
+    var id = ""; try { id = (await (await fetch("/api/ping", { cache: "no-store" })).json()).id || ""; } catch (e) {}
+    if (id && id !== want && history.length > 1) history.back();
+  }
 }
 
 // ------------------------------------------------------------------ the redesign's sidebar and Ctrl K

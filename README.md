@@ -282,6 +282,12 @@ network and 60 an hour). [How it works](docs/website.md).
   its address on that side, which works there and from the internet alike.
 - **At home** the website moves itself to `lan.yourname.v6.navy`, the phone's Wi-Fi address, in
   the same certificate, instead of going out to the internet and back.
+- **With the helper running on the computer**, the website moves to the helper's page (`http://localhost:8787`)
+  first, signed in by a one-time code: the helper reaches the phone the fastest way there is (the cable,
+  its hotspot, the same Wi-Fi, or from far away its tunnel), and nothing needs a certificate. The page
+  finds the helper by asking `localhost` for its own port (8787, 8797 or 8807) and, on arriving, checks it
+  is this phone's helper (with two phones and two helpers, the other one sends it back). If it does not
+  open, Back returns to the website, which stays for two minutes.
 - **Near the phone** (its hotspot, the cable, its Wi-Fi) the website moves to the phone's plain
   address there, the old `http://IP:8787`, still signed in: a one-time code carries the sign-in
   over, so the phone does not ask again. If that address does not open, Back returns to the website,
