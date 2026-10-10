@@ -172,10 +172,20 @@ class BridgeServer(
     /** Songs made smaller for the internet (CD-quality FLAC or AAC), kept in the cache. */
     private val transcoder by lazy { dev.periy.bridge.music.Transcoder(ctx, music) }
 
-    /** The page, gzipped once (it only changes with the app). */
+    /** What the page is, to itself: a short id of the page as it ships, put into it as it is served. */
+    private val pageId: String by lazy {
+        java.util.zip.CRC32().apply { update(ctx.assets.open("bridge.html").use { it.readBytes() }) }.value.toString(16)
+    }
+
+    /** The page with its own id in it (it only changes with the app): a page left open asks /api/page-id and finds out when it is old. */
+    private val pageBytes: ByteArray by lazy {
+        String(ctx.assets.open("bridge.html").use { it.readBytes() }, Charsets.UTF_8).replace("__PAGE_ID__", pageId).toByteArray(Charsets.UTF_8)
+    }
+
+    /** The page, gzipped once. */
     private val pageGzip: ByteArray by lazy {
         val out = java.io.ByteArrayOutputStream()
-        java.util.zip.GZIPOutputStream(out).use { gz -> ctx.assets.open("bridge.html").use { it.copyTo(gz) } }
+        java.util.zip.GZIPOutputStream(out).use { gz -> gz.write(pageBytes) }
         out.toByteArray()
     }
 
@@ -2463,8 +2473,13 @@ class BridgeServer(
                 call.response.header(HttpHeaders.ContentEncoding, "gzip")
                 call.respondBytes(pageGzip, ContentType.Text.Html.withCharset(Charsets.UTF_8))
             } else {
-                call.respondBytes(ctx.assets.open("bridge.html").use { it.readBytes() }, ContentType.Text.Html.withCharset(Charsets.UTF_8))
+                call.respondBytes(pageBytes, ContentType.Text.Html.withCharset(Charsets.UTF_8))
             }
+        }
+        // Which page this app serves now, for a page left open to compare with its own (nothing private in it).
+        get("/api/page-id") {
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respondText("{\"id\":\"$pageId\"}", ContentType.Application.Json)
         }
         get("/favicon.ico") { call.respond(HttpStatusCode.NoContent) }
         // Lexend Deca (SIL OFL 1.1), the typeface of the page's player, as Namida is set in it.
@@ -3255,7 +3270,7 @@ class BridgeServer(
         const val BENCH_MAX = 4L * 1024 * 1024 * 1024
 
         // map.html holds no positions: the app hands them in, the page asks /api/where (paired) for them.
-        val PUBLIC_PATHS = setOf("/", "/api/ping", "/favicon.ico", "/map.html")
+        val PUBLIC_PATHS = setOf("/", "/api/ping", "/api/page-id", "/favicon.ico", "/map.html")
 
         /** The page's font files: Lexend Deca, by script subset and weight. */
         val FONT_FILE = Regex("""lexend-deca-(latin|latin-ext)-(400|500|600|700)-normal\.woff2""")

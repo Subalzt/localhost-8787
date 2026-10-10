@@ -1788,8 +1788,13 @@
      corner and a play button in the other; its words sized to the card. */
   .nml-albums { display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); row-gap: 8px; padding: 8px 4px 0; }
   .handoff-go { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 90; border: 0; border-radius: 999px;
-    padding: 14px 22px; font: inherit; font-size: 15px; font-weight: 600; background: var(--accent); color: #fff; cursor: pointer;
+    padding: 14px 22px; font: inherit; font-size: 15px; font-weight: 600; background: var(--accent); color: var(--on-accent); cursor: pointer;
     box-shadow: 0 10px 30px rgba(0,0,0,.3); max-width: calc(100vw - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The page is older than the app on the phone: said once, over the player, until it is reloaded. */
+  .fresh-bar { position: fixed; left: 50%; bottom: calc(var(--safe-b, 0px) + 96px); transform: translateX(-50%); z-index: 95; display: flex;
+    align-items: center; gap: 14px; padding: 8px 8px 8px 20px; border-radius: 999px; background: var(--surface); color: var(--txt);
+    box-shadow: var(--float-shadow); font-size: 14px; font-weight: 500; width: max-content; max-width: calc(100vw - 32px); white-space: nowrap; }
+  .fresh-bar button { border: 0; border-radius: 999px; padding: 9px 16px; font: inherit; font-weight: 600; background: var(--accent); color: var(--on-accent); cursor: pointer; }
   @media (max-width: 600px) { .nml-albums { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   .nc { padding: 0 4px; container-type: inline-size; }
   .nc-card { width: 100%; aspect-ratio: .75; display: flex; flex-direction: column; padding: 0; border: 0; border-radius: 12px; overflow: hidden; cursor: pointer;
@@ -5816,6 +5821,7 @@ function connectEvents() {
     $("hero-state").textContent = "Connected"; $("hero-dot").classList.add("on");
   }
   events.addEventListener("open", live);
+  events.addEventListener("open", function () { pageFresh(); });
   events.addEventListener("ping", live);
   events.addEventListener("error", function () {
     $("conn").textContent = "Reconnecting"; $("dot").classList.remove("on");
@@ -10818,6 +10824,63 @@ window.addEventListener("keydown", function (e) {
     if (b && !b.hidden) cmdkClose(); else cmdkOpen();
   }
 }, true);
+
+// ------------------------------------------------------------------ a page left open meets a newer app
+//
+// The app puts the page's own id into it (below) and answers /api/page-id with the id it has now. A tab left
+// open across an update, or one a phone's browser brought back from memory without asking again, would
+// otherwise stay the old page for good, talking to a new app. It asks when it reconnects, comes to the
+// front, or every ten minutes; and when the ids differ it reloads at once if nothing would be lost (no song
+// playing, nothing sending, no call), else says so once and waits for the tap.
+
+var PAGE_ID = "__PAGE_ID__";
+var freshness = { at: 0, bar: null };
+
+function pageBusy() {
+  var audio = $("audio");
+  return (audio && !audio.paused) || !!callNow || transfers.some(function (r) { return r.state === "active" || r.state === "queued"; });
+}
+
+async function pageFresh() {
+  // The working copy served without the app has no id of its own: nothing to compare.
+  if (!/^[0-9a-f]+$/.test(PAGE_ID) || Date.now() - freshness.at < 15000) return;
+  freshness.at = Date.now();
+  var id = "";
+  try {
+    var r = await fetch("/api/page-id", { cache: "no-store" });
+    if (r.ok) id = (await r.json()).id || "";
+  } catch (e) { return; }
+  if (!id || id === PAGE_ID) return;
+  var last = 0; try { last = +sessionStorage.getItem("blazeit.reloaded") || 0; } catch (e) {}
+  // Reloaded a minute ago and still old: something in between keeps the old page, so it is said, not looped.
+  if (!pageBusy() && Date.now() - last > 60000) {
+    try { sessionStorage.setItem("blazeit.reloaded", String(Date.now())); } catch (e) {}
+    location.reload();
+    return;
+  }
+  if (freshness.bar) return;
+  var bar = document.createElement("div");
+  bar.className = "fresh-bar";
+  bar.setAttribute("role", "status");
+  var words = document.createElement("span");
+  words.textContent = "A newer version is ready";
+  var go = document.createElement("button");
+  go.type = "button";
+  go.textContent = "Reload";
+  go.addEventListener("click", function () {
+    try { sessionStorage.setItem("blazeit.reloaded", String(Date.now())); } catch (e) {}
+    // A fresh address if the browser insists on its copy: the id is part of it.
+    location.href = location.pathname + "?v=" + encodeURIComponent(id) + location.hash;
+  });
+  bar.appendChild(words);
+  bar.appendChild(go);
+  document.body.appendChild(bar);
+  freshness.bar = bar;
+}
+
+document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") pageFresh(); });
+window.addEventListener("pageshow", function (e) { if (e.persisted) { freshness.at = 0; pageFresh(); } });
+setInterval(pageFresh, 600000);
 
 (async function boot() {
   if (location.port === "8443") { siteMode = true; siteHop(); }
