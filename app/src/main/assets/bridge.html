@@ -997,7 +997,7 @@
     .set-row.sr-block > .seg { margin-left: 0; }
     /* The words take what is left beside a button or a value and wrap, so Download, a pill or a value stays
        at the right of its row instead of dropping below the words. */
-    .set-row > .sr-text:has(+ .sr-action), .set-row > .sr-text:has(+ .ip-pill), .set-row > .sr-text:has(+ .sr-value) { flex: 1 1 0; }
+    .set-row > .sr-text:has(+ .sr-action), .set-row > .sr-text:has(+ .ip-pill), .set-row > .sr-text:has(+ .sr-value), .set-row > .sr-text:last-child { flex: 1 1 0; }
     /* The colours wrap onto a second line rather than run off the card. */
     .set-row .swatches { flex-wrap: wrap; row-gap: 10px; }
   }
@@ -2967,14 +2967,14 @@
     <div class="set-group">
       <div class="set-row">
         <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V16h-15V6.5a1 1 0 0 1 1-1Z"/><path d="M2.5 18.5h19"/></svg></span>
-        <div class="sr-text"><b id="helper-file">blazeit-pc.bat</b><span id="helper-state"></span></div>
-        <a class="sr-action" id="helper-dl" href="/blazeit-pc.bat" download="blazeit-pc.bat">Download</a>
+        <div class="sr-text"><b id="helper-file">Helper for Windows</b><span id="helper-state"></span></div>
+        <a class="sr-action" id="helper-dl" href="/localhost8787-helper.exe" download="localhost8787-helper.exe">Download</a>
       </div>
-      <div class="set-row sr-note" id="helper-note">Full speed, the fastest link, and the phone as a trackpad. Nothing is installed; close its window to stop it.</div>
+      <div class="set-row sr-note" id="helper-note">One small program, nothing installed: full speed, the fastest link, the clipboard and the phone as a trackpad. Close its window to stop it.</div>
       <div class="set-row" id="helper-rs-row" hidden>
         <span class="sq purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V16h-15V6.5a1 1 0 0 1 1-1Z"/><path d="M2.5 18.5h19"/></svg></span>
-        <div class="sr-text"><b>localhost8787-helper.exe</b><span>The same helper in one small program (new): close the .bat one first</span></div>
-        <a class="sr-action" href="/localhost8787-helper.exe" download="localhost8787-helper.exe">Download</a>
+        <div class="sr-text"><b>Windows script</b><span>The older form of the same helper (a .bat file), if the program will not run here. Use one of the two, not both</span></div>
+        <a class="sr-action" href="/blazeit-pc.bat" download="blazeit-pc.bat">Download</a>
       </div>
       <div class="set-row" id="link-row" hidden>
         <span class="sq blue" id="link-icon"></span>
@@ -5726,11 +5726,22 @@ var HELPER_OS = /Android|iPhone|iPad/.test(navigator.userAgent) || (/Macintosh/.
   /Macintosh|Mac OS X/.test(navigator.userAgent) ? "mac" : /Linux|X11|CrOS/.test(navigator.userAgent) ? "linux" : "";
 
 function renderHelperState() {
-  // Windows also has the Rust helper, one program that does what the .bat does.
-  $("helper-rs-row").hidden = !!HELPER_OS || !/Windows/.test(navigator.userAgent);
+  // Windows gets the program (the .exe), with the older .bat under it; a Mac or Linux gets its Python file;
+  // a phone's or tablet's browser has no helper to get, and says where to get it.
+  var win = !HELPER_OS && /Windows/.test(navigator.userAgent), other = !HELPER_OS && !win;
+  $("helper-rs-row").hidden = !win;
+  $("helper-dl").hidden = other;
+  if (win) {
+    $("helper-file").textContent = "Helper for Windows";
+    $("helper-dl").href = "/localhost8787-helper.exe";
+    $("helper-dl").setAttribute("download", "localhost8787-helper.exe");
+  } else if (other) {
+    $("helper-file").textContent = "Laptop helper";
+    $("helper-note").textContent = "Open this page on your computer to get the helper. It finds the fastest way to the phone and adds the clipboard, the trackpad and a second screen.";
+  }
   if (HELPER_OS) {
     var file = "blazeit-" + HELPER_OS + ".py";
-    $("helper-file").textContent = file;
+    $("helper-file").textContent = "Helper for " + (HELPER_OS === "mac" ? "Mac" : "Linux");
     $("helper-dl").href = "/" + file;
     $("helper-dl").setAttribute("download", file);
     $("helper-note").textContent = "Full speed, the fastest link, the clipboard, and the phone as a trackpad. " +
@@ -5741,7 +5752,7 @@ function renderHelperState() {
   var el = $("helper-state");
   var local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
   el.className = local ? "ok" : siteMode ? "" : "warn";
-  el.textContent = local
+  el.textContent = other && !local ? "" : local
     ? "Running. Full speed, on the fastest link."
     : siteMode
       ? "Not on this computer. Get it to use the phone as a trackpad and second screen, and to reach it the fastest way: the cable or Wi-Fi when it is close, the internet when it is not. It signs itself in."
