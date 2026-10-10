@@ -742,9 +742,12 @@ class Cameras(
     private val awayAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     /** This phone and the linked phones, each as it stands now (a linked phone asked, a few seconds at most). */
-    suspend fun all(): CamList {
+    suspend fun all(quick: Boolean = false): CamList {
         val me = CamDto("self", peers.deviceName(), true, withBattery(_state.value))
-        val others = peers.peers.value.map { p ->
+        // Quick: this phone at once, the linked ones marked as being checked, so a page draws something while the
+        // slower answer is on its way.
+        val others = if (quick) peers.peers.value.map { p -> CamDto(p.name, p.name, false, null, "Checking…") }
+        else peers.peers.value.map { p ->
             scope.async {
                 val r = askCamera(p)
                 val st = r?.let { runCatching { json.decodeFromString<CamState>(it) }.getOrNull() }

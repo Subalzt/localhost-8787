@@ -2860,7 +2860,7 @@
   <!-- ---------------------------------------------------------- security cameras -->
   <!-- Your phones as cameras (server/Cameras.kt): live, each decoded here; one full screen with its controls. -->
   <section data-panel="cams" hidden>
-    <div class="cams-head"><h2>Cameras</h2><span id="cams-sub"></span></div>
+    <div class="cams-head"><span id="cams-sub"></span></div>
     <div class="cams-grid" id="cams-grid"><p class="empty">Looking for your cameras…</p></div>
   </section>
 
@@ -11865,6 +11865,11 @@ async function camsLoad() {
   if (cams.loading) return;
   cams.loading = true;
   try {
+    // First time here: what is known at once (this phone, the others marked as being checked), then the answer.
+    if (!cams.list.length) {
+      var q = await api("/api/cams?quick=1", { cache: "no-store" });
+      if (q.ok) { cams.list = (await q.json()).cams || []; renderCams(); }
+    }
     var r = await api("/api/cams", { cache: "no-store" });
     if (!r.ok) return;
     var d = await r.json();
@@ -11881,8 +11886,8 @@ function camAgo(at) {
   return s < 60 ? "just now" : s < 3600 ? Math.round(s / 60) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : new Date(at).toLocaleDateString();
 }
 
-function camStatus(st) {
-  if (!st) return "Not reachable now";
+function camStatus(st, why) {
+  if (!st) return why || "Not reachable now";
   if (st.waking) return "Waking it to start the camera…";
   if (st.error) return st.error;
   if (!st.on) return "Camera mode off";
@@ -11917,7 +11922,7 @@ function renderCams() {
     }
     if (host.children[i] !== tile) host.insertBefore(tile, host.children[i] || null);
     tile.querySelector(".cam-info b").textContent = c.name + (c.self ? " (the phone this page is on)" : "");
-    tile.querySelector(".cam-info span").textContent = camStatus(st);
+    tile.querySelector(".cam-info span").textContent = camStatus(st, c.why);
     // The switch: on and off from here, this phone's or a linked one's.
     var info = tile.querySelector(".cam-info"), btn = info.querySelector(".cam-btn");
     if (st && c.kind !== "laptop") {
@@ -12110,7 +12115,7 @@ function camClose() {
 function camFullStatus(c) {
   var f = cams.full, st = c.state || {};
   $("cf-name").textContent = c.name;
-  $("cf-status").textContent = camStatus(c.state);
+  $("cf-status").textContent = camStatus(c.state, c.why);
   if (f.view && f.view.rot !== (st.rotation || 0)) camFullPlay();
   var b = function (label, on, act, cls) { return '<button class="cam-btn' + (on ? "" : " dim") + (cls ? " " + cls : "") + '" type="button" data-act="' + act + '">' + label + '</button>'; };
   // A laptop's webcam: watch and listen only.

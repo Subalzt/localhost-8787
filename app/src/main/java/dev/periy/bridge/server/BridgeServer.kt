@@ -1315,7 +1315,7 @@ class BridgeServer(
         get("/api/cams") {
             call.device() ?: return@get
             call.response.header(HttpHeaders.CacheControl, "no-store")
-            call.respond(cameras().all())
+            call.respond(cameras().all(quick = call.request.queryParameters["quick"] != null))
         }
         get("/api/cams/state") {
             call.device() ?: return@get
