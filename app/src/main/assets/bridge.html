@@ -7481,18 +7481,26 @@ function playCurrent() {
   vizEnsure();
   // Over the internet, first what the phone will send for it (a moment, the first time).
   if (slowLink() && !player.blobs[t.id] && !playCurrent.planned) {
-    planFor(t.id).then(function () {
+    // The phone is asked first (a speed check, then what it will send); a request that stalls must not hold
+    // the song back for good, so it starts with the song as it is after 3.5 s, whatever the answer.
+    var started = false;
+    var go = function () {
+      if (started) return;
+      started = true;
       if (currentTrack() !== t) return;
       playCurrent.planned = true;
       try { playCurrent(); } finally { playCurrent.planned = false; }
-    });
+    };
+    planFor(t.id).then(go, go);
+    setTimeout(go, 3500);
     return;
   }
   var audio = $("audio");
+  player.retried = null;
   // From memory if it was prefetched; otherwise stream it with ranges.
   audio.src = player.blobs[t.id] || streamUrl(t.id);
   var p = audio.play();
-  if (p && p.catch) p.catch(function () {});
+  if (p && p.catch) p.catch(playRefused);
   showPlayer(t);
   markPlaying();
   // Give the current track a head start before pulling the next ones, so prefetching
@@ -7500,6 +7508,20 @@ function playCurrent() {
   clearTimeout(player.prefetchTimer);
   player.prefetchTimer = setTimeout(prefetchAhead, 1500);
   if (slowLink()) setTimeout(warmNext, 3000);
+}
+
+/**
+ * play() was refused. A newer song replacing this one (AbortError) is nothing; the browser holding audio
+ * back until the page is touched (NotAllowedError) is said, where it was silent: the bar says what to do,
+ * and Play starts it, as it always has.
+ */
+var PLAY_HINT = "Tap play to start the music";
+function playRefused(e) {
+  if (!e || e.name === "AbortError") return;
+  if (e.name === "NotAllowedError") {
+    $("pl-sub").textContent = PLAY_HINT;
+    setPlayIcon(false);
+  }
 }
 
 /** Over the internet (the website, a tunnel): a thin link that every byte of the song playing needs. */
@@ -8276,6 +8298,9 @@ function setupPlayer() {
   var seeking = false;
 
   audio.addEventListener("play", function () {
+    // The bar said "Tap play" when the browser held the music back: it is the artist again once it plays.
+    var cur = currentTrack();
+    if (cur && $("pl-sub").textContent === PLAY_HINT) $("pl-sub").textContent = cur.artist;
     setPlayIcon(true); playingChanged(true);
     clearTimeout(player.parkTimer);
     clearTimeout(player.prefetchTimer);
@@ -8286,6 +8311,24 @@ function setupPlayer() {
   audio.addEventListener("error", function () {
     if (player.parked || !audio.getAttribute("src")) return;
     var t = currentTrack();
+    // The network cut the stream (code 2: a Wi-Fi drop, the phone busy for a moment): once more, from where
+    // it was, before the song is called unplayable. Only a file that cannot be decoded or is not supported
+    // (codes 3 and 4) is skipped.
+    if (audio.error && audio.error.code === 2 && t && player.retried !== t.id) {
+      player.retried = t.id;
+      var at = audio.currentTime || 0, src = audio.getAttribute("src");
+      setTimeout(function () {
+        if (currentTrack() !== t) return;
+        audio.src = src;
+        audio.addEventListener("loadedmetadata", function once() {
+          audio.removeEventListener("loadedmetadata", once);
+          try { audio.currentTime = at; } catch (e) {}
+        });
+        var q = audio.play();
+        if (q && q.catch) q.catch(playRefused);
+      }, 800);
+      return;
+    }
     $("pl-sub").textContent = "This browser cannot play " + (t ? (formatBadge(t.mime) || t.mime) : "this file") + " - skipping";
     setTimeout(function () { playNext(true); }, 1500);
   });
