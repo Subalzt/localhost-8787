@@ -197,10 +197,21 @@ function setPlaces(list, allowed, always) {
   list_();
 }
 
+/**
+ * Room to leave when framing: on a narrow screen the sheet lies along the bottom over the map, and what
+ * is framed must sit above it, not under it. On a wide one it is at the side, which the left padding clears.
+ */
+function framePads(pad) {
+  var narrow = window.innerWidth < 760, open = !document.getElementById("sheet").hidden ? document.getElementById("sheet") : (!document.getElementById("tl").hidden ? document.getElementById("tl") : null);
+  var below = narrow && open ? open.offsetHeight + 24 : 0;
+  var left = !narrow && open ? 340 + 16 : 0;
+  return { paddingTopLeft: [pad + left, pad], paddingBottomRight: [pad, pad + below] };
+}
+
 function fit() {
   if (!places.length) return;
-  if (places.length === 1) { map.setView([places[0].fix.lat, places[0].fix.lon], 17); return; }
-  map.fitBounds(L.latLngBounds(places.map(function (p) { return [p.fix.lat, p.fix.lon]; })), { padding: [70, 70], maxZoom: 17 });
+  var pts = places.map(function (p) { return [p.fix.lat, p.fix.lon]; });
+  map.fitBounds(L.latLngBounds(pts), Object.assign(framePads(70), { maxZoom: 17 }));
 }
 document.getElementById("fit").onclick = function () { chosen = null; drawTrail(); list_(); fit(); };
 
@@ -415,7 +426,7 @@ function showAll() {
     tl.layers.push(pl);
     box.extend(pl.getBounds());
   });
-  if (box.isValid()) map.fitBounds(box, { padding: [60, 60], maxZoom: 16 });
+  if (box.isValid()) map.fitBounds(box, Object.assign(framePads(60), { maxZoom: 16 }));
   var total = tl.days.reduce(function (s, d) { return s + d.metres; }, 0);
   tlStats(far(total), tl.days.length + (tl.days.length === 1 ? " day" : " days") + ", " + dayName(tl.days[0].day) + " to " + dayName(tl.days[tl.days.length - 1].day) + ". Tap a day to see it on its own.");
 }
@@ -430,7 +441,7 @@ function showDay() {
   tl.layers.push(L.circleMarker(ll(a), { radius: 7, color: "#fff", weight: 3, fillColor: "#34C759", fillOpacity: 1 }).addTo(map));
   tl.layers.push(L.circleMarker(ll(z), { radius: 7, color: "#fff", weight: 3, fillColor: "#FF3B30", fillOpacity: 1 }).addTo(map));
   tl.dot = L.circleMarker(ll(a), { radius: 9, color: "#fff", weight: 3, fillColor: "#007AFF", fillOpacity: 1 }).addTo(map);
-  map.fitBounds(line.getBounds(), { padding: [60, 60], maxZoom: 18 });
+  map.fitBounds(line.getBounds(), Object.assign(framePads(60), { maxZoom: 18 }));
   var sum = tl.days.filter(function (d) { return d.day === key; })[0];
   tlStats(far(sum ? sum.metres : trailMetres(pts)),
     (key === "recent" ? "Recent trail" : dayName(key)) + " · " + clockOf(a.at) + " – " + clockOf(z.at) + " (" + spanOf(z.at - a.at) + ") · " + pts.length + " positions");
