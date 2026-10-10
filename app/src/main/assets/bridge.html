@@ -993,7 +993,16 @@
   @media (max-width: 700px) {
     .set-row { flex-wrap: wrap; }
     .set-row > .seg { margin-left: 44px; }
+    /* A block of its own (Light or dark) is already indented by its row: no second indent, so it fits. */
+    .set-row.sr-block > .seg { margin-left: 0; }
+    /* The words take what is left beside a button or a value and wrap, so Download, a pill or a value stays
+       at the right of its row instead of dropping below the words. */
+    .set-row > .sr-text:has(+ .sr-action), .set-row > .sr-text:has(+ .ip-pill), .set-row > .sr-text:has(+ .sr-value) { flex: 1 1 0; }
+    /* The colours wrap onto a second line rather than run off the card. */
+    .set-row .swatches { flex-wrap: wrap; row-gap: 10px; }
   }
+  /* Eight colours in one row of a narrow card: a little smaller, closer together. */
+  @media (max-width: 420px) { .set-row .swatches { gap: 6px; } .set-row .swatch { flex-basis: 26px !important; width: 26px !important; height: 26px !important; } }
 
   /* ================================================================ the remodel
      The page drawn like the phone. Motion is quick and physical: the tab pill glides, a page
@@ -1114,13 +1123,16 @@
 
   /* ---------------------------------------------------------------- in a phone's browser */
   @media (max-width: 700px) {
-    /* The tabs stay along the top, all five in one capsule that shares out the width, with the
-       monitor switch beside it; over Home's banner the bar is clear, as on the laptop. */
+    /* The tabs stay along the top in one capsule, with the monitor switch beside it; over Home's banner
+       the bar is clear, as on the laptop. There are eight of them now, more than a phone's width holds,
+       so the capsule slides sideways (the one you are on is kept in view) rather than the names running
+       into each other. */
     :root[data-style="theatre"] .side { top: 0; bottom: auto; left: 0; right: 0; height: auto; gap: 8px;
       padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 12px; }
     :root[data-style="theatre"] .side .logo { display: none; }
-    :root[data-style="theatre"] .tabs { flex: 1 1 auto; min-width: 0; overflow: visible; padding: 4px; }
-    :root[data-style="theatre"] .tabs button { flex: 1 1 0; min-width: 0; justify-content: center; padding: 9px 2px; font-size: 13px; }
+    :root[data-style="theatre"] .tabs { flex: 1 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; padding: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    :root[data-style="theatre"] .tabs::-webkit-scrollbar { display: none; }
+    :root[data-style="theatre"] .tabs button { flex: 0 0 auto; min-width: 0; justify-content: center; padding: 9px 13px; font-size: 13px; white-space: nowrap; }
     :root[data-style="theatre"] .side-foot { flex: 0 0 auto; }
     :root[data-style="theatre"] .side-item { padding: 9px; }
     :root[data-style="theatre"] .main { padding-top: 76px; padding-bottom: calc(var(--player-h, 0px) + 28px); }
@@ -3573,6 +3585,11 @@ function moveTabPill() {
   pill.style.width = on.offsetWidth + "px";
   pill.style.height = on.offsetHeight + "px";
   pill.style.transform = "translate(" + on.offsetLeft + "px," + on.offsetTop + "px)";
+  // Along a phone's width the capsule slides: the tab you are on is brought to the middle of it.
+  if (tabs.scrollWidth > tabs.clientWidth + 1) {
+    var to = Math.max(0, on.offsetLeft - (tabs.clientWidth - on.offsetWidth) / 2);
+    if (tabs.classList.contains("ready") && tabs.scrollTo) tabs.scrollTo({ left: to, behavior: "smooth" }); else tabs.scrollLeft = to;
+  }
   // Placed first without moving, then free to glide.
   if (!tabs.classList.contains("ready")) setTimeout(function () { tabs.classList.add("ready"); }, 60);
 }
