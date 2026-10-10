@@ -2260,15 +2260,22 @@ class BridgeServer(
             val said = withContext(Dispatchers.Main) { Handoff.open(ctx, d) }
             call.respond(ApiResult(d.error.isEmpty() && d.url.isNotEmpty(), said))
         }
-        // A page takes the phone's music to carry on ("latest": whatever was offered last); the phone stops.
+        // A page takes the phone's music to carry on ("latest": whatever was offered last). The phone goes on
+        // playing until that page says it is playing it (below), so a page the browser holds back never leaves
+        // the music heard nowhere.
         post("/api/handoff/claim") {
             call.device() ?: return@post
-            val player = ctx.container.player
-            val m = Handoff.claim(call.request.queryParameters["id"].orEmpty()) {
-                android.os.Handler(android.os.Looper.getMainLooper()).post { player.pause() }
-            }
+            val m = Handoff.claim(call.request.queryParameters["id"].orEmpty())
             if (m == null) call.respond(HttpStatusCode.NotFound, ApiResult(false, "Already taken, or too old"))
             else call.respond(m)
+        }
+        // The page that took the music is playing it: the phone stops.
+        post("/api/handoff/playing") {
+            call.device() ?: return@post
+            val player = ctx.container.player
+            val stop = Handoff.confirm(call.request.queryParameters["id"].orEmpty())
+            if (stop) android.os.Handler(android.os.Looper.getMainLooper()).post { player.pause() }
+            call.respond(ApiResult(stop))
         }
         // A page's music, carried on by the phone's own player from the same moment.
         post("/api/handoff/music") {

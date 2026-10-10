@@ -167,12 +167,32 @@ object Handoff {
         return Control.laptops().isNotEmpty()
     }
 
-    /** A page takes the music offered: it is its to play (once); null when another took it, or it is old. */
-    fun claim(id: String, onClaimed: () -> Unit): MusicHandoff? = synchronized(this) {
+    /** What a page has taken and not yet said it is playing: the offer's id, and when it was taken. */
+    @Volatile private var claimed: Pair<String, Long>? = null
+
+    /**
+     * A page takes the music offered: it is its to play (once); null when another took it, or it is old.
+     * The phone does not stop here: a page the browser holds back (one the laptop just opened, a tab in
+     * the background) cannot start the sound by itself, and the music would then be heard nowhere. It stops
+     * at [confirm], when the page says it is really playing.
+     */
+    fun claim(id: String): MusicHandoff? = synchronized(this) {
         val m = pending?.takeIf { it.id == id || id == "latest" } ?: return null
         if (System.currentTimeMillis() - m.at > 120_000) return null
         pending = null
-        onClaimed()
+        claimed = m.id to System.currentTimeMillis()
         m
+    }
+
+    /**
+     * The page that took the music [id] says it is playing it: true (once) when that is so and it was
+     * taken within two minutes, and the phone is to stop. A page that was never allowed to play leaves
+     * the phone playing, and stops it when the person taps Carry on there.
+     */
+    fun confirm(id: String): Boolean = synchronized(this) {
+        val c = claimed ?: return false
+        if (c.first != id || System.currentTimeMillis() - c.second > 120_000) return false
+        claimed = null
+        true
     }
 }

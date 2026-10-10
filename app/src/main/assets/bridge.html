@@ -6539,9 +6539,22 @@ async function handoffClaim(id) {
   var list = m.ids.map(function (i) { return byId[i]; }).filter(Boolean);
   if (!list.length) return;
   var at = (m.posMs + Math.min(10000, Math.max(0, Date.now() - m.at))) / 1000;
+  var audio = $("audio");
+  // The phone stops when this page is really playing the song, not when it merely took it: a page the laptop
+  // just opened, or one in the background, may be held back by the browser, and then the music would be heard
+  // nowhere. So the phone is told once the song sounds, which for such a page is when Carry on is tapped.
+  var want = list[Math.min(m.index, list.length - 1)].id, told = false;
+  var tell = function () {
+    var c = currentTrack();
+    if (told || !c || c.id !== want) return;
+    told = true;
+    audio.removeEventListener("playing", tell);
+    api("/api/handoff/playing?id=" + encodeURIComponent(m.id), { method: "POST" }).catch(function () {});
+  };
+  audio.addEventListener("playing", tell);
+  setTimeout(function () { audio.removeEventListener("playing", tell); }, 120000);
   setShuffle(false);
   startQueue(list, Math.min(m.index, list.length - 1), { kind: "songs", label: "From " + (m.from || "the phone") });
-  var audio = $("audio");
   var seekThere = function () { try { audio.currentTime = at; } catch (e) { } };
   if (audio.readyState >= 1) seekThere(); else audio.addEventListener("loadedmetadata", seekThere, { once: true });
   // A page the laptop just opened may not play by itself: one tap carries on.
@@ -6550,8 +6563,10 @@ async function handoffClaim(id) {
     var b = document.createElement("button");
     b.type = "button"; b.className = "handoff-go";
     b.textContent = "\u25B6  Carry on " + list[Math.min(m.index, list.length - 1)].title + " from " + (m.from || "the phone");
-    b.onclick = function () { audio.play(); b.remove(); };
+    b.onclick = function () { var q = audio.play(); if (q && q.catch) q.catch(playRefused); b.remove(); };
     document.body.appendChild(b);
+    // Gone once the song sounds by any other way (the player's own Play), or after a minute.
+    audio.addEventListener("playing", function () { b.remove(); }, { once: true });
     setTimeout(function () { b.remove(); }, 60000);
   }, 1200);
 }
