@@ -730,7 +730,7 @@ private fun BlazeItUi(vm: MainViewModel) {
                                 translationY = cp * size.height
                                 alpha = 1f - cp
                             }
-                            .background(Bridge.Bg.copy(alpha = 0.94f))
+                            .background(Bridge.Bg)
                             .then(Modifier.drawBehind { drawLine(lineColor, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(size.width, 0f), 1f) })
                             .padding(bottom = bottomInset),
                         contentAlignment = Alignment.Center,
@@ -1961,8 +1961,15 @@ private fun ComputersCard(computers: List<PairedDevice>, all: List<PairedDevice>
     val now = rememberNow()
     GroupCard {
         if (computers.isEmpty()) SettingRow("None yet", detail = "Open the address on Home in a browser, or run the helper", first = true, titleColor = Bridge.Muted)
-        computers.sortedWith(compareByDescending<PairedDevice> { (live[it.id] ?: 0) > 0 }.thenByDescending { it.lastSeenAt })
-            .forEachIndexed { i, d ->
+        // The ones in use now, then the most recent of the rest; the older sessions (a browser signed in once, days
+        // ago) fold under one row instead of listing the same laptop a dozen times.
+        val sorted = computers.sortedWith(compareByDescending<PairedDevice> { (live[it.id] ?: 0) > 0 }.thenByDescending { it.lastSeenAt })
+        val inUse = sorted.filter { (live[it.id] ?: 0) > 0 || ways[it.id]?.let { w -> now - w.at < WAY_FRESH_MS } == true }
+        val earlier = sorted.filter { it !in inUse }
+        var showEarlier by rememberSaveable { mutableStateOf(false) }
+        val keep = 2
+        val shown = inUse + if (showEarlier) earlier else earlier.take(keep)
+        shown.forEachIndexed { i, d ->
                 val isLive = (live[d.id] ?: 0) > 0
                 val w = ways[d.id]?.takeIf { now - it.at < WAY_FRESH_MS }
                 val role = when {
@@ -1978,15 +1985,22 @@ private fun ComputersCard(computers: List<PairedDevice>, all: List<PairedDevice>
                     dim = !isLive && w == null,
                     first = i == 0,
                     below = {
+                        // An address is one line (it would break in the middle of a number); a description may take two.
                         Text(
                             w?.detail ?: d.lastIp,
-                            style = CaptionStyle.copy(fontSize = 12.sp), color = Bridge.Muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            style = CaptionStyle.copy(fontSize = 12.sp), color = Bridge.Muted,
+                            maxLines = if (w != null) 2 else 1, overflow = TextOverflow.Ellipsis,
                         )
                     },
                 ) {
                     IconChip(BlazeIcons.Close, "Remove ${d.name}", tint = Bridge.Muted, size = 32.dp) { remove(d.id) }
                 }
             }
+        if (earlier.size > keep) SettingRow(
+            if (showEarlier) "Show fewer" else "Show ${earlier.size - keep} earlier",
+            detail = if (showEarlier) null else "Browsers and computers signed in before",
+            titleColor = Bridge.Accent, onClick = { showEarlier = !showEarlier },
+        )
     }
 }
 
