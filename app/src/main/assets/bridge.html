@@ -11786,6 +11786,10 @@ function camsHidden() {
 }
 
 async function camsLoad() {
+  // One ask at a time: the answer waits on every linked phone (a few seconds when one is away), and the
+  // timer must not stack another request on a list still being drawn up.
+  if (cams.loading) return;
+  cams.loading = true;
   try {
     var r = await api("/api/cams", { cache: "no-store" });
     if (!r.ok) return;
@@ -11793,7 +11797,8 @@ async function camsLoad() {
     cams.list = d.cams || [];
     renderCams();
     if (cams.full) { var c = cams.list.filter(function (x) { return x.target === cams.full.target; })[0]; if (c) camFullStatus(c); }
-  } catch (e) {}
+  } catch (e) {
+  } finally { cams.loading = false; }
 }
 
 function camAgo(at) {

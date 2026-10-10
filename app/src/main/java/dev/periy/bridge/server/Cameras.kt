@@ -715,12 +715,38 @@ class Cameras(
 
     // ------------------------------------------------------------------ the control centre: every camera
 
+    /** A linked phone being asked right now, by name: asked again while it has not answered, it is the same ask. */
+    private val asking = HashMap<String, kotlinx.coroutines.Deferred<String?>>()
+
+    /**
+     * What a linked phone says its camera is doing, or null when it has not said within two and a half seconds. The ask
+     * itself is blocking (a tunnel being dialled to a phone that is off can take far longer), so it runs on its
+     * own and is only waited for: a timeout around blocking code never gives up, and the whole list used to
+     * wait on a phone that was away. A page asking every second shares the one ask instead of piling up more.
+     */
+    private suspend fun askCamera(p: Peer): String? {
+        var fresh = false
+        val ask = synchronized(asking) {
+            asking[p.name] ?: scope.async { runCatching { peers.fetch(p, "/api/cams/state") }.getOrNull() }
+                .also { asking[p.name] = it; fresh = true }
+        }
+        if (fresh) ask.invokeOnCompletion { synchronized(asking) { if (asking[p.name] === ask) asking.remove(p.name) } }
+        // A phone that did not answer a moment ago is not waited for again: the list says so at once while the ask goes on.
+        val away = System.currentTimeMillis() - (awayAt[p.name] ?: 0L) < 20_000
+        val text = withTimeoutOrNull(if (away) 300 else 2_500) { ask.await() }
+        if (text != null) awayAt.remove(p.name) else if (!away) awayAt[p.name] = System.currentTimeMillis()
+        return text
+    }
+
+    /** When a linked phone last failed to answer for its camera, by name. */
+    private val awayAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     /** This phone and the linked phones, each as it stands now (a linked phone asked, a few seconds at most). */
     suspend fun all(): CamList {
         val me = CamDto("self", peers.deviceName(), true, withBattery(_state.value))
         val others = peers.peers.value.map { p ->
             scope.async {
-                val r = withTimeoutOrNull(4_000) { runCatching { peers.fetch(p, "/api/cams/state") }.getOrNull() }
+                val r = askCamera(p)
                 val st = r?.let { runCatching { json.decodeFromString<CamState>(it) }.getOrNull() }
                 CamDto(p.name, p.name, false, st, if (st == null) "Not reachable now" else "")
             }
