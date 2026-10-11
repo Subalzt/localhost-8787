@@ -2775,6 +2775,100 @@
     /* The colours keep their look; the finger's target reaches past them. */
     .swatch::before { content: ""; position: absolute; inset: -5px; border-radius: 50%; }
   }
+
+  /* ================================================================ Orbit (a skin)
+     After EDOLUS (Awwwards Site of the Day, 2026-10-04): a control room in deep space. Black with a faint
+     field of dots, the Home banner a nebula over a hairline grid; headlines heavy and in capitals; labels,
+     tabs and buttons in tracked monospace capitals; cards as hairline frames with ticks at their corners;
+     corners nearly square. Send files stays the one bold thing, in signal orange. Light is the same on paper.
+     Picked in Settings, per browser; laid over Theatre, so every layout and tab is the same underneath. */
+  :root[data-skin="orbit"][data-style][data-pro] {
+    --bg: #05060A; --surface: #0B0D13; --surface-2: #151924; --surface-3: #1F2431; --txt: #E9EDF4; --sub: #8B93A4; --faint: #3B4252;
+    --line: rgba(170,190,255,.15); --accent: #E9EDF4; --on-accent: #05060A; --side-bg: #07080D; --pro-side: #07080D;
+    --pro-fill: rgba(170,190,255,.07); --pro-fill2: rgba(170,190,255,.12); --pro-edge: rgba(170,190,255,.18);
+    --shadow: none; --card-shadow: none; --float-shadow: 0 0 0 1px rgba(170,190,255,.16), 0 24px 60px rgba(0,0,0,.7);
+    --r-card: 6px; --r: 4px; --r-btn: 4px; --tick: rgba(233,237,244,.6); --dots: rgba(170,190,255,.09); --signal: #FF7A3D;
+    --hero: radial-gradient(70% 90% at 88% 0%, rgba(255,122,61,.24), transparent 60%), radial-gradient(80% 110% at 0% 100%, rgba(46,98,255,.32), transparent 62%), #05060A;
+    color-scheme: dark;
+  }
+  :root[data-skin="orbit"][data-style][data-pro][data-theme="light"] {
+    --bg: #ECEEF2; --surface: #F8F9FB; --surface-2: #E1E4EA; --surface-3: #D2D7DF; --txt: #0A0C11; --sub: #586172; --faint: #B4BBC7;
+    --line: rgba(10,20,45,.15); --accent: #0A0C11; --on-accent: #F8F9FB; --side-bg: #E3E6EB; --pro-side: #E3E6EB;
+    --pro-fill: rgba(10,20,45,.06); --pro-fill2: rgba(10,20,45,.1); --pro-edge: rgba(10,20,45,.16); --tick: rgba(10,12,17,.55);
+    --dots: rgba(10,20,45,.07); --float-shadow: 0 0 0 1px rgba(10,20,45,.14), 0 20px 50px rgba(10,20,45,.16); color-scheme: light; }
+  @media (prefers-color-scheme: light) { :root[data-skin="orbit"][data-style][data-pro]:not([data-theme="dark"]) {
+    --bg: #ECEEF2; --surface: #F8F9FB; --surface-2: #E1E4EA; --surface-3: #D2D7DF; --txt: #0A0C11; --sub: #586172; --faint: #B4BBC7;
+    --line: rgba(10,20,45,.15); --accent: #0A0C11; --on-accent: #F8F9FB; --side-bg: #E3E6EB; --pro-side: #E3E6EB;
+    --pro-fill: rgba(10,20,45,.06); --pro-fill2: rgba(10,20,45,.1); --pro-edge: rgba(10,20,45,.16); --tick: rgba(10,12,17,.55);
+    --dots: rgba(10,20,45,.07); --float-shadow: 0 0 0 1px rgba(10,20,45,.14), 0 20px 50px rgba(10,20,45,.16); color-scheme: light; } }
+
+  :root[data-skin="orbit"][data-style][data-pro] body { background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 26px 26px, var(--bg); }
+
+  /* Headlines heavy and in capitals; section labels as instrument readouts. */
+  :root[data-skin="orbit"][data-style][data-pro] .page-head h1 { font-weight: 900; text-transform: uppercase; letter-spacing: -.02em; }
+  :root[data-skin="orbit"][data-style][data-pro] .set-title, :root[data-skin="orbit"][data-style][data-pro] .card-title h3, :root[data-skin="orbit"][data-style][data-pro] .sec-head h3, :root[data-skin="orbit"][data-style][data-pro] .sec-row .set-title {
+    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--sub); }
+
+  /* Cards: hairline frames with ticks at the corners. */
+  :root[data-skin="orbit"][data-style][data-pro] .card, :root[data-skin="orbit"][data-style][data-pro] .set-group { border-radius: 6px; box-shadow: none; border: 1px solid var(--line); background: linear-gradient(var(--tick), var(--tick)) 0 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 0 / 1px 9px no-repeat,
+      linear-gradient(var(--tick), var(--tick)) 100% 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 0 / 1px 9px no-repeat,
+      linear-gradient(var(--tick), var(--tick)) 0 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 100% / 1px 9px no-repeat,
+      linear-gradient(var(--tick), var(--tick)) 100% 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 100% / 1px 9px no-repeat, var(--surface); }
+
+  /* Tabs, buttons, switches: monospace capitals, corners nearly square. */
+  :root[data-skin="orbit"][data-style][data-pro] .tabs, :root[data-skin="orbit"][data-style][data-pro] .tabs > button, :root[data-skin="orbit"][data-style][data-pro] .tab-pill { border-radius: 4px; }
+  :root[data-skin="orbit"][data-style][data-pro] .tabs > button { font-family: var(--mono); font-size: 11.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+  :root[data-skin="orbit"][data-style][data-pro] .logo { font-family: var(--mono); font-size: 12.5px; letter-spacing: .14em; text-transform: uppercase; }
+  :root[data-skin="orbit"][data-style][data-pro] .btn, :root[data-skin="orbit"][data-style][data-pro] .beam-btn, :root[data-skin="orbit"][data-style][data-pro] .sr-action, :root[data-skin="orbit"][data-style][data-pro] .link-danger { border-radius: 4px; font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+  :root[data-skin="orbit"][data-style][data-pro] .seg { border-radius: 5px; background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+  :root[data-skin="orbit"][data-style][data-pro] .seg button { border-radius: 3px; font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; }
+  :root[data-skin="orbit"][data-style][data-pro] .seg button.on { background: var(--txt); color: var(--bg); box-shadow: none; }
+  :root[data-skin="orbit"][data-style][data-pro] .sq { background: none; border: 1px solid var(--line); border-radius: 4px; color: var(--txt); }
+  :root[data-skin="orbit"][data-style][data-pro] .ip-pill { border-radius: 3px; font-family: var(--mono); }
+  :root[data-skin="orbit"][data-style][data-pro] .clip-field textarea { font-family: var(--mono); font-size: 13px; border-radius: 4px; }
+  :root[data-skin="orbit"][data-style][data-pro] .bar, :root[data-skin="orbit"][data-style][data-pro] .chat-side-head b {
+    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--sub); }
+  :root[data-skin="orbit"][data-style][data-pro] .side-item { font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; }
+  /* Files: the phones as square chips; a folder an outlined tile, a file's own picture kept. */
+  :root[data-skin="orbit"][data-style][data-pro] .src-chip { border-radius: 4px; }
+  :root[data-skin="orbit"][data-style][data-pro] .ficon-dir { border-radius: 4px; background: none; box-shadow: inset 0 0 0 1px var(--line); color: var(--txt); }
+  :root[data-skin="orbit"][data-style][data-pro] .ficon-dir svg { width: 22px; height: 22px; fill: none; stroke: currentColor; }
+  :root[data-skin="orbit"][data-style][data-pro] #fs-list .row.dir, :root[data-skin="orbit"][data-style][data-pro] #fs-list .row.file { border-radius: 4px; }
+  :root[data-skin="orbit"][data-style][data-pro] .swatch { border-radius: 4px; }
+
+  /* Home's banner: the nebula over a hairline grid, the name in capitals, how it is reached as a readout. */
+  :root[data-skin="orbit"][data-style][data-pro] .status-line { background: linear-gradient(transparent 58%, var(--bg)), linear-gradient(rgba(170,190,255,.07) 1px, transparent 1px) 0 0 / 44px 44px,
+      linear-gradient(90deg, rgba(170,190,255,.07) 1px, transparent 1px) 0 0 / 44px 44px, var(--hero); }
+  :root[data-skin="orbit"][data-style][data-pro][data-theme="light"] .status-line { background: linear-gradient(rgba(170,190,255,.07) 1px, transparent 1px) 0 0 / 44px 44px,
+      linear-gradient(90deg, rgba(170,190,255,.07) 1px, transparent 1px) 0 0 / 44px 44px, var(--hero); }
+  :root[data-skin="orbit"][data-style][data-pro] .status-line .who b { text-transform: uppercase; font-weight: 900; letter-spacing: -.02em; text-shadow: none; }
+  :root[data-skin="orbit"][data-style][data-pro] .status-line .who > span, :root[data-skin="orbit"][data-style][data-pro] .status-line .rate span { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; text-shadow: none; }
+  :root[data-skin="orbit"][data-style][data-pro] .status-line::before { opacity: .18; }
+  :root[data-skin="orbit"][data-style][data-pro] .status-line .btn { border-radius: 4px; }
+  :root[data-skin="orbit"][data-style][data-pro] #route-badge { border-radius: 4px; font-family: var(--mono); font-size: 12px; letter-spacing: .06em; }
+  :root[data-skin="orbit"][data-style][data-pro] #route-badge em { opacity: .7; }
+  /* On a computer's width the banner is a card among the others. */
+  @media (min-width: 1000px) {
+    :root[data-skin="orbit"][data-style][data-pro] .status-line { background: linear-gradient(var(--tick), var(--tick)) 0 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 0 / 1px 9px no-repeat,
+      linear-gradient(var(--tick), var(--tick)) 100% 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 0 / 1px 9px no-repeat,
+      linear-gradient(var(--tick), var(--tick)) 0 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 100% / 1px 9px no-repeat,
+      linear-gradient(var(--tick), var(--tick)) 100% 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 100% / 1px 9px no-repeat, var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+    :root[data-skin="orbit"][data-style][data-pro][data-theme="light"] .status-line { background: linear-gradient(var(--tick), var(--tick)) 0 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 0 / 1px 9px no-repeat,
+      linear-gradient(var(--tick), var(--tick)) 100% 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 0 / 1px 9px no-repeat,
+      linear-gradient(var(--tick), var(--tick)) 0 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 100% / 1px 9px no-repeat,
+      linear-gradient(var(--tick), var(--tick)) 100% 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 100% / 1px 9px no-repeat, var(--surface); }
+  }
+
+  /* Send files: the one bold thing, in signal orange. */
+  :root[data-skin="orbit"][data-style][data-pro] .beam-card { border-radius: 6px; box-shadow: none; border: 1px solid color-mix(in srgb, var(--signal) 45%, transparent); color: #FFFFFF;
+    background: radial-gradient(120% 130% at 100% 0%, color-mix(in srgb, var(--signal) 42%, transparent), transparent 58%), linear-gradient(160deg, #1B0F09, #07080D); }
+  :root[data-skin="orbit"][data-style][data-pro] .beam-card.over { transform: none; box-shadow: inset 0 0 0 2px var(--signal); }
+  :root[data-skin="orbit"][data-style][data-pro] .beam-title { text-transform: uppercase; font-weight: 900; letter-spacing: -.02em; text-shadow: none; }
+  :root[data-skin="orbit"][data-style][data-pro] .beam-hint { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; }
+  :root[data-skin="orbit"][data-style][data-pro] .beam-btn { box-shadow: inset 0 0 0 1px rgba(255,255,255,.32); background: rgba(255,255,255,.04); color: #FFFFFF; }
+  :root[data-skin="orbit"][data-style][data-pro] .beam-hint { color: rgba(255,255,255,.7); opacity: 1; }
+  :root[data-skin="orbit"][data-style][data-pro] .beam-btn.primary { background: var(--signal); color: #140804; box-shadow: none; }
+  :root[data-skin="orbit"][data-style][data-pro] .beam-btn.primary:hover, :root[data-skin="orbit"][data-style][data-pro] .beam-btn:active { transform: none; box-shadow: none; }
 </style>
 </head>
 <body>
@@ -3036,6 +3130,16 @@
           <button data-theme-choice="system">Automatic</button>
           <button data-theme-choice="light">Light</button>
           <button data-theme-choice="dark">Dark</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <span class="sq grey"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(-25 12 12)"/></svg></span>
+        <div class="sr-text"><b>Skin</b><span>For this browser</span></div>
+      </div>
+      <div class="set-row sr-block">
+        <div class="seg" id="skin-seg">
+          <button data-skin-choice="theatre">Theatre</button>
+          <button data-skin-choice="orbit">Orbit</button>
         </div>
       </div>
     </div>
@@ -6069,6 +6173,19 @@ function applyLook(l) {
   if (label) label.textContent = accent === "auto" ? "Automatic" : accent.charAt(0).toUpperCase() + accent.slice(1);
   setPlayerSpace();
   try { localStorage.setItem("blazeit.look", JSON.stringify(look)); } catch (e) {}
+}
+
+/**
+ * The skin, kept in this browser: Theatre (the app's own look), or Orbit, a control room in deep space laid over it
+ * (the styles at the end of the sheet). The phone's shared look knows only Theatre, so it is not sent there.
+ */
+var SKINS = ["theatre", "orbit"];
+function applySkin(s) {
+  if (SKINS.indexOf(s) < 0) s = "theatre";
+  if (s === "theatre") document.documentElement.removeAttribute("data-skin");
+  else document.documentElement.setAttribute("data-skin", s);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-skin-choice]"), function (b) { b.classList.toggle("on", b.dataset.skinChoice === s); });
+  try { localStorage.setItem("blazeit.skin", s); } catch (e) {}
 }
 
 /** The colour swatches in Settings: Automatic first, then the system colours. */
@@ -10523,6 +10640,9 @@ function showApp() {
     wireMonitor();
     setupNav();
     $("measure").addEventListener("click", measure);
+    Array.prototype.forEach.call(document.querySelectorAll("[data-skin-choice]"), function (b) {
+      b.addEventListener("click", function () { applySkin(b.dataset.skinChoice); });
+    });
     Array.prototype.forEach.call(document.querySelectorAll("[data-theme-choice]"), function (b) {
       b.addEventListener("click", function () { setTheme(b.dataset.themeChoice); });
     });
@@ -11003,6 +11123,8 @@ setInterval(pageFresh, 600000);
   try { saved = localStorage.getItem("blazeit.theme") || "system"; } catch (e) {}
   applyTheme(saved);
   try { applyLook(JSON.parse(localStorage.getItem("blazeit.look") || "null")); } catch (e) {}
+  var skin = "theatre"; try { skin = localStorage.getItem("blazeit.skin") || "theatre"; } catch (e) {}
+  applySkin(skin);
   try {
     var res = await fetch("/api/ping", { credentials: "same-origin" });
     var info = await res.json();
