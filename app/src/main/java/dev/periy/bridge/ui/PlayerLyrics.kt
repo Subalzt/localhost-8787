@@ -13,6 +13,10 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -42,7 +46,13 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -158,14 +168,15 @@ internal fun LyricsOverCover(
             }
             // Not before the list has been laid out once.
             if (list.layoutInfo.visibleItemsInfo.isEmpty()) androidx.compose.runtime.withFrameNanos { }
-            list.centre(current.coerceAtLeast(0))
+            list.centre(current.coerceAtLeast(0), if (full) 0.3f else 0.5f)
         }
         // Over the cover, the line on a wash of the song's colour; on the full page, a soft card of the text colour.
         val selectedBg = if (full) Color.Transparent else tint.copy(alpha = 140 / 255f).compositeOver(nc.bg).copy(alpha = 0.5f)
         LazyColumn(
             state = list,
             userScrollEnabled = live,
-            contentPadding = PaddingValues(vertical = (half - 24.dp).coerceAtLeast(0.dp)),
+            // The line being sung a third of the way down, as a word-synced lyrics app holds it, with room below for the rest.
+            contentPadding = if (full) PaddingValues(top = maxHeight * 0.3f, bottom = maxHeight * 0.7f) else PaddingValues(vertical = (half - 24.dp).coerceAtLeast(0.dp)),
             horizontalAlignment = if (full) Alignment.Start else Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -191,13 +202,14 @@ internal fun LyricsOverCover(
 /** A line on Namida's full-page lyrics: large and bold, from the left. */
 private val FullLine = TextStyle(fontFamily = MusicType, fontWeight = FontWeight.Bold, fontSize = 28.sp, lineHeight = 34.sp, letterSpacing = (-0.3).sp)
 
-/** Glides so item [index] sits in the middle (from further off, it goes there first). */
-private suspend fun LazyListState.centre(index: Int) {
+/** Glides so item [index] sits at [at] of the way down: its middle at the middle, or (above the middle) its top there. */
+private suspend fun LazyListState.centre(index: Int, at: Float = 0.5f) {
     fun delta(): Float? {
         val info = layoutInfo
         val it = info.visibleItemsInfo.firstOrNull { v -> v.index == index } ?: return null
         // Item offsets and the viewport's ends are measured the same way, padding and all.
-        return it.offset + it.size / 2f - (info.viewportStartOffset + info.viewportEndOffset) / 2f
+        val mark = info.viewportStartOffset + (info.viewportEndOffset - info.viewportStartOffset) * at
+        return if (at == 0.5f) it.offset + it.size / 2f - mark else it.offset - mark
     }
     val dd = delta() ?: run { scrollToItem(index); androidx.compose.runtime.withFrameNanos { }; delta() } ?: return
     if (abs(dd) >= 1f) animateScrollBy(dd, tween(620, easing = Glide))
@@ -223,6 +235,8 @@ private fun Line(
     )
     val bg by animateColorAsState(if (on) selectedBg else selectedBg.copy(alpha = 0f), tween(300), label = "card")
     val grow by animateFloatAsState(if (on || !full) 1f else 0.94f, tween(420, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "grow")
+    // The lines around the one being sung softer the further off (on the full page).
+    val soft by animateDpAsState(if (!full) 0.dp else when (distance) { 0 -> 0.dp; 1 -> 1.2.dp; 2 -> 2.dp; else -> 2.8.dp }, tween(420), label = "soft")
     val base = nc.medium
     val style = if (full) FullLine.copy(color = base.copy(alpha = base.alpha * k))
     else Nm.medium.copy(color = base.copy(alpha = base.alpha * k), textAlign = TextAlign.Center)
@@ -231,14 +245,16 @@ private fun Line(
             // The line being sung a little larger than the rest, growing from its left edge.
             scaleX = grow; scaleY = grow
             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
-        }.padding(horizontal = 14.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp))
+        }.then(if (soft > 0.05.dp) Modifier.blur(soft, BlurredEdgeTreatment.Unbounded) else Modifier).padding(horizontal = 14.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp))
         else Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(8.dp)))
             .background(bg)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 8.dp, vertical = if (full) 10.dp else 8.dp),
         contentAlignment = if (full) Alignment.CenterStart else Alignment.Center,
     ) {
-        if (on && words && line.words.isNotEmpty()) {
+        if (on && full && words && line.words.isNotEmpty()) SungWords(line, style.copy(color = base), base, base.copy(alpha = base.alpha * 0.42f), state, tick)
+        else if (on && full) Text(line.text, style = style.copy(shadow = glowOf(base)))
+        else if (on && words && line.words.isNotEmpty()) {
             // Sung words full, those to come dim; the one being sung brightens across its time.
             val pos by remember(line) { derivedStateOf { tick.value; state.value.positionNow() } }
             val dim = base.copy(alpha = base.alpha * 0.45f)
@@ -250,6 +266,47 @@ private fun Line(
             }
             Text(text, style = style.copy(color = base))
         } else Text(line.text, style = style)
+    }
+}
+
+/** The soft light round sung words on the full page (it is always on the dark of the blurred cover). */
+@Composable
+private fun glowOf(base: Color): Shadow = Shadow(base.copy(alpha = 0.5f), Offset.Zero, with(LocalDensity.current) { 10.dp.toPx() })
+
+/**
+ * The line being sung, word by word, as a word-synced lyrics app shows it: the words sung bright and
+ * glowing, the one being sung wiping from bright to dim across a soft edge and rising a little as it
+ * lights (the sung ones stay up until the line is over), the words to come dim.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SungWords(line: LyricLine, style: TextStyle, base: Color, dim: Color, state: State<PhonePlayer.State>, tick: State<Long>) {
+    val pos by remember(line) { derivedStateOf { tick.value; state.value.positionNow() } }
+    val density = LocalDensity.current
+    val rise = with(density) { style.fontSize.toPx() } * 0.09f
+    val space = with(density) { (style.fontSize.toPx() * 0.27f).toDp() }
+    val glow = glowOf(base)
+    FlowRow {
+        line.words.forEach { w ->
+            val word = w.w.trim()
+            if (w.w.isNotEmpty() && w.w.first().isWhitespace()) Spacer(Modifier.width(space))
+            if (word.isNotEmpty()) {
+                val p = ((pos - w.t).toFloat() / (w.e - w.t).coerceAtLeast(1)).coerceIn(0f, 1f)
+                val look = when {
+                    p <= 0f -> style.copy(color = dim)
+                    p >= 1f -> style.copy(color = base, shadow = glow)
+                    else -> {
+                        // The edge runs from 14% behind the point sung to the point itself.
+                        val a = (p * 1.14f - 0.14f).coerceIn(0f, 1f)
+                        val b = (p * 1.14f).coerceIn(a + 0.001f, 1f)
+                        style.copy(brush = Brush.horizontalGradient(0f to base, a to base, b to dim, 1f to dim), shadow = glow)
+                    }
+                }
+                val lift = (p * 1.6f).coerceAtMost(1f)
+                Text(word, style = look, modifier = Modifier.graphicsLayer { translationY = -lift * rise })
+            }
+            if (w.w.length > 1 && w.w.last().isWhitespace()) Spacer(Modifier.width(space))
+        }
     }
 }
 

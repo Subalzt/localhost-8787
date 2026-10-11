@@ -917,6 +917,14 @@ private fun FullLyrics(
                 ) { Icon(Iconsax.Down, "Back to the player", tint = Color.White, modifier = Modifier.size(20.dp)) }
             }
             val shown = lyrics?.takeIf { it.timed || it.kind == dev.periy.bridge.server.ShownLyrics.Kind.PLAIN }
+            // How they are timed and where they came from, small over them.
+            if (shown != null && shown.timed) Text(
+                (if (shown.kind == dev.periy.bridge.server.ShownLyrics.Kind.WORD) "WORD SYNC" else "LINE SYNC") +
+                    when (shown.source) { "", "none" -> ""; "file" -> " · SONG FILE"; else -> " · " + shown.source.uppercase() },
+                style = TextStyle(fontFamily = MusicType, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp, color = Color.White.copy(alpha = 0.6f)),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+            )
             if (shown != null) key(cur.id) {
                 LyricsOverCover(
                     shown, state, tick, tint, live = true, onSeek = onSeek, full = true,
