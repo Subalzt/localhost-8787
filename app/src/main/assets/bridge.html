@@ -2714,6 +2714,49 @@
   #fs-list .row + .row { border-top: 0; }
   .cams-head #cams-sub:empty { display: none; }
   .cams-head { margin: 0 0 12px; }
+  /* ---------------------------------------------------------------- lyrics, word by word
+     Left-aligned and bold everywhere: the line being sung bright, its sung words glowing with the one
+     being sung wiping across and rising a little; the lines around it dimmer and softer the further off;
+     the line a third of the way down. A small label says how they are timed and where they came from. */
+  .np-lyr { --lyr-hi: var(--nm-medium); --lyr-lo: 42%; }
+  #np.wide .np-lyr { --lyr-hi: var(--txt); --lyr-lo: 46%; -webkit-mask-image: none; mask-image: none; }
+  .npl-src { display: none; }
+  #np.wide .npl-src:not(:empty) { display: block; height: 26px; font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: color-mix(in srgb, var(--txt) 55%, transparent); }
+  #np.wide .npl-list { height: calc(100% - 26px);
+    -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 82%, transparent); mask-image: linear-gradient(transparent, #000 14%, #000 82%, transparent); }
+  .npl-list { align-items: stretch; }
+  .npl-list::before { height: 32%; }
+  .npl-list::after { height: 68%; }
+  .npl-list .lyr-gap { margin: 0 8px; }
+  .npl-line, #np.wide .npl-line { text-align: left; background: none; font-weight: 700; letter-spacing: -.015em; transform-origin: 0 50%;
+    color: color-mix(in srgb, var(--lyr-hi) 34%, transparent);
+    transition: color .5s, filter .5s, transform .55s cubic-bezier(.2,.8,.2,1); }
+  .npl-line { font-size: 15px; line-height: 1.28; }
+  .npl-line.d0, #np.wide .npl-line.d0 { color: var(--lyr-hi); background: none; filter: none; transform: scale(1.03); }
+  .npl-line.d1, #np.wide .npl-line.d1 { color: color-mix(in srgb, var(--lyr-hi) 38%, transparent); filter: blur(.9px); }
+  .npl-line.d2, #np.wide .npl-line.d2 { color: color-mix(in srgb, var(--lyr-hi) 30%, transparent); filter: blur(1.5px); }
+  .npl-line.d3, #np.wide .npl-line.d3 { color: color-mix(in srgb, var(--lyr-hi) 24%, transparent); filter: blur(2.1px); }
+  #np.wide .npl-line.d1 { filter: blur(1.4px); }
+  #np.wide .npl-line.d2 { filter: blur(2.3px); }
+  #np.wide .npl-line.d3 { filter: blur(3.2px); }
+  /* A line timed only as a whole glows as it is sung. */
+  .npl-line.d0:not([data-words]) { text-shadow: 0 0 14px color-mix(in srgb, var(--lyr-hi) 45%, transparent); }
+  .npl-line .w { display: inline-block; transition: transform .35s cubic-bezier(.2,.8,.2,1); }
+  .npl-line.d0 .w, #np.wide .npl-line.d0 .w {
+    /* The soft edge runs from 14% behind the point sung to the point itself: a word not yet reached is all dim, one sung is all bright. */
+    background: linear-gradient(90deg, var(--lyr-hi) calc(var(--p, 0%) * 1.14 - 14%), color-mix(in srgb, var(--lyr-hi) var(--lyr-lo), transparent) calc(var(--p, 0%) * 1.14));
+    -webkit-background-clip: text; background-clip: text; color: transparent; transform: translateY(calc(var(--lift, 0) * -.09em)); }
+  .npl-line.d0 .w.sung { filter: drop-shadow(0 0 .32em color-mix(in srgb, var(--lyr-hi) 50%, transparent)); }
+  .npl-line:not(.d0) .w { background: none; color: inherit; transform: none; }
+  /* The glow is light on a dark page; on a light one it would be a grey smudge round dark words. */
+  :root[data-theme="light"] .npl-line.d0 .w.sung { filter: none; }
+  :root[data-theme="light"] .npl-line.d0:not([data-words]) { text-shadow: none; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .npl-line.d0 .w.sung { filter: none; }
+    :root:not([data-theme="dark"]) .npl-line.d0:not([data-words]) { text-shadow: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .npl-line .w { transition: none; } }
   /* A sent message's time was grey on blue (the base .meta colour won over the bubble's white). */
   .bub.mine .meta { color: rgba(255,255,255,.82); opacity: 1; }
   .bub.mine .meta.read { color: #FFFFFF; }
@@ -3123,7 +3166,7 @@
     <div class="np-el np-art" data-slot="-1" aria-hidden="true"></div>
     <div class="np-el np-art" data-slot="1" aria-hidden="true"></div>
     <div class="np-el np-art" data-slot="0" title="Play or pause"></div>
-    <div class="np-el np-lyr" id="np-lyr" aria-label="Lyrics"><div class="npl-list" id="npl-list"></div></div>
+    <div class="np-el np-lyr" id="np-lyr" aria-label="Lyrics"><div class="npl-src" id="npl-src"></div><div class="npl-list" id="npl-list"></div></div>
     <div class="np-el np-line t" data-slot="-1"></div><div class="np-el np-line a" data-slot="-1"></div>
     <div class="np-el np-line t" data-slot="1"></div><div class="np-el np-line a" data-slot="1"></div>
     <div class="np-el np-line t" data-slot="0"></div><div class="np-el np-line a" data-slot="0"></div>
@@ -9068,6 +9111,8 @@ function nplBuild() {
   var host = $("npl-list"), d = npl.data;
   host.innerHTML = "";
   npl.els = []; npl.gaps = []; npl.active = -1; npl.jump = true;
+  var src = $("npl-src");
+  if (src) src.textContent = d && d.lines ? (d.kind === "word" ? "Word sync" : "Line sync") + (d.source && d.source !== "none" ? " \u00B7 " + (d.source === "file" ? "Song file" : d.source) : "") : "";
   if (!d) return;
   if (d.kind === "plain") {
     var p = document.createElement("div");
@@ -9083,7 +9128,12 @@ function nplBuild() {
     var el = document.createElement("div");
     el.className = "npl-line";
     if (d.kind === "word" && l.words.length) {
-      l.words.forEach(function (w) { var sp = document.createElement("span"); sp.className = "w"; sp.textContent = w.w; el.appendChild(sp); });
+      l.words.forEach(function (w) {
+        var m = /^(\s*)(.*?)(\s*)$/.exec(w.w);
+        if (m[1]) el.appendChild(document.createTextNode(m[1]));
+        var sp = document.createElement("span"); sp.className = "w"; sp.textContent = m[2]; el.appendChild(sp);
+        if (m[3]) el.appendChild(document.createTextNode(m[3]));
+      });
       el.dataset.words = "1";
     } else el.textContent = l.text;
     el.onclick = function (e) { e.stopPropagation(); if (npTerms().bcp > 0.95) lyricsSeek(l.t); };
@@ -9101,20 +9151,23 @@ function nplTick() {
   while (lo <= hi) { var mid = (lo + hi) >> 1; if (d.lines[mid].t <= at) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
   if (idx !== npl.active) {
     var was = npl.els[npl.active];
-    if (was) Array.prototype.forEach.call(was.children, function (w) { w.style.removeProperty("--p"); });
+    if (was) Array.prototype.forEach.call(was.children, function (w) { w.style.removeProperty("--p"); w.style.removeProperty("--lift"); w.classList.remove("sung"); });
     npl.active = idx;
     npl.els.forEach(function (el, k) { el.className = "npl-line d" + Math.min(3, idx < 0 ? k + 1 : Math.abs(k - idx)); });
     var cur = npl.els[idx], box = $("npl-list");
     if (cur && performance.now() - npl.userAt > 3500) {
-      box.scrollTo({ top: cur.offsetTop + cur.offsetHeight / 2 - box.clientHeight / 2, behavior: npl.jump ? "auto" : "smooth" });
+      nplGlide(box, cur.offsetTop - box.clientHeight * 0.32, npl.jump);
       npl.jump = false;
     }
   }
   if (idx >= 0 && d.kind === "word") {
-    var l = d.lines[idx], el = npl.els[idx];
-    for (var k = 0; k < l.words.length && k < el.children.length; k++) {
+    var l = d.lines[idx], el = npl.els[idx], spans = el.children;
+    for (var k = 0; k < l.words.length && k < spans.length; k++) {
       var w = l.words[k], p = Math.max(0, Math.min(1, (pos - w.t) / Math.max(1, w.e - w.t)));
-      el.children[k].style.setProperty("--p", (p * 100).toFixed(1) + "%");
+      spans[k].style.setProperty("--p", (p * 100).toFixed(1) + "%");
+      // The word being sung rises a little as it lights, and stays up with the others sung, until the line ends.
+      spans[k].style.setProperty("--lift", Math.min(1, p * 1.6).toFixed(3));
+      spans[k].classList.toggle("sung", p > 0);
     }
   }
   npl.gaps.forEach(function (g) {
@@ -9125,6 +9178,20 @@ function nplTick() {
       Array.prototype.forEach.call(g.el.children, function (dot, k) { dot.classList.toggle("lit", f > (k + 1) / 4); });
     }
   });
+}
+
+/** The lyrics glide to [top] (a spring-like ease over 700 ms), or jump there; a hand on them stops it. */
+function nplGlide(box, top, jump) {
+  top = Math.max(0, Math.min(top, box.scrollHeight - box.clientHeight));
+  if (npl.glide) cancelAnimationFrame(npl.glide);
+  if (jump) { box.scrollTop = top; return; }
+  var from = box.scrollTop, t0 = performance.now(), ease = npBezier(0.22, 1, 0.36, 1);
+  (function step(now) {
+    if (performance.now() - npl.userAt < 300) { npl.glide = 0; return; }
+    var k = Math.min(1, (now - t0) / 700);
+    box.scrollTop = from + (top - from) * ease(k);
+    npl.glide = k < 1 ? requestAnimationFrame(step) : 0;
+  })(t0);
 }
 
 // ---- every frame: the waveform and the specks
