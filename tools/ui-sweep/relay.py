@@ -16,7 +16,7 @@ PORT, PHONE = int(sys.argv[1]), sys.argv[2]
 HOST, PHONE_PORT = (PHONE.split(":") + ["8787"])[:2]
 COOKIE = open(os.path.join(os.environ["APPDATA"], "Xoosh", "session.txt")).read().strip()
 HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade", "content-length", "host", "cookie"}
-OURS = {"/": "bridge.html", "/index.html": "bridge.html", "/map.html": "map.html"}
+OURS = {"/": "bridge.html", "/index.html": "bridge.html", "/map.html": "map.html", "/classic": "classic.html"}
 
 
 class H(BaseHTTPRequestHandler):

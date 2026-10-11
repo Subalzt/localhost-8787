@@ -2776,99 +2776,175 @@
     .swatch::before { content: ""; position: absolute; inset: -5px; border-radius: 50%; }
   }
 
-  /* ================================================================ Orbit (a skin)
-     After EDOLUS (Awwwards Site of the Day, 2026-10-04): a control room in deep space. Black with a faint
-     field of dots, the Home banner a nebula over a hairline grid; headlines heavy and in capitals; labels,
-     tabs and buttons in tracked monospace capitals; cards as hairline frames with ticks at their corners;
-     corners nearly square. Send files stays the one bold thing, in signal orange. Light is the same on paper.
-     Picked in Settings, per browser; laid over Theatre, so every layout and tab is the same underneath. */
-  :root[data-skin="orbit"][data-style][data-pro] {
-    --bg: #05060A; --surface: #0B0D13; --surface-2: #151924; --surface-3: #1F2431; --txt: #E9EDF4; --sub: #8B93A4; --faint: #3B4252;
-    --line: rgba(170,190,255,.15); --accent: #E9EDF4; --on-accent: #05060A; --side-bg: #07080D; --pro-side: #07080D;
-    --pro-fill: rgba(170,190,255,.07); --pro-fill2: rgba(170,190,255,.12); --pro-edge: rgba(170,190,255,.18);
-    --shadow: none; --card-shadow: none; --float-shadow: 0 0 0 1px rgba(170,190,255,.16), 0 24px 60px rgba(0,0,0,.7);
-    --r-card: 6px; --r: 4px; --r-btn: 4px; --tick: rgba(233,237,244,.6); --dots: rgba(170,190,255,.09); --signal: #FF7A3D;
-    --hero: radial-gradient(70% 90% at 88% 0%, rgba(255,122,61,.24), transparent 60%), radial-gradient(80% 110% at 0% 100%, rgba(46,98,255,.32), transparent 62%), #05060A;
-    color-scheme: dark;
-  }
-  :root[data-skin="orbit"][data-style][data-pro][data-theme="light"] {
-    --bg: #ECEEF2; --surface: #F8F9FB; --surface-2: #E1E4EA; --surface-3: #D2D7DF; --txt: #0A0C11; --sub: #586172; --faint: #B4BBC7;
-    --line: rgba(10,20,45,.15); --accent: #0A0C11; --on-accent: #F8F9FB; --side-bg: #E3E6EB; --pro-side: #E3E6EB;
-    --pro-fill: rgba(10,20,45,.06); --pro-fill2: rgba(10,20,45,.1); --pro-edge: rgba(10,20,45,.16); --tick: rgba(10,12,17,.55);
-    --dots: rgba(10,20,45,.07); --float-shadow: 0 0 0 1px rgba(10,20,45,.14), 0 20px 50px rgba(10,20,45,.16); color-scheme: light; }
-  @media (prefers-color-scheme: light) { :root[data-skin="orbit"][data-style][data-pro]:not([data-theme="dark"]) {
-    --bg: #ECEEF2; --surface: #F8F9FB; --surface-2: #E1E4EA; --surface-3: #D2D7DF; --txt: #0A0C11; --sub: #586172; --faint: #B4BBC7;
-    --line: rgba(10,20,45,.15); --accent: #0A0C11; --on-accent: #F8F9FB; --side-bg: #E3E6EB; --pro-side: #E3E6EB;
-    --pro-fill: rgba(10,20,45,.06); --pro-fill2: rgba(10,20,45,.1); --pro-edge: rgba(10,20,45,.16); --tick: rgba(10,12,17,.55);
-    --dots: rgba(10,20,45,.07); --float-shadow: 0 0 0 1px rgba(10,20,45,.14), 0 20px 50px rgba(10,20,45,.16); color-scheme: light; } }
 
-  :root[data-skin="orbit"][data-style][data-pro] body { background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 26px 26px, var(--bg); }
+  /* ================================================================ Line (the design since 2026-10-11)
+     Five award winners, the best of each. From The Bluejack Group's dashboard: Home opens with a briefing, a
+     few plain sentences from the live state, then big numbers with small labels. From Linea Prompt: one line
+     runs along the top of every tab, this computer to the phone, with packets on it while files move. From
+     Tink-on: the actions are pads with a tiny readout each, and the one thing to do (send) is a solid key.
+     From Cooldock: live tiles for what is going on (music, cameras, alerts). From AP Transit: where the
+     devices are, drawn as live dots and lines. Quiet underneath: a warm grey page, white panels, hairlines,
+     one system typeface (a book serif only for the briefing), corners soft. Laid over the old structure,
+     which stays in the page as Classic (Settings) and whole at /classic. */
+  .link-line, .briefing, #home-pads { display: none; }
+  :root[data-skin="line"][data-style][data-pro] { --bg: #F3F3F1; --surface: #FFFFFF; --surface-2: #EDEDEA; --surface-3: #E1E1DD; --txt: #111111; --ink: #111111; --sub: #6E6E69; --faint: #BDBDB7;
+    --line: rgba(17,17,17,.09); --accent: #111111; --on-accent: #FFFFFF; --side-bg: #F3F3F1; --pro-side: #F3F3F1; --pro-fill: rgba(17,17,17,.05);
+    --pro-fill2: rgba(17,17,17,.08); --pro-edge: rgba(17,17,17,.1); --card-shadow: 0 1px 0 rgba(17,17,17,.03); --shadow: var(--card-shadow);
+    --wire: #2F5BFF; --key: #111111; --on-key: #FFFFFF; color-scheme: light; --r-card: 18px; --r: 12px; --r-btn: 999px; --hero: none;
+    --serif: ui-serif, "New York", "Iowan Old Style", Charter, Georgia, "Noto Serif", serif;
+    --ui: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
+  :root[data-skin="line"][data-style][data-pro][data-theme="dark"] { --bg: #000000; --surface: #0E0E0F; --surface-2: #19191B; --surface-3: #252528; --txt: #F2F2F0; --ink: #F2F2F0; --sub: #8D8D88; --faint: #3B3B3E;
+    --line: rgba(255,255,255,.09); --accent: #F2F2F0; --on-accent: #000000; --side-bg: #000000; --pro-side: #000000; --pro-fill: rgba(255,255,255,.06);
+    --pro-fill2: rgba(255,255,255,.1); --pro-edge: rgba(255,255,255,.12); --card-shadow: none; --shadow: none;
+    --wire: #6E8FFF; --key: #F2F2F0; --on-key: #000000; color-scheme: dark; }
+  @media (prefers-color-scheme: dark) { :root[data-skin="line"][data-style][data-pro]:not([data-theme="light"]) { --bg: #000000; --surface: #0E0E0F; --surface-2: #19191B; --surface-3: #252528; --txt: #F2F2F0; --ink: #F2F2F0; --sub: #8D8D88; --faint: #3B3B3E;
+    --line: rgba(255,255,255,.09); --accent: #F2F2F0; --on-accent: #000000; --side-bg: #000000; --pro-side: #000000; --pro-fill: rgba(255,255,255,.06);
+    --pro-fill2: rgba(255,255,255,.1); --pro-edge: rgba(255,255,255,.12); --card-shadow: none; --shadow: none;
+    --wire: #6E8FFF; --key: #F2F2F0; --on-key: #000000; color-scheme: dark; } }
+  :root[data-skin="line"][data-style][data-pro] body { font-family: var(--ui); background: var(--bg); color: var(--ink); }
 
-  /* Headlines heavy and in capitals; section labels as instrument readouts. */
-  :root[data-skin="orbit"][data-style][data-pro] .page-head h1 { font-weight: 900; text-transform: uppercase; letter-spacing: -.02em; }
-  :root[data-skin="orbit"][data-style][data-pro] .set-title, :root[data-skin="orbit"][data-style][data-pro] .card-title h3, :root[data-skin="orbit"][data-style][data-pro] .sec-head h3, :root[data-skin="orbit"][data-style][data-pro] .sec-row .set-title {
-    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--sub); }
+  /* -------- type */
+  :root[data-skin="line"][data-style][data-pro] .page-head h1 { font-family: var(--ui); font-size: clamp(30px, 3.6vw, 42px); font-weight: 650; letter-spacing: -.035em; line-height: 1.05; }
+  :root[data-skin="line"][data-style][data-pro] .set-title, :root[data-skin="line"][data-style][data-pro] .bar, :root[data-skin="line"][data-style][data-pro] .card-title h3, :root[data-skin="line"][data-style][data-pro] .sec-head h3, :root[data-skin="line"][data-style][data-pro] .chat-side-head b {
+    font-family: var(--ui); font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--sub); }
+  :root[data-skin="line"][data-style][data-pro] .bar { margin: 28px 2px 10px; }
 
-  /* Cards: hairline frames with ticks at the corners. */
-  :root[data-skin="orbit"][data-style][data-pro] .card, :root[data-skin="orbit"][data-style][data-pro] .set-group { border-radius: 6px; box-shadow: none; border: 1px solid var(--line); background: linear-gradient(var(--tick), var(--tick)) 0 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 0 / 1px 9px no-repeat,
-      linear-gradient(var(--tick), var(--tick)) 100% 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 0 / 1px 9px no-repeat,
-      linear-gradient(var(--tick), var(--tick)) 0 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 100% / 1px 9px no-repeat,
-      linear-gradient(var(--tick), var(--tick)) 100% 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 100% / 1px 9px no-repeat, var(--surface); }
+  /* -------- panels and controls */
+  :root[data-skin="line"][data-style][data-pro] .card, :root[data-skin="line"][data-style][data-pro] .set-group { border-radius: var(--r-card); border: 1px solid var(--line); background: var(--surface); box-shadow: var(--card-shadow); }
+  :root[data-skin="line"][data-style][data-pro] .btn { border-radius: 999px; font-family: var(--ui); font-weight: 600; letter-spacing: -.01em; }
+  :root[data-skin="line"][data-style][data-pro] .seg { border-radius: 999px; background: var(--surface-2); box-shadow: none; }
+  :root[data-skin="line"][data-style][data-pro] .seg button { border-radius: 999px; font-family: var(--ui); }
+  :root[data-skin="line"][data-style][data-pro] .seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  :root[data-skin="line"][data-style][data-pro][data-theme="dark"] .seg button.on { background: var(--surface-3); }
+  :root[data-skin="line"][data-style][data-pro] .sq { border-radius: 9px; }
+  :root[data-skin="line"][data-style][data-pro] .sq svg { stroke: currentColor; }
+  :root[data-skin="line"][data-style][data-pro] .sr-action { color: var(--wire); }
+  :root[data-skin="line"][data-style][data-pro] .src-chip { border-radius: 999px; }
+  :root[data-skin="line"][data-style][data-pro] .clip-field textarea, :root[data-skin="line"][data-style][data-pro] .clip-item { border-radius: 12px; background: var(--surface-2); }
+  /* Folders and Settings' icons: plain tinted squares, the glyph in the text colour. */
+  :root[data-skin="line"][data-style][data-pro] .ficon-dir { width: 40px; height: 40px; border-radius: 11px; background: var(--surface-2); box-shadow: none; color: var(--ink); }
+  :root[data-skin="line"][data-style][data-pro] .ficon-dir svg { width: 22px; height: 22px; fill: none; stroke: currentColor; }
+  :root[data-skin="line"][data-style][data-pro] .sq { background: var(--surface-2); color: var(--ink); box-shadow: none; }
 
-  /* Tabs, buttons, switches: monospace capitals, corners nearly square. */
-  :root[data-skin="orbit"][data-style][data-pro] .tabs, :root[data-skin="orbit"][data-style][data-pro] .tabs > button, :root[data-skin="orbit"][data-style][data-pro] .tab-pill { border-radius: 4px; }
-  :root[data-skin="orbit"][data-style][data-pro] .tabs > button { font-family: var(--mono); font-size: 11.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
-  :root[data-skin="orbit"][data-style][data-pro] .logo { font-family: var(--mono); font-size: 12.5px; letter-spacing: .14em; text-transform: uppercase; }
-  :root[data-skin="orbit"][data-style][data-pro] .btn, :root[data-skin="orbit"][data-style][data-pro] .beam-btn, :root[data-skin="orbit"][data-style][data-pro] .sr-action, :root[data-skin="orbit"][data-style][data-pro] .link-danger { border-radius: 4px; font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
-  :root[data-skin="orbit"][data-style][data-pro] .seg { border-radius: 5px; background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
-  :root[data-skin="orbit"][data-style][data-pro] .seg button { border-radius: 3px; font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; }
-  :root[data-skin="orbit"][data-style][data-pro] .seg button.on { background: var(--txt); color: var(--bg); box-shadow: none; }
-  :root[data-skin="orbit"][data-style][data-pro] .sq { background: none; border: 1px solid var(--line); border-radius: 4px; color: var(--txt); }
-  :root[data-skin="orbit"][data-style][data-pro] .ip-pill { border-radius: 3px; font-family: var(--mono); }
-  :root[data-skin="orbit"][data-style][data-pro] .clip-field textarea { font-family: var(--mono); font-size: 13px; border-radius: 4px; }
-  :root[data-skin="orbit"][data-style][data-pro] .bar, :root[data-skin="orbit"][data-style][data-pro] .chat-side-head b {
-    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--sub); }
-  :root[data-skin="orbit"][data-style][data-pro] .side-item { font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; }
-  /* Files: the phones as square chips; a folder an outlined tile, a file's own picture kept. */
-  :root[data-skin="orbit"][data-style][data-pro] .src-chip { border-radius: 4px; }
-  :root[data-skin="orbit"][data-style][data-pro] .ficon-dir { border-radius: 4px; background: none; box-shadow: inset 0 0 0 1px var(--line); color: var(--txt); }
-  :root[data-skin="orbit"][data-style][data-pro] .ficon-dir svg { width: 22px; height: 22px; fill: none; stroke: currentColor; }
-  :root[data-skin="orbit"][data-style][data-pro] #fs-list .row.dir, :root[data-skin="orbit"][data-style][data-pro] #fs-list .row.file { border-radius: 4px; }
-  :root[data-skin="orbit"][data-style][data-pro] .swatch { border-radius: 4px; }
-
-  /* Home's banner: the nebula over a hairline grid, the name in capitals, how it is reached as a readout. */
-  :root[data-skin="orbit"][data-style][data-pro] .status-line { background: linear-gradient(transparent 58%, var(--bg)), linear-gradient(rgba(170,190,255,.07) 1px, transparent 1px) 0 0 / 44px 44px,
-      linear-gradient(90deg, rgba(170,190,255,.07) 1px, transparent 1px) 0 0 / 44px 44px, var(--hero); }
-  :root[data-skin="orbit"][data-style][data-pro][data-theme="light"] .status-line { background: linear-gradient(rgba(170,190,255,.07) 1px, transparent 1px) 0 0 / 44px 44px,
-      linear-gradient(90deg, rgba(170,190,255,.07) 1px, transparent 1px) 0 0 / 44px 44px, var(--hero); }
-  :root[data-skin="orbit"][data-style][data-pro] .status-line .who b { text-transform: uppercase; font-weight: 900; letter-spacing: -.02em; text-shadow: none; }
-  :root[data-skin="orbit"][data-style][data-pro] .status-line .who > span, :root[data-skin="orbit"][data-style][data-pro] .status-line .rate span { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; text-shadow: none; }
-  :root[data-skin="orbit"][data-style][data-pro] .status-line::before { opacity: .18; }
-  :root[data-skin="orbit"][data-style][data-pro] .status-line .btn { border-radius: 4px; }
-  :root[data-skin="orbit"][data-style][data-pro] #route-badge { border-radius: 4px; font-family: var(--mono); font-size: 12px; letter-spacing: .06em; }
-  :root[data-skin="orbit"][data-style][data-pro] #route-badge em { opacity: .7; }
-  /* On a computer's width the banner is a card among the others. */
+  /* -------- navigation: a computer's sidebar, quiet; a phone's top row of words, the one you are on underlined */
+  :root[data-skin="line"][data-style][data-pro] .side, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .side { --txt: var(--ink); --bg: var(--bg); --accent: var(--ink); --on-accent: var(--bg); }
+  :root[data-skin="line"][data-style][data-pro] .tab-pill { display: none; }
+  :root[data-skin="line"][data-style][data-pro] .tabs > button { font-family: var(--ui); font-weight: 500; }
+  :root[data-skin="line"][data-style][data-pro] .tabs > button.on { font-weight: 650; }
+  :root[data-skin="line"][data-style][data-pro] .logo { font-family: var(--ui); font-weight: 650; letter-spacing: -.01em; }
   @media (min-width: 1000px) {
-    :root[data-skin="orbit"][data-style][data-pro] .status-line { background: linear-gradient(var(--tick), var(--tick)) 0 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 0 / 1px 9px no-repeat,
-      linear-gradient(var(--tick), var(--tick)) 100% 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 0 / 1px 9px no-repeat,
-      linear-gradient(var(--tick), var(--tick)) 0 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 100% / 1px 9px no-repeat,
-      linear-gradient(var(--tick), var(--tick)) 100% 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 100% / 1px 9px no-repeat, var(--surface); border: 1px solid var(--line); border-radius: 6px; }
-    :root[data-skin="orbit"][data-style][data-pro][data-theme="light"] .status-line { background: linear-gradient(var(--tick), var(--tick)) 0 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 0 / 1px 9px no-repeat,
-      linear-gradient(var(--tick), var(--tick)) 100% 0 / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 0 / 1px 9px no-repeat,
-      linear-gradient(var(--tick), var(--tick)) 0 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 0 100% / 1px 9px no-repeat,
-      linear-gradient(var(--tick), var(--tick)) 100% 100% / 9px 1px no-repeat, linear-gradient(var(--tick), var(--tick)) 100% 100% / 1px 9px no-repeat, var(--surface); }
+    :root[data-skin="line"][data-style][data-pro] .side, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .side { background: var(--bg); border-right: 1px solid var(--line); }
+    :root[data-skin="line"][data-style][data-pro] .tabs > button { height: 36px; border-radius: 10px; font-size: 14px; color: var(--sub); }
+    :root[data-skin="line"][data-style][data-pro] .tabs > button.on { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+    :root[data-skin="line"][data-style][data-pro] .tabs > button svg { color: inherit; }
+  }
+  @media (max-width: 999px) {
+    :root[data-skin="line"][data-style][data-pro] .side, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .side { background: color-mix(in srgb, var(--bg) 88%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--line); }
+    :root[data-skin="line"][data-style][data-pro] .side::before { display: none; }
+    :root[data-skin="line"][data-style][data-pro] .tabs, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .tabs { background: none; box-shadow: none; border-radius: 0; }
+    :root[data-skin="line"][data-style][data-pro] .tabs > button, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .tabs > button { position: relative; background: none; color: var(--sub); border-radius: 0; font-size: 15px; padding: 0 12px; }
+    :root[data-skin="line"][data-style][data-pro] .tabs > button.on, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .tabs > button.on { background: none; color: var(--ink); }
+    :root[data-skin="line"][data-style][data-pro] .tabs > button.on::after { content: ""; position: absolute; left: 50%; bottom: 0; width: 18px; height: 3px; margin-left: -9px; border-radius: 3px; background: var(--wire); }
+    :root[data-skin="line"][data-style][data-pro] .mon-toggle { background: var(--surface-2); color: var(--ink); }
   }
 
-  /* Send files: the one bold thing, in signal orange. */
-  :root[data-skin="orbit"][data-style][data-pro] .beam-card { border-radius: 6px; box-shadow: none; border: 1px solid color-mix(in srgb, var(--signal) 45%, transparent); color: #FFFFFF;
-    background: radial-gradient(120% 130% at 100% 0%, color-mix(in srgb, var(--signal) 42%, transparent), transparent 58%), linear-gradient(160deg, #1B0F09, #07080D); }
-  :root[data-skin="orbit"][data-style][data-pro] .beam-card.over { transform: none; box-shadow: inset 0 0 0 2px var(--signal); }
-  :root[data-skin="orbit"][data-style][data-pro] .beam-title { text-transform: uppercase; font-weight: 900; letter-spacing: -.02em; text-shadow: none; }
-  :root[data-skin="orbit"][data-style][data-pro] .beam-hint { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; }
-  :root[data-skin="orbit"][data-style][data-pro] .beam-btn { box-shadow: inset 0 0 0 1px rgba(255,255,255,.32); background: rgba(255,255,255,.04); color: #FFFFFF; }
-  :root[data-skin="orbit"][data-style][data-pro] .beam-hint { color: rgba(255,255,255,.7); opacity: 1; }
-  :root[data-skin="orbit"][data-style][data-pro] .beam-btn.primary { background: var(--signal); color: #140804; box-shadow: none; }
-  :root[data-skin="orbit"][data-style][data-pro] .beam-btn.primary:hover, :root[data-skin="orbit"][data-style][data-pro] .beam-btn:active { transform: none; box-shadow: none; }
+  /* -------- the line: this computer to the phone, along the top of every tab */
+  :root[data-skin="line"][data-style][data-pro] .link-line { display: flex; align-items: center; gap: 12px; height: 30px; margin: 4px 0 22px; font-size: 13px; color: var(--sub); }
+  :root[data-skin="line"][data-style][data-pro] body[data-tab="music"] .link-line { display: none; }
+  :root[data-skin="line"][data-style][data-pro] .ll-end { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--ink); }
+  :root[data-skin="line"][data-style][data-pro] .ll-track { position: relative; flex: 1 1 auto; min-width: 60px; height: 1.5px; border-radius: 2px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--wire) 25%, transparent), var(--wire) 15%, var(--wire) 85%, color-mix(in srgb, var(--wire) 25%, transparent)); }
+  :root[data-skin="line"][data-style][data-pro] .ll-track::before, :root[data-skin="line"][data-style][data-pro] .ll-track::after { content: ""; position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: var(--wire); }
+  :root[data-skin="line"][data-style][data-pro] .ll-track::before { left: -3px; } :root[data-skin="line"][data-style][data-pro] .ll-track::after { right: -3px; }
+  :root[data-skin="line"][data-style][data-pro] .ll-pk { position: absolute; top: 50%; left: 0; width: 16px; height: 4px; margin-top: -2px; border-radius: 2px; background: var(--wire);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--wire) 70%, transparent); opacity: 0; animation: ll-run 3.6s linear infinite; }
+  :root[data-skin="line"][data-style][data-pro] .link-line.idle .ll-pk:first-child { opacity: .75; }
+  :root[data-skin="line"][data-style][data-pro] .link-line.busy .ll-pk { opacity: 1; animation-duration: 1.2s; }
+  :root[data-skin="line"][data-style][data-pro] .link-line.busy .ll-pk:nth-child(2) { animation-delay: .4s; } :root[data-skin="line"][data-style][data-pro] .link-line.busy .ll-pk:nth-child(3) { animation-delay: .8s; }
+  :root[data-skin="line"][data-style][data-pro] .link-line.down .ll-track { background: repeating-linear-gradient(90deg, var(--faint) 0 6px, transparent 6px 12px); }
+  :root[data-skin="line"][data-style][data-pro] .link-line.down .ll-track::before, :root[data-skin="line"][data-style][data-pro] .link-line.down .ll-track::after { background: var(--faint); }
+  :root[data-skin="line"][data-style][data-pro] .ll-mid { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis;
+    padding: 4px 12px; border-radius: 999px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); font: 600 11.5px/1.2 var(--mono); color: var(--ink); white-space: nowrap; }
+  @keyframes ll-run { from { left: 0; } to { left: calc(100% - 16px); } }
+  @media (prefers-reduced-motion: reduce) { :root[data-skin="line"][data-style][data-pro] .ll-pk { animation: none; } }
+
+  /* -------- Home: the briefing */
+  :root[data-skin="line"][data-style][data-pro] body[data-tab="home"] .page-head { display: none; }
+  :root[data-skin="line"][data-style][data-pro] .status-line, :root[data-skin="line"][data-style][data-pro] body.at-top .status-line {
+    display: flex !important; flex-wrap: wrap; align-items: flex-end; gap: 14px 24px; min-height: 0 !important; margin: 0 0 14px !important; padding: 0 !important;
+    border: 0 !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; color: var(--ink); }
+  :root[data-skin="line"][data-style][data-pro] .status-line::before, :root[data-skin="line"][data-style][data-pro] .status-line::after, :root[data-skin="line"][data-style][data-pro] .status-line .dot, :root[data-skin="line"][data-style][data-pro] .status-line .rate, :root[data-skin="line"][data-style][data-pro] #route-badge { display: none !important; }
+  :root[data-skin="line"][data-style][data-pro] .status-line .who { flex: 1 1 320px; display: block; }
+  :root[data-skin="line"][data-style][data-pro] .status-line .who b { display: block; margin: 0 0 6px; font-family: var(--ui); font-size: clamp(32px, 4.6vw, 54px); font-weight: 650; letter-spacing: -.04em;
+    line-height: 1.02; color: var(--ink); text-shadow: none; text-transform: none; }
+  :root[data-skin="line"][data-style][data-pro] .status-line .who > span { font-family: var(--ui); font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--sub); text-shadow: none; }
+  :root[data-skin="line"][data-style][data-pro] .status-line #hero-sub:not(:empty)::before { content: "\00B7"; margin: 0 7px; }
+  :root[data-skin="line"][data-style][data-pro] .status-line .hero-act { display: flex; gap: 8px; flex-wrap: wrap; }
+  :root[data-skin="line"][data-style][data-pro] .status-line .btn, :root[data-skin="line"][data-style][data-pro] .status-line .btn.ghost { height: 40px; padding: 0 18px; border-radius: 999px; font-size: 14px; background: var(--surface); color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--line); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  :root[data-skin="line"][data-style][data-pro] .briefing { display: block; margin: 0 0 30px; }
+  :root[data-skin="line"][data-style][data-pro] .brief { margin: 0 0 26px; max-width: 44ch; font-family: var(--serif); font-size: clamp(19px, 2.1vw, 24px); line-height: 1.45; letter-spacing: -.005em; color: var(--ink); }
+  :root[data-skin="line"][data-style][data-pro] .brief .q { color: var(--sub); }
+  :root[data-skin="line"][data-style][data-pro] .brief-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+  :root[data-skin="line"][data-style][data-pro] .st { padding: 16px 16px 4px 0; min-width: 0; }
+  :root[data-skin="line"][data-style][data-pro] .st + .st { padding-left: 16px; border-left: 1px solid var(--line); }
+  :root[data-skin="line"][data-style][data-pro] .st b { display: block; font-family: var(--ui); font-size: clamp(30px, 3.6vw, 46px); font-weight: 600; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+  :root[data-skin="line"][data-style][data-pro] .st b i { font-style: normal; font-size: .42em; font-weight: 600; letter-spacing: 0; margin-left: 3px; color: var(--sub); }
+  :root[data-skin="line"][data-style][data-pro] .st b .st-w { font-size: .62em; letter-spacing: -.02em; }
+  :root[data-skin="line"][data-style][data-pro] .st small { display: block; margin-top: 8px; font-size: 12.5px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 600px) {
+    :root[data-skin="line"][data-style][data-pro] .brief-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    :root[data-skin="line"][data-style][data-pro] .st:nth-child(3) { padding-left: 0; border-left: 0; }
+    :root[data-skin="line"][data-style][data-pro] .st:nth-child(n+3) { border-top: 1px solid var(--line); }
+  }
+  :root[data-skin="line"][data-style][data-pro] .route-hint { border-radius: 14px; }
+
+  /* -------- Home: the pads */
+  :root[data-skin="line"][data-style][data-pro] .home-main { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+  :root[data-skin="line"][data-style][data-pro] #home-pads { display: contents; }
+  :root[data-skin="line"][data-style][data-pro] .home-main > .beam-card { order: 1; }
+  :root[data-skin="line"][data-style][data-pro] .home-main > .clip-card { order: 2; grid-column: span 2; }
+  :root[data-skin="line"][data-style][data-pro] #pad-music { order: 3; } :root[data-skin="line"][data-style][data-pro] #pad-where { order: 4; } :root[data-skin="line"][data-style][data-pro] #pad-cams { order: 5; } :root[data-skin="line"][data-style][data-pro] #pad-alerts { order: 6; } :root[data-skin="line"][data-style][data-pro] #pad-phones { order: 7; }
+  @media (max-width: 999px) {
+    :root[data-skin="line"][data-style][data-pro] .home-main { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    :root[data-skin="line"][data-style][data-pro] .home-main > .clip-card { grid-column: 1 / -1; order: 3; }
+    :root[data-skin="line"][data-style][data-pro] #pad-music { order: 2; }
+  }
+  :root[data-skin="line"][data-style][data-pro] .pad { position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 14px; min-height: 148px; min-width: 0; padding: 16px;
+    border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--card-shadow); color: var(--ink); text-align: left; font: inherit; cursor: pointer;
+    transition: transform .2s cubic-bezier(.2,.8,.2,1), border-color .2s; }
+  :root[data-skin="line"][data-style][data-pro] .pad:hover { border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
+  :root[data-skin="line"][data-style][data-pro] .pad:active { transform: scale(.985); }
+  :root[data-skin="line"][data-style][data-pro] .pad-k { display: flex; align-items: center; gap: 8px; font: 600 10.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--sub); }
+  :root[data-skin="line"][data-style][data-pro] .pad-k i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+  :root[data-skin="line"][data-style][data-pro] .pad-k i.on { background: #34C759; box-shadow: 0 0 0 3px color-mix(in srgb, #34C759 22%, transparent); }
+  :root[data-skin="line"][data-style][data-pro] .pad-v { font-size: 19px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  :root[data-skin="line"][data-style][data-pro] .pad-s { margin-top: 3px; font-size: 13px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :root[data-skin="line"][data-style][data-pro] .pad-art { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: var(--surface-2); }
+  :root[data-skin="line"][data-style][data-pro] .pad-map { width: 100%; height: 72px; display: block; margin-bottom: 4px; }
+  :root[data-skin="line"][data-style][data-pro] .pad-map line { stroke: var(--wire); stroke-width: 1.2; stroke-dasharray: 3 3; }
+  :root[data-skin="line"][data-style][data-pro] .pad-map circle { fill: var(--ink); } :root[data-skin="line"][data-style][data-pro] .pad-map circle.me { fill: var(--wire); }
+  :root[data-skin="line"][data-style][data-pro] .pad-map text { font: 600 9px var(--mono); fill: var(--sub); }
+
+  /* Send: the one key. Solid ink, words in the page's colour. */
+  :root[data-skin="line"][data-style][data-pro] .beam-card { min-height: 148px; padding: 16px; border-radius: 18px; border: 0; box-shadow: none; color: var(--on-key); background: var(--key); gap: 14px; }
+  :root[data-skin="line"][data-style][data-pro] .beam-card.over { transform: none; box-shadow: 0 0 0 3px var(--wire); }
+  :root[data-skin="line"][data-style][data-pro] .beam-title { font-family: var(--ui); font-size: 22px; font-weight: 650; letter-spacing: -.03em; text-shadow: none; text-transform: none; }
+  :root[data-skin="line"][data-style][data-pro] .beam-hint { font-family: var(--ui); font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; color: color-mix(in srgb, var(--on-key) 62%, transparent); opacity: 1; }
+  :root[data-skin="line"][data-style][data-pro] .beam-actions { gap: 8px; }
+  :root[data-skin="line"][data-style][data-pro] .beam-btn { height: 40px; padding: 0 14px; border-radius: 999px; font-family: var(--ui); font-size: 14px; font-weight: 600; letter-spacing: 0; text-transform: none;
+    color: var(--on-key); background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--on-key) 30%, transparent); }
+  :root[data-skin="line"][data-style][data-pro] .beam-btn.primary { color: var(--key); background: var(--on-key); box-shadow: none; }
+  :root[data-skin="line"][data-style][data-pro] .beam-btn { white-space: nowrap; }
+  @media (max-width: 999px) { :root[data-skin="line"][data-style][data-pro] .beam-actions { flex-direction: column; } :root[data-skin="line"][data-style][data-pro] .beam-btn { width: 100%; justify-content: center; padding: 0 10px; } }
+  :root[data-skin="line"][data-style][data-pro] .beam-btn:hover { background: color-mix(in srgb, var(--on-key) 10%, transparent); }
+  :root[data-skin="line"][data-style][data-pro] .beam-btn.primary:hover { background: var(--on-key); transform: none; box-shadow: none; }
+  :root[data-skin="line"][data-style][data-pro] .beam-btn:active { transform: scale(.97); }
+  :root[data-skin="line"][data-style][data-pro] .beam-to { color: var(--on-key); }
+  :root[data-skin="line"][data-style][data-pro] .clip-card { padding: 16px 18px; }
+  :root[data-skin="line"][data-style][data-pro] .clip-card .sec-head { min-height: 28px; margin-bottom: 10px; }
+  :root[data-skin="line"][data-style][data-pro] section[data-panel="home"] .clip-field textarea, :root[data-skin="line"][data-style][data-pro] section[data-panel="home"] .clip-item { min-height: 96px; }
 </style>
 </head>
 <body>
@@ -2916,6 +2992,7 @@
     </div>
   </aside>
   <main class="main" id="main">
+  <div class="link-line down" id="link-line"><span class="ll-end">This computer</span><span class="ll-track"><i class="ll-pk"></i><i class="ll-pk"></i><i class="ll-pk"></i><span class="ll-mid" id="ll-mid">Connecting</span></span><span class="ll-end" id="ll-phone">Phone</span></div>
   <div class="page-head"><h1 id="page-title">Home</h1><p id="page-sub" hidden></p></div>
 
   <!-- ---------------------------------------------------------- home -->
@@ -2929,6 +3006,7 @@
         <div class="rate"><b id="hero-rate"></b><span id="hero-rate-sub">No transfers</span></div>
       </div>
     </div>
+    <div class="briefing" id="briefing"><p class="brief" id="brief"></p><div class="brief-stats" id="brief-stats"></div></div>
     <p class="route-hint" id="route-hint" hidden></p>
     <p class="route-hint" id="mirror-hint" hidden></p>
 
@@ -2962,6 +3040,13 @@
           <button class="beam-btn primary" id="pick-files" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg><span>Choose files</span></button>
           <button class="beam-btn" id="pick-folder" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17Z"/></svg><span>Choose a folder</span></button>
         </div>
+      </div>
+      <div id="home-pads">
+        <button class="pad" id="pad-music" type="button" data-go="music"><span class="pad-k"><i></i>Music</span><span class="pad-body"><span class="pad-v">Nothing playing</span><span class="pad-s"></span></span></button>
+        <button class="pad" id="pad-where" type="button" data-go="map"><span class="pad-k"><i></i>Where</span><span class="pad-body"></span></button>
+        <button class="pad" id="pad-cams" type="button" data-go="cams"><span class="pad-k"><i></i>Camera</span><span class="pad-body"><span class="pad-v">Off</span><span class="pad-s"></span></span></button>
+        <button class="pad" id="pad-alerts" type="button" data-go="alerts"><span class="pad-k"><i></i>Alerts</span><span class="pad-body"><span class="pad-v">None</span><span class="pad-s"></span></span></button>
+        <button class="pad" id="pad-phones" type="button" data-go="phones"><span class="pad-k"><i></i>Phones</span><span class="pad-body"><span class="pad-v">No linked phones</span><span class="pad-s"></span></span></button>
       </div>
     </div>
 
@@ -3134,12 +3219,12 @@
       </div>
       <div class="set-row">
         <span class="sq grey"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(-25 12 12)"/></svg></span>
-        <div class="sr-text"><b>Skin</b><span>For this browser</span></div>
+        <div class="sr-text"><b>Design</b><span>For this browser. The original page stays whole at <a href="/classic">/classic</a></span></div>
       </div>
       <div class="set-row sr-block">
         <div class="seg" id="skin-seg">
-          <button data-skin-choice="theatre">Theatre</button>
-          <button data-skin-choice="orbit">Orbit</button>
+          <button data-skin-choice="line">New</button>
+          <button data-skin-choice="theatre">Classic</button>
         </div>
       </div>
     </div>
@@ -5452,6 +5537,7 @@ function ensureTicker() {
 }
 
 function updateDock(active, totalBps) {
+  lineSeen.active = active; lineSeen.bps = totalBps; lineDraw();
   var count = $("tab-count");
   if (count) { count.hidden = !active; count.textContent = active; }
   var dock = $("dock");
@@ -6176,12 +6262,13 @@ function applyLook(l) {
 }
 
 /**
- * The skin, kept in this browser: Theatre (the app's own look), or Orbit, a control room in deep space laid over it
- * (the styles at the end of the sheet). The phone's shared look knows only Theatre, so it is not sent there.
+ * The design, kept in this browser: Line, the new one (the styles at the end of the sheet, and Home's briefing,
+ * line and pads), or Classic, the page as it was (Theatre). The phone's shared look knows only Theatre, so this
+ * is not sent there.
  */
-var SKINS = ["theatre", "orbit"];
+var SKINS = ["line", "theatre"];
 function applySkin(s) {
-  if (SKINS.indexOf(s) < 0) s = "theatre";
+  if (SKINS.indexOf(s) < 0) s = "line";
   if (s === "theatre") document.documentElement.removeAttribute("data-skin");
   else document.documentElement.setAttribute("data-skin", s);
   Array.prototype.forEach.call(document.querySelectorAll("[data-skin-choice]"), function (b) { b.classList.toggle("on", b.dataset.skinChoice === s); });
@@ -10628,6 +10715,7 @@ function showApp() {
     setupDrop();
     setupSendTo();
     setupDock();
+    lineSetup();
     setupPlayer();
     setupFullPlayer();
     loadFavourites();
@@ -10900,6 +10988,133 @@ async function takeHandoff() {
   }
 }
 
+// ------------------------------------------------------------------ Line: the line, the briefing, the pads
+//
+// What the new design shows that the old did not: along the top, this computer and the phone joined by a line, with
+// how and how fast (packets run along it while files move); on Home, a few plain sentences from the live state, four
+// numbers, and pads for music, where the devices are, the camera, alerts and linked phones. Filled from what the page
+// already knows, plus the camera's state (battery too) and the map's positions, asked every half a minute.
+
+var lineSeen = { active: 0, bps: 0, cam: null, where: null, at: 0, timer: 0 };
+var LL_WAYS = { usb: "USB cable", adb: "USB debugging", direct: "Direct link", hotspot: "Hotspot", wifi: "Wi-Fi", internet: "Internet tunnel", website: "Website" };
+
+function lineDraw() {
+  var el = $("link-line");
+  if (!el) return;
+  var up = !!route && $("dot") && $("dot").classList.contains("on");
+  el.classList.toggle("down", !up);
+  el.classList.toggle("busy", up && lineSeen.active > 0);
+  el.classList.toggle("idle", up && !lineSeen.active);
+  $("ll-phone").textContent = state.device || "Phone";
+  var way = route ? (LL_WAYS[route.via] || "Network") : "";
+  $("ll-mid").textContent = !up ? "Not connected" : lineSeen.active ? way + " \u00B7 " + rate(lineSeen.bps) : way + (route && route.ip ? " \u00B7 " + route.ip : "");
+}
+
+/** About how fast the link is, as a number, for the briefing: what is moving now, else what the link usually gives. */
+function lineSpeed() {
+  if (lineSeen.active && lineSeen.bps > 0) return { n: Math.round(lineSeen.bps / 1e6), now: true };
+  var b = route && ROUTE_BADGES[route.via], m = b && /(\d+)\s*MB\/s/.exec(b.speed);
+  if (route && route.via === "usb" && route.usbMbps > 0 && route.usbMbps < 600) return { n: 40, now: false };
+  return m ? { n: +m[1], now: false } : null;
+}
+
+async function lineAsk() {
+  if (document.documentElement.getAttribute("data-skin") !== "line") return;
+  try { var r = await api("/api/cams/state", { cache: "no-store" }); if (r.ok) lineSeen.cam = await r.json(); } catch (e) {}
+  if (Date.now() - lineSeen.at > 30000) {
+    lineSeen.at = Date.now();
+    try { var w = await api("/api/where", { cache: "no-store" }); if (w.ok) lineSeen.where = await w.json(); } catch (e) {}
+  }
+  lineDraw();
+  briefDraw();
+}
+
+function lineAgo(at) {
+  var s = (Date.now() - at) / 1000;
+  return s < 90 ? "just now" : s < 3600 ? Math.round(s / 60) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : new Date(at).toLocaleDateString(undefined, { weekday: "long" });
+}
+
+function metresBetween(a, b) {
+  var R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+  var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function farWords(m) { return m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(m < 10000 ? 1 : 0) + " km"; }
+
+/** Home: the sentences, the four numbers and the pads. */
+function briefDraw() {
+  if (document.documentElement.getAttribute("data-skin") !== "line" || !$("brief")) return;
+  var name = state.device || "The phone", up = $("dot") && $("dot").classList.contains("on");
+  var cam = lineSeen.cam, bat = cam && cam.battery >= 0 ? cam.battery : null, sp = lineSpeed();
+  var way = route ? (LL_WAYS[route.via] || "the network") : "";
+  var notes = Object.keys(notifs).filter(function (k) { return !notifs[k].ongoing; }).length;
+  var places = (lineSeen.where && lineSeen.where.places) || [], me = places.filter(function (p) { return p.id === "self"; })[0];
+  // The sentences: what is true now, said once, plainly.
+  var s = [];
+  if (!up) s.push(name + " is not reachable from this computer right now.");
+  else s.push(name + " is with this computer over " + (way === "Wi-Fi" ? "Wi-Fi" : "its " + way.toLowerCase()) +
+    (lineSeen.active ? ", moving " + lineSeen.active + (lineSeen.active === 1 ? " file" : " files") + " at " + rate(lineSeen.bps) + "." : sp ? ", good for about " + sp.n + " MB/s." : "."));
+  if (bat != null) s.push("Its battery is at " + bat + "%" + (cam.charging ? " and charging." : "."));
+  var away = linkedPhones.filter(function (p) { return !p.nearby; });
+  if (linkedPhones.length) s.push(linkedPhones.length === 1 ? linkedPhones[0].name + " is linked" + (linkedPhones[0].nearby ? " and nearby." : ".") : linkedPhones.length + " phones are linked.");
+  if (notes) s.push(notes === 1 ? "One notification is waiting." : notes + " notifications are waiting.");
+  else if (notifLive && notifAllowed) s.push('<span class="q">Nothing new on the phone.</span>');
+  $("brief").innerHTML = s.map(function (x) { return x.indexOf("<span") === 0 ? x : esc(x); }).join(" ");
+  // The numbers.
+  var stats = [
+    [bat != null ? bat + "<i>%</i>" : "\u2013", bat != null && cam.charging ? "Battery, charging" : "Battery"],
+    [sp ? sp.n + "<i>MB/s</i>" : up && way ? '<span class="st-w">' + esc(way) + "</span>" : "\u2013", up ? (sp ? (sp.now ? "Moving now" : "Typical over " + way) : "The link") : "Not connected"],
+    [String(linkedPhones.length), linkedPhones.length === 1 ? "Linked phone" : "Linked phones"],
+    [String(notes), notes === 1 ? "Notification" : "Notifications"],
+  ];
+  $("brief-stats").innerHTML = stats.map(function (x) { return '<div class="st"><b>' + x[0] + '</b><small>' + esc(x[1]) + "</small></div>"; }).join("");
+  padsDraw(places, me, notes, cam);
+}
+
+function padSet(id, v, sub, on) {
+  var p = $(id); if (!p) return;
+  var body = p.querySelector(".pad-body");
+  body.innerHTML = '<span class="pad-v"></span><span class="pad-s"></span>';
+  body.firstChild.textContent = v; body.lastChild.textContent = sub || "";
+  p.querySelector(".pad-k i").classList.toggle("on", !!on);
+}
+
+function padsDraw(places, me, notes, cam) {
+  var t = currentTrack(), playing = !!t && isPlaying();
+  padSet("pad-music", t ? t.title : "Nothing playing", t ? t.artist : (music.tracks && music.tracks.length ? music.tracks.length + " songs on the phone" : ""), playing);
+  if (t) {
+    var img = document.createElement("img"); img.className = "pad-art"; img.alt = ""; img.src = artUrl(t.albumId, 0);
+    $("pad-music").querySelector(".pad-body").prepend(img);
+  }
+  padSet("pad-cams", !cam ? "\u2013" : cam.running ? (cam.recording ? "Recording" : "Live") : cam.on ? "Starting" : "Off",
+    cam && cam.running ? (cam.viewers ? cam.viewers + " watching" : "Nobody watching") : "This phone's camera", cam && cam.running);
+  padSet("pad-alerts", notes ? notes + (notes === 1 ? " notification" : " notifications") : "None", !notifLive ? "Not passed on right now" : "From the phone", notes > 0);
+  padSet("pad-phones", linkedPhones.length ? linkedPhones.map(function (p) { return p.name; }).join(", ") : "No linked phones",
+    linkedPhones.length ? (linkedPhones.some(function (p) { return p.nearby; }) ? "Nearby" : "Away, through the tunnel") : "Link one from the phone", linkedPhones.some(function (p) { return p.nearby; }));
+  // Where: this phone in the middle, the others around it by direction and (squeezed) distance, joined by a line.
+  var pw = $("pad-where").querySelector(".pad-body"), others = me ? places.filter(function (p) { return p !== me && p.fix; }) : [];
+  if (!me || !me.fix) { padSet("pad-where", "No position yet", "Turn on location on the phone", false); return; }
+  var W = 220, H = 72, cx = W / 2, cy = H / 2, far = 0, svg = "";
+  others.forEach(function (p) { far = Math.max(far, metresBetween(me.fix, p.fix)); });
+  others.slice(0, 5).forEach(function (p) {
+    var m = metresBetween(me.fix, p.fix), a = Math.atan2(p.fix.lat - me.fix.lat, (p.fix.lon - me.fix.lon) * Math.cos(me.fix.lat * Math.PI / 180));
+    var k = far > 0 ? Math.sqrt(m / far) : 0, x = cx + Math.cos(a) * k * (W / 2 - 14), y = cy - Math.sin(a) * k * (H / 2 - 8);
+    svg += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '"/><circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3.5"/>';
+  });
+  svg += '<circle class="me" cx="' + cx + '" cy="' + cy + '" r="5"/>';
+  var near = others.slice().sort(function (a, b) { return metresBetween(me.fix, a.fix) - metresBetween(me.fix, b.fix); })[0];
+  pw.innerHTML = '<svg class="pad-map" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="xMidYMid meet" aria-hidden="true">' + svg + '</svg><span class="pad-s"></span>';
+  pw.lastChild.textContent = near ? near.name + " " + farWords(metresBetween(me.fix, near.fix)) + " away" + (others.length > 1 ? ", " + (others.length - 1) + " more" : "") : "Seen " + lineAgo(me.fix.at);
+  $("pad-where").querySelector(".pad-k i").classList.toggle("on", Date.now() - me.fix.at < 600000);
+}
+
+function lineSetup() {
+  Array.prototype.forEach.call(document.querySelectorAll("#home-pads .pad"), function (p) { p.addEventListener("click", function () { selectTab(p.dataset.go); }); });
+  lineAsk();
+  setInterval(function () { if (document.visibilityState === "visible") lineAsk(); }, 15000);
+  setInterval(function () { lineDraw(); briefDraw(); }, 3000);
+}
+
 // ------------------------------------------------------------------ the redesign's sidebar and Ctrl K
 //
 // On a computer's width the tabs run down a sidebar (the styles at the end of the page); Ctrl K
@@ -11123,7 +11338,7 @@ setInterval(pageFresh, 600000);
   try { saved = localStorage.getItem("blazeit.theme") || "system"; } catch (e) {}
   applyTheme(saved);
   try { applyLook(JSON.parse(localStorage.getItem("blazeit.look") || "null")); } catch (e) {}
-  var skin = "theatre"; try { skin = localStorage.getItem("blazeit.skin") || "theatre"; } catch (e) {}
+  var skin = "line"; try { skin = localStorage.getItem("blazeit.skin") || "line"; } catch (e) {}
   applySkin(skin);
   try {
     var res = await fetch("/api/ping", { credentials: "same-origin" });

@@ -2476,6 +2476,12 @@ class BridgeServer(
                 call.respondBytes(pageBytes, ContentType.Text.Html.withCharset(Charsets.UTF_8))
             }
         }
+        // The page as it was before the 2026-10-11 redesign, kept whole as a backup (Settings links to it).
+        get("/classic") {
+            call.response.header(HttpHeaders.CacheControl, "no-cache")
+            val bytes = withContext(Dispatchers.IO) { runCatching { ctx.assets.open("classic.html").use { it.readBytes() } }.getOrNull() }
+            if (bytes == null) call.respond(HttpStatusCode.NotFound) else call.respondBytes(bytes, ContentType.Text.Html.withCharset(Charsets.UTF_8))
+        }
         // Which page this app serves now, for a page left open to compare with its own (nothing private in it).
         get("/api/page-id") {
             call.response.header(HttpHeaders.CacheControl, "no-store")
@@ -3270,7 +3276,7 @@ class BridgeServer(
         const val BENCH_MAX = 4L * 1024 * 1024 * 1024
 
         // map.html holds no positions: the app hands them in, the page asks /api/where (paired) for them.
-        val PUBLIC_PATHS = setOf("/", "/api/ping", "/api/page-id", "/favicon.ico", "/map.html")
+        val PUBLIC_PATHS = setOf("/", "/classic", "/api/ping", "/api/page-id", "/favicon.ico", "/map.html")
 
         /** The page's font files: Lexend Deca, by script subset and weight. */
         val FONT_FILE = Regex("""lexend-deca-(latin|latin-ext)-(400|500|600|700)-normal\.woff2""")
