@@ -2945,6 +2945,21 @@
   :root[data-skin="line"][data-style][data-pro] .clip-card { padding: 16px 18px; }
   :root[data-skin="line"][data-style][data-pro] .clip-card .sec-head { min-height: 28px; margin-bottom: 10px; }
   :root[data-skin="line"][data-style][data-pro] section[data-panel="home"] .clip-field textarea, :root[data-skin="line"][data-style][data-pro] section[data-panel="home"] .clip-item { min-height: 96px; }
+  /* Shared interaction finish: keyboard navigation stays visible across every skin. */
+  :root { --focus-ring: var(--blue); }
+  :is(button, a, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus-ring) !important;
+    outline-offset: 3px !important;
+  }
+  #login { --focus-ring: #FFFFFF; }
+  .skip-link {
+    position: fixed; top: 12px; left: 12px; z-index: 10000;
+    padding: 12px 18px; border-radius: var(--r);
+    background: var(--accent); color: var(--on-accent);
+    font-weight: 600; transform: translateY(calc(-100% - 24px));
+  }
+  .skip-link:focus { transform: translateY(0); }
+  input, textarea { caret-color: var(--txt); }
 </style>
 </head>
 <body>
@@ -2961,14 +2976,14 @@
     <h1>Connect this<br>computer</h1>
     <p id="login-device">The phone will ask you to allow it.</p>
   <div class="pad">
-    <div id="login-error" class="banner bad" hidden></div>
+    <div id="login-error" class="banner bad" role="alert" hidden></div>
     <div id="pair-idle">
       <div class="actions"><button id="pair" class="btn lg-go">Ask to connect<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6.5 18.5 12 13 17.5"/></svg></button></div>
     </div>
     <div id="pair-wait" hidden>
       <p class="note lg-ask">Tap <b>Allow</b> on your phone if it shows this code</p>
       <div class="code" id="pair-code">----</div>
-      <div class="meta" id="pair-status">Waiting for the phone...</div>
+      <div class="meta" id="pair-status" role="status">Waiting for the phone...</div>
       <div class="actions"><button id="pair-cancel" class="btn ghost">Cancel</button></div>
     </div>
   </div>
@@ -2978,9 +2993,10 @@
 
 <!-- -------------------------------------------------------------------- app -->
 <div class="shell" id="app" hidden>
+  <a class="skip-link" href="#main">Skip to content</a>
   <aside class="side">
     <div class="logo"><span class="mark"><svg aria-hidden="true" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0b0b0b"/><g fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" transform="translate(50 50) scale(.86) translate(-51 -50.75)"><circle cx="36" cy="37" r="10" stroke="#fff"/><circle cx="36" cy="62" r="12.5" stroke="#fff"/><path d="M55 27 H76 L61 74" stroke="#FFD60A"/></g></svg></span><span>Localhost 8787</span></div>
-    <nav class="tabs" id="tabs"></nav>
+    <nav class="tabs" id="tabs" aria-label="Main navigation"></nav>
     <div class="side-foot">
       <button class="side-item mon-toggle" id="mon-toggle" title="Monitor: live speed, ping and the Wi-Fi link">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h4l3-7 5 14 3-9 2 2h3"/></svg><span>Monitor</span><i class="switch"></i>
@@ -2991,7 +3007,7 @@
       </div>
     </div>
   </aside>
-  <main class="main" id="main">
+  <main class="main" id="main" tabindex="-1">
   <div class="link-line down" id="link-line"><span class="ll-end">This computer</span><span class="ll-track"><i class="ll-pk"></i><i class="ll-pk"></i><i class="ll-pk"></i><span class="ll-mid" id="ll-mid">Connecting</span></span><span class="ll-end" id="ll-phone">Phone</span></div>
   <div class="page-head"><h1 id="page-title">Home</h1><p id="page-sub" hidden></p></div>
 
