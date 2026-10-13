@@ -50,7 +50,7 @@ class LyricsStore(ctx: Context, private val songFile: (TrackDto) -> File?) {
         val side = sidecar(t)
         if (own != null && own.source != "none") {
             // Found before the .lrc was kept beside the song: it is now.
-            if (side != null && !side.exists()) writeSidecar(side, own)
+            if (side != null && !side.exists()) writeSidecar(side, own, t)
             return own
         }
         if (side != null && side.isFile) {
@@ -68,14 +68,23 @@ class LyricsStore(ctx: Context, private val songFile: (TrackDto) -> File?) {
         val tmp = File(dir, f.name + ".tmp")
         tmp.writeText(json.encodeToString(LyricsDoc.serializer(), doc.copy(at = System.currentTimeMillis())))
         if (!tmp.renameTo(f)) { f.writeText(tmp.readText()); tmp.delete() }
-        if (doc.source != "none" && doc.source != "file") sidecar(t)?.let { if (!it.exists()) writeSidecar(it, doc) }
+        if (doc.source == "none" || doc.source == "file") return
+        val side = sidecar(t) ?: return
+        // Timed word by word (the lyrics checker's work, or LRCLIB's word sync): written beside the song even over
+        // the .lrc kept there before, which only had the lines. The app's own store is gone with a reinstall; the
+        // .lrc beside the song is not, so the word timing lives on there.
+        val words = WORD_TIMED.containsMatchIn(doc.lrc) || doc.lyricsfile.isNotBlank()
+        if (!side.exists()) writeSidecar(side, doc, t)
+        else if (words && !WORD_TIMED.containsMatchIn(runCatching { side.readText() }.getOrDefault(""))) writeSidecar(side, doc, t)
     }
 
     /** "Song.flac" keeps its lyrics in "Song.lrc", beside it. */
     private fun sidecar(t: TrackDto): File? = songFile(t)?.let { File(it.parentFile, it.nameWithoutExtension + ".lrc") }
 
-    private fun writeSidecar(f: File, doc: LyricsDoc) {
-        val text = doc.sidecar.ifBlank { doc.lrc.ifBlank { doc.plain } }
+    private fun writeSidecar(f: File, doc: LyricsDoc, t: TrackDto? = null) {
+        // With its song's details at the top (as LRCLIB's are kept), and its words' times when it has them.
+        val built = if (doc.sidecar.isBlank() && t != null) runCatching { LyricsText.lrcFile(t, doc, LyricsText.parse(doc)) }.getOrDefault("") else ""
+        val text = doc.sidecar.ifBlank { built.ifBlank { doc.lrc.ifBlank { doc.plain } } }
         if (text.isBlank()) return
         runCatching {
             f.writeText(text)
@@ -89,5 +98,7 @@ class LyricsStore(ctx: Context, private val songFile: (TrackDto) -> File?) {
         const val MAX_BYTES = 1024 * 1024
         /** A line with a time on it, "[01:02.30]", as timed lyrics have. */
         private val TIMED = Regex("""^\s*\[\d+:\d+""", RegexOption.MULTILINE)
+        /** A word's own time, "<01:02.30>", as Enhanced LRC has them. */
+        private val WORD_TIMED = Regex("""<\d+:\d+""")
     }
 }
