@@ -49,8 +49,8 @@ class LyricsStore(ctx: Context, private val songFile: (TrackDto) -> File?) {
         val own = runCatching { file(t).takeIf { it.isFile }?.let { json.decodeFromString<LyricsDoc>(it.readText()) } }.getOrNull()
         val side = sidecar(t)
         if (own != null && own.source != "none") {
-            // Found before the .lrc was kept beside the song: it is now.
-            if (side != null && !side.exists()) writeSidecar(side, own, t)
+            // Found before the .lrc was kept beside the song: it is now; timed word by word since, it is brought up to date.
+            if (side != null) { if (!side.exists()) writeSidecar(side, own, t) else keepWords(side, own, t) }
             return own
         }
         if (side != null && side.isFile) {
@@ -68,14 +68,20 @@ class LyricsStore(ctx: Context, private val songFile: (TrackDto) -> File?) {
         val tmp = File(dir, f.name + ".tmp")
         tmp.writeText(json.encodeToString(LyricsDoc.serializer(), doc.copy(at = System.currentTimeMillis())))
         if (!tmp.renameTo(f)) { f.writeText(tmp.readText()); tmp.delete() }
-        if (doc.source == "none" || doc.source == "file") return
+        if (doc.source == "none") return
         val side = sidecar(t) ?: return
         // Timed word by word (the lyrics checker's work, or LRCLIB's word sync): written beside the song even over
-        // the .lrc kept there before, which only had the lines. The app's own store is gone with a reinstall; the
-        // .lrc beside the song is not, so the word timing lives on there.
+        // the .lrc kept there before, which only had the lines, and even when these lyrics were first read from that
+        // .lrc (as they are after a reinstall, the app's own store gone with it). The .lrc beside the song outlives
+        // the app, so the word timing lives on there.
+        if (!side.exists()) { if (doc.source != "file") writeSidecar(side, doc, t) } else keepWords(side, doc, t)
+    }
+
+    /** [doc] timed word by word and the .lrc beside the song by line only: the .lrc takes the words' times. */
+    private fun keepWords(side: File, doc: LyricsDoc, t: TrackDto) {
         val words = WORD_TIMED.containsMatchIn(doc.lrc) || doc.lyricsfile.isNotBlank()
-        if (!side.exists()) writeSidecar(side, doc, t)
-        else if (words && !WORD_TIMED.containsMatchIn(runCatching { side.readText() }.getOrDefault(""))) writeSidecar(side, doc, t)
+        if (!words || WORD_TIMED.containsMatchIn(runCatching { side.readText() }.getOrDefault(""))) return
+        writeSidecar(side, if (doc.source == "file") doc.copy(source = "Timed word by word") else doc, t)
     }
 
     /** "Song.flac" keeps its lyrics in "Song.lrc", beside it. */
