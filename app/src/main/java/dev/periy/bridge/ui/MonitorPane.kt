@@ -74,6 +74,8 @@ import kotlin.math.roundToInt
 @Composable
 fun MonitorOverlay(m: MonitorSnapshot, running: Boolean, onClose: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
+    // Back folds the open sheet down to the pill first, rather than leaving the app.
+    androidx.activity.compose.BackHandler(enabled = expanded) { expanded = false }
     // The sampler only runs while someone is looking; this is the phone looking.
     DisposableEffect(Unit) {
         Monitor.watchUi(true)

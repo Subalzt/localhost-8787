@@ -72,7 +72,8 @@ fun LaptopFilesScreen(onClose: () -> Unit) {
     val listing = seen[path]
     val laptop = seen[""]?.laptop?.ifEmpty { null } ?: "The laptop"
     val up = { if (trail.size > 1) trail.removeAt(trail.lastIndex) else onClose() }
-    BackHandler(enabled = trail.size > 1) { up() }
+    // Up a folder, and from the top back to the app (it used to fall through there and close the app).
+    BackHandler { up() }
     // A file as it is, a folder as one zip of everything in it; it lands with what this phone has received.
     val save = { target: String, name: String, dir: Boolean ->
         Toast.makeText(ctx, "Saving $name", Toast.LENGTH_SHORT).show()

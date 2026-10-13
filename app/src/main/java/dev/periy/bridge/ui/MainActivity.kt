@@ -1814,7 +1814,7 @@ private fun LazyListScope.devicesTab(
             // Phones as security cameras (server/Cameras.kt): the control centre, over the lock screen too.
             val camCtx = LocalContext.current
             SettingRow("Cameras", "Your phones as security cameras, live, with motion alerts", icon = BlazeIcons.Video,
-                onClick = { camCtx.startActivity(android.content.Intent(camCtx, CamerasActivity::class.java)) })
+                onClick = { camCtx.startActivity(android.content.Intent(camCtx, CamerasActivity::class.java).putExtra("fromApp", true)) })
         }
     }
     item {

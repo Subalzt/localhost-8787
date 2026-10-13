@@ -120,12 +120,26 @@ class CamerasActivity : ComponentActivity() {
         enableEdgeToEdge()
         setShowWhenLocked(true)
         focus = intent.getStringExtra("camera")
-        setContent { BlazeTheme("dark") { CamerasScreen(focus, { focus = it }) { finish() } } }
+        fromApp = intent.getBooleanExtra("fromApp", false)
+        // Opened from the app's Devices: back at the top returns there. This screen is its own task (so the lock
+        // screen and the Quick Settings tile can open it alone), and without this back went to the home screen,
+        // as if the app had closed. Screens inside it (a camera full, its clips) take back first.
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (fromApp) startActivity(Intent(this@CamerasActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                finish()
+            }
+        })
+        setContent { BlazeTheme("dark") { CamerasScreen(focus, { focus = it }) { if (fromApp) startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); finish() } } }
     }
+
+    /** Whether the app opened this screen (back then returns to it). */
+    private var fromApp = false
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         intent.getStringExtra("camera")?.let { focus = it }
+        fromApp = intent.getBooleanExtra("fromApp", false)
     }
 }
 
