@@ -187,10 +187,11 @@ class Aligner:
             return None
         per_frame = (b - a) / emission.size(1) / self.sr * 1000
         a_ms, b_ms = a * 1000 / self.sr, b * 1000 / self.sr
-        starts, ends, score = {}, {}, []
+        starts, ends, score, chars = {}, {}, [], {}
         for i, sp in zip(idx, spans):
             starts[i] = a_ms + sp[0].start * per_frame
             ends[i] = a_ms + sp[-1].end * per_frame
+            chars[i] = [a_ms + s.start * per_frame for s in sp]
             score.append(sum(s.score for s in sp) / len(sp))
         edge = (a > 0 and min(starts.values()) < a_ms + EDGE_MS) or \
                (b < audio.numel() and max(ends.values()) > b_ms - EDGE_MS)
@@ -216,11 +217,15 @@ class Aligner:
             i = j
         for k in range(1, len(times)):
             times[k] = max(times[k], times[k - 1] + 1)
-        return times, sum(score) / len(score), edge
+        # Each placed word as heard: where each of its letters starts (for its syllables), and where it ends.
+        detail = {i: (keys[i], chars[i], ends[i]) for i in starts}
+        return times, sum(score) / len(score), edge, detail
 
 # ---------------------------------------------------------------- one song
 
 MIN_SCORE = 0.15
+# Words split into syllables, each lit as it is sung (--words-only turns it off).
+SYLLABLES = True
 PAD_MS = 600
 # A word this close to the edge of where it was looked for was pushed there, not found.
 EDGE_MS = 60
@@ -253,6 +258,110 @@ def settle(times, t, nxt):
         times[-1] = times[-2] + step
     return times
 
+VOWELS = set("aeiouy")
+# Two letters that make one sound: never split between them.
+DIGRAPHS = {"th", "ch", "sh", "ph", "wh", "ck", "gh", "ng", "qu"}
+# A syllable shorter than this is too quick to see light up on its own: kept with the one before.
+MIN_SYL_MS = 70
+# A gap in the singing at least this long after a word is marked, so its light stops when the voice does.
+END_GAP_MS = 140
+
+def syllable_starts(key):
+    """Where each syllable of [key] (a word as the aligner read it, a-z and ') begins, by letter: an
+    English rule of thumb (a consonant between vowels starts the next syllable, two are split between
+    them, letter pairs that make one sound kept together, a silent e at the end not its own)."""
+    groups, i = [], 0
+    while i < len(key):
+        if key[i] in VOWELS and not (key[i] == "y" and i == 0):
+            j = i
+            while j < len(key) and key[j] in VOWELS:
+                j += 1
+            groups.append((i, j))
+            i = j
+        else:
+            i += 1
+    # A final e after a consonant (make, there) is not sung as its own syllable.
+    if len(groups) > 1 and groups[-1] == (len(key) - 1, len(key)) and key[-1] == "e" and key[-2] not in VOWELS:
+        groups.pop()
+    if key.endswith("es") and len(groups) > 1 and groups[-1][0] == len(key) - 2 and key[-3] not in VOWELS and key[-3] not in "sxzcg":
+        groups.pop()
+    starts = [0]
+    for (a0, a1), (b0, b1) in zip(groups, groups[1:]):
+        cons = key[a1:b0]
+        n = len(cons)
+        if n == 0:
+            cut = b0
+        elif n == 1:
+            cut = a1
+        elif cons[:2] in DIGRAPHS and n == 2:
+            cut = a1
+        elif cons[-2:] in DIGRAPHS:
+            cut = b0 - 2
+        else:
+            cut = a1 + 1
+        if cut > starts[-1]:
+            starts.append(cut)
+    return starts
+
+def word_pieces(word, key, char_ms):
+    """[word] split where it is sung: [(ms, text)], each syllable with the time its first letter is heard.
+    The word whole when it has one syllable, or its letters cannot be matched to what the aligner read."""
+    # The word's own letters that the aligner read, in order (accents dropped, as norm() does).
+    keep = []
+    for k, c in enumerate(word):
+        d = unicodedata.normalize("NFKD", c.lower())
+        d = "".join(x for x in d if not unicodedata.combining(x)).replace("\u2019", "'").replace("`", "'")
+        if len(d) == 1 and ("a" <= d <= "z" or d == "'"):
+            keep.append((k, d))
+    letters = "".join(d for _, d in keep)
+    # norm() drops apostrophes at the ends; the aligner's key may drop letters it does not know.
+    lead = len(letters) - len(letters.lstrip("'"))
+    keep = keep[lead:]
+    while keep and keep[-1][1] == "'":
+        keep.pop()
+    if "".join(d for _, d in keep) != key or len(char_ms) != len(key) or len(key) < 4:
+        return None
+    cuts = syllable_starts(key)
+    if len(cuts) < 2:
+        return None
+    pieces, starts_ms = [], []
+    for n, c in enumerate(cuts):
+        a = 0 if n == 0 else keep[c][0]
+        b = keep[cuts[n + 1]][0] if n + 1 < len(cuts) else len(word)
+        ms = char_ms[c]
+        if pieces and (ms - starts_ms[-1] < MIN_SYL_MS):
+            pieces[-1] = pieces[-1] + word[a:b]
+            continue
+        pieces.append(word[a:b])
+        starts_ms.append(ms)
+    if len(pieces) < 2:
+        return None
+    return list(zip(starts_ms, pieces))
+
+def line_body(words, times, detail, sung, syllables=True):
+    """The line's words with their times: each word's syllables, each with its own, and a mark where the
+    singing stops after a word when there is a gap before the next. [sung]: the words whose times are
+    the aligner's own (moved ones keep their word time alone)."""
+    out = []
+    for i, (w, ms) in enumerate(zip(words, times)):
+        last = i == len(words) - 1
+        d = detail.get(i) if i in sung else None
+        pieces = word_pieces(w, d[0], d[1]) if (d and syllables) else None
+        if pieces:
+            pieces[0] = (ms, pieces[0][1])
+            ok = all(b[0] > a[0] for a, b in zip(pieces, pieces[1:]))
+            pieces = pieces if ok else None
+        if not pieces:
+            pieces = [(ms, w)]
+        body = "".join(f"<{fmt(p_ms)}>{text}" for p_ms, text in pieces)
+        out.append(body + ("" if last else " "))
+        if d:
+            end = d[2]
+            nxt = times[i + 1] if not last else None
+            if end > pieces[-1][0] + 40 and (last or nxt - end >= END_GAP_MS):
+                out.append(f"<{fmt(end)}>")
+    return "".join(out)
+
 def enhance(aligner, audio, doc, length_ms):
     lines, head = parse_lines(doc["lrc"])
     out, placed, total = list(head), 0, 0
@@ -277,6 +386,7 @@ def enhance(aligner, audio, doc, length_ms):
             total += 1
         if res:
             placed += 1
+            raw = list(res[0])
             times = settle(res[0], t, nxt)
             STATS.append((res[1], abs(times[0] - t)))
             # Sung before the line's own time: the line starts with its first word, after the last one's.
@@ -286,7 +396,9 @@ def enhance(aligner, audio, doc, length_ms):
             if early:
                 upto = times[early] if early < len(times) else start + GAP_MS * early
                 times[:early] = [start + (upto - start) * i / early for i in range(early)]
-            body = "".join(f"<{fmt(ms)}>{w}{' ' if i < len(words) - 1 else ''}" for i, (w, ms) in enumerate(zip(words, times)))
+            # The words whose times were not moved above are the aligner's own: their syllables and ends hold.
+            sung = {i for i, ms in enumerate(times) if i < len(raw) and abs(ms - raw[i]) < 1}
+            body = line_body(words, times, res[3] if len(res) > 3 else {}, sung, SYLLABLES)
             out.append(f"[{fmt(start)}]{body}")
             last_t, last_word = start, times[-1]
         else:
@@ -295,7 +407,7 @@ def enhance(aligner, audio, doc, length_ms):
     return "\n".join(out) + "\n", placed, total
 
 def main():
-    global PAD_MS, MIN_SCORE
+    global PAD_MS, MIN_SCORE, SYLLABLES
     ap = argparse.ArgumentParser()
     ap.add_argument("--phone", required=True)
     ap.add_argument("--ids", default="")
@@ -307,8 +419,9 @@ def main():
     ap.add_argument("--pad", type=int, default=PAD_MS, help="how far either side of a line's time to look for its words (ms)")
     ap.add_argument("--min", type=float, default=MIN_SCORE, help="the least confidence a line's word times are kept at")
     ap.add_argument("--mix", action="store_true", help="align against the whole mix, without pulling the vocals out first (faster, less exact)")
+    ap.add_argument("--words-only", action="store_true", help="time whole words only, not their syllables")
     args = ap.parse_args()
-    PAD_MS, MIN_SCORE = args.pad, args.min
+    PAD_MS, MIN_SCORE, SYLLABLES = args.pad, args.min, not args.words_only
     remember_where()
     phone = Phone(args.phone)
     tracks = phone.tracks()

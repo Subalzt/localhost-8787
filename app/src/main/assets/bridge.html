@@ -2743,6 +2743,7 @@
   /* A line timed only as a whole glows as it is sung. */
   .npl-line.d0:not([data-words]) { text-shadow: 0 0 14px color-mix(in srgb, var(--lyr-hi) 45%, transparent); }
   .npl-line .w { display: inline-block; transition: transform .35s cubic-bezier(.2,.8,.2,1); }
+  .npl-line .wd { display: inline-block; white-space: nowrap; }
   .npl-line.d0 .w, #np.wide .npl-line.d0 .w {
     /* The soft edge runs from 14% behind the point sung to the point itself: a word not yet reached is all dim, one sung is all bright. */
     background: linear-gradient(90deg, var(--lyr-hi) calc(var(--p, 0%) * 1.14 - 14%), color-mix(in srgb, var(--lyr-hi) var(--lyr-lo), transparent) calc(var(--p, 0%) * 1.14));
@@ -8288,17 +8289,25 @@ function parseLrc(text) {
     if (/<\d+:\d+/.test(rest)) {
       line = "";
       var re = /<(\d+:\d+(?:\.\d+)?)>([^<]*)/g, w;
-      while ((w = re.exec(rest))) { if (w[2]) words.push({ t: lrcTime(w[1]), w: w[2] }); line += w[2]; }
+      while ((w = re.exec(rest))) {
+        if (w[2]) words.push({ t: lrcTime(w[1]), w: w[2] });
+        else if (words.length) words[words.length - 1].end = lrcTime(w[1]);
+        line += w[2];
+      }
     }
-    stamps.forEach(function (st) { out.push({ t: st, text: line.trim(), words: words.map(function (x) { return { t: x.t, w: x.w }; }) }); });
+    stamps.forEach(function (st) { out.push({ t: st, text: line.trim(), words: words.map(function (x) { return { t: x.t, w: x.w, end: x.end }; }) }); });
   });
   out.sort(function (a, b) { return a.t - b.t; });
   // A positive offset shows the words earlier.
-  out.forEach(function (l) { l.t -= offset; l.words.forEach(function (w) { w.t -= offset; }); });
+  out.forEach(function (l) { l.t -= offset; l.words.forEach(function (w) { w.t -= offset; if (w.end != null) w.end -= offset; }); });
   for (var i = 0; i < out.length; i++) {
     var l = out[i];
     l.e = i + 1 < out.length ? out[i + 1].t : l.t + 6000;
-    for (var k = 0; k < l.words.length; k++) l.words[k].e = k + 1 < l.words.length ? l.words[k + 1].t : l.e;
+    for (var k = 0; k < l.words.length; k++) {
+      var wk = l.words[k];
+      wk.e = wk.end != null && wk.end > wk.t ? wk.end : k + 1 < l.words.length ? l.words[k + 1].t : l.e;
+      delete wk.end;
+    }
   }
   // A blank line only marks where the one before it ends.
   return out.filter(function (l) { return l.text; });
@@ -9348,12 +9357,15 @@ function nplBuild() {
     var el = document.createElement("div");
     el.className = "npl-line";
     if (d.kind === "word" && l.words.length) {
+      var word = null, pieces = [];
       l.words.forEach(function (w) {
         var m = /^(\s*)(.*?)(\s*)$/.exec(w.w);
-        if (m[1]) el.appendChild(document.createTextNode(m[1]));
-        var sp = document.createElement("span"); sp.className = "w"; sp.textContent = m[2]; el.appendChild(sp);
-        if (m[3]) el.appendChild(document.createTextNode(m[3]));
+        if (m[1]) { el.appendChild(document.createTextNode(m[1])); word = null; }
+        if (!word) { word = document.createElement("span"); word.className = "wd"; el.appendChild(word); }
+        var sp = document.createElement("span"); sp.className = "w"; sp.textContent = m[2]; word.appendChild(sp); pieces.push(sp);
+        if (m[3]) { el.appendChild(document.createTextNode(m[3])); word = null; }
       });
+      el._w = pieces;
       el.dataset.words = "1";
     } else el.textContent = l.text;
     el.onclick = function (e) { e.stopPropagation(); if (npTerms().bcp > 0.95) lyricsSeek(l.t); };
@@ -9371,7 +9383,7 @@ function nplTick() {
   while (lo <= hi) { var mid = (lo + hi) >> 1; if (d.lines[mid].t <= at) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
   if (idx !== npl.active) {
     var was = npl.els[npl.active];
-    if (was) Array.prototype.forEach.call(was.children, function (w) { w.style.removeProperty("--p"); w.style.removeProperty("--lift"); w.classList.remove("sung"); });
+    if (was) Array.prototype.forEach.call(was._w || was.children, function (w) { w.style.removeProperty("--p"); w.style.removeProperty("--lift"); w.classList.remove("sung"); });
     npl.active = idx;
     npl.els.forEach(function (el, k) { el.className = "npl-line d" + Math.min(3, idx < 0 ? k + 1 : Math.abs(k - idx)); });
     var cur = npl.els[idx], box = $("npl-list");
@@ -9381,7 +9393,7 @@ function nplTick() {
     }
   }
   if (idx >= 0 && d.kind === "word") {
-    var l = d.lines[idx], el = npl.els[idx], spans = el.children;
+    var l = d.lines[idx], el = npl.els[idx], spans = el._w || el.children;
     for (var k = 0; k < l.words.length && k < spans.length; k++) {
       var w = l.words[k], p = Math.max(0, Math.min(1, (pos - w.t) / Math.max(1, w.e - w.t)));
       spans[k].style.setProperty("--p", (p * 100).toFixed(1) + "%");

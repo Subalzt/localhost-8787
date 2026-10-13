@@ -286,10 +286,23 @@ private fun SungWords(line: LyricLine, style: TextStyle, base: Color, dim: Color
     val rise = with(density) { style.fontSize.toPx() } * 0.09f
     val space = with(density) { (style.fontSize.toPx() * 0.27f).toDp() }
     val glow = glowOf(base)
-    FlowRow {
+    // A word's syllables (pieces with no space between them) go together, so a word never breaks across lines.
+    val words = remember(line) {
+        val out = mutableListOf<MutableList<dev.periy.bridge.server.LyricWord>>()
+        var open = false
         line.words.forEach { w ->
+            if (!open || (w.w.isNotEmpty() && w.w.first().isWhitespace())) out += mutableListOf<dev.periy.bridge.server.LyricWord>()
+            out.last() += w
+            open = !(w.w.isNotEmpty() && w.w.last().isWhitespace())
+        }
+        out
+    }
+    FlowRow {
+      words.forEach { pieces ->
+       Row {
+        pieces.forEach { w ->
             val word = w.w.trim()
-            if (w.w.isNotEmpty() && w.w.first().isWhitespace()) Spacer(Modifier.width(space))
+            if (w === pieces.first() && w.w.isNotEmpty() && w.w.first().isWhitespace()) Spacer(Modifier.width(space))
             if (word.isNotEmpty()) {
                 val p = ((pos - w.t).toFloat() / (w.e - w.t).coerceAtLeast(1)).coerceIn(0f, 1f)
                 val look = when {
@@ -307,6 +320,8 @@ private fun SungWords(line: LyricLine, style: TextStyle, base: Color, dim: Color
             }
             if (w.w.length > 1 && w.w.last().isWhitespace()) Spacer(Modifier.width(space))
         }
+       }
+      }
     }
 }
 

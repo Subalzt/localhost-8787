@@ -228,7 +228,7 @@ object LyricsText {
 
     /** LRC: "[01:02.30] words", several times on one line, an [offset:], and <01:02.30> word times (Enhanced LRC). */
     fun parseLrc(text: String): List<LyricLine> {
-        class Raw(val t: Long, val text: String, val words: List<Pair<Long, String>>)
+        class Raw(val t: Long, val text: String, val words: List<Pair<Long, String>>, val ends: Map<Int, Long> = emptyMap())
         val out = mutableListOf<Raw>()
         var offset = 0L
         for (raw in text.split(Regex("\r?\n"))) {
@@ -243,24 +243,27 @@ object LyricsText {
             }
             if (stamps.isEmpty()) continue
             val words = mutableListOf<Pair<Long, String>>()
+            // A time with nothing after it marks where the word before it stops being sung.
+            val ends = mutableMapOf<Int, Long>()
             var line = rest
             if (HAS_WORDS.containsMatchIn(rest)) {
                 val sb = StringBuilder()
                 for (w in WORD.findAll(rest)) {
-                    val wt = lrcTime(w.groupValues[1])
-                    if (w.groupValues[2].isNotEmpty() && wt != null) words += wt to w.groupValues[2]
+                    val wt = lrcTime(w.groupValues[1]) ?: continue
+                    if (w.groupValues[2].isNotEmpty()) words += wt to w.groupValues[2]
+                    else if (words.isNotEmpty()) ends[words.size - 1] = wt
                     sb.append(w.groupValues[2])
                 }
                 line = sb.toString()
             }
-            stamps.forEach { st -> out += Raw(st, line.trim(), words.toList()) }
+            stamps.forEach { st -> out += Raw(st, line.trim(), words.toList(), ends.toMap()) }
         }
         out.sortBy { it.t }
         // A positive offset shows the words earlier.
-        val lines = out.map { r -> Raw(r.t - offset, r.text, r.words.map { (wt, w) -> (wt - offset) to w }) }
+        val lines = out.map { r -> Raw(r.t - offset, r.text, r.words.map { (wt, w) -> (wt - offset) to w }, r.ends.mapValues { it.value - offset }) }
         val result = lines.mapIndexed { i, r ->
             val e = if (i + 1 < lines.size) lines[i + 1].t else r.t + 6000
-            val words = r.words.mapIndexed { k, (wt, w) -> LyricWord(wt, if (k + 1 < r.words.size) r.words[k + 1].first else e, w) }
+            val words = r.words.mapIndexed { k, (wt, w) -> LyricWord(wt, r.ends[k]?.takeIf { it > wt } ?: if (k + 1 < r.words.size) r.words[k + 1].first else e, w) }
             LyricLine(r.t, e, r.text, words)
         }
         // A blank line only marks where the one before it ends.
@@ -372,7 +375,11 @@ object LyricsText {
         return when (d.kind) {
             ShownLyrics.Kind.WORD -> head + d.lines.joinToString("\n") { l ->
                 if (l.words.isEmpty()) "[${stamp(l.t)}]${l.text}"
-                else "[${stamp(l.t)}]" + l.words.joinToString("") { "<${stamp(it.t)}>${it.w}" } + "<${stamp(l.e)}>"
+                // Each word (or syllable) at its time, and where the singing stops after it when that is before the next.
+                else "[${stamp(l.t)}]" + l.words.mapIndexed { k, w ->
+                    val next = if (k + 1 < l.words.size) l.words[k + 1].t else l.e
+                    "<${stamp(w.t)}>${w.w}" + if (w.e < next) "<${stamp(w.e)}>" else ""
+                }.joinToString("") + if (l.words.last().e < l.e) "" else "<${stamp(l.e)}>"
             } + "\n"
             ShownLyrics.Kind.LINE -> head + doc.lrc.replace(HEAD_TAGS, "").trim() + "\n"
             ShownLyrics.Kind.PLAIN -> doc.plain.trim() + "\n"
