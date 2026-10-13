@@ -280,6 +280,8 @@ network and 60 an hour). [How it works](docs/website.md).
 - **The name follows the phone**: mobile data's own IPv6 (the carrier lets connections in; a home
   router usually does not), or, while the phone shares its data over the hotspot or USB tethering,
   its address on that side, which works there and from the internet alike.
+  A hotspot does not always give its laptops IPv6, so the name also points at the phone's own IPv4 on the
+  hotspot (or cable) while it is on; only devices on that network can reach it, and the others take the IPv6.
 - **At home** the website moves itself to `lan.yourname.v6.navy`, the phone's Wi-Fi address, in
   the same certificate, instead of going out to the internet and back.
 - **With the helper running on the computer**, the website moves to the helper's page (`http://localhost:8787`)

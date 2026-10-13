@@ -76,6 +76,8 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         val certFor: String = "",
         /** What lan.NAME points at now: "ipv6|ipv4". */
         val lanPublished: String = "",
+        /** The IPv4 the name was last given: the phone's own on its hotspot or cable (see dnsV4). */
+        val publishedV4: String = "",
     ) {
         val ready: Boolean get() = name.isNotBlank() && token.isNotBlank() && agreed
     }
@@ -194,7 +196,7 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
             // Each step on its own: the door opens with the certificate there is, whatever dynv6
             // or Let's Encrypt say this time; a step that fails is tried again on the next round.
             val problems = ArrayList<String>()
-            for (step in listOf(::serve, ::dns, ::lanDns, ::cert, ::serve)) {
+            for (step in listOf(::serve, ::dns, ::dnsV4, ::lanDns, ::cert, ::serve)) {
                 try {
                     step()
                 } catch (e: InterruptedException) {
@@ -226,6 +228,32 @@ class Site(private val ctx: Context, private val pagePort: () -> Int) {
         pointAt(v6)
         save(conf.copy(published = v6))
     }
+
+    /**
+     * While the hotspot or USB tethering is on, the name is also given the phone's own IPv4 there. A hotspot does not
+     * always hand its laptops an IPv6 address (this phone's often gives them IPv4 alone), and then the name, with only
+     * the phone's IPv6, could not be reached from the phone's own hotspot at all: the page would not load. A private
+     * IPv4 in public DNS is only reached on that network; browsers elsewhere take the IPv6. dynv6's update cannot
+     * take an A record away again, so the last one stays when the hotspot goes off, answering only on the hotspot.
+     */
+    private fun dnsV4() {
+        val v4 = tetherV4() ?: return
+        if (v4 == conf.publishedV4) return
+        say("Pointing ${conf.name} at $v4 too, for the hotspot")
+        val q = "zone=" + java.net.URLEncoder.encode(conf.name, "UTF-8") + "&token=" + java.net.URLEncoder.encode(conf.token, "UTF-8") +
+            "&ipv4=" + java.net.URLEncoder.encode(v4, "UTF-8")
+        val (code, text) = http("GET", "https://dynv6.com/api/update?$q", null)
+        if (code !in 200..299) throw dynv6Error(code, text)
+        save(conf.copy(publishedV4 = v4))
+    }
+
+    /** The phone's own IPv4 on its hotspot (first) or USB tethering, while one is on. */
+    private fun tetherV4(): String? = runCatching {
+        NetInfo.addresses()
+            .filter { !it.isIpv6 && (it.kind == LinkKind.HOTSPOT || it.kind == LinkKind.USB) }
+            .sortedBy { if (it.kind == LinkKind.HOTSPOT) 0 else 1 }
+            .firstOrNull()?.host
+    }.getOrNull()
 
     private fun cert() {
         val c = conf
