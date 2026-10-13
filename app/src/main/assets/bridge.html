@@ -6243,14 +6243,14 @@ function applyLook(l) {
  */
 var SKINS = ["music", "theatre"];
 function applySkin(s) {
-  if (SKINS.indexOf(s) < 0) s = "music";
+  if (SKINS.indexOf(s) < 0) s = "theatre";
   // Home's pieces are moved about for this design: going back to Classic puts them back by loading the page again.
   var was = document.documentElement.getAttribute("data-skin");
-  if (was === "music" && s !== "music" && mx.built) { try { localStorage.setItem("blazeit.skin", s); } catch (e) {} location.reload(); return; }
+  if (was === "music" && s !== "music" && mx.built) { try { localStorage.setItem("blazeit.design", s); } catch (e) {} location.reload(); return; }
   if (s === "theatre") document.documentElement.removeAttribute("data-skin");
   else document.documentElement.setAttribute("data-skin", s);
   Array.prototype.forEach.call(document.querySelectorAll("[data-skin-choice]"), function (b) { b.classList.toggle("on", b.dataset.skinChoice === s); });
-  try { localStorage.setItem("blazeit.skin", s); } catch (e) {}
+  try { localStorage.setItem("blazeit.design", s); } catch (e) {}
   if (s === "music" && window.appStarted) lineSetup();
 }
 
@@ -11338,7 +11338,8 @@ setInterval(pageFresh, 600000);
   try { saved = localStorage.getItem("blazeit.theme") || "system"; } catch (e) {}
   applyTheme(saved);
   try { applyLook(JSON.parse(localStorage.getItem("blazeit.look") || "null")); } catch (e) {}
-  var skin = "music"; try { skin = localStorage.getItem("blazeit.skin") || "music"; } catch (e) {}
+  // Classic unless this browser picked the new design in Settings since 14 Oct (the old key held the brief default).
+  var skin = "theatre"; try { skin = localStorage.getItem("blazeit.design") || "theatre"; } catch (e) {}
   applySkin(skin);
   try {
     var res = await fetch("/api/ping", { credentials: "same-origin" });
