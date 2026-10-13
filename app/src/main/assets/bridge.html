@@ -2778,174 +2778,131 @@
   }
 
 
-  /* ================================================================ Line (the design since 2026-10-11)
-     Five award winners, the best of each. From The Bluejack Group's dashboard: Home opens with a briefing, a
-     few plain sentences from the live state, then big numbers with small labels. From Linea Prompt: one line
-     runs along the top of every tab, this computer to the phone, with packets on it while files move. From
-     Tink-on: the actions are pads with a tiny readout each, and the one thing to do (send) is a solid key.
-     From Cooldock: live tiles for what is going on (music, cameras, alerts). From AP Transit: where the
-     devices are, drawn as live dots and lines. Quiet underneath: a warm grey page, white panels, hairlines,
-     one system typeface (a book serif only for the briefing), corners soft. Laid over the old structure,
-     which stays in the page as Classic (Settings) and whole at /classic. */
   .link-line, .briefing, #home-pads { display: none; }
-  :root[data-skin="line"][data-style][data-pro] { --bg: #F3F3F1; --surface: #FFFFFF; --surface-2: #EDEDEA; --surface-3: #E1E1DD; --txt: #111111; --ink: #111111; --sub: #6E6E69; --faint: #BDBDB7;
-    --line: rgba(17,17,17,.09); --accent: #111111; --on-accent: #FFFFFF; --side-bg: #F3F3F1; --pro-side: #F3F3F1; --pro-fill: rgba(17,17,17,.05);
-    --pro-fill2: rgba(17,17,17,.08); --pro-edge: rgba(17,17,17,.1); --card-shadow: 0 1px 0 rgba(17,17,17,.03); --shadow: var(--card-shadow);
-    --wire: #2F5BFF; --key: #111111; --on-key: #FFFFFF; color-scheme: light; --r-card: 18px; --r: 12px; --r-btn: 999px; --hero: none;
-    --serif: ui-serif, "New York", "Iowan Old Style", Charter, Georgia, "Noto Serif", serif;
-    --ui: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
-  :root[data-skin="line"][data-style][data-pro][data-theme="dark"] { --bg: #000000; --surface: #0E0E0F; --surface-2: #19191B; --surface-3: #252528; --txt: #F2F2F0; --ink: #F2F2F0; --sub: #8D8D88; --faint: #3B3B3E;
-    --line: rgba(255,255,255,.09); --accent: #F2F2F0; --on-accent: #000000; --side-bg: #000000; --pro-side: #000000; --pro-fill: rgba(255,255,255,.06);
-    --pro-fill2: rgba(255,255,255,.1); --pro-edge: rgba(255,255,255,.12); --card-shadow: none; --shadow: none;
-    --wire: #6E8FFF; --key: #F2F2F0; --on-key: #000000; color-scheme: dark; }
-  @media (prefers-color-scheme: dark) { :root[data-skin="line"][data-style][data-pro]:not([data-theme="light"]) { --bg: #000000; --surface: #0E0E0F; --surface-2: #19191B; --surface-3: #252528; --txt: #F2F2F0; --ink: #F2F2F0; --sub: #8D8D88; --faint: #3B3B3E;
-    --line: rgba(255,255,255,.09); --accent: #F2F2F0; --on-accent: #000000; --side-bg: #000000; --pro-side: #000000; --pro-fill: rgba(255,255,255,.06);
-    --pro-fill2: rgba(255,255,255,.1); --pro-edge: rgba(255,255,255,.12); --card-shadow: none; --shadow: none;
-    --wire: #6E8FFF; --key: #F2F2F0; --on-key: #000000; color-scheme: dark; } }
-  :root[data-skin="line"][data-style][data-pro] body { font-family: var(--ui); background: var(--bg); color: var(--ink); }
 
-  /* -------- type */
-  :root[data-skin="line"][data-style][data-pro] .page-head h1 { font-family: var(--ui); font-size: clamp(30px, 3.6vw, 42px); font-weight: 650; letter-spacing: -.035em; line-height: 1.05; }
-  :root[data-skin="line"][data-style][data-pro] .set-title, :root[data-skin="line"][data-style][data-pro] .bar, :root[data-skin="line"][data-style][data-pro] .card-title h3, :root[data-skin="line"][data-style][data-pro] .sec-head h3, :root[data-skin="line"][data-style][data-pro] .chat-side-head b {
-    font-family: var(--ui); font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--sub); }
-  :root[data-skin="line"][data-style][data-pro] .bar { margin: 28px 2px 10px; }
+  /* ================================================================ Music (the design since 2026-10-14)
+     The Music tab, carried to every tab. The page's own black (pure black when dark) and white and greys; the
+     accent from Settings only where a thing is lit; Music's type, its bar (the page's name large, a quiet note
+     beside it), its chips (the one shown solid), its cards (the album card: a big square of artwork and two lines
+     under it) and its motion: a page's pieces rise into place one after another, a press gives, artwork swells a
+     little under the pointer. On a phone the tabs are chips with a solid pill that glides to the one you pick.
+     Home is laid out like Music's albums: a card for the phone itself, then one for what is playing, where your
+     devices are, the camera, alerts and linked phones; the things to do as chips above them. */
+  .mx-home, .mx-n { display: none; }
+  :root[data-skin="music"][data-style][data-pro] { --bg: #F2F2F2; --surface: #FFFFFF; --surface-2: #E8E8E8; --surface-3: #DCDCDC; --txt: #000000; --sub: rgba(0,0,0,.56); --faint: rgba(0,0,0,.28);
+    --line: rgba(0,0,0,.08); --accent: #000000; --on-accent: #FFFFFF; --side-bg: #F2F2F2; --pro-side: #F2F2F2; --pro-fill: rgba(0,0,0,.05); --pro-fill2: rgba(0,0,0,.09);
+    --pro-edge: rgba(0,0,0,.08); --card-shadow: 0 1px 2px rgba(0,0,0,.05); --shadow: var(--card-shadow); color-scheme: light; --r-card: 14px; --r: 12px; --r-btn: 999px; --hero: none;
+    --mx-dim: color-mix(in srgb, var(--txt) 58%, transparent); --mx-fill: color-mix(in srgb, var(--txt) 6%, transparent);
+    --mx-fill2: color-mix(in srgb, var(--txt) 11%, transparent); --mx-ease: cubic-bezier(.05, .7, .1, 1);
+    --ui: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "MiSans", sans-serif; }
+  :root[data-skin="music"][data-style][data-pro][data-theme="dark"] { --bg: #000000; --surface: #121212; --surface-2: #1E1E1E; --surface-3: #2A2A2A; --txt: #FFFFFF; --sub: rgba(255,255,255,.58); --faint: rgba(255,255,255,.3);
+    --line: rgba(255,255,255,.08); --accent: #FFFFFF; --on-accent: #000000; --side-bg: #000000; --pro-side: #000000; --pro-fill: rgba(255,255,255,.06);
+    --pro-fill2: rgba(255,255,255,.11); --pro-edge: rgba(255,255,255,.1); --card-shadow: none; --shadow: none; color-scheme: dark; }
+  @media (prefers-color-scheme: dark) { :root[data-skin="music"][data-style][data-pro]:not([data-theme="light"]) { --bg: #000000; --surface: #121212; --surface-2: #1E1E1E; --surface-3: #2A2A2A; --txt: #FFFFFF; --sub: rgba(255,255,255,.58); --faint: rgba(255,255,255,.3);
+    --line: rgba(255,255,255,.08); --accent: #FFFFFF; --on-accent: #000000; --side-bg: #000000; --pro-side: #000000; --pro-fill: rgba(255,255,255,.06);
+    --pro-fill2: rgba(255,255,255,.11); --pro-edge: rgba(255,255,255,.1); --card-shadow: none; --shadow: none; color-scheme: dark; } }
+  :root[data-skin="music"][data-style][data-pro] body { font-family: var(--ui); letter-spacing: -.01em; background: var(--bg); color: var(--txt); }
 
-  /* -------- panels and controls */
-  :root[data-skin="line"][data-style][data-pro] .card, :root[data-skin="line"][data-style][data-pro] .set-group { border-radius: var(--r-card); border: 1px solid var(--line); background: var(--surface); box-shadow: var(--card-shadow); }
-  :root[data-skin="line"][data-style][data-pro] .btn { border-radius: 999px; font-family: var(--ui); font-weight: 600; letter-spacing: -.01em; }
-  :root[data-skin="line"][data-style][data-pro] .seg { border-radius: 999px; background: var(--surface-2); box-shadow: none; }
-  :root[data-skin="line"][data-style][data-pro] .seg button { border-radius: 999px; font-family: var(--ui); }
-  :root[data-skin="line"][data-style][data-pro] .seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-  :root[data-skin="line"][data-style][data-pro][data-theme="dark"] .seg button.on { background: var(--surface-3); }
-  :root[data-skin="line"][data-style][data-pro] .sq { border-radius: 9px; }
-  :root[data-skin="line"][data-style][data-pro] .sq svg { stroke: currentColor; }
-  :root[data-skin="line"][data-style][data-pro] .sr-action { color: var(--wire); }
-  :root[data-skin="line"][data-style][data-pro] .src-chip { border-radius: 999px; }
-  :root[data-skin="line"][data-style][data-pro] .clip-field textarea, :root[data-skin="line"][data-style][data-pro] .clip-item { border-radius: 12px; background: var(--surface-2); }
-  /* Folders and Settings' icons: plain tinted squares, the glyph in the text colour. */
-  :root[data-skin="line"][data-style][data-pro] .ficon-dir { width: 40px; height: 40px; border-radius: 11px; background: var(--surface-2); box-shadow: none; color: var(--ink); }
-  :root[data-skin="line"][data-style][data-pro] .ficon-dir svg { width: 22px; height: 22px; fill: none; stroke: currentColor; }
-  :root[data-skin="line"][data-style][data-pro] .sq { background: var(--surface-2); color: var(--ink); box-shadow: none; }
+  /* -------- the bar: the page's name large, a quiet note beside it */
+  :root[data-skin="music"][data-style][data-pro] .page-head { display: flex; align-items: baseline; gap: 12px; }
+  :root[data-skin="music"][data-style][data-pro] .page-head h1 { font-family: var(--ui); font-size: 26px; font-weight: 700; letter-spacing: -.025em; }
+  :root[data-skin="music"][data-style][data-pro] .mx-n { display: inline; font-size: 13px; color: var(--mx-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (min-width: 1000px) { :root[data-skin="music"][data-style][data-pro] .page-head h1 { font-size: 30px; } }
+  :root[data-skin="music"][data-style][data-pro] .set-title, :root[data-skin="music"][data-style][data-pro] .bar, :root[data-skin="music"][data-style][data-pro] .card-title h3, :root[data-skin="music"][data-style][data-pro] .sec-head h3, :root[data-skin="music"][data-style][data-pro] .chat-side-head b {
+    font-family: var(--ui); font-size: 17px; font-weight: 700; letter-spacing: -.02em; text-transform: none; color: var(--txt); }
+  :root[data-skin="music"][data-style][data-pro] .bar { margin: 26px 2px 10px; }
 
-  /* -------- navigation: a computer's sidebar, quiet; a phone's top row of words, the one you are on underlined */
-  :root[data-skin="line"][data-style][data-pro] .side, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .side { --txt: var(--ink); --bg: var(--bg); --accent: var(--ink); --on-accent: var(--bg); }
-  :root[data-skin="line"][data-style][data-pro] .tab-pill { display: none; }
-  :root[data-skin="line"][data-style][data-pro] .tabs > button { font-family: var(--ui); font-weight: 500; }
-  :root[data-skin="line"][data-style][data-pro] .tabs > button.on { font-weight: 650; }
-  :root[data-skin="line"][data-style][data-pro] .logo { font-family: var(--ui); font-weight: 650; letter-spacing: -.01em; }
+  /* -------- cards, chips, rows */
+  :root[data-skin="music"][data-style][data-pro] .card, :root[data-skin="music"][data-style][data-pro] .set-group { border: 0; border-radius: 14px; background: var(--surface); box-shadow: var(--card-shadow); }
+  :root[data-skin="music"][data-style][data-pro] .btn { border-radius: 999px; font-family: var(--ui); font-weight: 600; }
+  :root[data-skin="music"][data-style][data-pro] .seg { gap: 6px; padding: 0; border-radius: 0; background: none; box-shadow: none; }
+  :root[data-skin="music"][data-style][data-pro] .seg button { padding: 7px 14px; border-radius: 17px; background: var(--mx-fill); color: var(--txt); font-family: var(--ui); font-weight: 500; transition: background .2s, color .2s, transform .15s; }
+  :root[data-skin="music"][data-style][data-pro] .seg button.on { background: var(--txt); color: var(--bg); box-shadow: none; }
+  :root[data-skin="music"][data-style][data-pro] .seg button:active, :root[data-skin="music"][data-style][data-pro] .btn:active { transform: scale(.96); }
+  :root[data-skin="music"][data-style][data-pro] .src-chip { border-radius: 17px; box-shadow: none; }
+  :root[data-skin="music"][data-style][data-pro] .sq { width: 32px; height: 32px; flex-basis: 32px; border-radius: 9px; background: var(--mx-fill2); color: var(--txt); box-shadow: none; }
+  :root[data-skin="music"][data-style][data-pro] .sq svg { stroke: currentColor; }
+  :root[data-skin="music"][data-style][data-pro] .sr-action { color: var(--txt); font-weight: 600; }
+  :root[data-skin="music"][data-style][data-pro] .ficon-dir { width: 44px; height: 44px; flex-basis: 44px; border-radius: 10px; background: var(--mx-fill2); color: var(--txt); }
+  :root[data-skin="music"][data-style][data-pro] .ficon-dir svg { width: 22px; height: 22px; fill: none; stroke: currentColor; }
+  :root[data-skin="music"][data-style][data-pro] #fs-list .row.dir:hover, :root[data-skin="music"][data-style][data-pro] #fs-list .row.file:hover { background: var(--mx-fill); }
+  :root[data-skin="music"][data-style][data-pro] .clip-field textarea, :root[data-skin="music"][data-style][data-pro] .clip-item { border-radius: 12px; background: var(--mx-fill); }
+
+  /* -------- navigation: a computer's sidebar as Music's; a phone's tabs as chips, the pill gliding */
+  :root[data-skin="music"][data-style][data-pro] .side, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .side { --bg: inherit; --txt: inherit; --sub: inherit; --surface: inherit; --accent: inherit; --on-accent: inherit; color: var(--txt); }
+  :root[data-skin="music"][data-style][data-pro] .tabs > button { font-family: var(--ui); }
   @media (min-width: 1000px) {
-    :root[data-skin="line"][data-style][data-pro] .side, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .side { background: var(--bg); border-right: 1px solid var(--line); }
-    :root[data-skin="line"][data-style][data-pro] .tabs > button { height: 36px; border-radius: 10px; font-size: 14px; color: var(--sub); }
-    :root[data-skin="line"][data-style][data-pro] .tabs > button.on { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
-    :root[data-skin="line"][data-style][data-pro] .tabs > button svg { color: inherit; }
+    :root[data-skin="music"][data-style][data-pro] .side, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .side { background: var(--bg); border-right: 1px solid var(--line); }
+    :root[data-skin="music"][data-style][data-pro] .tabs > button { height: 36px; border-radius: 10px; font-size: 14px; font-weight: 500; color: var(--mx-dim); }
+    :root[data-skin="music"][data-style][data-pro] .tabs > button.on { background: var(--mx-fill2); color: var(--txt); font-weight: 600; }
   }
   @media (max-width: 999px) {
-    :root[data-skin="line"][data-style][data-pro] .side, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .side { background: color-mix(in srgb, var(--bg) 88%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-      border-bottom: 1px solid var(--line); }
-    :root[data-skin="line"][data-style][data-pro] .side::before { display: none; }
-    :root[data-skin="line"][data-style][data-pro] .tabs, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .tabs { background: none; box-shadow: none; border-radius: 0; }
-    :root[data-skin="line"][data-style][data-pro] .tabs > button, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .tabs > button { position: relative; background: none; color: var(--sub); border-radius: 0; font-size: 15px; padding: 0 12px; }
-    :root[data-skin="line"][data-style][data-pro] .tabs > button.on, :root[data-skin="line"][data-style][data-pro] body.at-top[data-tab] .tabs > button.on { background: none; color: var(--ink); }
-    :root[data-skin="line"][data-style][data-pro] .tabs > button.on::after { content: ""; position: absolute; left: 50%; bottom: 0; width: 18px; height: 3px; margin-left: -9px; border-radius: 3px; background: var(--wire); }
-    :root[data-skin="line"][data-style][data-pro] .mon-toggle { background: var(--surface-2); color: var(--ink); }
+    :root[data-skin="music"][data-style][data-pro] .side, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .side { background: color-mix(in srgb, var(--bg) 90%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+    :root[data-skin="music"][data-style][data-pro] .side::before { display: none; }
+    :root[data-skin="music"][data-style][data-pro] .tabs, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .tabs { gap: 6px; padding: 0; background: none; box-shadow: none; }
+    :root[data-skin="music"][data-style][data-pro] .tabs > button, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .tabs > button { height: 36px; padding: 0 15px; border-radius: 18px; background: var(--mx-fill); color: var(--txt); font-size: 14.5px; font-weight: 500; }
+    :root[data-skin="music"][data-style][data-pro] .tabs > button.on, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .tabs > button.on { background: none; color: var(--bg); font-weight: 600; }
+    :root[data-skin="music"][data-style][data-pro] .tab-pill, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .tab-pill { border-radius: 18px; background: var(--txt); box-shadow: none; }
+    :root[data-skin="music"][data-style][data-pro] .mon-toggle { background: var(--mx-fill); color: var(--txt); }
   }
 
-  /* -------- the line: this computer to the phone, along the top of every tab */
-  :root[data-skin="line"][data-style][data-pro] .link-line { display: flex; align-items: center; gap: 12px; height: 30px; margin: 4px 0 22px; font-size: 13px; color: var(--sub); }
-  :root[data-skin="line"][data-style][data-pro] body[data-tab="music"] .link-line { display: none; }
-  :root[data-skin="line"][data-style][data-pro] .ll-end { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--ink); }
-  :root[data-skin="line"][data-style][data-pro] .ll-track { position: relative; flex: 1 1 auto; min-width: 60px; height: 1.5px; border-radius: 2px;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--wire) 25%, transparent), var(--wire) 15%, var(--wire) 85%, color-mix(in srgb, var(--wire) 25%, transparent)); }
-  :root[data-skin="line"][data-style][data-pro] .ll-track::before, :root[data-skin="line"][data-style][data-pro] .ll-track::after { content: ""; position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: var(--wire); }
-  :root[data-skin="line"][data-style][data-pro] .ll-track::before { left: -3px; } :root[data-skin="line"][data-style][data-pro] .ll-track::after { right: -3px; }
-  :root[data-skin="line"][data-style][data-pro] .ll-pk { position: absolute; top: 50%; left: 0; width: 16px; height: 4px; margin-top: -2px; border-radius: 2px; background: var(--wire);
-    box-shadow: 0 0 10px color-mix(in srgb, var(--wire) 70%, transparent); opacity: 0; animation: ll-run 3.6s linear infinite; }
-  :root[data-skin="line"][data-style][data-pro] .link-line.idle .ll-pk:first-child { opacity: .75; }
-  :root[data-skin="line"][data-style][data-pro] .link-line.busy .ll-pk { opacity: 1; animation-duration: 1.2s; }
-  :root[data-skin="line"][data-style][data-pro] .link-line.busy .ll-pk:nth-child(2) { animation-delay: .4s; } :root[data-skin="line"][data-style][data-pro] .link-line.busy .ll-pk:nth-child(3) { animation-delay: .8s; }
-  :root[data-skin="line"][data-style][data-pro] .link-line.down .ll-track { background: repeating-linear-gradient(90deg, var(--faint) 0 6px, transparent 6px 12px); }
-  :root[data-skin="line"][data-style][data-pro] .link-line.down .ll-track::before, :root[data-skin="line"][data-style][data-pro] .link-line.down .ll-track::after { background: var(--faint); }
-  :root[data-skin="line"][data-style][data-pro] .ll-mid { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis;
-    padding: 4px 12px; border-radius: 999px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); font: 600 11.5px/1.2 var(--mono); color: var(--ink); white-space: nowrap; }
-  @keyframes ll-run { from { left: 0; } to { left: calc(100% - 16px); } }
-  @media (prefers-reduced-motion: reduce) { :root[data-skin="line"][data-style][data-pro] .ll-pk { animation: none; } }
+  /* -------- motion: a page's pieces rise into place one after another */
+  :root[data-skin="music"][data-style][data-pro] [data-panel].enter { animation: none; }
+  :root[data-skin="music"][data-style][data-pro] section[data-panel]:not([data-panel="music"]).enter > * { animation: mx-rise .42s var(--mx-ease) backwards; }
+  :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > :nth-child(2) { animation-delay: 50ms; } :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > :nth-child(3) { animation-delay: 100ms; }
+  :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > :nth-child(4) { animation-delay: 150ms; } :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > :nth-child(5) { animation-delay: 200ms; }
+  :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > :nth-child(n+6) { animation-delay: 250ms; }
+  @keyframes mx-rise { from { opacity: 0; transform: translateY(25px); } }
+  @media (prefers-reduced-motion: reduce) { :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > * { animation-duration: .2s; } }
 
-  /* -------- Home: the briefing */
-  :root[data-skin="line"][data-style][data-pro] body[data-tab="home"] .page-head { display: none; }
-  :root[data-skin="line"][data-style][data-pro] .status-line, :root[data-skin="line"][data-style][data-pro] body.at-top .status-line {
-    display: flex !important; flex-wrap: wrap; align-items: flex-end; gap: 14px 24px; min-height: 0 !important; margin: 0 0 14px !important; padding: 0 !important;
-    border: 0 !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; color: var(--ink); }
-  :root[data-skin="line"][data-style][data-pro] .status-line::before, :root[data-skin="line"][data-style][data-pro] .status-line::after, :root[data-skin="line"][data-style][data-pro] .status-line .dot, :root[data-skin="line"][data-style][data-pro] .status-line .rate, :root[data-skin="line"][data-style][data-pro] #route-badge { display: none !important; }
-  :root[data-skin="line"][data-style][data-pro] .status-line .who { flex: 1 1 320px; display: block; }
-  :root[data-skin="line"][data-style][data-pro] .status-line .who b { display: block; margin: 0 0 6px; font-family: var(--ui); font-size: clamp(32px, 4.6vw, 54px); font-weight: 650; letter-spacing: -.04em;
-    line-height: 1.02; color: var(--ink); text-shadow: none; text-transform: none; }
-  :root[data-skin="line"][data-style][data-pro] .status-line .who > span { font-family: var(--ui); font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--sub); text-shadow: none; }
-  :root[data-skin="line"][data-style][data-pro] .status-line #hero-sub:not(:empty)::before { content: "\00B7"; margin: 0 7px; }
-  :root[data-skin="line"][data-style][data-pro] .status-line .hero-act { display: flex; gap: 8px; flex-wrap: wrap; }
-  :root[data-skin="line"][data-style][data-pro] .status-line .btn, :root[data-skin="line"][data-style][data-pro] .status-line .btn.ghost { height: 40px; padding: 0 18px; border-radius: 999px; font-size: 14px; background: var(--surface); color: var(--ink);
-    box-shadow: inset 0 0 0 1px var(--line); -webkit-backdrop-filter: none; backdrop-filter: none; }
-  :root[data-skin="line"][data-style][data-pro] .briefing { display: block; margin: 0 0 30px; }
-  :root[data-skin="line"][data-style][data-pro] .brief { margin: 0 0 26px; max-width: 44ch; font-family: var(--serif); font-size: clamp(19px, 2.1vw, 24px); line-height: 1.45; letter-spacing: -.005em; color: var(--ink); }
-  :root[data-skin="line"][data-style][data-pro] .brief .q { color: var(--sub); }
-  :root[data-skin="line"][data-style][data-pro] .brief-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); }
-  :root[data-skin="line"][data-style][data-pro] .st { padding: 16px 16px 4px 0; min-width: 0; }
-  :root[data-skin="line"][data-style][data-pro] .st + .st { padding-left: 16px; border-left: 1px solid var(--line); }
-  :root[data-skin="line"][data-style][data-pro] .st b { display: block; font-family: var(--ui); font-size: clamp(30px, 3.6vw, 46px); font-weight: 600; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
-  :root[data-skin="line"][data-style][data-pro] .st b i { font-style: normal; font-size: .42em; font-weight: 600; letter-spacing: 0; margin-left: 3px; color: var(--sub); }
-  :root[data-skin="line"][data-style][data-pro] .st b .st-w { font-size: .62em; letter-spacing: -.02em; }
-  :root[data-skin="line"][data-style][data-pro] .st small { display: block; margin-top: 8px; font-size: 12.5px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  @media (max-width: 600px) {
-    :root[data-skin="line"][data-style][data-pro] .brief-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    :root[data-skin="line"][data-style][data-pro] .st:nth-child(3) { padding-left: 0; border-left: 0; }
-    :root[data-skin="line"][data-style][data-pro] .st:nth-child(n+3) { border-top: 1px solid var(--line); }
-  }
-  :root[data-skin="line"][data-style][data-pro] .route-hint { border-radius: 14px; }
-
-  /* -------- Home: the pads */
-  :root[data-skin="line"][data-style][data-pro] .home-main { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
-  :root[data-skin="line"][data-style][data-pro] #home-pads { display: contents; }
-  :root[data-skin="line"][data-style][data-pro] .home-main > .beam-card { order: 1; }
-  :root[data-skin="line"][data-style][data-pro] .home-main > .clip-card { order: 2; grid-column: span 2; }
-  :root[data-skin="line"][data-style][data-pro] #pad-music { order: 3; } :root[data-skin="line"][data-style][data-pro] #pad-where { order: 4; } :root[data-skin="line"][data-style][data-pro] #pad-cams { order: 5; } :root[data-skin="line"][data-style][data-pro] #pad-alerts { order: 6; } :root[data-skin="line"][data-style][data-pro] #pad-phones { order: 7; }
-  @media (max-width: 999px) {
-    :root[data-skin="line"][data-style][data-pro] .home-main { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    :root[data-skin="line"][data-style][data-pro] .home-main > .clip-card { grid-column: 1 / -1; order: 3; }
-    :root[data-skin="line"][data-style][data-pro] #pad-music { order: 2; }
-  }
-  :root[data-skin="line"][data-style][data-pro] .pad { position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 14px; min-height: 148px; min-width: 0; padding: 16px;
-    border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--card-shadow); color: var(--ink); text-align: left; font: inherit; cursor: pointer;
-    transition: transform .2s cubic-bezier(.2,.8,.2,1), border-color .2s; }
-  :root[data-skin="line"][data-style][data-pro] .pad:hover { border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
-  :root[data-skin="line"][data-style][data-pro] .pad:active { transform: scale(.985); }
-  :root[data-skin="line"][data-style][data-pro] .pad-k { display: flex; align-items: center; gap: 8px; font: 600 10.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--sub); }
-  :root[data-skin="line"][data-style][data-pro] .pad-k i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
-  :root[data-skin="line"][data-style][data-pro] .pad-k i.on { background: #34C759; box-shadow: 0 0 0 3px color-mix(in srgb, #34C759 22%, transparent); }
-  :root[data-skin="line"][data-style][data-pro] .pad-v { font-size: 19px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  :root[data-skin="line"][data-style][data-pro] .pad-s { margin-top: 3px; font-size: 13px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  :root[data-skin="line"][data-style][data-pro] .pad-art { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: var(--surface-2); }
-  :root[data-skin="line"][data-style][data-pro] .pad-map { width: 100%; height: 72px; display: block; margin-bottom: 4px; }
-  :root[data-skin="line"][data-style][data-pro] .pad-map line { stroke: var(--wire); stroke-width: 1.2; stroke-dasharray: 3 3; }
-  :root[data-skin="line"][data-style][data-pro] .pad-map circle { fill: var(--ink); } :root[data-skin="line"][data-style][data-pro] .pad-map circle.me { fill: var(--wire); }
-  :root[data-skin="line"][data-style][data-pro] .pad-map text { font: 600 9px var(--mono); fill: var(--sub); }
-
-  /* Send: the one key. Solid ink, words in the page's colour. */
-  :root[data-skin="line"][data-style][data-pro] .beam-card { min-height: 148px; padding: 16px; border-radius: 18px; border: 0; box-shadow: none; color: var(--on-key); background: var(--key); gap: 14px; }
-  :root[data-skin="line"][data-style][data-pro] .beam-card.over { transform: none; box-shadow: 0 0 0 3px var(--wire); }
-  :root[data-skin="line"][data-style][data-pro] .beam-title { font-family: var(--ui); font-size: 22px; font-weight: 650; letter-spacing: -.03em; text-shadow: none; text-transform: none; }
-  :root[data-skin="line"][data-style][data-pro] .beam-hint { font-family: var(--ui); font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; color: color-mix(in srgb, var(--on-key) 62%, transparent); opacity: 1; }
-  :root[data-skin="line"][data-style][data-pro] .beam-actions { gap: 8px; }
-  :root[data-skin="line"][data-style][data-pro] .beam-btn { height: 40px; padding: 0 14px; border-radius: 999px; font-family: var(--ui); font-size: 14px; font-weight: 600; letter-spacing: 0; text-transform: none;
-    color: var(--on-key); background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--on-key) 30%, transparent); }
-  :root[data-skin="line"][data-style][data-pro] .beam-btn.primary { color: var(--key); background: var(--on-key); box-shadow: none; }
-  :root[data-skin="line"][data-style][data-pro] .beam-btn { white-space: nowrap; }
-  @media (max-width: 999px) { :root[data-skin="line"][data-style][data-pro] .beam-actions { flex-direction: column; } :root[data-skin="line"][data-style][data-pro] .beam-btn { width: 100%; justify-content: center; padding: 0 10px; } }
-  :root[data-skin="line"][data-style][data-pro] .beam-btn:hover { background: color-mix(in srgb, var(--on-key) 10%, transparent); }
-  :root[data-skin="line"][data-style][data-pro] .beam-btn.primary:hover { background: var(--on-key); transform: none; box-shadow: none; }
-  :root[data-skin="line"][data-style][data-pro] .beam-btn:active { transform: scale(.97); }
-  :root[data-skin="line"][data-style][data-pro] .beam-to { color: var(--on-key); }
-  :root[data-skin="line"][data-style][data-pro] .clip-card { padding: 16px 18px; }
-  :root[data-skin="line"][data-style][data-pro] .clip-card .sec-head { min-height: 28px; margin-bottom: 10px; }
-  :root[data-skin="line"][data-style][data-pro] section[data-panel="home"] .clip-field textarea, :root[data-skin="line"][data-style][data-pro] section[data-panel="home"] .clip-item { min-height: 96px; }
+  /* -------- Home, as Music's albums */
+  :root[data-skin="music"][data-style][data-pro] section[data-panel="home"] > :not(.mx-home):not(#lap-section):not(.bar):not(#files):not(.home-main):not(.drop-veil):not(input) { display: none !important; }
+  :root[data-skin="music"][data-style][data-pro] .home-main { display: block; }
+  :root[data-skin="music"][data-style][data-pro] .home-main > .beam-card, :root[data-skin="music"][data-style][data-pro] #home-pads, :root[data-skin="music"][data-style][data-pro] .status-line, :root[data-skin="music"][data-style][data-pro] .link-line, :root[data-skin="music"][data-style][data-pro] .briefing { display: none !important; }
+  :root[data-skin="music"][data-style][data-pro] .mx-home { display: block; margin: 0 0 18px; }
+  :root[data-skin="music"][data-style][data-pro] .mx-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+  :root[data-skin="music"][data-style][data-pro] .mx-acts > button, :root[data-skin="music"][data-style][data-pro] .mx-acts .beam-btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border: 0; border-radius: 19px;
+    background: var(--mx-fill); color: var(--txt); box-shadow: none; font: 500 14.5px/1 var(--ui); letter-spacing: -.01em; text-transform: none; cursor: pointer;
+    transition: background .2s, transform .15s; }
+  :root[data-skin="music"][data-style][data-pro] .mx-acts > button[hidden] { display: none; }
+  :root[data-skin="music"][data-style][data-pro] .mx-acts > button:hover, :root[data-skin="music"][data-style][data-pro] .mx-acts .beam-btn:hover { background: var(--mx-fill2); }
+  :root[data-skin="music"][data-style][data-pro] .mx-acts .beam-btn.primary { background: var(--txt); color: var(--bg); }
+  :root[data-skin="music"][data-style][data-pro] .mx-acts > button:active { transform: scale(.96); }
+  :root[data-skin="music"][data-style][data-pro] .mx-acts svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  :root[data-skin="music"][data-style][data-pro] .mx-acts .beam-to { position: relative; }
+  :root[data-skin="music"][data-style][data-pro] .mx-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 12px; }
+  @media (max-width: 600px) { :root[data-skin="music"][data-style][data-pro] .mx-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+  :root[data-skin="music"][data-style][data-pro] .mc { display: flex; flex-direction: column; min-width: 0; padding: 8px; border: 0; border-radius: 14px; background: var(--surface); box-shadow: var(--card-shadow);
+    color: var(--txt); font: inherit; text-align: left; cursor: pointer; transition: transform .2s var(--mx-ease); animation: mx-rise .42s var(--mx-ease) backwards; }
+  :root[data-skin="music"][data-style][data-pro] .mc:nth-child(2) { animation-delay: 50ms; } :root[data-skin="music"][data-style][data-pro] .mc:nth-child(3) { animation-delay: 100ms; } :root[data-skin="music"][data-style][data-pro] .mc:nth-child(4) { animation-delay: 150ms; }
+  :root[data-skin="music"][data-style][data-pro] .mc:nth-child(5) { animation-delay: 200ms; } :root[data-skin="music"][data-style][data-pro] .mc:nth-child(n+6) { animation-delay: 250ms; }
+  :root[data-skin="music"][data-style][data-pro] .mc:active { transform: scale(.96); }
+  :root[data-skin="music"][data-style][data-pro] .mc-art { position: relative; display: grid; place-items: center; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--mx-fill); }
+  :root[data-skin="music"][data-style][data-pro] .mc-art > * { transition: transform .45s var(--mx-ease); }
+  :root[data-skin="music"][data-style][data-pro] .mc:hover .mc-art > * { transform: scale(1.04); }
+  :root[data-skin="music"][data-style][data-pro] .mc-art img { width: 100%; height: 100%; object-fit: cover; }
+  :root[data-skin="music"][data-style][data-pro] .mc-art svg.ic { width: 38%; height: 38%; fill: none; stroke: var(--txt); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
+  :root[data-skin="music"][data-style][data-pro] .mc-art b { font-size: clamp(34px, 11cqw, 58px); font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  :root[data-skin="music"][data-style][data-pro] .mc-art b i { font-style: normal; font-size: .4em; font-weight: 600; color: var(--mx-dim); margin-left: 2px; }
+  :root[data-skin="music"][data-style][data-pro] .mc-art { container-type: inline-size; }
+  :root[data-skin="music"][data-style][data-pro] .mc-art .mc-map { width: 100%; height: 100%; }
+  :root[data-skin="music"][data-style][data-pro] .mc-map line { stroke: var(--mx-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+  :root[data-skin="music"][data-style][data-pro] .mc-map circle { fill: var(--txt); } :root[data-skin="music"][data-style][data-pro] .mc-map circle.me { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
+  :root[data-skin="music"][data-style][data-pro] .mc-dot { position: absolute; top: 9px; right: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  :root[data-skin="music"][data-style][data-pro] .mc-dot.on { background: #34C759; box-shadow: 0 0 0 3px color-mix(in srgb, #34C759 25%, transparent); }
+  :root[data-skin="music"][data-style][data-pro] .mc-eq { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 3px; align-items: flex-end; height: 16px; }
+  :root[data-skin="music"][data-style][data-pro] .mc-eq i { width: 3px; border-radius: 2px; background: #FFFFFF; box-shadow: 0 0 6px rgba(0,0,0,.4); animation: mx-eq .9s ease-in-out infinite alternate; }
+  :root[data-skin="music"][data-style][data-pro] .mc-eq i:nth-child(2) { animation-delay: -.3s; } :root[data-skin="music"][data-style][data-pro] .mc-eq i:nth-child(3) { animation-delay: -.6s; }
+  @keyframes mx-eq { from { height: 30%; } to { height: 100%; } }
+  :root[data-skin="music"][data-style][data-pro] .mc-faces { display: flex; }
+  :root[data-skin="music"][data-style][data-pro] .mc-faces span { width: 46%; aspect-ratio: 1; display: grid; place-items: center; margin-left: -10%; border-radius: 50%; background: var(--surface-3);
+    box-shadow: 0 0 0 3px var(--surface); font-size: clamp(16px, 8cqw, 30px); font-weight: 700; }
+  :root[data-skin="music"][data-style][data-pro] .mc-faces span:first-child { margin-left: 0; }
+  :root[data-skin="music"][data-style][data-pro] .mc-t { margin: 9px 4px 0; font-size: 14.5px; font-weight: 600; letter-spacing: -.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  :root[data-skin="music"][data-style][data-pro] .mc-s { margin: 2px 4px 2px; font-size: 12.5px; color: var(--mx-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  :root[data-skin="music"][data-style][data-pro] .home-main > .clip-card { margin-top: 26px; }
+  :root[data-skin="music"][data-style][data-pro] .banner { border: 0; border-radius: 14px; background: var(--surface); color: var(--txt); box-shadow: var(--card-shadow); }
+  :root[data-skin="music"][data-style][data-pro] .banner.bad { box-shadow: inset 3px 0 0 #FF453A, var(--card-shadow); }
   /* Shared interaction finish: keyboard navigation stays visible across every skin. */
   :root { --focus-ring: var(--blue); }
   :is(button, a, input, textarea, select, [tabindex]):focus-visible {
@@ -3240,7 +3197,7 @@
       </div>
       <div class="set-row sr-block">
         <div class="seg" id="skin-seg">
-          <button data-skin-choice="line">New</button>
+          <button data-skin-choice="music">New</button>
           <button data-skin-choice="theatre">Classic</button>
         </div>
       </div>
@@ -3892,6 +3849,7 @@ function selectTab(id, fromHistory) {
     $("page-title").textContent = tab.label;
     $("page-sub").textContent = "";
   }
+  if (typeof mxNote === "function") mxNote(id);
   Array.prototype.forEach.call($("tabs").children, function (b) {
     b.classList.toggle("on", b.dataset.tab === id);
   });
@@ -6283,13 +6241,17 @@ function applyLook(l) {
  * line and pads), or Classic, the page as it was (Theatre). The phone's shared look knows only Theatre, so this
  * is not sent there.
  */
-var SKINS = ["line", "theatre"];
+var SKINS = ["music", "theatre"];
 function applySkin(s) {
-  if (SKINS.indexOf(s) < 0) s = "line";
+  if (SKINS.indexOf(s) < 0) s = "music";
+  // Home's pieces are moved about for this design: going back to Classic puts them back by loading the page again.
+  var was = document.documentElement.getAttribute("data-skin");
+  if (was === "music" && s !== "music" && mx.built) { try { localStorage.setItem("blazeit.skin", s); } catch (e) {} location.reload(); return; }
   if (s === "theatre") document.documentElement.removeAttribute("data-skin");
   else document.documentElement.setAttribute("data-skin", s);
   Array.prototype.forEach.call(document.querySelectorAll("[data-skin-choice]"), function (b) { b.classList.toggle("on", b.dataset.skinChoice === s); });
   try { localStorage.setItem("blazeit.skin", s); } catch (e) {}
+  if (s === "music" && window.appStarted) lineSetup();
 }
 
 /** The colour swatches in Settings: Automatic first, then the system colours. */
@@ -11016,132 +10978,142 @@ async function takeHandoff() {
   }
 }
 
-// ------------------------------------------------------------------ Line: the line, the briefing, the pads
-//
-// What the new design shows that the old did not: along the top, this computer and the phone joined by a line, with
-// how and how fast (packets run along it while files move); on Home, a few plain sentences from the live state, four
-// numbers, and pads for music, where the devices are, the camera, alerts and linked phones. Filled from what the page
-// already knows, plus the camera's state (battery too) and the map's positions, asked every half a minute.
-
-var lineSeen = { active: 0, bps: 0, cam: null, where: null, at: 0, timer: 0 };
-var LL_WAYS = { usb: "USB cable", adb: "USB debugging", direct: "Direct link", hotspot: "Hotspot", wifi: "Wi-Fi", internet: "Internet tunnel", website: "Website" };
-
-function lineDraw() {
-  var el = $("link-line");
-  if (!el) return;
-  var up = !!route && $("dot") && $("dot").classList.contains("on");
-  el.classList.toggle("down", !up);
-  el.classList.toggle("busy", up && lineSeen.active > 0);
-  el.classList.toggle("idle", up && !lineSeen.active);
-  $("ll-phone").textContent = state.device || "Phone";
-  var way = route ? (LL_WAYS[route.via] || "Network") : "";
-  $("ll-mid").textContent = !up ? "Not connected" : lineSeen.active ? way + " \u00B7 " + rate(lineSeen.bps) : way + (route && route.ip ? " \u00B7 " + route.ip : "");
-}
-
-/** About how fast the link is, as a number, for the briefing: what is moving now, else what the link usually gives. */
-function lineSpeed() {
-  if (lineSeen.active && lineSeen.bps > 0) return { n: Math.round(lineSeen.bps / 1e6), now: true };
-  var b = route && ROUTE_BADGES[route.via], m = b && /(\d+)\s*MB\/s/.exec(b.speed);
-  if (route && route.via === "usb" && route.usbMbps > 0 && route.usbMbps < 600) return { n: 40, now: false };
-  return m ? { n: +m[1], now: false } : null;
-}
-
-async function lineAsk() {
-  if (document.documentElement.getAttribute("data-skin") !== "line") return;
-  try { var r = await api("/api/cams/state", { cache: "no-store" }); if (r.ok) lineSeen.cam = await r.json(); } catch (e) {}
-  if (Date.now() - lineSeen.at > 30000) {
-    lineSeen.at = Date.now();
-    try { var w = await api("/api/where", { cache: "no-store" }); if (w.ok) lineSeen.where = await w.json(); } catch (e) {}
-  }
-  lineDraw();
-  briefDraw();
-}
-
-function lineAgo(at) {
-  var s = (Date.now() - at) / 1000;
-  return s < 90 ? "just now" : s < 3600 ? Math.round(s / 60) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : new Date(at).toLocaleDateString(undefined, { weekday: "long" });
-}
-
-function metresBetween(a, b) {
-  var R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
-  var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-function farWords(m) { return m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(m < 10000 ? 1 : 0) + " km"; }
-
-/** Home: the sentences, the four numbers and the pads. */
-function briefDraw() {
-  if (document.documentElement.getAttribute("data-skin") !== "line" || !$("brief")) return;
-  var name = state.device || "The phone", up = $("dot") && $("dot").classList.contains("on");
-  var cam = lineSeen.cam, bat = cam && cam.battery >= 0 ? cam.battery : null, sp = lineSpeed();
-  var way = route ? (LL_WAYS[route.via] || "the network") : "";
-  var notes = Object.keys(notifs).filter(function (k) { return !notifs[k].ongoing; }).length;
-  var places = (lineSeen.where && lineSeen.where.places) || [], me = places.filter(function (p) { return p.id === "self"; })[0];
-  // The sentences: what is true now, said once, plainly.
-  var s = [];
-  if (!up) s.push(name + " is not reachable from this computer right now.");
-  else s.push(name + " is with this computer over " + (way === "Wi-Fi" ? "Wi-Fi" : "its " + way.toLowerCase()) +
-    (lineSeen.active ? ", moving " + lineSeen.active + (lineSeen.active === 1 ? " file" : " files") + " at " + rate(lineSeen.bps) + "." : sp ? ", good for about " + sp.n + " MB/s." : "."));
-  if (bat != null) s.push("Its battery is at " + bat + "%" + (cam.charging ? " and charging." : "."));
-  var away = linkedPhones.filter(function (p) { return !p.nearby; });
-  if (linkedPhones.length) s.push(linkedPhones.length === 1 ? linkedPhones[0].name + " is linked" + (linkedPhones[0].nearby ? " and nearby." : ".") : linkedPhones.length + " phones are linked.");
-  if (notes) s.push(notes === 1 ? "One notification is waiting." : notes + " notifications are waiting.");
-  else if (notifLive && notifAllowed) s.push('<span class="q">Nothing new on the phone.</span>');
-  $("brief").innerHTML = s.map(function (x) { return x.indexOf("<span") === 0 ? x : esc(x); }).join(" ");
-  // The numbers.
-  var stats = [
-    [bat != null ? bat + "<i>%</i>" : "\u2013", bat != null && cam.charging ? "Battery, charging" : "Battery"],
-    [sp ? sp.n + "<i>MB/s</i>" : up && way ? '<span class="st-w">' + esc(way) + "</span>" : "\u2013", up ? (sp ? (sp.now ? "Moving now" : "Typical over " + way) : "The link") : "Not connected"],
-    [String(linkedPhones.length), linkedPhones.length === 1 ? "Linked phone" : "Linked phones"],
-    [String(notes), notes === 1 ? "Notification" : "Notifications"],
-  ];
-  $("brief-stats").innerHTML = stats.map(function (x) { return '<div class="st"><b>' + x[0] + '</b><small>' + esc(x[1]) + "</small></div>"; }).join("");
-  padsDraw(places, me, notes, cam);
-}
-
-function padSet(id, v, sub, on) {
-  var p = $(id); if (!p) return;
-  var body = p.querySelector(".pad-body");
-  body.innerHTML = '<span class="pad-v"></span><span class="pad-s"></span>';
-  body.firstChild.textContent = v; body.lastChild.textContent = sub || "";
-  p.querySelector(".pad-k i").classList.toggle("on", !!on);
-}
-
-function padsDraw(places, me, notes, cam) {
-  var t = currentTrack(), playing = !!t && isPlaying();
-  padSet("pad-music", t ? t.title : "Nothing playing", t ? t.artist : (music.tracks && music.tracks.length ? music.tracks.length + " songs on the phone" : ""), playing);
-  if (t) {
-    var img = document.createElement("img"); img.className = "pad-art"; img.alt = ""; img.src = artUrl(t.albumId, 0);
-    $("pad-music").querySelector(".pad-body").prepend(img);
-  }
-  padSet("pad-cams", !cam ? "\u2013" : cam.running ? (cam.recording ? "Recording" : "Live") : cam.on ? "Starting" : "Off",
-    cam && cam.running ? (cam.viewers ? cam.viewers + " watching" : "Nobody watching") : "This phone's camera", cam && cam.running);
-  padSet("pad-alerts", notes ? notes + (notes === 1 ? " notification" : " notifications") : "None", !notifLive ? "Not passed on right now" : "From the phone", notes > 0);
-  padSet("pad-phones", linkedPhones.length ? linkedPhones.map(function (p) { return p.name; }).join(", ") : "No linked phones",
-    linkedPhones.length ? (linkedPhones.some(function (p) { return p.nearby; }) ? "Nearby" : "Away, through the tunnel") : "Link one from the phone", linkedPhones.some(function (p) { return p.nearby; }));
-  // Where: this phone in the middle, the others around it by direction and (squeezed) distance, joined by a line.
-  var pw = $("pad-where").querySelector(".pad-body"), others = me ? places.filter(function (p) { return p !== me && p.fix; }) : [];
-  if (!me || !me.fix) { padSet("pad-where", "No position yet", "Turn on location on the phone", false); return; }
-  var W = 220, H = 72, cx = W / 2, cy = H / 2, far = 0, svg = "";
-  others.forEach(function (p) { far = Math.max(far, metresBetween(me.fix, p.fix)); });
-  others.slice(0, 5).forEach(function (p) {
-    var m = metresBetween(me.fix, p.fix), a = Math.atan2(p.fix.lat - me.fix.lat, (p.fix.lon - me.fix.lon) * Math.cos(me.fix.lat * Math.PI / 180));
-    var k = far > 0 ? Math.sqrt(m / far) : 0, x = cx + Math.cos(a) * k * (W / 2 - 14), y = cy - Math.sin(a) * k * (H / 2 - 8);
-    svg += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '"/><circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3.5"/>';
-  });
-  svg += '<circle class="me" cx="' + cx + '" cy="' + cy + '" r="5"/>';
-  var near = others.slice().sort(function (a, b) { return metresBetween(me.fix, a.fix) - metresBetween(me.fix, b.fix); })[0];
-  pw.innerHTML = '<svg class="pad-map" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="xMidYMid meet" aria-hidden="true">' + svg + '</svg><span class="pad-s"></span>';
-  pw.lastChild.textContent = near ? near.name + " " + farWords(metresBetween(me.fix, near.fix)) + " away" + (others.length > 1 ? ", " + (others.length - 1) + " more" : "") : "Seen " + lineAgo(me.fix.at);
-  $("pad-where").querySelector(".pad-k i").classList.toggle("on", Date.now() - me.fix.at < 600000);
-}
-
-function lineSetup() {
-  Array.prototype.forEach.call(document.querySelectorAll("#home-pads .pad"), function (p) { p.addEventListener("click", function () { selectTab(p.dataset.go); }); });
-  lineAsk();
-  setInterval(function () { if (document.visibilityState === "visible") lineAsk(); }, 15000);
-  setInterval(function () { lineDraw(); briefDraw(); }, 3000);
-}
+// ------------------------------------------------------------------ Music: the design, carried from the Music tab
+//
+// Home laid out as Music's albums: a card each for the phone, what is playing, where your devices are, the camera,
+// alerts and linked phones, each a big square of artwork with two lines under it; the things to do (send files, a
+// folder, the phone's screen, a second screen) as chips above them, the clipboard and what is on the phone below.
+// Beside each page's name, Music's quiet note. Filled from what the page knows, plus the camera's state (with the
+// battery) every 15 s and where the devices are every 30 s, only in this design.
+
+var lineSeen = { active: 0, bps: 0, cam: null, where: null, at: 0 };
+var mx = { built: false, cards: {} };
+var MX_WAYS = { usb: "USB cable", adb: "USB debugging", direct: "Direct link", hotspot: "Hotspot", wifi: "Wi-Fi", internet: "Internet tunnel", website: "Website" };
+
+function mxOn() { return document.documentElement.getAttribute("data-skin") === "music"; }
+
+/** Kept for what calls it as files move (the transfer dock): the note and the phone's card show the speed. */
+function lineDraw() { if (mxOn() && mx.built) mxDraw(); }
+
+function mxNote(id) {
+  var n = $("mx-n");
+  if (!n) return;
+  var up = $("dot") && $("dot").classList.contains("on");
+  if ((id || document.body.dataset.tab) === "home") {
+    n.textContent = !up ? "Not connected" : (state.device || "Phone") + " · " + (route ? MX_WAYS[route.via] || "Network" : "Connecting") +
+      (lineSeen.active ? " · " + rate(lineSeen.bps) : "");
+  } else n.textContent = "";
+}
+
+/** Home's pieces, moved once into Music's layout: the chips (the same buttons, still wired) and the cards. */
+function mxBuild() {
+  if (mx.built || !mxOn()) return;
+  mx.built = true;
+  var head = document.querySelector(".page-head");
+  if (head && !$("mx-n")) { var n = document.createElement("span"); n.className = "mx-n"; n.id = "mx-n"; head.appendChild(n); }
+  var home = document.querySelector('section[data-panel="home"]');
+  var box = document.createElement("div");
+  box.className = "mx-home"; box.id = "mx-home";
+  box.innerHTML = '<div class="mx-acts" id="mx-acts"></div><div class="mx-cards" id="mx-cards"></div>';
+  home.insertBefore(box, home.firstChild);
+  var acts = $("mx-acts");
+  ["pick-files", "pick-folder", "beam-to", "mirror-btn", "display-btn"].forEach(function (id) { var b = $(id); if (b) acts.appendChild(b); });
+  var menu = $("to-menu"); if (menu) acts.appendChild(menu);
+  var MX_IC = {
+    phone: '<path d="M9 2.5h6A2.5 2.5 0 0 1 17.5 5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 19V5A2.5 2.5 0 0 1 9 2.5Z"/><path d="M11 18.5h2"/>',
+    music: '<path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+    cam: '<path d="M5.5 6.5h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z"/><path d="M15.5 10.5l4.2-2.6a.5.5 0 0 1 .8.4v7.4a.5.5 0 0 1-.8.4l-4.2-2.6"/>',
+    bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+    pin: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.5"/>',
+  };
+  mx.ic = function (k) { return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + MX_IC[k] + "</svg>"; };
+  var cards = [["phone", "settings"], ["music", "music"], ["where", "map"], ["cam", "cams"], ["alerts", "alerts"], ["phones", "phones"]];
+  var host = $("mx-cards");
+  cards.forEach(function (c) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "mc"; b.dataset.go = c[1];
+    b.innerHTML = '<span class="mc-art"></span><span class="mc-t"></span><span class="mc-s"></span>';
+    b.addEventListener("click", function () { selectTab(c[1]); });
+    host.appendChild(b);
+    mx.cards[c[0]] = b;
+  });
+  mxDraw();
+}
+
+/** One card: its artwork (only redrawn when it changes, so a cover does not flicker), its two lines, its light. */
+function mxCard(k, art, title, sub, on) {
+  var b = mx.cards[k]; if (!b) return;
+  var a = b.querySelector(".mc-art");
+  if (a.dataset.key !== art) { a.dataset.key = art; a.innerHTML = art; }
+  var d = a.querySelector(".mc-dot");
+  if (on != null) { if (!d) { d = document.createElement("i"); d.className = "mc-dot"; a.appendChild(d); } d.classList.toggle("on", !!on); }
+  b.querySelector(".mc-t").textContent = title;
+  b.querySelector(".mc-s").textContent = sub || "";
+}
+
+function mxDraw() {
+  if (!mxOn() || !mx.built) return;
+  mxNote();
+  var up = $("dot") && $("dot").classList.contains("on"), cam = lineSeen.cam;
+  var bat = cam && cam.battery >= 0 ? cam.battery : null, way = route ? MX_WAYS[route.via] || "Network" : "";
+  // The phone itself: its battery large, how this page reaches it.
+  mxCard("phone", bat != null ? "<b>" + bat + "<i>%</i></b>" : mx.ic("phone"), state.device || "Phone",
+    !up ? "Not connected" : lineSeen.active ? way + " · " + rate(lineSeen.bps) : way + (cam && cam.charging ? " · charging" : ""), up);
+  // What is playing: its cover, the bars moving while it plays.
+  var t = currentTrack(), playing = !!t && isPlaying();
+  mxCard("music", t ? '<img alt="" src="' + esc(artUrl(t.albumId, 0)) + '">' + (playing ? '<span class="mc-eq"><i></i><i></i><i></i></span>' : "") : mx.ic("music"),
+    t ? t.title : "Music", t ? t.artist : (music.tracks && music.tracks.length ? music.tracks.length + " songs" : "Nothing playing"));
+  // Where: this phone in the middle, the others around it by direction and (squeezed) distance.
+  var places = (lineSeen.where && lineSeen.where.places) || [], me = places.filter(function (p) { return p.id === "self"; })[0];
+  if (me && me.fix) {
+    var others = places.filter(function (p) { return p !== me && p.fix; }), far = 0, svg = "", S = 100, c = S / 2;
+    others.forEach(function (p) { far = Math.max(far, mxMetres(me.fix, p.fix)); });
+    others.slice(0, 6).forEach(function (p) {
+      var m = mxMetres(me.fix, p.fix), an = Math.atan2(p.fix.lat - me.fix.lat, (p.fix.lon - me.fix.lon) * Math.cos(me.fix.lat * Math.PI / 180));
+      var k = far > 0 ? Math.sqrt(m / far) : 0, x = c + Math.cos(an) * k * 38, y = c - Math.sin(an) * k * 38;
+      svg += '<line x1="50" y1="50" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '"/><circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3.2"/>';
+    });
+    var near = others.slice().sort(function (a, b) { return mxMetres(me.fix, a.fix) - mxMetres(me.fix, b.fix); })[0];
+    mxCard("where", '<svg class="mc-map" viewBox="0 0 100 100" aria-hidden="true">' + svg + '<circle class="me" cx="50" cy="50" r="5.5"/></svg>', "Where",
+      near ? near.name + " · " + mxFar(mxMetres(me.fix, near.fix)) : "Only this phone", Date.now() - me.fix.at < 600000);
+  } else mxCard("where", mx.ic("pin"), "Where", "No position yet", false);
+  // The camera.
+  mxCard("cam", mx.ic("cam"), "Camera", !cam ? "" : cam.running ? (cam.recording ? "Recording" : "Live") + (cam.viewers ? " · " + cam.viewers + " watching" : "") : cam.on ? "Starting" : "Off",
+    cam && cam.running);
+  // Alerts: how many, large.
+  var notes = Object.keys(notifs).filter(function (k) { return !notifs[k].ongoing; }).length;
+  mxCard("alerts", notes ? "<b>" + notes + "</b>" : mx.ic("bell"), "Alerts", notes ? (notes === 1 ? "1 notification" : notes + " notifications") : notifLive ? "Nothing new" : "Not passed on now", notes > 0);
+  // Linked phones: their first letters.
+  var lp = linkedPhones || [];
+  mxCard("phones", lp.length ? '<span class="mc-faces">' + lp.slice(0, 3).map(function (p) { return "<span>" + esc((p.name || "?").charAt(0).toUpperCase()) + "</span>"; }).join("") + "</span>" : mx.ic("phone"),
+    lp.length ? lp.map(function (p) { return p.name; }).join(", ") : "Phones", lp.length ? (lp.some(function (p) { return p.nearby; }) ? "Nearby" : "Away · through the tunnel") : "None linked", lp.some(function (p) { return p.nearby; }));
+}
+
+function mxMetres(a, b) {
+  var R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+  var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function mxFar(m) { return m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(m < 10000 ? 1 : 0) + " km"; }
+
+async function mxAsk() {
+  if (!mxOn()) return;
+  try { var r = await api("/api/cams/state", { cache: "no-store" }); if (r.ok) lineSeen.cam = await r.json(); } catch (e) {}
+  if (Date.now() - lineSeen.at > 30000) {
+    lineSeen.at = Date.now();
+    try { var w = await api("/api/where", { cache: "no-store" }); if (w.ok) lineSeen.where = await w.json(); } catch (e) {}
+  }
+  mxDraw();
+}
+
+function lineSetup() {
+  if (!mxOn() || mx.setup) return;
+  mx.setup = true;
+  mxBuild();
+  mxAsk();
+  setInterval(function () { if (document.visibilityState === "visible") mxAsk(); }, 15000);
+  setInterval(mxDraw, 3000);
+}
 
 // ------------------------------------------------------------------ the redesign's sidebar and Ctrl K
 //
@@ -11366,7 +11338,7 @@ setInterval(pageFresh, 600000);
   try { saved = localStorage.getItem("blazeit.theme") || "system"; } catch (e) {}
   applyTheme(saved);
   try { applyLook(JSON.parse(localStorage.getItem("blazeit.look") || "null")); } catch (e) {}
-  var skin = "line"; try { skin = localStorage.getItem("blazeit.skin") || "line"; } catch (e) {}
+  var skin = "music"; try { skin = localStorage.getItem("blazeit.skin") || "music"; } catch (e) {}
   applySkin(skin);
   try {
     var res = await fetch("/api/ping", { credentials: "same-origin" });
