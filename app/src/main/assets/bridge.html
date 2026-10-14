@@ -6720,6 +6720,31 @@ function artistNamed(credit) {
   return (music.artistByKey && music.artistByKey[k]) || null;
 }
 
+/**
+ * Who something is by, each artist their own link to their page: "Fivio Foreign, Kanye West & Alicia
+ * Keys" is three. A name the library has no page for is plain text.
+ */
+function creditLinks(el, credit) {
+  el.textContent = "";
+  var parts = artistParts(credit);
+  if (!parts.length) { el.textContent = credit || ""; return; }
+  parts.forEach(function (n, i) {
+    if (i > 0) el.appendChild(document.createTextNode(i === parts.length - 1 ? " & " : ", "));
+    var ar = music.artistByKey && music.artistByKey[artistKey(n)];
+    var s = document.createElement("span");
+    s.textContent = n;
+    if (ar) {
+      s.className = "ar-link";
+      s.title = "All of " + ar.name;
+      s.setAttribute("role", "link");
+      s.tabIndex = 0;
+      s.onclick = function (e) { e.stopPropagation(); openArtist(ar.key); };
+      s.onkeydown = function (e) { if (e.key === "Enter") s.onclick(e); };
+    }
+    el.appendChild(s);
+  });
+}
+
 /** The artists the Artists view shows: those matching the search. */
 function artistMatches() {
   var q = artistKey(music.filter);
@@ -7406,14 +7431,7 @@ function renderAlbumPage(host) {
   head.firstChild.appendChild(coverEl("nml-hc", a.coverId, a.album));
   var info = head.lastChild;
   info.querySelector("h2").textContent = a.album;
-  info.querySelector(".by").textContent = prettyCredit(a.artist);
-  var byAr = artistNamed(a.artist);
-  if (byAr) {
-    var byEl = info.querySelector(".by");
-    byEl.classList.add("ar-link");
-    byEl.title = "All of " + byAr.name;
-    byEl.onclick = function () { openArtist(byAr.key); };
-  }
+  creditLinks(info.querySelector(".by"), a.artist);
   var btns = info.querySelector(".nml-head-btns");
   var play = nmlButton("Play", "play", "Play " + a.album, function () { playAlbum(a.key, false); });
   play.classList.add("mx-play");

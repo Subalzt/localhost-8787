@@ -952,11 +952,8 @@ private fun AlbumHead(a: Album, shelf: MusicShelf, pushOffset: () -> Float, acts
             Text(a.title, style = TextStyle(fontFamily = MusicType, fontSize = 21.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp, color = nc.large),
                 textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
-            // Who it is by: tapped, their page.
-            val by = remember(a.artist, shelf.artists) { shelf.artistNamed(a.artist) }
-            Text(remember(a.artist, shelf.whole) { shelf.credit(a.artist) }, style = TextStyle(fontFamily = MusicType, fontSize = 19.sp, color = nc.primary.takeIf { it != nc.large } ?: nc.small),
-                textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = if (by != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable { shelf.openArtist(by) }.padding(horizontal = 4.dp) else Modifier)
+            // Who it is by, each artist on their own: tapped, their page.
+            CreditLinks(a.artist, shelf, TextStyle(fontFamily = MusicType, fontSize = 19.sp, color = nc.primary.takeIf { it != nc.large } ?: nc.small))
             if (meta.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 Text(meta, style = Nm.small.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium), textAlign = TextAlign.Center, maxLines = 1,
@@ -1177,6 +1174,24 @@ private fun ArtistPage(a: Artist, shelf: MusicShelf, now: PhonePlayer.State, hea
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Who something is by, centred, each artist their own tap to their page ("Fivio Foreign, Kanye West
+ * & Alicia Keys" is three); a name the library has no page for is plain.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun CreditLinks(credit: String, shelf: MusicShelf, style: TextStyle) {
+    val parts = remember(credit, shelf.whole) { dev.periy.bridge.server.artistParts(credit, shelf.whole).ifEmpty { listOf(credit) } }
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+        parts.forEachIndexed { i, n ->
+            val ar = remember(n, shelf.artists) { shelf.artists.firstOrNull { it.key == artistKey(n) } }
+            Text(n, style = style, maxLines = 1,
+                modifier = if (ar != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable { shelf.openArtist(ar) }.padding(horizontal = 2.dp) else Modifier.padding(horizontal = 2.dp))
+            if (i < parts.lastIndex) Text(if (i == parts.lastIndex - 1) " & " else ", ", style = style)
         }
     }
 }
