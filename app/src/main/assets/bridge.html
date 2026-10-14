@@ -2873,6 +2873,31 @@
   @media (max-width: 999px) {
     :root[data-pro][data-theme="dark"] body:not(#_) :is(.card, .set-group, .status-line, .beam-card) { box-shadow: inset 0 0 0 .5px rgba(255,255,255,.07); }
   }
+  /* Artists: pictures in circles, A to Z; an artist's page with their picture large, their albums across, their songs. */
+  .nml-artists { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 18px 10px; padding: 8px 12px 12px; }
+  @media (max-width: 600px) { .nml-artists { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 6px; padding: 6px 8px 12px; } }
+  .ar-card { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 6px; border: 0; border-radius: 14px;
+    background: none; color: var(--txt); font: inherit; text-align: center; cursor: pointer; transition: background .15s, transform .15s; }
+  .ar-card:hover { background: color-mix(in srgb, var(--txt) 6%, transparent); }
+  .ar-card:active { transform: scale(.97); }
+  .ar-card b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
+  .ar-card small { margin-top: -4px; font-size: 12px; color: var(--sub); }
+  .ar-pic { position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 1; border-radius: 50%; overflow: hidden;
+    background: color-mix(in srgb, var(--txt) 8%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--txt) 12%, transparent); }
+  .ar-pic > .ar-cov, .ar-pic > img.ar-img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; object-fit: cover; }
+  .ar-pic > img.ar-img { z-index: 1; }
+  .ar-pic > i { font-style: normal; font-size: 34px; font-weight: 700; color: var(--sub); }
+  .ar-head { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 16px 4px; text-align: center; }
+  .ar-head .ar-pic { width: min(220px, 56vw); box-shadow: 0 18px 44px -20px rgba(0,0,0,.55); }
+  .ar-head .ar-pic > i { font-size: 72px; }
+  .ar-head h2 { margin: 12px 0 0; font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
+  .ar-head p { margin: 0; font-size: 13.5px; color: var(--sub); }
+  .ar-head .nml-head-btns { margin-top: 14px; }
+  .ar-sec { margin: 26px 16px 10px; font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+  .ar-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(148px, 172px); gap: 12px; padding: 0 16px 6px; overflow-x: auto; scrollbar-width: none; }
+  .ar-row::-webkit-scrollbar { display: none; }
+  .ar-link { cursor: pointer; text-decoration: underline transparent; text-underline-offset: 3px; transition: text-decoration-color .15s; }
+  .ar-link:hover { text-decoration-color: currentColor; }
   /* Shared interaction finish: keyboard navigation stays visible across every skin. */
   :root { --focus-ring: var(--blue); }
   :is(button, a, input, textarea, select, [tabindex]):focus-visible {
@@ -3095,6 +3120,7 @@
         <label class="mx-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input id="mx-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false" aria-label="Search the music"></label>
         <h6>Library</h6>
         <button type="button" data-v="albums"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><circle cx="12" cy="12" r="3.5"/></svg>Albums</button>
+        <button type="button" data-v="artists"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>Artists</button>
         <button type="button" data-v="songs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>Songs</button>
         <button type="button" data-v="liked"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.6 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10Z"/></svg>Favourites</button>
         <div class="mx-count" id="mx-count"></div>
@@ -3117,13 +3143,14 @@
       </div>
       <!-- On a narrow window: the page's name large, the other two beside it as plain words. -->
       <nav class="mx-chips" id="mx-chips" aria-label="Show">
-        <button type="button" data-v="albums">Albums</button><button type="button" data-v="songs">Songs</button><button type="button" data-v="liked">Favourites</button>
+        <button type="button" data-v="albums">Albums</button><button type="button" data-v="artists">Artists</button><button type="button" data-v="songs">Songs</button><button type="button" data-v="liked">Favourites</button>
       </nav>
       <div class="nml-page" id="music-list"><p class="nml-note">Looking for music...</p></div>
       <div id="music-more" class="nml-more"></div>
       <nav class="nml-nav" id="music-view" role="tablist" aria-label="Show" data-on="albums">
         <button type="button" role="tab" data-v="songs"><span class="nml-pill"><i></i><span data-nx="tracks"></span></span><b>Tracks</b></button>
         <button type="button" role="tab" data-v="albums" class="on"><span class="nml-pill"><i></i><span data-nx="albums"></span></span><b>Albums</b></button>
+        <button type="button" role="tab" data-v="artists"><span class="nml-pill"><i></i><span data-nx="mic"></span></span><b>Artists</b></button>
         <button type="button" role="tab" data-v="liked"><span class="nml-pill"><i></i><span data-nx="heart"></span></span><b>Liked</b></button>
       </nav>
     </div>
@@ -6035,6 +6062,7 @@ function connectEvents() {
   events.addEventListener("theme", function (e) { applyTheme(e.data); });
   events.addEventListener("look", function (e) { try { applyLook(JSON.parse(e.data)); } catch (err) {} });
   events.addEventListener("cover", function (e) { coverArrived(e.data); });
+  events.addEventListener("artist", function (e) { artistArrived(e.data); });
   events.addEventListener("favourites", function (e) { try { setFavourites(JSON.parse(e.data)); } catch (err) {} });
   events.addEventListener("eq", function (e) { if (Date.now() - eq.mine > 800 && eq.held < 0) try { eqTake(JSON.parse(e.data)); } catch (err) {} });
   // The phone's links changed: the helper may be moving this page onto another one.
@@ -6395,7 +6423,7 @@ var PREFETCH_MAX_BYTES = 250 * 1024 * 1024;
 var MUSIC_PAGE = 300;
 
 var music = { tracks: [], granted: true, loaded: false, loading: false,
-              view: "albums", album: null, filter: "", shown: MUSIC_PAGE };
+              view: "albums", album: null, artist: null, filter: "", shown: MUSIC_PAGE };
 // source: where the queue was started, so the banner can say it, and where Music was then
 // (place), so the player bar's cover can go back there: { kind: "album" | "songs", key, label, place }.
 var player = { queue: [], order: [], pos: -1, shuffle: false, repeat: "off", repeatTimes: 1, source: null,
@@ -6589,6 +6617,7 @@ async function musicLoad(refresh) {
     music.granted = !!body.granted;
     music.tracks = body.tracks || [];
     indexAlbums();
+    indexArtists();
     music.loaded = true;
   } catch (e) {
     $("music-list").innerHTML = '<p class="empty">Could not load the library.</p>';
@@ -6610,8 +6639,92 @@ async function musicLoad(refresh) {
 
 /** "Pusha T & Malice feat. Kendrick Lamar" -> ["Pusha T", "Malice", "Kendrick Lamar"]. */
 function artistParts(s) {
-  return String(s || "").split(/\s*(?:,|&|\+|\/|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|\bx\b)\s*/i)
-    .map(function (a) { return a.trim(); }).filter(Boolean);
+  // A lone lower-case "x" joins names ("A x B"); a capital X is part of one (Lil Nas X).
+  return String(s || "").split(" x ").reduce(function (out, p) {
+    return out.concat(p.split(/\s*(?:,|&|\+|\/|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b)\s*/i));
+  }, []).map(function (a) { return a.trim(); }).filter(Boolean);
+}
+/** An artist's name as names are compared: letters and digits, lower case. */
+function artistKey(s) { return String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""); }
+
+/**
+ * Everyone on the songs (groupArtists in MusicShelf.kt): each artist named on a song or as its
+ * album's artist, spelt as most of their songs spell them, A to Z (a leading "The" aside); their
+ * own albums and the others they are on, newest first, and their songs in that order.
+ */
+function indexArtists() {
+  var skip = { variousartists: 1, unknownartist: 1, unknown: 1, va: 1 }, songs = {}, spell = {}, keys = [];
+  music.tracks.forEach(function (t) {
+    var seen = {};
+    artistParts(t.artist).concat(artistParts(t.albumArtist)).forEach(function (n) {
+      var k = artistKey(n);
+      if (!k || skip[k] || seen[k]) return;
+      seen[k] = 1;
+      if (!songs[k]) { songs[k] = []; spell[k] = {}; keys.push(k); }
+      songs[k].push(t);
+      spell[k][n] = (spell[k][n] || 0) + 1;
+    });
+  });
+  music.artists = keys.map(function (k) {
+    var name = Object.keys(spell[k]).sort(function (a, b) { return spell[k][b] - spell[k][a]; })[0];
+    var all = [], seen = {};
+    songs[k].forEach(function (t) { var a = music.albumByKey[t.ak]; if (a && !seen[a.key]) { seen[a.key] = 1; all.push(a); } });
+    all.sort(function (a, b) { return (b.year || 0) - (a.year || 0); });
+    var own = all.filter(function (a) { return artistParts(a.artist).some(function (n) { return artistKey(n) === k; }); });
+    var order = {};
+    all.forEach(function (a, i) { order[a.key] = i; });
+    var tracks = songs[k].slice().sort(function (x, y) {
+      return ((order[x.ak] || 0) - (order[y.ak] || 0)) || (x.disc - y.disc) || (x.track - y.track) || x.title.localeCompare(y.title);
+    });
+    return { key: k, name: name, tracks: tracks, albums: own, appears: all.filter(function (a) { return own.indexOf(a) < 0; }) };
+  }).sort(function (a, b) { return a.name.replace(/^the /i, "").localeCompare(b.name.replace(/^the /i, ""), undefined, { sensitivity: "base" }); });
+  music.artistByKey = {};
+  music.artists.forEach(function (a) { music.artistByKey[a.key] = a; });
+  if (music.artist !== null && !music.artistByKey[music.artist]) music.artist = null;
+}
+
+/** The artist an album or song is credited to (the first named), when the library has them. */
+function artistNamed(credit) {
+  var k = artistKey(artistParts(credit)[0] || credit);
+  return (music.artistByKey && music.artistByKey[k]) || null;
+}
+
+/** The artists the Artists view shows: those matching the search. */
+function artistMatches() {
+  var q = artistKey(music.filter);
+  return (music.artists || []).filter(function (a) { return !q || artistKey(a.name).indexOf(q) >= 0; });
+}
+
+/**
+ * An artist's picture in a circle: theirs from Apple Music or Deezer, found by the phone
+ * (server/ArtistArt.kt); until it comes, the cover of their newest album, or their initial.
+ * The phone says when one is found ("artist" event) and it is put in then.
+ */
+function artistPic(ar) {
+  var box = document.createElement("span");
+  box.className = "ar-pic";
+  box.dataset.ak = ar.key;
+  var a = ar.albums[0] || ar.appears[0];
+  if (a) box.appendChild(coverEl("ar-cov", a.coverId, a.album));
+  else { var i = document.createElement("i"); i.textContent = ar.name.charAt(0).toUpperCase(); box.appendChild(i); }
+  artistImg(box, ar.name, false);
+  return box;
+}
+function artistImg(box, name, fresh) {
+  var old = box.querySelector("img.ar-img");
+  if (old) old.remove();
+  var img = document.createElement("img");
+  img.className = "ar-img";
+  img.alt = "";
+  img.decoding = "async";
+  img.onerror = function () { img.remove(); };
+  img.src = "/api/music/artist-art?name=" + encodeURIComponent(name) + (fresh ? "&v=" + Date.now() : "");
+  box.appendChild(img);
+}
+function artistArrived(key) {
+  var ar = music.artistByKey && music.artistByKey[key];
+  if (!ar) return;
+  Array.prototype.forEach.call(document.querySelectorAll('.ar-pic[data-ak="' + key + '"]'), function (box) { artistImg(box, ar.name, true); });
 }
 function albumNameKey(s) { return String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(); }
 
@@ -6708,7 +6821,7 @@ var CLOSE_SVG = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" s
 // Namida's tiles and cards, an album's page pushed over them the iOS way, and Namida's bar along
 // the foot to go between them. The views are music.view: "songs" (Tracks), "albums", "liked".
 
-var NML_ORDER = ["songs", "albums", "liked"];
+var NML_ORDER = ["songs", "albums", "artists", "liked"];
 var NML_SORTS = ["Disc Number", "Title", "Duration", "Artist"];
 var NML_LOSSLESS = ["FLAC", "ALAC", "WAV", "AIFF", "APE", "WV", "DSD"];
 // Namida's push: in over 400 ms, quick to leave and slow to arrive, both ways.
@@ -6809,7 +6922,9 @@ function renderMusic() {
   if (!music.loaded) { nmlNote(host, "Looking for music..."); return; }
   if (!music.tracks.length) { nmlNote(host, "No music found on the phone"); return; }
   if (music.album !== null) { renderAlbumPage(host); return; }
+  if (music.artist !== null) { renderArtistPage(host); return; }
   if (music.view === "albums") renderAlbums(host);
+  else if (music.view === "artists") renderArtists(host);
   else {
     var liked = music.view === "liked", list = liked ? likedMatches() : musicMatches();
     if (!list.length) nmlNote(host, liked && !music.filter.trim() ? "No liked songs yet. Tap the heart on a song to keep it here." : "Nothing matches");
@@ -7096,7 +7211,13 @@ function renderAlbums(host) {
   if (!albums.length) { nmlNote(host, "Nothing matches"); return; }
   var grid = document.createElement("div");
   grid.className = "nml-albums";
-  albums.forEach(function (a) {
+  albums.forEach(function (a) { grid.appendChild(nmlAlbumCell(a)); });
+  host.appendChild(grid);
+  markPlaying();
+}
+
+/** An album's card: its cover with Play on it, its name and who it is by; a click opens it. */
+function nmlAlbumCell(a) {
     var n = a.tracks.length;
     var cell = document.createElement("div");
     cell.className = "nc";
@@ -7122,9 +7243,77 @@ function renderAlbums(host) {
     card.appendChild(cap);
     card.onclick = function () { openAlbum(a.key, art); };
     cell.appendChild(card);
-    grid.appendChild(cell);
+    return cell;
+}
+
+/** Artists: their pictures in circles, A to Z, how many songs each; a click opens their page. */
+function renderArtists(host) {
+  var list = artistMatches();
+  if (!list.length) { nmlNote(host, "Nothing matches"); return; }
+  var grid = document.createElement("div");
+  grid.className = "nml-artists";
+  list.forEach(function (ar) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "ar-card";
+    b.setAttribute("aria-label", ar.name + ", " + nmlCount(ar.tracks.length, "song"));
+    b.appendChild(artistPic(ar));
+    var name = document.createElement("b");
+    name.textContent = ar.name;
+    b.appendChild(name);
+    var n = document.createElement("small");
+    n.textContent = nmlCount(ar.tracks.length, "song");
+    b.appendChild(n);
+    b.onclick = function () { openArtist(ar.key); };
+    grid.appendChild(b);
   });
   host.appendChild(grid);
+}
+
+/**
+ * An artist's page: their picture large in a circle, their name, how many albums and songs, Play
+ * and Shuffle for every song they are on; their albums across (newest first), the albums they are
+ * on, then all their songs.
+ */
+function renderArtistPage(host) {
+  var ar = music.artistByKey && music.artistByKey[music.artist];
+  if (!ar) { music.artist = null; renderMusic(); return; }
+  var head = document.createElement("div");
+  head.className = "ar-head";
+  head.appendChild(artistPic(ar));
+  var h = document.createElement("h2");
+  h.textContent = ar.name;
+  head.appendChild(h);
+  var p = document.createElement("p");
+  p.textContent = [ar.albums.length ? nmlCount(ar.albums.length, "album") : "", nmlCount(ar.tracks.length, "song"), nmlMinutes(nmlSum(ar.tracks))].filter(Boolean).join(" \u00B7 ");
+  head.appendChild(p);
+  var btns = document.createElement("div");
+  btns.className = "nml-head-btns";
+  var from = { kind: "songs", label: ar.name };
+  var play = nmlButton("Play", "play", "Play " + ar.name, function () { setShuffle(false); startQueue(ar.tracks, 0, from); });
+  play.classList.add("mx-play");
+  var shuf = nmlButton("Shuffle", "shuffle", "Shuffle " + ar.name, function () { setShuffle(true); startQueue(ar.tracks, Math.floor(Math.random() * ar.tracks.length), from); });
+  shuf.classList.add("mx-shuf");
+  btns.appendChild(play);
+  btns.appendChild(shuf);
+  head.appendChild(btns);
+  host.appendChild(head);
+  [["Albums", ar.albums], ["Appears on", ar.appears]].forEach(function (s) {
+    if (!s[1].length) return;
+    var title = document.createElement("h3");
+    title.className = "ar-sec";
+    title.textContent = s[0];
+    host.appendChild(title);
+    var row = document.createElement("div");
+    row.className = "ar-row";
+    s[1].forEach(function (a) { row.appendChild(nmlAlbumCell(a)); });
+    host.appendChild(row);
+  });
+  var st = document.createElement("h3");
+  st.className = "ar-sec";
+  st.textContent = "Songs";
+  host.appendChild(st);
+  renderTracks(host, ar.tracks, ar.tracks, from);
   markPlaying();
 }
 
@@ -7169,6 +7358,13 @@ function renderAlbumPage(host) {
   var info = head.lastChild;
   info.querySelector("h2").textContent = a.album;
   info.querySelector(".by").textContent = a.artist;
+  var byAr = artistNamed(a.artist);
+  if (byAr) {
+    var byEl = info.querySelector(".by");
+    byEl.classList.add("ar-link");
+    byEl.title = "All of " + byAr.name;
+    byEl.onclick = function () { openArtist(byAr.key); };
+  }
   var btns = info.querySelector(".nml-head-btns");
   var play = nmlButton("Play", "play", "Play " + a.album, function () { playAlbum(a.key, false); });
   play.classList.add("mx-play");
@@ -7339,6 +7535,31 @@ function openAlbum(key, fromArt) {
   if (ghost) nmlPush(ghost, true, fromArt);
 }
 
+/** An artist's page, pushed over the page under it (an album open goes). */
+function openArtist(key) {
+  if (!music.artistByKey || !music.artistByKey[key] || (music.artist === key && music.album === null)) return;
+  nmlPopClose(true);
+  var ghost = music.album === null && music.artist === null ? nmlGhost() : null;
+  if (music.artist === null && music.album === null) nml.aunder = window.scrollY;
+  music.album = null;
+  nml.afilter = ""; nml.afinding = false;
+  music.artist = key;
+  renderMusic();
+  window.scrollTo(0, 0);
+  if (ghost) nmlPush(ghost, true);
+}
+
+/** Back from an artist to the page under it, where it was left. */
+function closeArtist() {
+  if (music.artist === null) return;
+  nmlPopClose(true);
+  var ghost = nmlGhost();
+  music.artist = null;
+  renderMusic();
+  window.scrollTo(0, nml.aunder || 0);
+  nmlPush(ghost, false);
+}
+
 /** Back from an album to the page under it, where it was left. */
 function closeAlbum() {
   if (music.album === null) return;
@@ -7354,11 +7575,12 @@ function closeAlbum() {
 /** Tracks, Albums or Liked from Namida's bar: the page slides in from the side it is on, each kept where it was left. */
 function nmlGo(v) {
   nmlPopClose(true);
-  if (v === music.view && music.album === null) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+  if (v === music.view && music.album === null && music.artist === null) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
   var from = NML_ORDER.indexOf(music.view), to = NML_ORDER.indexOf(v);
-  if (music.album === null) nml.scroll[music.view] = window.scrollY;
+  if (music.album === null && music.artist === null) nml.scroll[music.view] = window.scrollY;
   music.view = v;
   music.album = null;
+  music.artist = null;
   nml.afilter = ""; nml.afinding = false;
   music.shown = MUSIC_PAGE;
   renderMusic();
@@ -7377,17 +7599,17 @@ function nmlGo(v) {
  */
 function nmlBar() {
   var bar = $("nml-bar"), inAlbum = music.album !== null, finding = inAlbum ? nml.afinding : nml.searching;
-  bar.classList.toggle("away", inAlbum || finding);
+  bar.classList.toggle("away", inAlbum || music.artist !== null || finding);
   bar.classList.toggle("finding", finding);
   var input = $("music-search");
-  input.placeholder = inAlbum ? "Search this album" : music.view === "songs" ? "Search tracks" : music.view === "albums" ? "Search albums" : "Search liked songs";
+  input.placeholder = inAlbum ? "Search this album" : music.view === "songs" ? "Search tracks" : music.view === "albums" ? "Search albums" : music.view === "artists" ? "Search artists" : "Search liked songs";
   var want = inAlbum ? nml.afilter : music.filter;
   if (input.value !== want && document.activeElement !== input) input.value = want;
   $("nml-back").title = finding ? "Close the search" : "Back";
   nmlLead();
 }
 
-var MX_TITLES = { albums: "Albums", songs: "Songs", liked: "Favourites" };
+var MX_TITLES = { albums: "Albums", artists: "Artists", songs: "Songs", liked: "Favourites" };
 
 /** The page's name large, how many under it, and for songs Play and Shuffle for all of them. */
 function nmlLead() {
@@ -7398,6 +7620,8 @@ function nmlLead() {
   d.firstChild.textContent = MX_TITLES[v];
   if (v === "albums") {
     d.lastChild.textContent = ready ? nmlCount(albumMatches().length, "album") : "";
+  } else if (v === "artists") {
+    d.lastChild.textContent = ready ? nmlCount(artistMatches().length, "artist") : "";
   } else {
     var liked = v === "liked", list = ready ? (liked ? likedMatches() : musicMatches()) : [];
     d.lastChild.textContent = ready ? nmlCount(list.length, "song") : "";
@@ -7437,6 +7661,7 @@ function nmlFind(on) {
 function nmlBack() {
   if (music.album !== null && nml.afinding) nmlFind(false);
   else if (music.album !== null) closeAlbum();
+  else if (music.artist !== null) closeArtist();
   else if (nml.searching) nmlFind(false);
 }
 
@@ -7534,11 +7759,11 @@ function setViewButtons() {
   var seg = $("music-view");
   seg.dataset.on = music.view;
   Array.prototype.forEach.call(document.querySelectorAll("#music-view button, #mx-side button, #mx-chips button"), function (b) {
-    var on = b.dataset.v === music.view && (music.album === null || b.closest("#mx-side") !== null);
+    var on = b.dataset.v === music.view && ((music.album === null && music.artist === null) || b.closest("#mx-side") !== null);
     b.classList.toggle("on", on);
     b.setAttribute("aria-selected", on ? "true" : "false");
   });
-  $("mx-chips").hidden = music.album !== null;
+  $("mx-chips").hidden = music.album !== null || music.artist !== null;
   nmlLead();
 }
 
@@ -9961,6 +10186,8 @@ function npTrackChanged(t) {
  * with, the same set the phone's player uses. Path data from the iconsax-react package.
  */
 var NX = {
+  // A microphone, for Artists.
+  mic: '<rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" stroke-linecap="round"/>',
   // A phone, for Handoff: the song carries on there.
   phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
   // Solid, for the player and its bar: play, pause, and the double triangles either way.

@@ -586,6 +586,18 @@ class BridgeServer(
             call.respond(store.dto())
         }
 
+        // An artist's picture (?name=), found online (server/ArtistArt.kt); 404 while there is none yet.
+        get("/api/music/artist-art") {
+            val name = call.request.queryParameters["name"].orEmpty()
+            val bytes = if (name.isBlank()) null else withContext(Dispatchers.IO) { music.artistPicture(name) }
+            if (bytes == null) {
+                call.response.header(HttpHeaders.CacheControl, "no-store")
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+            call.response.header(HttpHeaders.CacheControl, "private, max-age=604800")
+            call.respondBytes(bytes, ContentType.Image.JPEG)
+        }
         get("/api/music/art/{albumId}") {
             val albumId = call.parameters["albumId"]?.toLongOrNull()
             // ?s=128 or 384: a small WebP for a row or a tile, a tenth of the full cover's bytes.

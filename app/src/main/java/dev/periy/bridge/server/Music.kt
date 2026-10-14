@@ -100,6 +100,16 @@ data class FavouriteDto(val on: Boolean = false)
  * Reading the index needs the music permission -- READ_MEDIA_AUDIO on Android 13 and
  * later, which covers audio and nothing else. Not all-files access; not photos.
  */
+/**
+ * The artists named in a song's artist tag: "A, B & C feat. D" is four. A lone lower-case "x"
+ * between names joins them too ("A x B"), but not a capital X, which is part of a name (Lil Nas X).
+ * The page splits them the same way (artistParts in bridge.html).
+ */
+fun artistParts(s: String): List<String> =
+    s.split(" x ").flatMap { it.split(ARTIST_JOIN) }.map { it.trim() }.filter { it.isNotEmpty() }
+
+private val ARTIST_JOIN = Regex("""\s*(?:,|&|\+|/|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b)\s*""", RegexOption.IGNORE_CASE)
+
 class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
 
     private val app = ctx.applicationContext
@@ -109,6 +119,24 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
     private val finder = CoverFinder(java.io.File(app.filesDir, "covers"), lookupOnline) { albumId ->
         art.remove(albumId)
         EventBus.emit("cover", albumId.toString())
+    }
+
+    /** Pictures of the artists, from Apple Music or Deezer; each one found is announced to the pages ("artist", its name as compared). */
+    private val artists = ArtistArt(java.io.File(app.filesDir, "artists"), lookupOnline) { name ->
+        EventBus.emit("artist", ArtistArt.key(name))
+    }
+
+    /**
+     * The picture of artist [name] as a JPEG, or null while there is none yet (it is then looked up
+     * in the background, through the artist's albums in the library).
+     */
+    fun artistPicture(name: String): ByteArray? {
+        artists.cached(name)?.let { return it }
+        val want = ArtistArt.key(name)
+        val albums = tracks().filter { t -> (artistParts(t.artist) + artistParts(t.albumArtist)).any { ArtistArt.key(it) == want } }
+            .groupingBy { it.album }.eachCount().entries.sortedByDescending { it.value }.map { it.key }
+        artists.request(name, albums)
+        return null
     }
 
     @Volatile private var cached: List<TrackDto> = emptyList()

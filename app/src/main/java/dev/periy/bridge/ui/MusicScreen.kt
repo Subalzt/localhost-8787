@@ -96,6 +96,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
@@ -178,7 +179,7 @@ fun MusicScreen(
     val scope = rememberCoroutineScope()
     // Laid out Albums, Songs, Liked, as the switch in the bar reads; shelf.page keeps its own
     // numbering (0 songs, 1 albums, 2 liked), which the rest of the app goes by.
-    val pager = rememberPagerState(initialPage = PAGE_ORDER.indexOf(shelf.page).coerceAtLeast(0)) { 3 }
+    val pager = rememberPagerState(initialPage = PAGE_ORDER.indexOf(shelf.page).coerceAtLeast(0)) { PAGE_ORDER.size }
     LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect { shelf.page = PAGE_ORDER[it] } }
     LaunchedEffect(shelf.page) {
         val want = PAGE_ORDER.indexOf(shelf.page)
@@ -226,10 +227,33 @@ fun MusicScreen(
             scope.launch { push.animateTo(1f, tween(300, easing = LinearToEaseOut)) }
         }
     }
+    // An artist's page is pushed the same way, under any album opened from it.
+    val apush = remember { Animatable(if (shelf.artist != null) 1f else 0f) }
+    var shownArtist by remember { mutableStateOf(shelf.artist) }
+    LaunchedEffect(shelf.artist) {
+        val target = shelf.artist
+        if (target != null) {
+            shownArtist = target
+            apush.animateTo(1f, tween(400, easing = LinearToEaseOut))
+        } else if (shownArtist != null) {
+            apush.animateTo(0f, tween(400, easing = LinearToEaseOut))
+            shownArtist = null
+        }
+    }
+    androidx.activity.compose.PredictiveBackHandler(
+        enabled = shelf.showing && shelf.artist != null && shelf.open == null && motion.p < 0.5f,
+    ) { events ->
+        try {
+            events.collect { e -> apush.snapTo(1f - e.progress) }
+            shelf.artist = null
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            scope.launch { apush.animateTo(1f, tween(300, easing = LinearToEaseOut)) }
+        }
+    }
     val widthPx = remember { floatArrayOf(0f) }
     val origin = remember { floatArrayOf(0f, 0f) }
     // The pages come in one after another the first time they show, as Namida's do.
-    LaunchedEffect(Unit) { shelf.trackEntrance.restart(); shelf.albumEntrance.restart(); shelf.likedEntrance.restart() }
+    LaunchedEffect(Unit) { shelf.trackEntrance.restart(); shelf.albumEntrance.restart(); shelf.artistEntrance.restart(); shelf.likedEntrance.restart() }
 
     CompositionLocalProvider(
         LocalNamida provides nc,
@@ -246,7 +270,7 @@ fun MusicScreen(
             }) {
             // ---- Albums, Songs and Liked, a swipe apart; a third aside while an album is pushed over them
             HorizontalPager(
-                pager, Modifier.fillMaxSize().offset { IntOffset((-push.value * widthPx[0] / 3f).roundToInt(), 0) },
+                pager, Modifier.fillMaxSize().offset { IntOffset((-maxOf(push.value, apush.value) * widthPx[0] / 3f).roundToInt(), 0) },
                 key = { it },
             ) { index ->
                 Box(Modifier.fillMaxSize().graphicsLayer {
@@ -256,7 +280,27 @@ fun MusicScreen(
                     when (PAGE_ORDER[index]) {
                         0 -> TracksPage(shelf, now, hearts, acts, top, bottom + 72.dp, requestMusic)
                         1 -> AlbumsPage(shelf, now, top, bottom, requestMusic)
+                        3 -> ArtistsPage(shelf, top, bottom, requestMusic)
                         else -> LikedPage(shelf, now, likedOrder, hearts, acts, top, bottom + 72.dp, requestMusic)
+                    }
+                }
+            }
+
+            // ---- an artist, pushed over them; a third aside in turn while an album is pushed over it
+            shownArtist?.let { ar ->
+                key("artist-" + ar.key) {
+                    Box(
+                        Modifier.fillMaxSize()
+                            .offset { IntOffset(((1f - apush.value) * widthPx[0] - push.value * widthPx[0] / 3f).roundToInt(), 0) }
+                            .drawBehind {
+                                val w = 18.dp.toPx()
+                                drawRect(
+                                    Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.16f * apush.value)), startX = -w, endX = 0f),
+                                    topLeft = Offset(-w, 0f), size = Size(w, size.height),
+                                )
+                            },
+                    ) {
+                        ArtistPage(ar, shelf, now, hearts, acts, albumTop, bottom)
                     }
                 }
             }
@@ -306,11 +350,13 @@ fun MusicScreen(
             AppBar(shelf, statusTop) {
                 val counts = listOf(
                     remember(shelf.albums, shelf.query) { shelf.albumMatches() }.size,
+                    remember(shelf.artists, shelf.query) { shelf.artistMatches() }.size,
                     remember(shelf.tracks, shelf.query) { shelf.songs() }.size,
                     remember(shelf.tracks, shelf.query, likedOrder) { shelf.liked(likedOrder) }.size,
                 )
                 PageSwitch(counts, { pagePos }, Modifier.fillMaxWidth()) { i ->
                     shelf.open = null
+                    shelf.artist = null
                     scope.launch { pager.animateScrollToPage(i, animationSpec = tween(420, easing = PageEase)) }
                 }
             }
@@ -332,11 +378,11 @@ fun MusicScreen(
             FloatingShuffle(
                 shown = {
                     val p = pagePos
-                    val k = maxOf(1f - abs(p - 1f), 1f - abs(p - 2f)).coerceIn(0f, 1f)
-                    val list = if (p >= 1.5f) likedNow else songsNow
-                    if (list.isEmpty()) 0f else k * (1f - push.value)
+                    val k = maxOf(1f - abs(p - 2f), 1f - abs(p - 3f)).coerceIn(0f, 1f)
+                    val list = if (p >= 2.5f) likedNow else songsNow
+                    if (list.isEmpty()) 0f else k * (1f - maxOf(push.value, apush.value))
                 },
-                onShuffle = { val l = if (pagePos >= 1.5f) likedNow else songsNow; acts.shuffle(l) },
+                onShuffle = { val l = if (pagePos >= 2.5f) likedNow else songsNow; acts.shuffle(l) },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = bottom - 4.dp),
             )
 
@@ -545,8 +591,8 @@ private fun DiscHeader(disc: Int, tracks: List<TrackDto>, modifier: Modifier = M
 
 // ---------------------------------------------------------------------------- pieces
 
-/** The pages left to right, by the shelf's numbers for them: Albums, Songs, Liked. */
-private val PAGE_ORDER = listOf(1, 0, 2)
+/** The pages left to right, by the shelf's numbers for them: Albums, Artists, Songs, Liked. */
+private val PAGE_ORDER = listOf(1, 3, 0, 2)
 
 /**
  * The switch between Albums, Songs and Liked: three equal parts across a shallow track, each its
@@ -561,16 +607,16 @@ private fun PageSwitch(counts: List<Int>, position: () -> Float, modifier: Modif
     val pill = if (nc.dark) Color(0xFF2C2C2E) else Color.White
     val edge = nc.onSurface.copy(alpha = if (nc.dark) 0.10f else 0.06f)
     val d = LocalDensity.current
-    val labelSize = with(d) { 13.dp.toSp() }
+    val labelSize = with(d) { 12.5.dp.toSp() }
     val countSize = with(d) { 11.dp.toSp() }
-    val items = listOf(Triple("Albums", Iconsax.Albums, counts[0]), Triple("Songs", Iconsax.Music, counts[1]), Triple("Liked", Iconsax.Heart, counts[2]))
+    val items = listOf(Triple("Albums", Iconsax.Albums, counts[0]), Triple("Artists", Iconsax.Microphone, counts[1]), Triple("Songs", Iconsax.Music, counts[2]), Triple("Liked", Iconsax.Heart, counts[3]))
     val inset = 3.dp
     Row(
         modifier.height(38.dp).clip(CircleShape).background(track)
             .drawBehind {
                 val ins = inset.toPx()
-                val part = (size.width - 2 * ins) / 3f
-                val p = position().coerceIn(0f, 2f)
+                val part = (size.width - 2 * ins) / items.size
+                val p = position().coerceIn(0f, items.size - 1f)
                 val r = androidx.compose.ui.geometry.CornerRadius((size.height - 2 * ins) / 2f)
                 val top = Offset(ins + p * part, ins)
                 val sz = Size(part, size.height - 2 * ins)
@@ -592,8 +638,8 @@ private fun PageSwitch(counts: List<Int>, position: () -> Float, modifier: Modif
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(if (i == 2 && on > 0.5f) Iconsax.HeartOn else icon, null, tint = ink, modifier = Modifier.size(15.dp))
-                Spacer(Modifier.width(5.dp))
+                Icon(if (i == 3 && on > 0.5f) Iconsax.HeartOn else icon, null, tint = ink, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
                 Text(label, style = TextStyle(fontFamily = MusicType, fontSize = labelSize, fontWeight = if (on > 0.5f) FontWeight.SemiBold else FontWeight.Medium, color = ink),
                     maxLines = 1, softWrap = false)
                 Spacer(Modifier.width(4.dp))
@@ -905,8 +951,11 @@ private fun AlbumHead(a: Album, shelf: MusicShelf, pushOffset: () -> Float, acts
             Text(a.title, style = TextStyle(fontFamily = MusicType, fontSize = 21.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp, color = nc.large),
                 textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
+            // Who it is by: tapped, their page.
+            val by = remember(a.artist, shelf.artists) { shelf.artistNamed(a.artist) }
             Text(a.artist, style = TextStyle(fontFamily = MusicType, fontSize = 19.sp, color = nc.primary.takeIf { it != nc.large } ?: nc.small),
-                textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = if (by != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable { shelf.openArtist(by) }.padding(horizontal = 4.dp) else Modifier)
             if (meta.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 Text(meta, style = Nm.small.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium), textAlign = TextAlign.Center, maxLines = 1,
@@ -962,11 +1011,13 @@ private fun AppBar(shelf: MusicShelf, statusTop: Dp, lead: @Composable () -> Uni
     val searching = if (album != null) shelf.albumSearching else shelf.searching
     val nc = Nm.c
     val inAlbum = album != null
+    // On an artist's page (no album over it) there is back, and nothing to search.
+    val onArtist = shelf.artist != null && album == null
     val open by animateFloatAsState(if (searching) 1f else 0f, tween(400, easing = PageEase), label = "search")
-    val back by animateFloatAsState(if (inAlbum || searching) 1f else 0f, tween(300), label = "back")
+    val back by animateFloatAsState(if (inAlbum || onArtist || searching) 1f else 0f, tween(300), label = "back")
     val value = if (inAlbum) shelf.albumQuery else shelf.query
     val set: (String) -> Unit = { if (inAlbum) shelf.albumQuery = it else shelf.query = it }
-    val away by animateFloatAsState(if (inAlbum || searching) 1f else 0f, tween(400, easing = PageEase), label = "lead")
+    val away by animateFloatAsState(if (inAlbum || onArtist || searching) 1f else 0f, tween(400, easing = PageEase), label = "lead")
     Box(Modifier.fillMaxWidth().background(nc.appBar).padding(top = statusTop).height(AppBarHeight)) {
         // The switch, from 16 in on the left to just short of the search button; gone in the
         // first third of the search opening, so the two are never seen over each other.
@@ -985,12 +1036,12 @@ private fun AppBar(shelf: MusicShelf, statusTop: Dp, lead: @Composable () -> Uni
             }
             BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 6.dp), contentAlignment = Alignment.CenterEnd) {
                 if (open > 0.01f) SearchBox(
-                    value, set, when { inAlbum -> "Search this album"; shelf.page == 0 -> "Search songs"; shelf.page == 1 -> "Search albums"; else -> "Search liked songs" },
+                    value, set, when { inAlbum -> "Search this album"; shelf.page == 0 -> "Search songs"; shelf.page == 1 -> "Search albums"; shelf.page == 3 -> "Search artists"; else -> "Search liked songs" },
                     Modifier.width(maxWidth * open).graphicsLayer { alpha = (open * 2f).coerceAtMost(1f) },
                 )
             }
             // Search turns into clear: the one goes out before the other comes in.
-            Box(Modifier.size(BarButton), contentAlignment = Alignment.Center) {
+            if (!onArtist) Box(Modifier.size(BarButton), contentAlignment = Alignment.Center) {
                 val outA = (1f - open * 2f).coerceIn(0f, 1f)
                 val inA = (open * 2f - 1f).coerceIn(0f, 1f)
                 if (outA > 0f) Box(Modifier.graphicsLayer { alpha = outA; rotationZ = -45f * open }) {
@@ -1030,5 +1081,139 @@ private fun SearchBox(value: String, onChange: (String) -> Unit, placeholder: St
             cursorBrush = SolidColor(nc.onSurface),
             modifier = Modifier.fillMaxWidth().focusRequester(focus),
         )
+    }
+}
+
+// ---------------------------------------------------------------------------- artists
+
+/**
+ * Everyone on the songs, A to Z: each artist's picture in a circle (from Apple Music, or Deezer;
+ * the cover of their newest album until it comes), their name, how many songs. A tap opens their page.
+ */
+@Composable
+private fun ArtistsPage(shelf: MusicShelf, top: Dp, bottom: Dp, requestMusic: () -> Unit) {
+    val artists = remember(shelf.artists, shelf.query) { shelf.artistMatches() }
+    val grid = shelf.artistGrid
+    Column(Modifier.fillMaxSize().padding(top = top)) {
+        LazyVerticalGrid(
+            GridCells.Fixed(3), Modifier.weight(1f), state = grid,
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 10.dp, bottom = bottom),
+            horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            noteFor(shelf, artists.isEmpty())?.let { n -> item(key = "note", span = { GridItemSpan(maxLineSpan) }) { LibraryNote(n, requestMusic) } }
+            itemsIndexed(artists, key = { _, a -> a.key }) { i, a ->
+                val first = grid.firstVisibleItemIndex
+                Column(
+                    Modifier.fillMaxWidth().entrance(shelf.artistEntrance, (i / 3 - first / 3) + i % 3, duration = 400 / 3)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { shelf.openArtist(a) }.padding(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    ArtistPicture(a, Modifier.fillMaxWidth().aspectRatio(1f), big = false)
+                    Spacer(Modifier.height(8.dp))
+                    Text(a.name, style = TextStyle(fontFamily = MusicType, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Nm.c.large),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                    Text(count(a.tracks.size, "song"), style = Nm.small.copy(fontSize = 11.sp), maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * An artist's page: their picture large in a circle, their name, how many albums and songs, Play
+ * and Shuffle for every song they are on; their albums across (newest first), then the albums
+ * they are on, then all their songs.
+ */
+@Composable
+private fun ArtistPage(a: Artist, shelf: MusicShelf, now: PhonePlayer.State, hearts: Set<Long>, acts: TrackActions, top: Dp, bottom: Dp) {
+    val nc = Nm.c
+    val list = remember(a.key) { LazyListState() }
+    val playingId = now.current?.id
+    val playingKey = now.current?.let { shelf.albumOf[it.id]?.key }
+    LazyColumn(Modifier.fillMaxSize().background(nc.bg).padding(top = top), state = list, contentPadding = PaddingValues(bottom = bottom)) {
+        item(key = "head") {
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 6.dp)) {
+                val img = min(maxWidth.value - 120f, 220f).dp
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    ArtistPicture(a, Modifier.size(img).shadow(18.dp, CircleShape, ambientColor = nc.shadow, spotColor = nc.shadow), big = true)
+                    Spacer(Modifier.height(16.dp))
+                    Text(a.name, style = TextStyle(fontFamily = MusicType, fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = nc.large),
+                        textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(4.dp))
+                    val n = a.albums.size
+                    Text(listOfNotNull(if (n > 0) count(n, "album") else null, count(a.tracks.size, "song"), fmtMinutes(a.tracks.sumOf { it.durationMs })).joinToString(" · "),
+                        style = Nm.small.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium), textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(18.dp))
+                    PlayShuffle({ acts.play(a.tracks, 0) }, { acts.shuffle(a.tracks) })
+                }
+            }
+        }
+        if (a.albums.isNotEmpty()) {
+            item(key = "albums-h") { ArtistSection("Albums") }
+            item(key = "albums") { ArtistAlbums(a.albums, shelf, playingKey, now.playing) }
+        }
+        if (a.appearsOn.isNotEmpty()) {
+            item(key = "on-h") { ArtistSection("Appears on") }
+            item(key = "on") { ArtistAlbums(a.appearsOn, shelf, playingKey, now.playing) }
+        }
+        item(key = "songs-h") { ArtistSection("Songs") }
+        itemsIndexed(a.tracks, key = { _, t -> "s" + t.id }) { i, t ->
+            TrackTile(
+                t, shelf.coverOf(t), current = t.id == playingId, hearted = t.id in hearts, acts = acts,
+                modifier = Modifier.entrance(shelf.pageEntrance, i + 4),
+            ) { acts.play(a.tracks, i) }
+        }
+    }
+}
+
+@Composable
+private fun ArtistSection(title: String) {
+    Text(title, style = TextStyle(fontFamily = MusicType, fontSize = 19.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp, color = Nm.c.large),
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 10.dp))
+}
+
+/** Albums in a row across the page, as cards, scrolled sideways. */
+@Composable
+private fun ArtistAlbums(albums: List<Album>, shelf: MusicShelf, playingKey: String?, sounding: Boolean) {
+    androidx.compose.foundation.lazy.LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items(albums.size, key = { albums[it].key }) { i ->
+            val al = albums[i]
+            AlbumCard(al, shelf, playing = al.key == playingKey, sounding = sounding, cols = 2, modifier = Modifier.width(156.dp))
+        }
+    }
+}
+
+/**
+ * An artist's picture in a circle: theirs from Apple Music or Deezer (asked for again a few times
+ * while it is being found), until then the cover of their newest album, or their initial.
+ */
+@Composable
+private fun ArtistPicture(a: Artist, modifier: Modifier, big: Boolean) {
+    val nc = Nm.c
+    val library = LocalContext.current.container.music
+    val pic by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, a.key) {
+        for (attempt in 0 until 6) {
+            val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { library.artistPicture(a.name) }.getOrNull() }
+            val bmp = bytes?.let {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val o = android.graphics.BitmapFactory.Options().apply { inSampleSize = if (big) 1 else 2 }
+                    android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size, o)?.asImageBitmap()
+                }
+            }
+            if (bmp != null) { value = bmp; return@produceState }
+            kotlinx.coroutines.delay(5_000L * (attempt + 1))
+        }
+    }
+    Box(modifier.clip(CircleShape).background(nc.cardColor).border(0.5.dp, hairline(), CircleShape), contentAlignment = Alignment.Center) {
+        val shown = pic
+        val cover = (a.albums + a.appearsOn).firstOrNull()
+        when {
+            shown != null -> androidx.compose.foundation.Image(shown, a.name, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+            cover != null -> Cover(cover.coverId, cover.title, Modifier.fillMaxSize(), radius = 0.dp, big = big)
+            else -> Text(a.name.take(1).uppercase(), style = TextStyle(fontFamily = MusicType, fontSize = if (big) 64.sp else 28.sp, fontWeight = FontWeight.Bold, color = nc.large))
+        }
     }
 }

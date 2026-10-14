@@ -49,6 +49,19 @@ data class Album(
     val durationMs: Long get() = tracks.sumOf { it.durationMs }
 }
 
+/**
+ * An artist in the library: every song they are on (newest album first), the albums that are
+ * theirs, and the others they are on.
+ */
+@Stable
+data class Artist(
+    val key: String,
+    val name: String,
+    val tracks: List<TrackDto>,
+    val albums: List<Album>,
+    val appearsOn: List<Album>,
+)
+
 /** The library as the Music screen shows it, and where in it you are. */
 @Stable
 class MusicShelf {
@@ -63,11 +76,14 @@ class MusicShelf {
 
     /** The Music screen is open, over the app. */
     var showing by mutableStateOf(false)
-    /** 0: Tracks, 1: Albums, 2: Liked. */
+    /** 0: Tracks, 1: Albums, 2: Liked, 3: Artists. */
     var page by mutableIntStateOf(0)
     /** The search over the page showing, and what is typed in it. */
     var searching by mutableStateOf(false)
     var query by mutableStateOf("")
+    /** Everyone on the songs, A to Z, and the artist whose page is open (under any album opened from it). */
+    var artists by mutableStateOf(emptyList<Artist>())
+    var artist by mutableStateOf<Artist?>(null)
     /** The album open over the pages, and a search within it. */
     var open by mutableStateOf<Album?>(null)
     var albumSearching by mutableStateOf(false)
@@ -81,11 +97,13 @@ class MusicShelf {
     /** Where each page is scrolled to, kept while the screen is closed. */
     val trackList = LazyListState()
     val albumGrid = LazyGridState()
+    val artistGrid = LazyGridState()
     val likedList = LazyListState()
 
     /** When each page's items came on screen, for Namida's staggered entrance. */
     val trackEntrance = Entrance()
     val albumEntrance = Entrance()
+    val artistEntrance = Entrance()
     val likedEntrance = Entrance()
     val pageEntrance = Entrance()
 
@@ -113,6 +131,8 @@ class MusicShelf {
             albums = grouped
             albumOf = buildMap { grouped.forEach { a -> a.tracks.forEach { put(it.id, a) } } }
             open = open?.let { o -> grouped.firstOrNull { it.key == o.key } }
+            artists = withContext(Dispatchers.Default) { groupArtists(sorted, grouped) }
+            artist = artist?.let { o -> artists.firstOrNull { it.key == o.key } }
             loaded = true
         } finally {
             loading = false
@@ -141,6 +161,24 @@ class MusicShelf {
         val q = searchKey(query)
         if (q.isEmpty()) return albums
         return albums.filter { a -> searchKey(a.title + a.artist).contains(q) || a.tracks.any { matches(it, q) } }
+    }
+
+    fun artistMatches(): List<Artist> {
+        val q = searchKey(query)
+        return if (q.isEmpty()) artists else artists.filter { searchKey(it.name).contains(q) }
+    }
+
+    /** The artist an album or song is credited to (the first named), when the library has them. */
+    fun artistNamed(credit: String): Artist? {
+        val k = artistKey(artistParts(credit).firstOrNull() ?: credit)
+        return artists.firstOrNull { it.key == k }
+    }
+
+    /** Opens an artist's page (over the pages; an album open goes). */
+    fun openArtist(a: Artist) {
+        open = null
+        artist = a
+        pageEntrance.restart()
     }
 
     /** An album's songs in the order chosen on its page, and only those matching its search. */
@@ -178,6 +216,7 @@ class MusicShelf {
         when {
             open != null && albumSearching -> { albumSearching = false; albumQuery = "" }
             open != null -> open = null
+            artist != null -> artist = null
             searching -> { searching = false; query = "" }
             else -> showing = false
         }
@@ -218,8 +257,43 @@ fun groupAlbums(tracks: List<TrackDto>): List<Album> {
     }.sortedWith(compareByDescending<Album> { it.tracks.size }.thenBy { it.title.lowercase() })
 }
 
-private val ARTIST_SPLIT = Regex("""\s*(?:,|&|\+|/|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|\bx\b)\s*""", RegexOption.IGNORE_CASE)
-private fun artistParts(s: String): List<String> = s.split(ARTIST_SPLIT).map { it.trim() }.filter { it.isNotEmpty() }
+private fun artistParts(s: String): List<String> = dev.periy.bridge.server.artistParts(s)
+
+/** An artist's name as names are compared: letters and digits, lower case. */
+fun artistKey(s: String): String = s.lowercase().filter { it.isLetterOrDigit() }
+
+/**
+ * Everyone on the songs, as the page lists them (indexArtists in bridge.html): each artist named
+ * on a song or as its album's artist, spelt as most of their songs spell them, A to Z (a leading
+ * "The" aside). Various Artists and Unknown are not artists.
+ */
+fun groupArtists(tracks: List<TrackDto>, albums: List<Album>): List<Artist> {
+    val skip = setOf("variousartists", "unknownartist", "unknown", "va")
+    val songs = LinkedHashMap<String, MutableList<TrackDto>>()
+    val spell = HashMap<String, HashMap<String, Int>>()
+    tracks.forEach { t ->
+        (artistParts(t.artist) + artistParts(t.albumArtist)).map { it to artistKey(it) }
+            .filter { it.second.isNotEmpty() && it.second !in skip }.distinctBy { it.second }
+            .forEach { (n, k) ->
+                songs.getOrPut(k) { mutableListOf() } += t
+                val m = spell.getOrPut(k) { HashMap() }
+                m[n] = (m[n] ?: 0) + 1
+            }
+    }
+    val albumOf = HashMap<Long, Album>()
+    albums.forEach { a -> a.tracks.forEach { albumOf[it.id] = a } }
+    return songs.map { (k, ts) ->
+        val name = spell[k]!!.maxByOrNull { it.value }!!.key
+        val all = ts.mapNotNull { albumOf[it.id] }.distinctBy { it.key }.sortedByDescending { it.year }
+        val (own, other) = all.partition { a -> artistParts(a.artist).any { artistKey(it) == k } }
+        val order = all.withIndex().associate { it.value.key to it.index }
+        Artist(
+            k, name,
+            ts.sortedWith(compareBy<TrackDto>({ order[albumOf[it.id]?.key] ?: Int.MAX_VALUE }, { it.disc }, { it.track }, { it.title.lowercase() })),
+            own, other,
+        )
+    }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name.removePrefix("The ").removePrefix("the ") })
+}
 private fun albumNameKey(s: String): String = s.lowercase().replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim()
 
 /**
