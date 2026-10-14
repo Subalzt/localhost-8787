@@ -696,11 +696,9 @@ private fun BlazeItUi(vm: MainViewModel) {
                                     onToggle = toggleServer,
                                 )
                                 TAB_DEVICES -> devicesTab(
-                                    running, transfers, paired, devices, live, vm,
+                                    running, paired, devices, live, vm,
                                     openControl = { controlOpen = true },
-                                    openLaptopFiles = { laptopFilesOpen = true },
                                     openHealth = { healthOpen = true },
-                                    openMap = { mapOpen = true },
                                 )
                                 TAB_PHONES -> phonesTab(
                                     running, nearby, paired, peerStatus, routes, threads, recentCalls, chatGroups,
@@ -1817,42 +1815,28 @@ private fun ago(at: Long): String {
  */
 private fun LazyListScope.devicesTab(
     running: Boolean,
-    transfers: List<Transfer>,
     paired: List<Peer>,
     devices: List<PairedDevice>,
     live: Map<String, Int>,
     vm: MainViewModel,
     openControl: () -> Unit,
-    openLaptopFiles: () -> Unit,
     openHealth: () -> Unit,
-    openMap: () -> Unit,
 ) {
     // Linked phones are on Phones: their ways in here (the one each was let in by, and the one it
     // asked with) are not shown as computers.
     val linkedIds = paired.map { it.deviceId }.filter { it.isNotEmpty() }.toSet()
     val computers = devices.filter { it.id !in linkedIds && !it.name.startsWith(dev.periy.bridge.server.PHONE_PREFIX) }
 
-    // Where your phones and laptops are (server/Where.kt), on a map.
+    // Map, Cameras and the laptop's Files are tabs of their own, so they are not repeated here.
     item {
-        GroupCard(Modifier.padding(top = 4.dp)) {
-            SettingRow("Where they are", "Your phones and laptops on a map, precisely", first = true, icon = BlazeIcons.Pin, onClick = openMap)
-            // Phones as security cameras (server/Cameras.kt): the control centre, over the lock screen too.
-            val camCtx = LocalContext.current
-            SettingRow("Cameras", "Your phones as security cameras, live, with motion alerts", icon = BlazeIcons.Video,
-                onClick = { camCtx.startActivity(android.content.Intent(camCtx, CamerasActivity::class.java).putExtra("fromApp", true)) })
-        }
-    }
-    item {
-        SectionBar("Computers") {
+        SectionBar("Computers", Modifier.padding(top = 4.dp)) {
             val n = computers.count { (live[it.id] ?: 0) > 0 }
             if (n > 0) Text("$n live", style = LabelStyle.copy(fontWeight = FontWeight.SemiBold), color = Bridge.Lit)
         }
     }
     item { ComputersCard(computers, devices, live) { vm.removeDevice(it) } }
     item { Spacer(Modifier.height(12.dp)) }
-    item { ControlRow(running, openControl, openLaptopFiles, openHealth) }
-
-    transfersSection(transfers)
+    item { ControlRow(running, openControl, openHealth) }
 
     // Last, and apart: it signs out every computer and phone at once.
     item { SectionBar("Pairing") }
@@ -2031,7 +2015,7 @@ private fun ComputersCard(computers: List<PairedDevice>, all: List<PairedDevice>
 
 /** Control: the trackpad and keys for the computer running the helper, on a screen of its own. */
 @Composable
-private fun ControlRow(running: Boolean, open: () -> Unit, openFiles: () -> Unit, openHealth: () -> Unit) {
+private fun ControlRow(running: Boolean, open: () -> Unit, openHealth: () -> Unit) {
     val laptops by dev.periy.bridge.server.Control.connected.collectAsStateWithLifecycle()
     GroupCard {
         SettingRow(
@@ -2042,12 +2026,6 @@ private fun ControlRow(running: Boolean, open: () -> Unit, openFiles: () -> Unit
                 else -> "Trackpad and keys for " + dev.periy.bridge.server.helperMachine(laptops.first())
             },
             first = true, icon = BlazeIcons.Trackpad, iconColor = Color(0xFF5E5CE6), onClick = open,
-        ) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
-        // Its files, from anywhere, through the same helper.
-        SettingRow(
-            "Files on the laptop",
-            detail = if (laptops.isEmpty()) "Needs the helper on the computer" else "Browse and save to this phone",
-            icon = BlazeIcons.Folder, iconColor = Color(0xFF0A84FF), onClick = openFiles,
         ) { Icon(BlazeIcons.Chevron, null, tint = Bridge.Faint, modifier = Modifier.size(18.dp)) }
         // Handoff: what the laptop is showing or playing, carried on here (paused there).
         val hctx = LocalContext.current
