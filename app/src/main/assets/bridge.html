@@ -2780,6 +2780,21 @@
 
   .link-line, .briefing, #home-pads { display: none; }
 
+  /* Shared interaction finish: keyboard navigation stays visible across every skin. */
+  :root { --focus-ring: var(--blue); }
+  :is(button, a, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus-ring) !important;
+    outline-offset: 3px !important;
+  }
+  #login { --focus-ring: #FFFFFF; }
+  .skip-link {
+    position: fixed; top: 12px; left: 12px; z-index: 10000;
+    padding: 12px 18px; border-radius: var(--r);
+    background: var(--accent); color: var(--on-accent);
+    font-weight: 600; transform: translateY(calc(-100% - 24px));
+  }
+  .skip-link:focus { transform: translateY(0); }
+  input, textarea { caret-color: var(--txt); }
 </style>
 </head>
 <body>
