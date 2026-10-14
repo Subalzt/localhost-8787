@@ -148,8 +148,45 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
     }
 
     /** Pictures of the artists, from Apple Music or Deezer; each one found is announced to the pages ("artist", its name as compared). */
-    private val artists = ArtistArt(java.io.File(app.filesDir, "artists2"), lookupOnline) { name ->
+    private val artists = ArtistArt(
+        java.io.File(app.filesDir, "artists2"), lookupOnline,
+        shared = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && android.os.Environment.isExternalStorageManager())
+                java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MUSIC), "Artists")
+            else null
+        },
+    ) { name ->
         EventBus.emit("artist", ArtistArt.key(name))
+    }
+    @Volatile private var allAsked = false
+
+    /**
+     * Every artist in the library, as the Artists pages list them (each name on a song or as its
+     * album's artist, spelt as most of their songs spell it), with their albums, most songs first.
+     */
+    private fun artistsWithAlbums(): List<Pair<String, List<String>>> {
+        val all = tracks()
+        val whole = wholeActs(all)
+        val skip = setOf("variousartists", "unknownartist", "unknown", "va")
+        val spell = HashMap<String, HashMap<String, Int>>()
+        val albums = HashMap<String, HashMap<String, Int>>()
+        all.forEach { t ->
+            (artistParts(t.artist, whole) + artistParts(t.albumArtist, whole)).distinctBy { ArtistArt.key(it) }.forEach { n ->
+                val k = ArtistArt.key(n)
+                if (k.isEmpty() || k in skip) return@forEach
+                spell.getOrPut(k) { HashMap() }.merge(n, 1, Int::plus)
+                albums.getOrPut(k) { HashMap() }.merge(t.album, 1, Int::plus)
+            }
+        }
+        return spell.map { (k, m) -> m.maxByOrNull { it.value }!!.key to albums[k]!!.entries.sortedByDescending { it.value }.map { it.key } }
+    }
+
+    /** Looks up every artist's picture that is not here yet, in the background, one after another; how many were asked for. */
+    fun fetchAllArtistPictures(): Int {
+        allAsked = true
+        var n = 0
+        artistsWithAlbums().forEach { (name, albums) -> if (!artists.has(name)) { artists.request(name, albums); n++ } }
+        return n
     }
 
     /**
@@ -157,6 +194,8 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
      * in the background, through the artist's albums in the library).
      */
     fun artistPicture(name: String): ByteArray? {
+        // The first time any is asked for, the rest are fetched too, so the pages fill in without each being shown first.
+        if (!allAsked) runCatching { fetchAllArtistPictures() }
         artists.cached(name)?.let { return it }
         val want = ArtistArt.key(name)
         val all = tracks()

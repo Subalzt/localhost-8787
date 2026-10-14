@@ -34,10 +34,17 @@ import java.util.concurrent.LinkedBlockingQueue
  * catalogues turn away anyone asking faster. A picture found is kept in the app's storage, so each
  * artist is looked up once; one neither has is not asked about again for a week; a network failure
  * marks nothing, so the artist is tried again next time it is shown.
+ *
+ * Each picture is also kept beside the music, as the lyrics are ([shared]: Music/Artists, a JPEG
+ * named after the artist, "Central Cee.jpg"), so it outlasts the app's own storage (a reinstall)
+ * and other players can use it; a picture there is taken as found. The folder has a .nomedia, so
+ * the photos do not show up in the gallery.
  */
 class ArtistArt(
     private val dir: File,
     private val enabled: () -> Boolean,
+    /** Where pictures are kept beside the music, or null when the phone's files cannot be written. */
+    private val shared: () -> File? = { null },
     private val onFound: (String) -> Unit,
 ) {
     private class Ask(val name: String, val albums: List<String>)
@@ -49,15 +56,39 @@ class ArtistArt(
 
     private fun file(name: String, ext: String) = File(dir, fileKey(name) + ext)
 
-    /** The picture found earlier, as a JPEG, or null. */
-    fun cached(name: String): ByteArray? =
-        file(name, ".jpg").takeIf { it.isFile }?.let { runCatching { it.readBytes() }.getOrNull() }
+    /** The artist's picture beside the music: their name, without what a file name cannot hold. */
+    private fun sharedFile(name: String): File? =
+        shared()?.let { File(it, name.trim().replace(Regex("""[\\/:*?"<>|]"""), "_").take(120) + ".jpg") }
+
+    /** The picture found earlier, as a JPEG, or null: the app's copy, else the one beside the music (copied in). */
+    fun cached(name: String): ByteArray? {
+        val own = file(name, ".jpg")
+        if (own.isFile) {
+            val bytes = runCatching { own.readBytes() }.getOrNull() ?: return null
+            sharedFile(name)?.let { if (!it.isFile) keepShared(it, bytes) }
+            return bytes
+        }
+        val side = sharedFile(name)?.takeIf { it.isFile } ?: return null
+        val bytes = runCatching { side.readBytes() }.getOrNull()?.takeIf { it.isNotEmpty() } ?: return null
+        runCatching { dir.mkdirs(); own.writeBytes(bytes) }
+        return bytes
+    }
+
+    /** Whether the artist's picture is here already, either copy. */
+    fun has(name: String): Boolean = file(name, ".jpg").isFile || sharedFile(name)?.isFile == true
+
+    private fun keepShared(f: File, bytes: ByteArray) {
+        runCatching {
+            f.parentFile?.let { d -> d.mkdirs(); File(d, ".nomedia").let { n -> if (!n.exists()) n.createNewFile() } }
+            f.writeBytes(bytes)
+        }
+    }
 
     /** Looks the artist up in the background (by one of [albums], their albums in the library, where it can), unless it is switched off, unnamed, or done already. */
     fun request(name: String, albums: List<String> = emptyList()) {
         val n = name.trim()
         if (!enabled() || key(n).isEmpty() || n.equals("Unknown artist", true) || n.equals("Various Artists", true)) return
-        if (file(n, ".jpg").isFile) return
+        if (has(n)) return
         val none = file(n, ".none")
         if (none.isFile && System.currentTimeMillis() - none.lastModified() < RETRY_MS) return
         if (!asked.add(key(n))) return
@@ -81,6 +112,7 @@ class ArtistArt(
                         bytes.isEmpty() -> runCatching { dir.mkdirs(); file(name, ".none").writeText("") }
                         else -> {
                             runCatching { dir.mkdirs(); file(name, ".jpg").writeBytes(bytes) }
+                            sharedFile(name)?.let { keepShared(it, bytes) }
                             onFound(name)
                         }
                     }

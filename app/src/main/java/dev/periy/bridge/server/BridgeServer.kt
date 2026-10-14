@@ -586,6 +586,11 @@ class BridgeServer(
             call.respond(store.dto())
         }
 
+        // Every artist's picture fetched now, in the background; how many were asked for.
+        post("/api/music/artist-art/all") {
+            val n = withContext(Dispatchers.IO) { music.fetchAllArtistPictures() }
+            call.respond(mapOf("asked" to n))
+        }
         // An artist's picture (?name=), found online (server/ArtistArt.kt); 404 while there is none yet.
         get("/api/music/artist-art") {
             val name = call.request.queryParameters["name"].orEmpty()
