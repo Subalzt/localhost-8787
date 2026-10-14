@@ -9253,11 +9253,12 @@ function nplBuild() {
     var el = document.createElement("div");
     el.className = "npl-line";
     if (d.kind === "word" && l.words.length) {
-      var word = null, pieces = [], letters = [];
+      var word = null, pieces = [], letters = [], words = [];
       l.words.forEach(function (w) {
         var m = /^(\s*)(.*?)(\s*)$/.exec(w.w);
         if (m[1]) { el.appendChild(document.createTextNode(m[1])); word = null; }
-        if (!word) { word = document.createElement("span"); word.className = "wd"; el.appendChild(word); }
+        if (!word) { word = document.createElement("span"); word.className = "wd"; word._t = w.t; el.appendChild(word); words.push(word); }
+        word._e = w.e;
         var sp = document.createElement("span"); sp.className = "w"; word.appendChild(sp); pieces.push(sp);
         // Its letters catch one after the next in a quick run as it starts, never longer than the syllable.
         var chars = Array.from(m[2]), step = Math.min(NPL_RUN_MS, (w.e - w.t) / Math.max(1, chars.length));
@@ -9269,6 +9270,7 @@ function nplBuild() {
       });
       el._w = pieces;
       el._ch = letters;
+      el._wd = words;
       el.dataset.words = "1";
     } else el.textContent = l.text;
     el.onclick = function (e) { e.stopPropagation(); if (npTerms().bcp > 0.95) lyricsSeek(l.t); };
@@ -9286,7 +9288,7 @@ function nplTick() {
   while (lo <= hi) { var mid = (lo + hi) >> 1; if (d.lines[mid].t <= at) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
   if (idx !== npl.active) {
     var was = npl.els[npl.active];
-    if (was && was._ch) was._ch.forEach(function (c) { c.el.style.transform = ""; c.el.style.color = ""; c.el.style.textShadow = ""; }); if (was) was._rgb = null;
+    if (was && was._ch) was._ch.forEach(function (c) { c.el.style.transform = ""; c.el.style.color = ""; c.el.style.textShadow = ""; }); if (was) { was._rgb = null; (was._wd || []).forEach(function (w) { w.style.transform = ""; }); }
     npl.active = idx;
     npl.els.forEach(function (el, k) { el.className = "npl-line d" + Math.min(3, idx < 0 ? k + 1 : Math.abs(k - idx)); });
     var cur = npl.els[idx], box = $("npl-list");
@@ -9326,7 +9328,8 @@ function nplMix(a, b, f) { return [0, 1, 2].map(function (i) { return Math.round
  * The line being sung, as this app sings it rather than as a music app wipes it: each syllable's letters
  * catch in a quick run as it starts, each giving a small hop as it catches and flashing white before
  * cooling into the song's own colour, glowing while it is held; sung, the letters settle to the text
- * colour with a little of the song's colour in it. Words to come wait dim, still. The movement is kept
+ * colour with a little of the song's colour in it. The whole word rises a little as it starts and comes
+ * back down once it has been sung. Words to come wait dim, still. The movement is kept
  * small so the line reads easily. The same as the phone's own player draws it.
  */
 function nplSing(el, pos) {
@@ -9340,6 +9343,12 @@ function nplSing(el, pos) {
   var dark = npIsDark(), base = el._rgb, hot = nplVivid(np.tintRgb || [156, 153, 193], dark);
   var flash = dark ? [255, 255, 255] : base, sung = nplMix(base, hot, 0.22);
   var rgba = function (c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a.toFixed(3) + ")"; };
+  // The word: up over 180 ms as it starts, held while it is sung, down over 320 ms after.
+  var ease = function (x) { x = Math.max(0, Math.min(1, x)); return 1 - Math.pow(1 - x, 3); };
+  (el._wd || []).forEach(function (w) {
+    var up = ease((pos - w._t) / 180) * (1 - ease((pos - w._e) / 320));
+    w.style.transform = up > 0.001 ? "translateY(" + (-0.1 * up).toFixed(3) + "em)" : "";
+  });
   el._ch.forEach(function (l) {
     var a = pos - l.at, y, s = 1, col, glow = 0;
     if (a < 0) {

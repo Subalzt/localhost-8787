@@ -308,7 +308,8 @@ private class SungLetter(val glyph: TextLayoutResult, val x: Float, val at: Long
  * the letters of each syllable catch one after another in a quick run as it starts (so a syllable
  * reads as a burst, not a slow fill), each giving a small hop as it catches and flashing white before
  * cooling into the song's own colour, glowing while it is held; once sung, the letters settle to a
- * soft white with the song's colour in it. Words to come wait dim, still. The movement is kept small
+ * soft white with the song's colour in it. The whole word rises a little as it starts and comes back
+ * down once it has been sung. Words to come wait dim, still. The movement is kept small
  * so the line reads easily: the colour does the work, the hop only marks the moment. Drawn per letter
  * on one canvas per word, so the word keeps its kerning, and only redrawn (never laid out again).
  */
@@ -361,7 +362,10 @@ private fun SungWords(line: LyricLine, style: TextStyle, base: Color, dim: Color
                         tick.value
                         val now = state.value.positionNow()
                         val loud = Loudness.at(env, now)
-                        letters.forEach { l -> drawLetter(l, now, loud, em, base, dim, sung, hot) }
+                        val lift = -em * WORD_RISE * wordLift(now, pieces.first().t, pieces.last().e)
+                        withTransform({ translate(0f, lift) }) {
+                            letters.forEach { l -> drawLetter(l, now, loud, em, base, dim, sung, hot) }
+                        }
                     },
             )
         }
@@ -372,6 +376,14 @@ private fun SungWords(line: LyricLine, style: TextStyle, base: Color, dim: Color
 private const val RUN_MS = 70L
 /** How long a letter's hop lasts as it catches. */
 private const val HOP_MS = 220f
+/** How far a word rises while it is sung, in its text's height. */
+private const val WORD_RISE = 0.1f
+
+/** How far up a word is, 0 to 1: rising over 180 ms as it starts, held while it is sung, down over 320 ms after. */
+private fun wordLift(now: Long, from: Long, to: Long): Float {
+    fun ease(x: Float) = 1f - (1f - x.coerceIn(0f, 1f)).let { it * it * it }
+    return ease((now - from) / 180f) * (1f - ease((now - to) / 320f))
+}
 
 private fun DrawScope.drawLetter(l: SungLetter, now: Long, loud: Float, em: Float, base: Color, dim: Color, sung: Color, hot: Color) {
     val a = (now - l.at).toFloat()
