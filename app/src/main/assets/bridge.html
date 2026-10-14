@@ -2780,144 +2780,6 @@
 
   .link-line, .briefing, #home-pads { display: none; }
 
-  /* ================================================================ Music (the design since 2026-10-14)
-     The Music tab, carried to every tab. The page's own black (pure black when dark) and white and greys; the
-     accent from Settings only where a thing is lit; Music's type, its bar (the page's name large, a quiet note
-     beside it), its chips (the one shown solid), its cards (the album card: a big square of artwork and two lines
-     under it) and its motion: a page's pieces rise into place one after another, a press gives, artwork swells a
-     little under the pointer. On a phone the tabs are chips with a solid pill that glides to the one you pick.
-     Home is laid out like Music's albums: a card for the phone itself, then one for what is playing, where your
-     devices are, the camera, alerts and linked phones; the things to do as chips above them. */
-  .mx-home, .mx-n { display: none; }
-  :root[data-skin="music"][data-style][data-pro] { --bg: #F2F2F2; --surface: #FFFFFF; --surface-2: #E8E8E8; --surface-3: #DCDCDC; --txt: #000000; --sub: rgba(0,0,0,.56); --faint: rgba(0,0,0,.28);
-    --line: rgba(0,0,0,.08); --accent: #000000; --on-accent: #FFFFFF; --side-bg: #F2F2F2; --pro-side: #F2F2F2; --pro-fill: rgba(0,0,0,.05); --pro-fill2: rgba(0,0,0,.09);
-    --pro-edge: rgba(0,0,0,.08); --card-shadow: 0 1px 2px rgba(0,0,0,.05); --shadow: var(--card-shadow); color-scheme: light; --r-card: 14px; --r: 12px; --r-btn: 999px; --hero: none;
-    --mx-dim: color-mix(in srgb, var(--txt) 58%, transparent); --mx-fill: color-mix(in srgb, var(--txt) 6%, transparent);
-    --mx-fill2: color-mix(in srgb, var(--txt) 11%, transparent); --mx-ease: cubic-bezier(.05, .7, .1, 1);
-    --ui: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "MiSans", sans-serif; }
-  :root[data-skin="music"][data-style][data-pro][data-theme="dark"] { --bg: #000000; --surface: #121212; --surface-2: #1E1E1E; --surface-3: #2A2A2A; --txt: #FFFFFF; --sub: rgba(255,255,255,.58); --faint: rgba(255,255,255,.3);
-    --line: rgba(255,255,255,.08); --accent: #FFFFFF; --on-accent: #000000; --side-bg: #000000; --pro-side: #000000; --pro-fill: rgba(255,255,255,.06);
-    --pro-fill2: rgba(255,255,255,.11); --pro-edge: rgba(255,255,255,.1); --card-shadow: none; --shadow: none; color-scheme: dark; }
-  @media (prefers-color-scheme: dark) { :root[data-skin="music"][data-style][data-pro]:not([data-theme="light"]) { --bg: #000000; --surface: #121212; --surface-2: #1E1E1E; --surface-3: #2A2A2A; --txt: #FFFFFF; --sub: rgba(255,255,255,.58); --faint: rgba(255,255,255,.3);
-    --line: rgba(255,255,255,.08); --accent: #FFFFFF; --on-accent: #000000; --side-bg: #000000; --pro-side: #000000; --pro-fill: rgba(255,255,255,.06);
-    --pro-fill2: rgba(255,255,255,.11); --pro-edge: rgba(255,255,255,.1); --card-shadow: none; --shadow: none; color-scheme: dark; } }
-  :root[data-skin="music"][data-style][data-pro] body { font-family: var(--ui); letter-spacing: -.01em; background: var(--bg); color: var(--txt); }
-
-  /* -------- the bar: the page's name large, a quiet note beside it */
-  :root[data-skin="music"][data-style][data-pro] .page-head { display: flex; align-items: baseline; gap: 12px; }
-  :root[data-skin="music"][data-style][data-pro] .page-head h1 { font-family: var(--ui); font-size: 26px; font-weight: 700; letter-spacing: -.025em; }
-  :root[data-skin="music"][data-style][data-pro] .mx-n { display: inline; font-size: 13px; color: var(--mx-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  @media (min-width: 1000px) { :root[data-skin="music"][data-style][data-pro] .page-head h1 { font-size: 30px; } }
-  :root[data-skin="music"][data-style][data-pro] .set-title, :root[data-skin="music"][data-style][data-pro] .bar, :root[data-skin="music"][data-style][data-pro] .card-title h3, :root[data-skin="music"][data-style][data-pro] .sec-head h3, :root[data-skin="music"][data-style][data-pro] .chat-side-head b {
-    font-family: var(--ui); font-size: 17px; font-weight: 700; letter-spacing: -.02em; text-transform: none; color: var(--txt); }
-  :root[data-skin="music"][data-style][data-pro] .bar { margin: 26px 2px 10px; }
-
-  /* -------- cards, chips, rows */
-  :root[data-skin="music"][data-style][data-pro] .card, :root[data-skin="music"][data-style][data-pro] .set-group { border: 0; border-radius: 14px; background: var(--surface); box-shadow: var(--card-shadow); }
-  :root[data-skin="music"][data-style][data-pro] .btn { border-radius: 999px; font-family: var(--ui); font-weight: 600; }
-  :root[data-skin="music"][data-style][data-pro] .seg { gap: 6px; padding: 0; border-radius: 0; background: none; box-shadow: none; }
-  :root[data-skin="music"][data-style][data-pro] .seg button { padding: 7px 14px; border-radius: 17px; background: var(--mx-fill); color: var(--txt); font-family: var(--ui); font-weight: 500; transition: background .2s, color .2s, transform .15s; }
-  :root[data-skin="music"][data-style][data-pro] .seg button.on { background: var(--txt); color: var(--bg); box-shadow: none; }
-  :root[data-skin="music"][data-style][data-pro] .seg button:active, :root[data-skin="music"][data-style][data-pro] .btn:active { transform: scale(.96); }
-  :root[data-skin="music"][data-style][data-pro] .src-chip { border-radius: 17px; box-shadow: none; }
-  :root[data-skin="music"][data-style][data-pro] .sq { width: 32px; height: 32px; flex-basis: 32px; border-radius: 9px; background: var(--mx-fill2); color: var(--txt); box-shadow: none; }
-  :root[data-skin="music"][data-style][data-pro] .sq svg { stroke: currentColor; }
-  :root[data-skin="music"][data-style][data-pro] .sr-action { color: var(--txt); font-weight: 600; }
-  :root[data-skin="music"][data-style][data-pro] .ficon-dir { width: 44px; height: 44px; flex-basis: 44px; border-radius: 10px; background: var(--mx-fill2); color: var(--txt); }
-  :root[data-skin="music"][data-style][data-pro] .ficon-dir svg { width: 22px; height: 22px; fill: none; stroke: currentColor; }
-  :root[data-skin="music"][data-style][data-pro] #fs-list .row.dir:hover, :root[data-skin="music"][data-style][data-pro] #fs-list .row.file:hover { background: var(--mx-fill); }
-  :root[data-skin="music"][data-style][data-pro] .clip-field textarea, :root[data-skin="music"][data-style][data-pro] .clip-item { border-radius: 12px; background: var(--mx-fill); }
-
-  /* -------- navigation: a computer's sidebar as Music's; a phone's tabs as chips, the pill gliding */
-  :root[data-skin="music"][data-style][data-pro] .side, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .side { --bg: inherit; --txt: inherit; --sub: inherit; --surface: inherit; --accent: inherit; --on-accent: inherit; color: var(--txt); }
-  :root[data-skin="music"][data-style][data-pro] .tabs > button { font-family: var(--ui); }
-  @media (min-width: 1000px) {
-    :root[data-skin="music"][data-style][data-pro] .side, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .side { background: var(--bg); border-right: 1px solid var(--line); }
-    :root[data-skin="music"][data-style][data-pro] .tabs > button { height: 36px; border-radius: 10px; font-size: 14px; font-weight: 500; color: var(--mx-dim); }
-    :root[data-skin="music"][data-style][data-pro] .tabs > button.on { background: var(--mx-fill2); color: var(--txt); font-weight: 600; }
-  }
-  @media (max-width: 999px) {
-    :root[data-skin="music"][data-style][data-pro] .side, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .side { background: color-mix(in srgb, var(--bg) 90%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
-    :root[data-skin="music"][data-style][data-pro] .side::before { display: none; }
-    :root[data-skin="music"][data-style][data-pro] .tabs, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .tabs { gap: 6px; padding: 0; background: none; box-shadow: none; }
-    :root[data-skin="music"][data-style][data-pro] .tabs > button, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .tabs > button { height: 36px; padding: 0 15px; border-radius: 18px; background: var(--mx-fill); color: var(--txt); font-size: 14.5px; font-weight: 500; }
-    :root[data-skin="music"][data-style][data-pro] .tabs > button.on, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .tabs > button.on { background: none; color: var(--bg); font-weight: 600; }
-    :root[data-skin="music"][data-style][data-pro] .tab-pill, :root[data-skin="music"][data-style][data-pro] body.at-top[data-tab] .tab-pill { border-radius: 18px; background: var(--txt); box-shadow: none; }
-    :root[data-skin="music"][data-style][data-pro] .mon-toggle { background: var(--mx-fill); color: var(--txt); }
-  }
-
-  /* -------- motion: a page's pieces rise into place one after another */
-  :root[data-skin="music"][data-style][data-pro] [data-panel].enter { animation: none; }
-  :root[data-skin="music"][data-style][data-pro] section[data-panel]:not([data-panel="music"]).enter > * { animation: mx-rise .42s var(--mx-ease) backwards; }
-  :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > :nth-child(2) { animation-delay: 50ms; } :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > :nth-child(3) { animation-delay: 100ms; }
-  :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > :nth-child(4) { animation-delay: 150ms; } :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > :nth-child(5) { animation-delay: 200ms; }
-  :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > :nth-child(n+6) { animation-delay: 250ms; }
-  @keyframes mx-rise { from { opacity: 0; transform: translateY(25px); } }
-  @media (prefers-reduced-motion: reduce) { :root[data-skin="music"][data-style][data-pro] section[data-panel].enter > * { animation-duration: .2s; } }
-
-  /* -------- Home, as Music's albums */
-  :root[data-skin="music"][data-style][data-pro] section[data-panel="home"] > :not(.mx-home):not(#lap-section):not(.bar):not(#files):not(.home-main):not(.drop-veil):not(input) { display: none !important; }
-  :root[data-skin="music"][data-style][data-pro] .home-main { display: block; }
-  :root[data-skin="music"][data-style][data-pro] .home-main > .beam-card, :root[data-skin="music"][data-style][data-pro] #home-pads, :root[data-skin="music"][data-style][data-pro] .status-line, :root[data-skin="music"][data-style][data-pro] .link-line, :root[data-skin="music"][data-style][data-pro] .briefing { display: none !important; }
-  :root[data-skin="music"][data-style][data-pro] .mx-home { display: block; margin: 0 0 18px; }
-  :root[data-skin="music"][data-style][data-pro] .mx-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
-  :root[data-skin="music"][data-style][data-pro] .mx-acts > button, :root[data-skin="music"][data-style][data-pro] .mx-acts .beam-btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border: 0; border-radius: 19px;
-    background: var(--mx-fill); color: var(--txt); box-shadow: none; font: 500 14.5px/1 var(--ui); letter-spacing: -.01em; text-transform: none; cursor: pointer;
-    transition: background .2s, transform .15s; }
-  :root[data-skin="music"][data-style][data-pro] .mx-acts > button[hidden] { display: none; }
-  :root[data-skin="music"][data-style][data-pro] .mx-acts > button:hover, :root[data-skin="music"][data-style][data-pro] .mx-acts .beam-btn:hover { background: var(--mx-fill2); }
-  :root[data-skin="music"][data-style][data-pro] .mx-acts .beam-btn.primary { background: var(--txt); color: var(--bg); }
-  :root[data-skin="music"][data-style][data-pro] .mx-acts > button:active { transform: scale(.96); }
-  :root[data-skin="music"][data-style][data-pro] .mx-acts svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  :root[data-skin="music"][data-style][data-pro] .mx-acts .beam-to { position: relative; }
-  :root[data-skin="music"][data-style][data-pro] .mx-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 12px; }
-  @media (max-width: 600px) { :root[data-skin="music"][data-style][data-pro] .mx-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
-  :root[data-skin="music"][data-style][data-pro] .mc { display: flex; flex-direction: column; min-width: 0; padding: 8px; border: 0; border-radius: 14px; background: var(--surface); box-shadow: var(--card-shadow);
-    color: var(--txt); font: inherit; text-align: left; cursor: pointer; transition: transform .2s var(--mx-ease); animation: mx-rise .42s var(--mx-ease) backwards; }
-  :root[data-skin="music"][data-style][data-pro] .mc:nth-child(2) { animation-delay: 50ms; } :root[data-skin="music"][data-style][data-pro] .mc:nth-child(3) { animation-delay: 100ms; } :root[data-skin="music"][data-style][data-pro] .mc:nth-child(4) { animation-delay: 150ms; }
-  :root[data-skin="music"][data-style][data-pro] .mc:nth-child(5) { animation-delay: 200ms; } :root[data-skin="music"][data-style][data-pro] .mc:nth-child(n+6) { animation-delay: 250ms; }
-  :root[data-skin="music"][data-style][data-pro] .mc:active { transform: scale(.96); }
-  :root[data-skin="music"][data-style][data-pro] .mc-art { position: relative; display: grid; place-items: center; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--mx-fill); }
-  :root[data-skin="music"][data-style][data-pro] .mc-art > * { transition: transform .45s var(--mx-ease); }
-  :root[data-skin="music"][data-style][data-pro] .mc:hover .mc-art > * { transform: scale(1.04); }
-  :root[data-skin="music"][data-style][data-pro] .mc-art img { width: 100%; height: 100%; object-fit: cover; }
-  :root[data-skin="music"][data-style][data-pro] .mc-art svg.ic { width: 38%; height: 38%; fill: none; stroke: var(--txt); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
-  :root[data-skin="music"][data-style][data-pro] .mc-art b { font-size: clamp(34px, 11cqw, 58px); font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
-  :root[data-skin="music"][data-style][data-pro] .mc-art b i { font-style: normal; font-size: .4em; font-weight: 600; color: var(--mx-dim); margin-left: 2px; }
-  :root[data-skin="music"][data-style][data-pro] .mc-art { container-type: inline-size; }
-  :root[data-skin="music"][data-style][data-pro] .mc-art .mc-map { width: 100%; height: 100%; }
-  :root[data-skin="music"][data-style][data-pro] .mc-map line { stroke: var(--mx-dim); stroke-width: 1; stroke-dasharray: 3 3; }
-  :root[data-skin="music"][data-style][data-pro] .mc-map circle { fill: var(--txt); } :root[data-skin="music"][data-style][data-pro] .mc-map circle.me { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
-  :root[data-skin="music"][data-style][data-pro] .mc-dot { position: absolute; top: 9px; right: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
-  :root[data-skin="music"][data-style][data-pro] .mc-dot.on { background: #34C759; box-shadow: 0 0 0 3px color-mix(in srgb, #34C759 25%, transparent); }
-  :root[data-skin="music"][data-style][data-pro] .mc-eq { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 3px; align-items: flex-end; height: 16px; }
-  :root[data-skin="music"][data-style][data-pro] .mc-eq i { width: 3px; border-radius: 2px; background: #FFFFFF; box-shadow: 0 0 6px rgba(0,0,0,.4); animation: mx-eq .9s ease-in-out infinite alternate; }
-  :root[data-skin="music"][data-style][data-pro] .mc-eq i:nth-child(2) { animation-delay: -.3s; } :root[data-skin="music"][data-style][data-pro] .mc-eq i:nth-child(3) { animation-delay: -.6s; }
-  @keyframes mx-eq { from { height: 30%; } to { height: 100%; } }
-  :root[data-skin="music"][data-style][data-pro] .mc-faces { display: flex; }
-  :root[data-skin="music"][data-style][data-pro] .mc-faces span { width: 46%; aspect-ratio: 1; display: grid; place-items: center; margin-left: -10%; border-radius: 50%; background: var(--surface-3);
-    box-shadow: 0 0 0 3px var(--surface); font-size: clamp(16px, 8cqw, 30px); font-weight: 700; }
-  :root[data-skin="music"][data-style][data-pro] .mc-faces span:first-child { margin-left: 0; }
-  :root[data-skin="music"][data-style][data-pro] .mc-t { margin: 9px 4px 0; font-size: 14.5px; font-weight: 600; letter-spacing: -.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  :root[data-skin="music"][data-style][data-pro] .mc-s { margin: 2px 4px 2px; font-size: 12.5px; color: var(--mx-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  :root[data-skin="music"][data-style][data-pro] .home-main > .clip-card { margin-top: 26px; }
-  :root[data-skin="music"][data-style][data-pro] .banner { border: 0; border-radius: 14px; background: var(--surface); color: var(--txt); box-shadow: var(--card-shadow); }
-  :root[data-skin="music"][data-style][data-pro] .banner.bad { box-shadow: inset 3px 0 0 #FF453A, var(--card-shadow); }
-  /* Shared interaction finish: keyboard navigation stays visible across every skin. */
-  :root { --focus-ring: var(--blue); }
-  :is(button, a, input, textarea, select, [tabindex]):focus-visible {
-    outline: 2px solid var(--focus-ring) !important;
-    outline-offset: 3px !important;
-  }
-  #login { --focus-ring: #FFFFFF; }
-  .skip-link {
-    position: fixed; top: 12px; left: 12px; z-index: 10000;
-    padding: 12px 18px; border-radius: var(--r);
-    background: var(--accent); color: var(--on-accent);
-    font-weight: 600; transform: translateY(calc(-100% - 24px));
-  }
-  .skip-link:focus { transform: translateY(0); }
-  input, textarea { caret-color: var(--txt); }
 </style>
 </head>
 <body>
@@ -3189,16 +3051,6 @@
           <button data-theme-choice="system">Automatic</button>
           <button data-theme-choice="light">Light</button>
           <button data-theme-choice="dark">Dark</button>
-        </div>
-      </div>
-      <div class="set-row">
-        <span class="sq grey"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(-25 12 12)"/></svg></span>
-        <div class="sr-text"><b>Design</b><span>For this browser. The original page stays whole at <a href="/classic">/classic</a></span></div>
-      </div>
-      <div class="set-row sr-block">
-        <div class="seg" id="skin-seg">
-          <button data-skin-choice="music">New</button>
-          <button data-skin-choice="theatre">Classic</button>
         </div>
       </div>
     </div>
@@ -3849,7 +3701,6 @@ function selectTab(id, fromHistory) {
     $("page-title").textContent = tab.label;
     $("page-sub").textContent = "";
   }
-  if (typeof mxNote === "function") mxNote(id);
   Array.prototype.forEach.call($("tabs").children, function (b) {
     b.classList.toggle("on", b.dataset.tab === id);
   });
@@ -5512,7 +5363,6 @@ function ensureTicker() {
 }
 
 function updateDock(active, totalBps) {
-  lineSeen.active = active; lineSeen.bps = totalBps; lineDraw();
   var count = $("tab-count");
   if (count) { count.hidden = !active; count.textContent = active; }
   var dock = $("dock");
@@ -6234,24 +6084,6 @@ function applyLook(l) {
   if (label) label.textContent = accent === "auto" ? "Automatic" : accent.charAt(0).toUpperCase() + accent.slice(1);
   setPlayerSpace();
   try { localStorage.setItem("blazeit.look", JSON.stringify(look)); } catch (e) {}
-}
-
-/**
- * The design, kept in this browser: Line, the new one (the styles at the end of the sheet, and Home's briefing,
- * line and pads), or Classic, the page as it was (Theatre). The phone's shared look knows only Theatre, so this
- * is not sent there.
- */
-var SKINS = ["music", "theatre"];
-function applySkin(s) {
-  if (SKINS.indexOf(s) < 0) s = "theatre";
-  // Home's pieces are moved about for this design: going back to Classic puts them back by loading the page again.
-  var was = document.documentElement.getAttribute("data-skin");
-  if (was === "music" && s !== "music" && mx.built) { try { localStorage.setItem("blazeit.design", s); } catch (e) {} location.reload(); return; }
-  if (s === "theatre") document.documentElement.removeAttribute("data-skin");
-  else document.documentElement.setAttribute("data-skin", s);
-  Array.prototype.forEach.call(document.querySelectorAll("[data-skin-choice]"), function (b) { b.classList.toggle("on", b.dataset.skinChoice === s); });
-  try { localStorage.setItem("blazeit.design", s); } catch (e) {}
-  if (s === "music" && window.appStarted) lineSetup();
 }
 
 /** The colour swatches in Settings: Automatic first, then the system colours. */
@@ -10705,7 +10537,6 @@ function showApp() {
     setupDrop();
     setupSendTo();
     setupDock();
-    lineSetup();
     setupPlayer();
     setupFullPlayer();
     loadFavourites();
@@ -10718,9 +10549,6 @@ function showApp() {
     wireMonitor();
     setupNav();
     $("measure").addEventListener("click", measure);
-    Array.prototype.forEach.call(document.querySelectorAll("[data-skin-choice]"), function (b) {
-      b.addEventListener("click", function () { applySkin(b.dataset.skinChoice); });
-    });
     Array.prototype.forEach.call(document.querySelectorAll("[data-theme-choice]"), function (b) {
       b.addEventListener("click", function () { setTheme(b.dataset.themeChoice); });
     });
@@ -10978,143 +10806,6 @@ async function takeHandoff() {
   }
 }
 
-// ------------------------------------------------------------------ Music: the design, carried from the Music tab
-//
-// Home laid out as Music's albums: a card each for the phone, what is playing, where your devices are, the camera,
-// alerts and linked phones, each a big square of artwork with two lines under it; the things to do (send files, a
-// folder, the phone's screen, a second screen) as chips above them, the clipboard and what is on the phone below.
-// Beside each page's name, Music's quiet note. Filled from what the page knows, plus the camera's state (with the
-// battery) every 15 s and where the devices are every 30 s, only in this design.
-
-var lineSeen = { active: 0, bps: 0, cam: null, where: null, at: 0 };
-var mx = { built: false, cards: {} };
-var MX_WAYS = { usb: "USB cable", adb: "USB debugging", direct: "Direct link", hotspot: "Hotspot", wifi: "Wi-Fi", internet: "Internet tunnel", website: "Website" };
-
-function mxOn() { return document.documentElement.getAttribute("data-skin") === "music"; }
-
-/** Kept for what calls it as files move (the transfer dock): the note and the phone's card show the speed. */
-function lineDraw() { if (mxOn() && mx.built) mxDraw(); }
-
-function mxNote(id) {
-  var n = $("mx-n");
-  if (!n) return;
-  var up = $("dot") && $("dot").classList.contains("on");
-  if ((id || document.body.dataset.tab) === "home") {
-    n.textContent = !up ? "Not connected" : (state.device || "Phone") + " · " + (route ? MX_WAYS[route.via] || "Network" : "Connecting") +
-      (lineSeen.active ? " · " + rate(lineSeen.bps) : "");
-  } else n.textContent = "";
-}
-
-/** Home's pieces, moved once into Music's layout: the chips (the same buttons, still wired) and the cards. */
-function mxBuild() {
-  if (mx.built || !mxOn()) return;
-  mx.built = true;
-  var head = document.querySelector(".page-head");
-  if (head && !$("mx-n")) { var n = document.createElement("span"); n.className = "mx-n"; n.id = "mx-n"; head.appendChild(n); }
-  var home = document.querySelector('section[data-panel="home"]');
-  var box = document.createElement("div");
-  box.className = "mx-home"; box.id = "mx-home";
-  box.innerHTML = '<div class="mx-acts" id="mx-acts"></div><div class="mx-cards" id="mx-cards"></div>';
-  home.insertBefore(box, home.firstChild);
-  var acts = $("mx-acts");
-  ["pick-files", "pick-folder", "beam-to", "mirror-btn", "display-btn"].forEach(function (id) { var b = $(id); if (b) acts.appendChild(b); });
-  var menu = $("to-menu"); if (menu) acts.appendChild(menu);
-  var MX_IC = {
-    phone: '<path d="M9 2.5h6A2.5 2.5 0 0 1 17.5 5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 19V5A2.5 2.5 0 0 1 9 2.5Z"/><path d="M11 18.5h2"/>',
-    music: '<path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
-    cam: '<path d="M5.5 6.5h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z"/><path d="M15.5 10.5l4.2-2.6a.5.5 0 0 1 .8.4v7.4a.5.5 0 0 1-.8.4l-4.2-2.6"/>',
-    bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
-    pin: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.5"/>',
-  };
-  mx.ic = function (k) { return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + MX_IC[k] + "</svg>"; };
-  var cards = [["phone", "settings"], ["music", "music"], ["where", "map"], ["cam", "cams"], ["alerts", "alerts"], ["phones", "phones"]];
-  var host = $("mx-cards");
-  cards.forEach(function (c) {
-    var b = document.createElement("button");
-    b.type = "button"; b.className = "mc"; b.dataset.go = c[1];
-    b.innerHTML = '<span class="mc-art"></span><span class="mc-t"></span><span class="mc-s"></span>';
-    b.addEventListener("click", function () { selectTab(c[1]); });
-    host.appendChild(b);
-    mx.cards[c[0]] = b;
-  });
-  mxDraw();
-}
-
-/** One card: its artwork (only redrawn when it changes, so a cover does not flicker), its two lines, its light. */
-function mxCard(k, art, title, sub, on) {
-  var b = mx.cards[k]; if (!b) return;
-  var a = b.querySelector(".mc-art");
-  if (a.dataset.key !== art) { a.dataset.key = art; a.innerHTML = art; }
-  var d = a.querySelector(".mc-dot");
-  if (on != null) { if (!d) { d = document.createElement("i"); d.className = "mc-dot"; a.appendChild(d); } d.classList.toggle("on", !!on); }
-  b.querySelector(".mc-t").textContent = title;
-  b.querySelector(".mc-s").textContent = sub || "";
-}
-
-function mxDraw() {
-  if (!mxOn() || !mx.built) return;
-  mxNote();
-  var up = $("dot") && $("dot").classList.contains("on"), cam = lineSeen.cam;
-  var bat = cam && cam.battery >= 0 ? cam.battery : null, way = route ? MX_WAYS[route.via] || "Network" : "";
-  // The phone itself: its battery large, how this page reaches it.
-  mxCard("phone", bat != null ? "<b>" + bat + "<i>%</i></b>" : mx.ic("phone"), state.device || "Phone",
-    !up ? "Not connected" : lineSeen.active ? way + " · " + rate(lineSeen.bps) : way + (cam && cam.charging ? " · charging" : ""), up);
-  // What is playing: its cover, the bars moving while it plays.
-  var t = currentTrack(), playing = !!t && isPlaying();
-  mxCard("music", t ? '<img alt="" src="' + esc(artUrl(t.albumId, 0)) + '">' + (playing ? '<span class="mc-eq"><i></i><i></i><i></i></span>' : "") : mx.ic("music"),
-    t ? t.title : "Music", t ? t.artist : (music.tracks && music.tracks.length ? music.tracks.length + " songs" : "Nothing playing"));
-  // Where: this phone in the middle, the others around it by direction and (squeezed) distance.
-  var places = (lineSeen.where && lineSeen.where.places) || [], me = places.filter(function (p) { return p.id === "self"; })[0];
-  if (me && me.fix) {
-    var others = places.filter(function (p) { return p !== me && p.fix; }), far = 0, svg = "", S = 100, c = S / 2;
-    others.forEach(function (p) { far = Math.max(far, mxMetres(me.fix, p.fix)); });
-    others.slice(0, 6).forEach(function (p) {
-      var m = mxMetres(me.fix, p.fix), an = Math.atan2(p.fix.lat - me.fix.lat, (p.fix.lon - me.fix.lon) * Math.cos(me.fix.lat * Math.PI / 180));
-      var k = far > 0 ? Math.sqrt(m / far) : 0, x = c + Math.cos(an) * k * 38, y = c - Math.sin(an) * k * 38;
-      svg += '<line x1="50" y1="50" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '"/><circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3.2"/>';
-    });
-    var near = others.slice().sort(function (a, b) { return mxMetres(me.fix, a.fix) - mxMetres(me.fix, b.fix); })[0];
-    mxCard("where", '<svg class="mc-map" viewBox="0 0 100 100" aria-hidden="true">' + svg + '<circle class="me" cx="50" cy="50" r="5.5"/></svg>', "Where",
-      near ? near.name + " · " + mxFar(mxMetres(me.fix, near.fix)) : "Only this phone", Date.now() - me.fix.at < 600000);
-  } else mxCard("where", mx.ic("pin"), "Where", "No position yet", false);
-  // The camera.
-  mxCard("cam", mx.ic("cam"), "Camera", !cam ? "" : cam.running ? (cam.recording ? "Recording" : "Live") + (cam.viewers ? " · " + cam.viewers + " watching" : "") : cam.on ? "Starting" : "Off",
-    cam && cam.running);
-  // Alerts: how many, large.
-  var notes = Object.keys(notifs).filter(function (k) { return !notifs[k].ongoing; }).length;
-  mxCard("alerts", notes ? "<b>" + notes + "</b>" : mx.ic("bell"), "Alerts", notes ? (notes === 1 ? "1 notification" : notes + " notifications") : notifLive ? "Nothing new" : "Not passed on now", notes > 0);
-  // Linked phones: their first letters.
-  var lp = linkedPhones || [];
-  mxCard("phones", lp.length ? '<span class="mc-faces">' + lp.slice(0, 3).map(function (p) { return "<span>" + esc((p.name || "?").charAt(0).toUpperCase()) + "</span>"; }).join("") + "</span>" : mx.ic("phone"),
-    lp.length ? lp.map(function (p) { return p.name; }).join(", ") : "Phones", lp.length ? (lp.some(function (p) { return p.nearby; }) ? "Nearby" : "Away · through the tunnel") : "None linked", lp.some(function (p) { return p.nearby; }));
-}
-
-function mxMetres(a, b) {
-  var R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
-  var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-function mxFar(m) { return m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(m < 10000 ? 1 : 0) + " km"; }
-
-async function mxAsk() {
-  if (!mxOn()) return;
-  try { var r = await api("/api/cams/state", { cache: "no-store" }); if (r.ok) lineSeen.cam = await r.json(); } catch (e) {}
-  if (Date.now() - lineSeen.at > 30000) {
-    lineSeen.at = Date.now();
-    try { var w = await api("/api/where", { cache: "no-store" }); if (w.ok) lineSeen.where = await w.json(); } catch (e) {}
-  }
-  mxDraw();
-}
-
-function lineSetup() {
-  if (!mxOn() || mx.setup) return;
-  mx.setup = true;
-  mxBuild();
-  mxAsk();
-  setInterval(function () { if (document.visibilityState === "visible") mxAsk(); }, 15000);
-  setInterval(mxDraw, 3000);
-}
-
 // ------------------------------------------------------------------ the redesign's sidebar and Ctrl K
 //
 // On a computer's width the tabs run down a sidebar (the styles at the end of the page); Ctrl K
@@ -11338,9 +11029,6 @@ setInterval(pageFresh, 600000);
   try { saved = localStorage.getItem("blazeit.theme") || "system"; } catch (e) {}
   applyTheme(saved);
   try { applyLook(JSON.parse(localStorage.getItem("blazeit.look") || "null")); } catch (e) {}
-  // Classic unless this browser picked the new design in Settings since 14 Oct (the old key held the brief default).
-  var skin = "theatre"; try { skin = localStorage.getItem("blazeit.design") || "theatre"; } catch (e) {}
-  applySkin(skin);
   try {
     var res = await fetch("/api/ping", { credentials: "same-origin" });
     var info = await res.json();
