@@ -306,12 +306,11 @@ private class SungLetter(val glyph: TextLayoutResult, val x: Float, val at: Long
 /**
  * The line being sung, letter by letter, as this app sings it rather than as a music app wipes it:
  * the letters of each syllable catch one after another in a quick run as it starts (so a syllable
- * reads as a burst, not a slow fill), each jumping on a spring (up, a small dip under the line, then
- * settling) and flashing white before cooling into the song's own colour while it is held; a held
- * note keeps moving, a wave running through its letters as high as the music is loud; once sung,
- * the letters settle to a soft white with the song's colour in it. Words to come wait a little low
- * and dim, and crouch just before they are sung. Drawn per letter on one canvas per word, so the
- * word keeps its kerning, and only redrawn (never laid out again) as the song plays.
+ * reads as a burst, not a slow fill), each giving a small hop as it catches and flashing white before
+ * cooling into the song's own colour, glowing while it is held; once sung, the letters settle to a
+ * soft white with the song's colour in it. Words to come wait dim, still. The movement is kept small
+ * so the line reads easily: the colour does the work, the hop only marks the moment. Drawn per letter
+ * on one canvas per word, so the word keeps its kerning, and only redrawn (never laid out again).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -371,6 +370,8 @@ private fun SungWords(line: LyricLine, style: TextStyle, base: Color, dim: Color
 
 /** How quickly a syllable's letters catch, one after the next. */
 private const val RUN_MS = 70L
+/** How long a letter's hop lasts as it catches. */
+private const val HOP_MS = 220f
 
 private fun DrawScope.drawLetter(l: SungLetter, now: Long, loud: Float, em: Float, base: Color, dim: Color, sung: Color, hot: Color) {
     val a = (now - l.at).toFloat()
@@ -379,24 +380,18 @@ private fun DrawScope.drawLetter(l: SungLetter, now: Long, loud: Float, em: Floa
     val c: Color
     var glow = 0f
     if (a < 0f) {
-        // To come: a little low, crouching further just before it is sung.
-        val crouch = ((a + 160f) / 160f).coerceIn(0f, 1f)
-        y = em * (0.03f + 0.04f * crouch)
-        s = 1f - 0.04f * crouch
-        c = lerp(dim, base.copy(alpha = dim.alpha + 0.12f), crouch)
+        // To come: dim, still.
+        y = 0f
+        c = dim
     } else {
-        // The jump: a spring kicked upwards, overshooting under the line once, then still.
-        val damp = kotlin.math.exp(-a / 150f)
-        val swing = kotlin.math.sin(a / 40f)
-        y = -em * 0.24f * damp * swing
-        s = 1f + 0.2f * damp * swing.coerceAtLeast(0f)
+        // The hop: a small lift as it catches, back on the line within a quarter of a second, no bounce.
+        val hop = if (a < HOP_MS) kotlin.math.sin(a / HOP_MS * PI.toFloat()) else 0f
+        y = -em * 0.06f * hop
+        s = 1f + 0.03f * hop
         val held = now < l.end
         if (held) {
-            // Held: white as it catches, cooling into the song's colour; a wave runs through it with the music.
+            // Held: white as it catches, cooling into the song's colour.
             c = lerp(Color.White, hot, (a / 260f).coerceIn(0f, 1f))
-            val sway = ((a - 220f) / 300f).coerceIn(0f, 1f) * (0.25f + 0.75f * loud)
-            y += -em * 0.07f * sway * kotlin.math.sin(now / 1000f * 2f * PI.toFloat() * 2.1f - l.n * 0.8f)
-            s += 0.06f * sway
             glow = 1f
         } else {
             // Sung: it cools from the song's colour to the soft white of the sung, its glow going.

@@ -9324,11 +9324,10 @@ function nplMix(a, b, f) { return [0, 1, 2].map(function (i) { return Math.round
 
 /**
  * The line being sung, as this app sings it rather than as a music app wipes it: each syllable's letters
- * catch in a quick run as it starts, each jumping on a spring (up, a small dip under the line, then
- * still) and flashing white before cooling into the song's own colour while it is held; a held note
- * keeps moving, a wave running through its letters as high as the music is loud; sung, the letters
- * settle to the text colour with a little of the song's colour in it. Words to come wait a little low
- * and dim, and crouch just before they are sung. The same as the phone's own player draws it.
+ * catch in a quick run as it starts, each giving a small hop as it catches and flashing white before
+ * cooling into the song's own colour, glowing while it is held; sung, the letters settle to the text
+ * colour with a little of the song's colour in it. Words to come wait dim, still. The movement is kept
+ * small so the line reads easily. The same as the phone's own player draws it.
  */
 function nplSing(el, pos) {
   // The line's own text colour, read through a pixel (the page's colours are not always written as rgb()).
@@ -9339,25 +9338,20 @@ function nplSing(el, pos) {
     el._rgb = [px[0], px[1], px[2]];
   }
   var dark = npIsDark(), base = el._rgb, hot = nplVivid(np.tintRgb || [156, 153, 193], dark);
-  var flash = dark ? [255, 255, 255] : base, sung = nplMix(base, hot, 0.22), loud = np.loud || 0;
+  var flash = dark ? [255, 255, 255] : base, sung = nplMix(base, hot, 0.22);
   var rgba = function (c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a.toFixed(3) + ")"; };
   el._ch.forEach(function (l) {
     var a = pos - l.at, y, s = 1, col, glow = 0;
     if (a < 0) {
-      // To come: a little low, crouching further just before it is sung.
-      var crouch = Math.max(0, Math.min(1, (a + 160) / 160));
-      y = 0.03 + 0.04 * crouch; s = 1 - 0.04 * crouch;
-      col = rgba(base, 0.42 + 0.12 * crouch);
+      // To come: dim, still.
+      y = 0; col = rgba(base, 0.42);
     } else {
-      // The jump: a spring kicked upwards, overshooting under the line once, then still.
-      var damp = Math.exp(-a / 150), swing = Math.sin(a / 40);
-      y = -0.24 * damp * swing; s = 1 + 0.2 * damp * Math.max(0, swing);
+      // The hop: a small lift as it catches, back on the line within a quarter of a second, no bounce.
+      var hop = a < 220 ? Math.sin(a / 220 * Math.PI) : 0;
+      y = -0.06 * hop; s = 1 + 0.03 * hop;
       var warm = Math.min(1, a / 260);
       if (pos < l.end) {
-        // Held: white as it catches, cooling into the song's colour; a wave runs through it with the music.
-        var sway = Math.max(0, Math.min(1, (a - 220) / 300)) * (0.25 + 0.75 * loud);
-        y -= 0.07 * sway * Math.sin(pos / 1000 * 2 * Math.PI * 2.1 - l.n * 0.8);
-        s += 0.06 * sway;
+        // Held: white as it catches, cooling into the song's colour.
         col = rgba(nplMix(flash, hot, warm), 1); glow = 1;
       } else {
         // Sung: from the song's colour to the soft colour of the sung, its glow going.
