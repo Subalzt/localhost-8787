@@ -243,6 +243,9 @@ private fun Line(
 ) {
     val nc = Nm.c
     val on = distance == 0
+    // A line the aligner could not time word by word, in a song that is, still goes word by word.
+    @Suppress("NAME_SHADOWING")
+    val line = remember(line, words) { if (words && line.words.isEmpty()) line.copy(words = spreadWords(line)) else line }
     val k by animateFloatAsState(
         if (full) when (distance) { 0 -> 1f; 1 -> 0.42f; 2 -> 0.3f; else -> 0.2f } else when (distance) { 0 -> 1f; 1 -> 0.5f; 2 -> 0.4f; else -> 0.25f },
         tween(300), label = "line",
@@ -280,6 +283,26 @@ private fun Line(
             }
             Text(text, style = style.copy(color = base))
         } else Text(line.text, style = style)
+    }
+}
+
+/**
+ * Words for a line that has none timed, in a song timed word by word (the aligner could not match
+ * that line): spread across the line by their length, each word worth its letters and two more so a
+ * short word still gets its moment, over the time a line that long takes to sing (85 ms a letter,
+ * at least 0.6 s) or the line's own time if shorter. An estimate, but the line moves with the rest.
+ */
+private fun spreadWords(line: LyricLine): List<dev.periy.bridge.server.LyricWord> {
+    val parts = Regex("\\S+\\s*").findAll(line.text).map { it.value }.toList()
+    if (parts.isEmpty()) return emptyList()
+    val weights = parts.map { it.trim().length + 2f }
+    val total = weights.sum()
+    val sung = minOf((line.e - line.t).coerceAtLeast(1L), maxOf(600L, (total * 85f).toLong()))
+    var at = 0f
+    return parts.mapIndexed { i, p ->
+        val t = line.t + (sung * at / total).toLong()
+        at += weights[i]
+        dev.periy.bridge.server.LyricWord(t, line.t + (sung * at / total).toLong(), p)
     }
 }
 

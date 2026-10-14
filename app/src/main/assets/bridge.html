@@ -9252,9 +9252,11 @@ function nplBuild() {
     if (l.t - from > 4500 && (i > 0 || l.t > 4500)) npl.gaps.push({ from: from, to: l.t, el: gapEl(host) });
     var el = document.createElement("div");
     el.className = "npl-line";
-    if (d.kind === "word" && l.words.length) {
+    // A line the aligner could not time word by word, in a song that is, still goes word by word (nplSpread).
+    var lw = d.kind === "word" ? (l.words.length ? l.words : nplSpread(l)) : [];
+    if (lw.length) {
       var word = null, pieces = [], letters = [], words = [];
-      l.words.forEach(function (w) {
+      lw.forEach(function (w) {
         var m = /^(\s*)(.*?)(\s*)$/.exec(w.w);
         if (m[1]) { el.appendChild(document.createTextNode(m[1])); word = null; }
         if (!word) { word = document.createElement("span"); word.className = "wd"; word._t = w.t; el.appendChild(word); words.push(word); }
@@ -9310,6 +9312,22 @@ function nplTick() {
 
 /** How quickly a syllable's letters catch, one after the next. */
 var NPL_RUN_MS = 70;
+
+/**
+ * Words for a line that has none timed, in a song timed word by word: spread across the line by their
+ * length (each word its letters and two more), over the time a line that long takes to sing (85 ms a
+ * letter, at least 0.6 s) or the line's own time if shorter. Only for showing: the lyrics kept are not changed.
+ */
+function nplSpread(l) {
+  var parts = (l.text || "").match(/\S+\s*/g) || [];
+  if (!parts.length) return [];
+  var weights = parts.map(function (p) { return p.trim().length + 2; }), total = weights.reduce(function (a, b) { return a + b; }, 0);
+  var sung = Math.min(Math.max(1, l.e - l.t), Math.max(600, total * 85)), at = 0;
+  return parts.map(function (p, i) {
+    var t = l.t + sung * at / total; at += weights[i];
+    return { t: t, e: l.t + sung * at / total, w: p };
+  });
+}
 
 /** The song's colour made vivid enough to light words: its hue, at least half saturated, bright on the dark (deeper on a light page). A grey cover gives the app's yellow. */
 function nplVivid(rgb, dark) {
