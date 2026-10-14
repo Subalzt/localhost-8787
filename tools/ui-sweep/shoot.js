@@ -42,7 +42,7 @@ function getJson(url) {
   if (!EDGE) { console.error('Microsoft Edge not found'); process.exit(1); }
   const edge = spawn(EDGE, [
     '--headless=new', '--remote-debugging-port=' + PORT, '--user-data-dir=' + profile, '--no-first-run', '--no-proxy-server',
-    '--hide-scrollbars', '--force-device-scale-factor=1', '--autoplay-policy=no-user-gesture-required', 'about:blank',
+    '--hide-scrollbars', '--force-device-scale-factor=1', '--autoplay-policy=no-user-gesture-required', '--mute-audio', 'about:blank',
   ], { stdio: 'ignore' });
   let targets;
   for (let i = 0; i < 60; i++) { try { targets = await getJson('http://127.0.0.1:' + PORT + '/json'); if (targets.length) break; } catch (e) {} await sleep(250); }
@@ -97,7 +97,16 @@ function getJson(url) {
   }
   if (args.audit) fs.writeFileSync(path.join(OUT, 'audit.json'), JSON.stringify(audits, null, 1));
   try { ws.close(); } catch (e) {}
-  edge.kill();
+  // Closed through the browser itself: the process started here hands over to another and exits, so
+  // killing it left the browser running (and playing) behind.
+  try {
+    const v = await getJson('http://127.0.0.1:' + PORT + '/json/version');
+    const bw = new WebSocket(v.webSocketDebuggerUrl);
+    await new Promise((r, j) => { bw.addEventListener('open', r); bw.addEventListener('error', j); });
+    bw.send(JSON.stringify({ id: 1, method: 'Browser.close' }));
+    await sleep(700);
+  } catch (e) {}
+  try { edge.kill(); } catch (e) {}
   console.log('done', OUT);
   process.exit(0);
 })().catch(e => { console.error('shoot failed', e); process.exit(1); });
