@@ -641,12 +641,14 @@ fun BarTabs(
     position: Float = selected.toFloat(),
     /** A count on a tab's icon, by tab (unread messages on Devices). */
     badges: Map<Int, Int> = emptyMap(),
+    /** How lit each tab is, 0 to 1, when the pages are not the tabs in a row; [position] otherwise. */
+    lit: ((Int) -> Float)? = null,
     onSelect: (Int) -> Unit,
 ) {
     val at = position.coerceIn(0f, items.lastIndex.toFloat())
     Row(modifier.fillMaxWidth().height(56.dp)) {
         items.forEachIndexed { i, (label, icon) ->
-            val over = (1f - kotlin.math.abs(at - i)).coerceIn(0f, 1f)
+            val over = (lit?.invoke(i) ?: (1f - kotlin.math.abs(at - i))).coerceIn(0f, 1f)
             val c = androidx.compose.ui.graphics.lerp(Bridge.Faint, Bridge.Text, over)
             Column(
                 Modifier.weight(1f).fillMaxHeight()
@@ -666,7 +668,7 @@ fun BarTabs(
                     ) { Text(if (n > 99) "99+" else "$n", style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold), color = Color.White) }
                 }
                 Spacer(Modifier.height(3.dp))
-                Text(label, style = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.Medium), color = c, maxLines = 1)
+                Text(label, style = TextStyle(fontSize = if (items.size > 6) 10.sp else 10.5.sp, fontWeight = FontWeight.Medium), color = c, maxLines = 1, softWrap = false)
             }
         }
     }

@@ -329,26 +329,42 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * The tabs along the bottom. Music is not a page beside the others: it opens full screen
- * (MusicScreen.kt). Control opens from Devices (the computers); the linked phones, their
- * conversations and calls, and adding a phone have Phones to themselves.
+ * The tabs along the bottom, every main part of the app one tap away, as the web page has them.
+ * Home, Devices, Phones and Settings are pages a swipe moves between; Map, Cameras, Files (the
+ * laptop's) and Music open over the app, full screen, and back returns to the page you were on.
+ * Control opens from Devices (the computers); the linked phones, their conversations and calls,
+ * and adding a phone have Phones to themselves.
  */
 private val TABS = listOf(
     "Home" to BlazeIcons.Home,
     "Devices" to BlazeIcons.Laptop,
     "Phones" to BlazeIcons.Phones,
+    "Map" to BlazeIcons.Pin,
+    "Cameras" to BlazeIcons.Video,
+    "Files" to BlazeIcons.Folder,
     "Music" to BlazeIcons.Music,
     "Settings" to BlazeIcons.Sliders,
 )
-private const val PILL_MUSIC = 3
 private const val PILL_PHONES = 2
+private const val PILL_MAP = 3
+private const val PILL_CAMS = 4
+private const val PILL_FILES = 5
+private const val PILL_MUSIC = 6
 
-/** The pages a swipe moves between: every tab but Music. */
-private val PAGES = TABS.filterIndexed { i, _ -> i != PILL_MUSIC }
-private fun pageOfPill(pill: Int) = if (pill > PILL_MUSIC) pill - 1 else pill
+/** The tabs that are pages a swipe moves between, in order. */
+private val PAGE_PILLS = listOf(0, 1, 2, 7)
+private val PAGES = PAGE_PILLS.map { TABS[it] }
+private fun pageOfPill(pill: Int) = PAGE_PILLS.indexOf(pill)
+private fun pillOfPage(page: Int) = PAGE_PILLS[page.coerceIn(0, PAGE_PILLS.lastIndex)]
 
-/** Where the pill sits in the tabs for a place in the pages (2.5 is halfway from Control to Settings). */
-private fun pillOfPage(page: Float) = if (page <= PILL_MUSIC - 1) page else page + 1f
+/** How lit each tab is for a place in the pages: mid-swipe the two pages share it, the tabs between them stay quiet. */
+private fun litOfPage(page: Float): (Int) -> Float {
+    val p = page.coerceIn(0f, PAGE_PILLS.lastIndex.toFloat())
+    val lo = kotlin.math.floor(p).toInt()
+    val hi = kotlin.math.ceil(p).toInt()
+    val f = p - lo
+    return { i -> (if (i == PAGE_PILLS[lo]) 1f - f else 0f) + (if (i == PAGE_PILLS[hi] && hi != lo) f else 0f) }
+}
 private const val TAB_HOME = 0
 private val debugTab = kotlinx.coroutines.flow.MutableStateFlow(-1)
 
@@ -422,8 +438,6 @@ private fun BlazeItUi(vm: MainViewModel) {
         shelf.showing = false
         navScope.launch { pager.animateScrollToPage(i, animationSpec = spring(dampingRatio = 0.95f, stiffness = 650f)) }
     }
-    // A tap on a tab: Music opens full screen over the app; the rest slide there.
-    val onPill: (Int) -> Unit = { i -> if (i == PILL_MUSIC) shelf.showing = true else goTo(pageOfPill(i)) }
     // Where the pages are right now, in tabs, for the bars to follow a swipe.
     val pagePos by remember { derivedStateOf { pager.currentPage + pager.currentPageOffsetFraction } }
     LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect { tab = it } }
@@ -443,6 +457,17 @@ private fun BlazeItUi(vm: MainViewModel) {
     var healthOpen by remember { mutableStateOf(false) }
     // Where your phones and laptops are, on a map, open over the app.
     var mapOpen by remember { mutableStateOf(false) }
+    // A tap on a tab: Music, Map and the laptop's Files open full screen over the app, Cameras as
+    // its own screen (back from it returns here); the rest slide there.
+    val onPill: (Int) -> Unit = { i ->
+        when (i) {
+            PILL_MUSIC -> shelf.showing = true
+            PILL_MAP -> mapOpen = true
+            PILL_FILES -> laptopFilesOpen = true
+            PILL_CAMS -> ctx.startActivity(android.content.Intent(ctx, CamerasActivity::class.java).putExtra("fromApp", true))
+            else -> goTo(pageOfPill(i))
+        }
+    }
     // Location, asked for once on the first start (then all the time, as Android has it asked
     // separately), so this phone is on the map from the beginning.
     val askAlways = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -736,7 +761,7 @@ private fun BlazeItUi(vm: MainViewModel) {
                         contentAlignment = Alignment.Center,
                     ) {
                         BarTabs(
-                            TABS, pillOfPage(shown.toFloat()).toInt(), position = pillOfPage(pagePos),
+                            TABS, pillOfPage(shown), lit = litOfPage(pagePos),
                             // Messages not yet read and calls missed, on Phones, where the conversations are: only
                             // those it lists (a linked phone's, a group's), never one nobody can open to read.
                             badges = mapOf(PILL_PHONES to threads.filterKeys { k -> k.startsWith(dev.periy.bridge.server.Messages.GROUP) || paired.any { it.name == k } }
