@@ -83,6 +83,8 @@ class MusicShelf {
     var query by mutableStateOf("")
     /** Everyone on the songs, A to Z, and the artist whose page is open (under any album opened from it). */
     var artists by mutableStateOf(emptyList<Artist>())
+    /** The acts with "&" in their name, kept whole (wholeActs in server/Music.kt). */
+    var whole by mutableStateOf(emptySet<String>())
     var artist by mutableStateOf<Artist?>(null)
     /** The album open over the pages, and a search within it. */
     var open by mutableStateOf<Album?>(null)
@@ -131,6 +133,7 @@ class MusicShelf {
             albums = grouped
             albumOf = buildMap { grouped.forEach { a -> a.tracks.forEach { put(it.id, a) } } }
             open = open?.let { o -> grouped.firstOrNull { it.key == o.key } }
+            whole = dev.periy.bridge.server.wholeActs(sorted)
             artists = withContext(Dispatchers.Default) { groupArtists(sorted, grouped) }
             artist = artist?.let { o -> artists.firstOrNull { it.key == o.key } }
             loaded = true
@@ -170,9 +173,12 @@ class MusicShelf {
 
     /** The artist an album or song is credited to (the first named), when the library has them. */
     fun artistNamed(credit: String): Artist? {
-        val k = artistKey(artistParts(credit).firstOrNull() ?: credit)
+        val k = artistKey(dev.periy.bridge.server.artistParts(credit, whole).firstOrNull() ?: credit)
         return artists.firstOrNull { it.key == k }
     }
+
+    /** A credit as people write it: "Dave & Central Cee" for a tag's "Dave; Central Cee". */
+    fun credit(s: String): String = dev.periy.bridge.server.prettyCredit(s, whole)
 
     /** Opens an artist's page (over the pages; an album open goes). */
     fun openArtist(a: Artist) {
@@ -269,6 +275,8 @@ fun artistKey(s: String): String = s.lowercase().filter { it.isLetterOrDigit() }
  */
 fun groupArtists(tracks: List<TrackDto>, albums: List<Album>): List<Artist> {
     val skip = setOf("variousartists", "unknownartist", "unknown", "va")
+    val whole = dev.periy.bridge.server.wholeActs(tracks)
+    fun artistParts(s: String) = dev.periy.bridge.server.artistParts(s, whole)
     val songs = LinkedHashMap<String, MutableList<TrackDto>>()
     val spell = HashMap<String, HashMap<String, Int>>()
     tracks.forEach { t ->

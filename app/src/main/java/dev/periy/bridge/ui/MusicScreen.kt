@@ -405,6 +405,7 @@ private class TrackActions(val player: PhonePlayer, val shelf: MusicShelf, val f
     fun next(t: TrackDto) = player.playNext(listOf(t))
     fun last(list: List<TrackDto>) = player.playLast(list)
     fun album(t: TrackDto) { shelf.albumOf[t.id]?.let { shelf.openAlbum(it) } }
+    fun credit(s: String) = shelf.credit(s)
     fun heart(t: TrackDto) = favourites.toggle(t.id)
     /** Namida's note along the top, for what was done out of sight (a song swiped to play next). */
     val snack = NamidaSnack()
@@ -861,7 +862,7 @@ private fun TrackTile(
                         style = TextStyle(fontFamily = MusicType, fontSize = 16.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
                             color = nc.large),
                     )
-                    if (!inAlbum) Text(t.artist, style = Nm.small.copy(fontSize = 14.sp, color = lerp(nc.small, nc.large.copy(alpha = 0.75f), lit)),
+                    if (!inAlbum) Text(remember(t.artist) { acts.credit(t.artist) }, style = Nm.small.copy(fontSize = 14.sp, color = lerp(nc.small, nc.large.copy(alpha = 0.75f), lit)),
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (hearted) Box(Modifier.size(30.dp).clip(CircleShape).clickable { acts.heart(t) }, contentAlignment = Alignment.Center) {
@@ -909,7 +910,7 @@ private fun AlbumCard(a: Album, shelf: MusicShelf, playing: Boolean, sounding: B
         Text(a.title, style = TextStyle(fontFamily = MusicType, fontSize = name,
             fontWeight = if (playing) FontWeight.Bold else FontWeight.Medium, color = nc.large),
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 2.dp))
-        Text(a.artist, style = Nm.small.copy(fontSize = by), maxLines = 1, overflow = TextOverflow.Ellipsis,
+        Text(remember(a.artist, shelf.whole) { shelf.credit(a.artist) }, style = Nm.small.copy(fontSize = by), maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp, vertical = 1.dp))
     }
 }
@@ -953,7 +954,7 @@ private fun AlbumHead(a: Album, shelf: MusicShelf, pushOffset: () -> Float, acts
             Spacer(Modifier.height(2.dp))
             // Who it is by: tapped, their page.
             val by = remember(a.artist, shelf.artists) { shelf.artistNamed(a.artist) }
-            Text(a.artist, style = TextStyle(fontFamily = MusicType, fontSize = 19.sp, color = nc.primary.takeIf { it != nc.large } ?: nc.small),
+            Text(remember(a.artist, shelf.whole) { shelf.credit(a.artist) }, style = TextStyle(fontFamily = MusicType, fontSize = 19.sp, color = nc.primary.takeIf { it != nc.large } ?: nc.small),
                 textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = if (by != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable { shelf.openArtist(by) }.padding(horizontal = 4.dp) else Modifier)
             if (meta.isNotEmpty()) {
@@ -1131,6 +1132,7 @@ private fun ArtistPage(a: Artist, shelf: MusicShelf, now: PhonePlayer.State, hea
     val list = remember(a.key) { LazyListState() }
     val playingId = now.current?.id
     val playingKey = now.current?.let { shelf.albumOf[it.id]?.key }
+    var allSongs by remember(a.key) { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize().background(nc.bg).padding(top = top), state = list, contentPadding = PaddingValues(bottom = bottom)) {
         item(key = "head") {
             BoxWithConstraints(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 6.dp)) {
@@ -1149,40 +1151,43 @@ private fun ArtistPage(a: Artist, shelf: MusicShelf, now: PhonePlayer.State, hea
                 }
             }
         }
-        if (a.albums.isNotEmpty()) {
-            item(key = "albums-h") { ArtistSection("Albums") }
-            item(key = "albums") { ArtistAlbums(a.albums, shelf, playingKey, now.playing) }
-        }
-        if (a.appearsOn.isNotEmpty()) {
-            item(key = "on-h") { ArtistSection("Appears on") }
-            item(key = "on") { ArtistAlbums(a.appearsOn, shelf, playingKey, now.playing) }
-        }
-        item(key = "songs-h") { ArtistSection("Songs") }
-        itemsIndexed(a.tracks, key = { _, t -> "s" + t.id }) { i, t ->
+        // Their songs first, the first five (all of them on a tap), as the page reads best; then their albums.
+        item(key = "songs-h") { ArtistSection("Songs", if (a.tracks.size > 5) count(a.tracks.size, "song") else null) }
+        val shownSongs = if (allSongs) a.tracks else a.tracks.take(5)
+        itemsIndexed(shownSongs, key = { _, t -> "s" + t.id }) { i, t ->
             TrackTile(
                 t, shelf.coverOf(t), current = t.id == playingId, hearted = t.id in hearts, acts = acts,
-                modifier = Modifier.entrance(shelf.pageEntrance, i + 4),
+                modifier = Modifier.entrance(shelf.pageEntrance, i + 2),
             ) { acts.play(a.tracks, i) }
+        }
+        if (a.tracks.size > 5) item(key = "more") {
+            Text(if (allSongs) "Show fewer" else "Show all " + a.tracks.size,
+                style = TextStyle(fontFamily = MusicType, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = nc.large),
+                modifier = Modifier.padding(start = 16.dp, top = 6.dp).clip(CircleShape).clickable { allSongs = !allSongs }
+                    .background(nc.onSurface.copy(alpha = 0.08f)).padding(horizontal = 16.dp, vertical = 9.dp))
+        }
+        listOf("Albums" to a.albums, "Appears on" to a.appearsOn).forEach { (title, albums) ->
+            if (albums.isEmpty()) return@forEach
+            item(key = "h-$title") { ArtistSection(title, null) }
+            albums.chunked(2).forEachIndexed { r, pair ->
+                item(key = "$title-$r") {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        pair.forEach { al -> AlbumCard(al, shelf, playing = al.key == playingKey, sounding = now.playing, cols = 2, modifier = Modifier.weight(1f)) }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
         }
     }
 }
 
+/** A section of an artist's page: its name, and how many on the right. */
 @Composable
-private fun ArtistSection(title: String) {
-    Text(title, style = TextStyle(fontFamily = MusicType, fontSize = 19.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp, color = Nm.c.large),
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 10.dp))
-}
-
-/** Albums in a row across the page, as cards, scrolled sideways. */
-@Composable
-private fun ArtistAlbums(albums: List<Album>, shelf: MusicShelf, playingKey: String?, sounding: Boolean) {
-    androidx.compose.foundation.lazy.LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        items(albums.size, key = { albums[it].key }) { i ->
-            val al = albums[i]
-            AlbumCard(al, shelf, playing = al.key == playingKey, sounding = sounding, cols = 2, modifier = Modifier.width(156.dp))
-        }
+private fun ArtistSection(title: String, note: String?) {
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp), verticalAlignment = Alignment.Bottom) {
+        Text(title, style = TextStyle(fontFamily = MusicType, fontSize = 20.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp, color = Nm.c.large),
+            modifier = Modifier.weight(1f))
+        if (note != null) Text(note, style = Nm.small.copy(fontSize = 13.sp))
     }
 }
 

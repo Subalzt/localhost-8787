@@ -103,12 +103,38 @@ data class FavouriteDto(val on: Boolean = false)
 /**
  * The artists named in a song's artist tag: "A, B & C feat. D" is four. A lone lower-case "x"
  * between names joins them too ("A x B"), but not a capital X, which is part of a name (Lil Nas X).
+ * A name with "&" in it whose halves are never named apart anywhere in the library ([whole], from
+ * [wholeActs]) is one act and stays whole: King Gizzard & The Lizard Wizard, Young T & Bugsey; but
+ * Freddie Gibbs & The Alchemist splits, as both are named on their own elsewhere.
  * The page splits them the same way (artistParts in bridge.html).
  */
-fun artistParts(s: String): List<String> =
-    s.split(" x ").flatMap { it.split(ARTIST_JOIN) }.map { it.trim() }.filter { it.isNotEmpty() }
+fun artistParts(s: String, whole: Set<String> = emptySet()): List<String> =
+    s.split(" x ").flatMap { it.split(ARTIST_LIST) }.map { it.trim() }.filter { it.isNotEmpty() }
+        .flatMap { p -> if (ArtistArt.key(p) in whole) listOf(p) else p.split(ARTIST_AND) }
+        .map { it.trim() }.filter { it.isNotEmpty() }
 
-private val ARTIST_JOIN = Regex("""\s*(?:,|&|\+|/|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b)\s*""", RegexOption.IGNORE_CASE)
+/** The acts with "&" in their name, as compared (ArtistArt.key): neither half is named on its own anywhere in the library. */
+fun wholeActs(tracks: List<TrackDto>): Set<String> {
+    val names = tracks.flatMap { listOf(it.artist, it.albumArtist) }.filter { it.isNotBlank() }
+        .flatMap { s -> s.split(" x ").flatMap { it.split(ARTIST_LIST) } }.map { it.trim() }.filter { it.isNotEmpty() }
+    val alone = names.filter { !it.contains('&') }.map { ArtistArt.key(it) }.toSet()
+    return names.filter { it.contains('&') }
+        .filter { n -> n.split(ARTIST_AND).none { p -> ArtistArt.key(p) in alone } }
+        .map { ArtistArt.key(it) }.toSet()
+}
+
+/** Names in a credit as "A & B", or "A, B & C" (a tag's "A; B" or "A/B" read as people would write it). */
+fun prettyCredit(s: String, whole: Set<String> = emptySet()): String {
+    val p = artistParts(s, whole)
+    return when {
+        p.size < 2 || s.contains("feat", true) || s.contains(" ft", true) -> s
+        p.size == 2 -> p[0] + " & " + p[1]
+        else -> p.dropLast(1).joinToString(", ") + " & " + p.last()
+    }
+}
+
+private val ARTIST_LIST = Regex("""\s*(?:,|\+|/|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b)\s*""", RegexOption.IGNORE_CASE)
+private val ARTIST_AND = Regex("""\s*&\s*""")
 
 class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
 
@@ -122,7 +148,7 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
     }
 
     /** Pictures of the artists, from Apple Music or Deezer; each one found is announced to the pages ("artist", its name as compared). */
-    private val artists = ArtistArt(java.io.File(app.filesDir, "artists"), lookupOnline) { name ->
+    private val artists = ArtistArt(java.io.File(app.filesDir, "artists2"), lookupOnline) { name ->
         EventBus.emit("artist", ArtistArt.key(name))
     }
 
@@ -133,7 +159,9 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
     fun artistPicture(name: String): ByteArray? {
         artists.cached(name)?.let { return it }
         val want = ArtistArt.key(name)
-        val albums = tracks().filter { t -> (artistParts(t.artist) + artistParts(t.albumArtist)).any { ArtistArt.key(it) == want } }
+        val all = tracks()
+        val whole = wholeActs(all)
+        val albums = all.filter { t -> (artistParts(t.artist, whole) + artistParts(t.albumArtist, whole)).any { ArtistArt.key(it) == want } }
             .groupingBy { it.album }.eachCount().entries.sortedByDescending { it.value }.map { it.key }
         artists.request(name, albums)
         return null

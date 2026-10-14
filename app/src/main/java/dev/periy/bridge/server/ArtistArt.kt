@@ -22,11 +22,12 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 
 /**
- * Pictures of the artists in the library, for the Artists pages, found online: Apple Music's own
- * picture of the artist first, then Deezer's when Apple has none. Apple has several artists of one
- * name, so the artist is found through one of their albums in the library (the album's artist in
- * the catalogue is the one), and by name only when no album matches; their page's preview image is
- * the picture.
+ * Pictures of the artists in the library, for the Artists pages, found online: Deezer's photo of the
+ * artist first (of the artists of that name there, the one most people follow: the Aitch with
+ * 168,000 followers, not the one with 78), then Apple Music's when Deezer has none. Apple has several
+ * artists of one name too, so there the artist is found through one of their albums in the library,
+ * and their page's preview image is the picture; but Apple's is sometimes an album cover or plain
+ * black, so it comes second. A picture that is all one colour (a placeholder) is not kept.
  *
  * Only an artist's name leaves the phone, as a search, and only while finding covers online is on
  * (the same setting as [CoverFinder]). One artist at a time, a couple of seconds apart, as the
@@ -94,9 +95,31 @@ class ArtistArt(
 
     /** The picture as a square JPEG, [EMPTY] when neither catalogue has one, or an exception when they could not be reached. */
     private fun lookup(ask: Ask): ByteArray {
-        val url = runCatching { apple(ask) }.getOrNull() ?: deezer(ask.name) ?: return EMPTY
-        val image = get(url)
-        val bmp = BitmapFactory.decodeByteArray(image, 0, image.size) ?: return EMPTY
+        // Neither reachable (no network): an exception, so nothing is recorded and it is tried again.
+        var reached = false
+        for (find in listOf({ deezer(ask.name) }, { apple(ask) })) {
+            val url = try { find().also { reached = true } } catch (e: Exception) { null } ?: continue
+            val image = runCatching { get(url) }.getOrNull() ?: continue
+            val bmp = BitmapFactory.decodeByteArray(image, 0, image.size) ?: continue
+            if (flat(bmp)) continue
+            return square(bmp)
+        }
+        if (!reached) error("No catalogue reachable")
+        return EMPTY
+    }
+
+    /** A placeholder: nearly one colour all over (the brightness hardly varies across a small copy). */
+    private fun flat(bmp: Bitmap): Boolean {
+        val s = Bitmap.createScaledBitmap(bmp, 24, 24, true)
+        val v = IntArray(24 * 24)
+        s.getPixels(v, 0, 24, 0, 0, 24, 24)
+        val lum = v.map { c -> ((c shr 16 and 255) * 299 + (c shr 8 and 255) * 587 + (c and 255) * 114) / 1000f }
+        val mean = lum.average().toFloat()
+        val sd = kotlin.math.sqrt(lum.map { (it - mean) * (it - mean) }.average()).toFloat()
+        return sd < 10f
+    }
+
+    private fun square(bmp: Bitmap): ByteArray {
         // Square, from the middle (Apple's are square already; a few of Deezer's are not).
         val side = minOf(bmp.width, bmp.height)
         val sq = Bitmap.createBitmap(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side)
@@ -131,12 +154,13 @@ class ArtistArt(
         return og.replace(Regex("""/\d+x\d+\w*\.(jpg|jpeg|png|webp)$"""), "/${PX}x${PX}cc.jpg")
     }
 
-    /** Deezer: the artist's picture, when it has one (an artist with none has an empty path in its link). */
+    /** Deezer: the picture of the most followed artist of that name, when it has one (an artist with none has an empty path in its link). */
     private fun deezer(name: String): String? {
-        val body = get("https://api.deezer.com/search/artist?limit=10&q=" + URLEncoder.encode(name, "UTF-8")).decodeToString()
+        val body = get("https://api.deezer.com/search/artist?limit=25&q=" + URLEncoder.encode(name, "UTF-8")).decodeToString()
         val data = Json.parseToJsonElement(body).jsonObject["data"]?.jsonArray ?: return null
         val want = key(name)
-        val hit = data.map { it.jsonObject }.firstOrNull { key(it["name"]?.jsonPrimitive?.contentOrNull.orEmpty()) == want } ?: return null
+        val hit = data.map { it.jsonObject }.filter { key(it["name"]?.jsonPrimitive?.contentOrNull.orEmpty()) == want }
+            .maxByOrNull { it["nb_fan"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L } ?: return null
         val pic = hit["picture_xl"]?.jsonPrimitive?.contentOrNull ?: return null
         return pic.takeUnless { it.contains("/artist//") }
     }

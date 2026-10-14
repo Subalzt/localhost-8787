@@ -2893,9 +2893,12 @@
   .ar-head h2 { margin: 12px 0 0; font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
   .ar-head p { margin: 0; font-size: 13.5px; color: var(--sub); }
   .ar-head .nml-head-btns { margin-top: 14px; }
-  .ar-sec { margin: 26px 16px 10px; font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
-  .ar-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(148px, 172px); gap: 12px; padding: 0 16px 6px; overflow-x: auto; scrollbar-width: none; }
-  .ar-row::-webkit-scrollbar { display: none; }
+  .ar-sec { display: flex; align-items: baseline; gap: 12px; margin: 28px 16px 8px; font-size: 20px; font-weight: 700; letter-spacing: -.015em; }
+  .ar-sec span { flex: 1; }
+  .ar-sec small { font-size: 13px; font-weight: 500; color: var(--sub); letter-spacing: 0; }
+  .ar-more { margin: 8px 16px 0; padding: 9px 16px; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--txt) 8%, transparent);
+    color: var(--txt); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .ar-more:hover { background: color-mix(in srgb, var(--txt) 13%, transparent); }
   .ar-link { cursor: pointer; text-decoration: underline transparent; text-underline-offset: 3px; transition: text-decoration-color .15s; }
   .ar-link:hover { text-decoration-color: currentColor; }
   /* Shared interaction finish: keyboard navigation stays visible across every skin. */
@@ -6616,6 +6619,7 @@ async function musicLoad(refresh) {
     var body = await res.json();
     music.granted = !!body.granted;
     music.tracks = body.tracks || [];
+    music.whole = wholeActs(music.tracks);
     indexAlbums();
     indexArtists();
     music.loaded = true;
@@ -6638,11 +6642,38 @@ async function musicLoad(refresh) {
 // the top, holding Albums or Songs and the search. They narrow what is under them in place.
 
 /** "Pusha T & Malice feat. Kendrick Lamar" -> ["Pusha T", "Malice", "Kendrick Lamar"]. */
+var ARTIST_LIST = /\s*(?:,|\+|\/|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b)\s*/i;
 function artistParts(s) {
-  // A lone lower-case "x" joins names ("A x B"); a capital X is part of one (Lil Nas X).
-  return String(s || "").split(" x ").reduce(function (out, p) {
-    return out.concat(p.split(/\s*(?:,|&|\+|\/|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b)\s*/i));
-  }, []).map(function (a) { return a.trim(); }).filter(Boolean);
+  // A lone lower-case "x" joins names ("A x B"); a capital X is part of one (Lil Nas X). A name with
+  // "&" that the library credits a song to alone is one act and stays whole (music.whole, wholeActs).
+  var whole = music.whole || {};
+  return String(s || "").split(" x ").reduce(function (out, p) { return out.concat(p.split(ARTIST_LIST)); }, [])
+    .map(function (a) { return a.trim(); }).filter(Boolean)
+    .reduce(function (out, p) { return out.concat(whole[artistKey(p)] ? [p] : p.split(/\s*&\s*/)); }, [])
+    .map(function (a) { return a.trim(); }).filter(Boolean);
+}
+/**
+ * The acts with "&" in their name (wholeActs in server/Music.kt): neither half is named on its own
+ * anywhere in the library. King Gizzard & The Lizard Wizard stays one; Freddie Gibbs & The Alchemist splits.
+ */
+function wholeActs(tracks) {
+  var names = [], alone = {}, out = {};
+  tracks.forEach(function (t) {
+    [t.artist, t.albumArtist].forEach(function (s) {
+      String(s || "").split(" x ").forEach(function (p) { p.split(ARTIST_LIST).forEach(function (n) { n = n.trim(); if (n) names.push(n); }); });
+    });
+  });
+  names.forEach(function (n) { if (n.indexOf("&") < 0) alone[artistKey(n)] = 1; });
+  names.forEach(function (n) {
+    if (n.indexOf("&") >= 0 && !n.split(/\s*&\s*/).some(function (p) { return alone[artistKey(p)]; })) out[artistKey(n)] = 1;
+  });
+  return out;
+}
+/** Names in a credit as people write them: "Dave & Central Cee" for a tag's "Dave; Central Cee". */
+function prettyCredit(s) {
+  var p = artistParts(s);
+  if (p.length < 2 || /feat|\bft\b/i.test(s)) return s || "";
+  return p.length === 2 ? p[0] + " & " + p[1] : p.slice(0, -1).join(", ") + " & " + p[p.length - 1];
 }
 /** An artist's name as names are compared: letters and digits, lower case. */
 function artistKey(s) { return String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""); }
@@ -7037,7 +7068,7 @@ function nmlTile(t, queue, source, number, inAlbum) {
   row.replaceChild(lead, row.firstChild);
   var tx = row.querySelector(".nt-text").children, a = music.albumByKey[t.ak];
   tx[0].textContent = t.title;
-  if (inAlbum && a && t.artist === a.artist) tx[1].remove(); else tx[1].textContent = t.artist;
+  if (inAlbum && a && t.artist === a.artist) tx[1].remove(); else tx[1].textContent = prettyCredit(t.artist);
   if (inAlbum) row.querySelector(".nt-al").remove(); else row.querySelector(".nt-al").textContent = t.album;
   row.querySelector(".nt-d").textContent = fmtTime(t.durationMs / 1000);
   var heart = row.querySelector(".nt-heart");
@@ -7239,7 +7270,7 @@ function nmlAlbumCell(a) {
     cap.className = "nc-cap";
     cap.innerHTML = "<b></b><span></span>";
     cap.children[0].textContent = a.album;
-    cap.children[1].textContent = a.artist;
+    cap.children[1].textContent = prettyCredit(a.artist);
     card.appendChild(cap);
     card.onclick = function () { openAlbum(a.key, art); };
     cell.appendChild(card);
@@ -7298,23 +7329,41 @@ function renderArtistPage(host) {
   btns.appendChild(shuf);
   head.appendChild(btns);
   host.appendChild(head);
+  var sec = function (title, note) {
+    var h3 = document.createElement("h3");
+    h3.className = "ar-sec";
+    h3.innerHTML = "<span></span><small></small>";
+    h3.firstChild.textContent = title;
+    h3.lastChild.textContent = note || "";
+    host.appendChild(h3);
+  };
+  var many = ar.tracks.length > 5, all = nml.allSongs === ar.key;
+  sec("Songs", many ? nmlCount(ar.tracks.length, "song") : "");
+  renderTracks(host, all || !many ? ar.tracks : ar.tracks.slice(0, 5), ar.tracks, from);
+  if (many) {
+    var more = document.createElement("button");
+    more.type = "button";
+    more.className = "ar-more";
+    more.textContent = all ? "Show fewer" : "Show all " + ar.tracks.length;
+    more.onclick = function () { nml.allSongs = all ? null : ar.key; nmlRedrawArtist(); };
+    host.appendChild(more);
+  }
   [["Albums", ar.albums], ["Appears on", ar.appears]].forEach(function (s) {
     if (!s[1].length) return;
-    var title = document.createElement("h3");
-    title.className = "ar-sec";
-    title.textContent = s[0];
-    host.appendChild(title);
-    var row = document.createElement("div");
-    row.className = "ar-row";
-    s[1].forEach(function (a) { row.appendChild(nmlAlbumCell(a)); });
-    host.appendChild(row);
+    sec(s[0], "");
+    var grid = document.createElement("div");
+    grid.className = "nml-albums ar-albums";
+    s[1].forEach(function (a) { grid.appendChild(nmlAlbumCell(a)); });
+    host.appendChild(grid);
   });
-  var st = document.createElement("h3");
-  st.className = "ar-sec";
-  st.textContent = "Songs";
-  host.appendChild(st);
-  renderTracks(host, ar.tracks, ar.tracks, from);
   markPlaying();
+}
+
+/** The artist's page again (all their songs, or five), where it was scrolled to. */
+function nmlRedrawArtist() {
+  var y = window.scrollY;
+  renderMusic();
+  window.scrollTo(0, y);
 }
 
 /** An album's songs in the order picked on its page, and only those matching its search. */
@@ -7357,7 +7406,7 @@ function renderAlbumPage(host) {
   head.firstChild.appendChild(coverEl("nml-hc", a.coverId, a.album));
   var info = head.lastChild;
   info.querySelector("h2").textContent = a.album;
-  info.querySelector(".by").textContent = a.artist;
+  info.querySelector(".by").textContent = prettyCredit(a.artist);
   var byAr = artistNamed(a.artist);
   if (byAr) {
     var byEl = info.querySelector(".by");
