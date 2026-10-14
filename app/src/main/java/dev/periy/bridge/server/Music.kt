@@ -105,23 +105,53 @@ data class FavouriteDto(val on: Boolean = false)
  * between names joins them too ("A x B"), but not a capital X, which is part of a name (Lil Nas X).
  * A name with "&" in it whose halves are never named apart anywhere in the library ([whole], from
  * [wholeActs]) is one act and stays whole: King Gizzard & The Lizard Wizard, Young T & Bugsey; but
- * Freddie Gibbs & The Alchemist splits, as both are named on their own elsewhere.
+ * Freddie Gibbs & The Alchemist splits, as both are named on their own elsewhere. So too a name
+ * written "Name, The Something" whose halves are never named apart: Tyler, The Creator.
  * The page splits them the same way (artistParts in bridge.html).
  */
 fun artistParts(s: String, whole: Set<String> = emptySet()): List<String> =
-    s.split(" x ").flatMap { it.split(ARTIST_LIST) }.map { it.trim() }.filter { it.isNotEmpty() }
+    joinPairs(s.split(" x ").flatMap { it.split(ARTIST_LIST) }.map { it.trim() }.filter { it.isNotEmpty() }, whole)
         .flatMap { p -> if (ArtistArt.key(p) in whole) listOf(p) else p.split(ARTIST_AND) }
         .map { it.trim() }.filter { it.isNotEmpty() }
 
+/** Two names next to each other that are one act ("Tyler" and "The Creator"), put back together. */
+private fun joinPairs(parts: List<String>, whole: Set<String>): List<String> {
+    if (whole.isEmpty()) return parts
+    val out = mutableListOf<String>()
+    var i = 0
+    while (i < parts.size) {
+        if (i + 1 < parts.size && ArtistArt.key(parts[i]) + ArtistArt.key(parts[i + 1]) in whole) { out += parts[i] + ", " + parts[i + 1]; i += 2 }
+        else { out += parts[i]; i++ }
+    }
+    return out
+}
+
 /** The acts with "&" in their name, as compared (ArtistArt.key): neither half is named on its own anywhere in the library. */
 fun wholeActs(tracks: List<TrackDto>): Set<String> {
-    val names = tracks.flatMap { listOf(it.artist, it.albumArtist) }.filter { it.isNotBlank() }
-        .flatMap { s -> s.split(" x ").flatMap { it.split(ARTIST_LIST) } }.map { it.trim() }.filter { it.isNotEmpty() }
-    val alone = names.filter { !it.contains('&') }.map { ArtistArt.key(it) }.toSet()
-    return names.filter { it.contains('&') }
-        .filter { n -> n.split(ARTIST_AND).none { p -> ArtistArt.key(p) in alone } }
-        .map { ArtistArt.key(it) }.toSet()
+    val credits = tracks.flatMap { listOf(it.artist, it.albumArtist) }.filter { it.isNotBlank() }
+    // "Name, The Something", written with a comma.
+    val pairs = credits.flatMap { c -> THE_PAIR.findAll(c).map { m -> ArtistArt.key(m.groupValues[1]) + ArtistArt.key(m.groupValues[2]) }.toList() }.toSet()
+    val alone = HashSet<String>()
+    val amp = mutableListOf<String>()
+    credits.forEach { c ->
+        val parts = c.split(" x ").flatMap { it.split(ARTIST_LIST) }.map { it.trim() }.filter { it.isNotEmpty() }
+        parts.forEachIndexed { i, p ->
+            val k = ArtistArt.key(p)
+            val inPair = (i + 1 < parts.size && k + ArtistArt.key(parts[i + 1]) in pairs) || (i > 0 && ArtistArt.key(parts[i - 1]) + k in pairs)
+            when {
+                p.contains('&') -> amp += p
+                !inPair -> alone += k
+            }
+        }
+    }
+    val acts = amp.filter { n -> n.split(ARTIST_AND).none { p -> ArtistArt.key(p) in alone } }.map { ArtistArt.key(it) }
+    val joined = credits.flatMap { c -> THE_PAIR.findAll(c).toList() }
+        .filter { m -> ArtistArt.key(m.groupValues[1]) !in alone && ArtistArt.key(m.groupValues[2]) !in alone }
+        .map { m -> ArtistArt.key(m.groupValues[1]) + ArtistArt.key(m.groupValues[2]) }
+    return (acts + joined).toSet()
 }
+
+private val THE_PAIR = Regex("""([^,;&/+]+?),\s*(The\s+[^,;&/+]+)""", RegexOption.IGNORE_CASE)
 
 /** Names in a credit as "A & B", or "A, B & C" (a tag's "A; B" or "A/B" read as people would write it). */
 fun prettyCredit(s: String, whole: Set<String> = emptySet()): String {
@@ -155,6 +185,7 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
                 java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MUSIC), "Artists")
             else null
         },
+        cover = { id -> cover(id) },
     ) { name ->
         EventBus.emit("artist", ArtistArt.key(name))
     }
@@ -164,28 +195,38 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
      * Every artist in the library, as the Artists pages list them (each name on a song or as its
      * album's artist, spelt as most of their songs spell it), with their albums, most songs first.
      */
-    private fun artistsWithAlbums(): List<Pair<String, List<String>>> {
+    private fun artistsWithAlbums(): List<Triple<String, List<String>, List<Long>>> {
         val all = tracks()
         val whole = wholeActs(all)
         val skip = setOf("variousartists", "unknownartist", "unknown", "va")
         val spell = HashMap<String, HashMap<String, Int>>()
         val albums = HashMap<String, HashMap<String, Int>>()
+        val ids = HashMap<String, LinkedHashSet<Long>>()
         all.forEach { t ->
             (artistParts(t.artist, whole) + artistParts(t.albumArtist, whole)).distinctBy { ArtistArt.key(it) }.forEach { n ->
                 val k = ArtistArt.key(n)
                 if (k.isEmpty() || k in skip) return@forEach
                 spell.getOrPut(k) { HashMap() }.merge(n, 1, Int::plus)
                 albums.getOrPut(k) { HashMap() }.merge(t.album, 1, Int::plus)
+                t.albumId.toLongOrNull()?.let { ids.getOrPut(k) { LinkedHashSet() } += it }
             }
         }
-        return spell.map { (k, m) -> m.maxByOrNull { it.value }!!.key to albums[k]!!.entries.sortedByDescending { it.value }.map { it.key } }
+        return spell.map { (k, m) ->
+            Triple(m.maxByOrNull { it.value }!!.key, albums[k]!!.entries.sortedByDescending { it.value }.map { it.key }, ids[k]?.toList().orEmpty())
+        }
     }
 
-    /** Looks up every artist's picture that is not here yet, in the background, one after another; how many were asked for. */
-    fun fetchAllArtistPictures(): Int {
+    /**
+     * Looks up every artist's picture that is not here yet, in the background, one after another; with
+     * [recheck], first throws away any kept that is one of their own covers. How many were asked for.
+     */
+    fun fetchAllArtistPictures(recheck: Boolean = false): Int {
         allAsked = true
         var n = 0
-        artistsWithAlbums().forEach { (name, albums) -> if (!artists.has(name)) { artists.request(name, albums); n++ } }
+        artistsWithAlbums().forEach { (name, albums, covers) ->
+            if (recheck) runCatching { artists.dropIfCover(name, covers) }
+            if (!artists.has(name)) { artists.request(name, albums, covers); n++ }
+        }
         return n
     }
 
@@ -200,9 +241,9 @@ class MusicLibrary(ctx: Context, lookupOnline: () -> Boolean = { true }) {
         val want = ArtistArt.key(name)
         val all = tracks()
         val whole = wholeActs(all)
-        val albums = all.filter { t -> (artistParts(t.artist, whole) + artistParts(t.albumArtist, whole)).any { ArtistArt.key(it) == want } }
-            .groupingBy { it.album }.eachCount().entries.sortedByDescending { it.value }.map { it.key }
-        artists.request(name, albums)
+        val mine = all.filter { t -> (artistParts(t.artist, whole) + artistParts(t.albumArtist, whole)).any { ArtistArt.key(it) == want } }
+        val albums = mine.groupingBy { it.album }.eachCount().entries.sortedByDescending { it.value }.map { it.key }
+        artists.request(name, albums, mine.mapNotNull { it.albumId.toLongOrNull() })
         return null
     }
 

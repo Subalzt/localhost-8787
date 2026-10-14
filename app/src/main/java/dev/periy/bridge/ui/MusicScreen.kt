@@ -1207,8 +1207,9 @@ private fun ArtistSection(title: String, note: String?) {
 }
 
 /**
- * An artist's picture in a circle: theirs from Apple Music or Deezer (asked for again a few times
- * while it is being found), until then the cover of their newest album, or their initial.
+ * An artist's picture in a circle: their photo (asked for again a few times while it is being found);
+ * with none, their initials on a colour their name always gives, never one of their covers (which
+ * would read as a song, not a person).
  */
 @Composable
 private fun ArtistPicture(a: Artist, modifier: Modifier, big: Boolean) {
@@ -1227,13 +1228,18 @@ private fun ArtistPicture(a: Artist, modifier: Modifier, big: Boolean) {
             kotlinx.coroutines.delay(5_000L * (attempt + 1))
         }
     }
-    Box(modifier.clip(CircleShape).background(nc.cardColor).border(0.5.dp, hairline(), CircleShape), contentAlignment = Alignment.Center) {
+    // A colour from the name: the same hue for the same artist every time, soft on the dark.
+    val hue = remember(a.key) { (a.key.hashCode().toLong() and 0xffffffffL) % 360L }.toFloat()
+    val wash = remember(hue) {
+        Brush.linearGradient(listOf(Color.hsv(hue, 0.45f, 0.62f), Color.hsv((hue + 40f) % 360f, 0.55f, 0.32f)))
+    }
+    val initials = remember(a.name) {
+        a.name.split(' ').filter { w -> w.firstOrNull()?.isLetterOrDigit() == true }.take(2).joinToString("") { it.take(1).uppercase() }
+            .ifEmpty { a.name.take(1).uppercase() }
+    }
+    Box(modifier.clip(CircleShape).background(wash).border(0.5.dp, hairline(), CircleShape), contentAlignment = Alignment.Center) {
         val shown = pic
-        val cover = (a.albums + a.appearsOn).firstOrNull()
-        when {
-            shown != null -> androidx.compose.foundation.Image(shown, a.name, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-            cover != null -> Cover(cover.coverId, cover.title, Modifier.fillMaxSize(), radius = 0.dp, big = big)
-            else -> Text(a.name.take(1).uppercase(), style = TextStyle(fontFamily = MusicType, fontSize = if (big) 64.sp else 28.sp, fontWeight = FontWeight.Bold, color = nc.large))
-        }
+        if (shown != null) androidx.compose.foundation.Image(shown, a.name, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+        else Text(initials, style = TextStyle(fontFamily = MusicType, fontSize = if (big) 64.sp else 26.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.92f)))
     }
 }

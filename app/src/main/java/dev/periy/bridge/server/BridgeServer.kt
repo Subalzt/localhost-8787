@@ -586,9 +586,11 @@ class BridgeServer(
             call.respond(store.dto())
         }
 
-        // Every artist's picture fetched now, in the background; how many were asked for.
+        // Every artist's picture fetched now, in the background; how many were asked for. ?recheck=1
+        // first throws away any kept that is one of the artist's own covers.
         post("/api/music/artist-art/all") {
-            val n = withContext(Dispatchers.IO) { music.fetchAllArtistPictures() }
+            val again = call.request.queryParameters["recheck"] == "1"
+            val n = withContext(Dispatchers.IO) { music.fetchAllArtistPictures(again) }
             call.respond(mapOf("asked" to n))
         }
         // An artist's picture (?name=), found online (server/ArtistArt.kt); 404 while there is none yet.

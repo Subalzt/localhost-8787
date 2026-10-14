@@ -2886,7 +2886,7 @@
     background: color-mix(in srgb, var(--txt) 8%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--txt) 12%, transparent); }
   .ar-pic > .ar-cov, .ar-pic > img.ar-img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; object-fit: cover; }
   .ar-pic > img.ar-img { z-index: 1; }
-  .ar-pic > i { font-style: normal; font-size: 34px; font-weight: 700; color: var(--sub); }
+  .ar-pic > i { font-style: normal; font-size: 30px; font-weight: 700; color: rgba(255,255,255,.92); letter-spacing: -.02em; }
   .ar-head { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 16px 4px; text-align: center; }
   .ar-head .ar-pic { width: min(220px, 56vw); box-shadow: 0 18px 44px -20px rgba(0,0,0,.55); }
   .ar-head .ar-pic > i { font-size: 72px; }
@@ -6645,11 +6645,16 @@ async function musicLoad(refresh) {
 var ARTIST_LIST = /\s*(?:,|\+|\/|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b)\s*/i;
 function artistParts(s) {
   // A lone lower-case "x" joins names ("A x B"); a capital X is part of one (Lil Nas X). A name with
-  // "&" that the library credits a song to alone is one act and stays whole (music.whole, wholeActs).
+  // "&" whose halves are never named apart is one act and stays whole (music.whole, wholeActs); so
+  // does "Name, The Something" (Tyler, The Creator).
   var whole = music.whole || {};
-  return String(s || "").split(" x ").reduce(function (out, p) { return out.concat(p.split(ARTIST_LIST)); }, [])
-    .map(function (a) { return a.trim(); }).filter(Boolean)
-    .reduce(function (out, p) { return out.concat(whole[artistKey(p)] ? [p] : p.split(/\s*&\s*/)); }, [])
+  var parts = String(s || "").split(" x ").reduce(function (out, p) { return out.concat(p.split(ARTIST_LIST)); }, [])
+    .map(function (a) { return a.trim(); }).filter(Boolean), joined = [];
+  for (var i = 0; i < parts.length; i++) {
+    if (i + 1 < parts.length && whole[artistKey(parts[i]) + artistKey(parts[i + 1])]) { joined.push(parts[i] + ", " + parts[i + 1]); i++; }
+    else joined.push(parts[i]);
+  }
+  return joined.reduce(function (out, p) { return out.concat(whole[artistKey(p)] ? [p] : p.split(/\s*&\s*/)); }, [])
     .map(function (a) { return a.trim(); }).filter(Boolean);
 }
 /**
@@ -6657,16 +6662,20 @@ function artistParts(s) {
  * anywhere in the library. King Gizzard & The Lizard Wizard stays one; Freddie Gibbs & The Alchemist splits.
  */
 function wholeActs(tracks) {
-  var names = [], alone = {}, out = {};
-  tracks.forEach(function (t) {
-    [t.artist, t.albumArtist].forEach(function (s) {
-      String(s || "").split(" x ").forEach(function (p) { p.split(ARTIST_LIST).forEach(function (n) { n = n.trim(); if (n) names.push(n); }); });
+  var THE_PAIR = /([^,;&\/+]+?),\s*(The\s+[^,;&\/+]+)/gi, credits = [], pairs = {}, alone = {}, amp = [], out = {};
+  tracks.forEach(function (t) { [t.artist, t.albumArtist].forEach(function (s) { if (s) credits.push(String(s)); }); });
+  var each = function (c, f) { var m; THE_PAIR.lastIndex = 0; while ((m = THE_PAIR.exec(c))) f(m); };
+  credits.forEach(function (c) { each(c, function (m) { pairs[artistKey(m[1]) + artistKey(m[2])] = 1; }); });
+  credits.forEach(function (c) {
+    var parts = c.split(" x ").reduce(function (o, p) { return o.concat(p.split(ARTIST_LIST)); }, []).map(function (a) { return a.trim(); }).filter(Boolean);
+    parts.forEach(function (p, i) {
+      var k = artistKey(p);
+      var inPair = (i + 1 < parts.length && pairs[k + artistKey(parts[i + 1])]) || (i > 0 && pairs[artistKey(parts[i - 1]) + k]);
+      if (p.indexOf("&") >= 0) amp.push(p); else if (!inPair) alone[k] = 1;
     });
   });
-  names.forEach(function (n) { if (n.indexOf("&") < 0) alone[artistKey(n)] = 1; });
-  names.forEach(function (n) {
-    if (n.indexOf("&") >= 0 && !n.split(/\s*&\s*/).some(function (p) { return alone[artistKey(p)]; })) out[artistKey(n)] = 1;
-  });
+  amp.forEach(function (n) { if (!n.split(/\s*&\s*/).some(function (p) { return alone[artistKey(p)]; })) out[artistKey(n)] = 1; });
+  credits.forEach(function (c) { each(c, function (m) { if (!alone[artistKey(m[1])] && !alone[artistKey(m[2])]) out[artistKey(m[1]) + artistKey(m[2])] = 1; }); });
   return out;
 }
 /** Names in a credit as people write them: "Dave & Central Cee" for a tag's "Dave; Central Cee". */
@@ -6752,17 +6761,22 @@ function artistMatches() {
 }
 
 /**
- * An artist's picture in a circle: theirs from Apple Music or Deezer, found by the phone
- * (server/ArtistArt.kt); until it comes, the cover of their newest album, or their initial.
- * The phone says when one is found ("artist" event) and it is put in then.
+ * An artist's picture in a circle: their photo, found by the phone (server/ArtistArt.kt); with none,
+ * their initials on a colour their name always gives, never one of their covers (that reads as a
+ * song, not a person). The phone says when one is found ("artist" event) and it is put in then.
  */
 function artistPic(ar) {
   var box = document.createElement("span");
   box.className = "ar-pic";
   box.dataset.ak = ar.key;
-  var a = ar.albums[0] || ar.appears[0];
-  if (a) box.appendChild(coverEl("ar-cov", a.coverId, a.album));
-  else { var i = document.createElement("i"); i.textContent = ar.name.charAt(0).toUpperCase(); box.appendChild(i); }
+  var h = 0;
+  for (var c = 0; c < ar.key.length; c++) h = (h * 31 + ar.key.charCodeAt(c)) >>> 0;
+  h = h % 360;
+  box.style.background = "linear-gradient(135deg, hsl(" + h + " 38% 46%), hsl(" + ((h + 40) % 360) + " 45% 22%))";
+  var i = document.createElement("i");
+  i.textContent = ar.name.split(" ").filter(function (w) { return /^[\p{L}\p{N}]/u.test(w); }).slice(0, 2)
+    .map(function (w) { return w.charAt(0).toUpperCase(); }).join("") || ar.name.charAt(0).toUpperCase();
+  box.appendChild(i);
   artistImg(box, ar.name, false);
   return box;
 }
