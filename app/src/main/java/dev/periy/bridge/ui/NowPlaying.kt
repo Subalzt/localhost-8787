@@ -927,7 +927,7 @@ private fun FullLyrics(
             )
             if (shown != null) key(cur.id) {
                 LyricsOverCover(
-                    shown, state, tick, tint, live = true, onSeek = onSeek, full = true,
+                    shown, state, tick, tint, live = true, onSeek = onSeek, full = true, env = env,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
             } else Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 28.dp), contentAlignment = Alignment.CenterStart) {

@@ -68,6 +68,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import dev.periy.bridge.music.Loudness
+import kotlin.math.PI
 import androidx.compose.ui.unit.sp
 import dev.periy.bridge.music.PhonePlayer
 import dev.periy.bridge.server.LyricLine
@@ -131,8 +140,11 @@ internal fun LyricsOverCover(
     modifier: Modifier,
     full: Boolean = false,
     onOpen: (() -> Unit)? = null,
+    /** The song's loudness (music/Loudness.kt), which moves a held note on the full page. */
+    env: ByteArray? = null,
 ) {
     val nc = Nm.c
+    val hot = remember(tint) { vividOf(tint) }
     // Namida fades the lyrics out at the top and bottom edges.
     val fade = Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
         drawContent()
@@ -186,7 +198,7 @@ internal fun LyricsOverCover(
                     is GapItem -> Dots(item, on = d == 0, state = live0, tick = tick, full = full)
                     is LineItem -> Line(
                         item.line, lyrics.kind == ShownLyrics.Kind.WORD, distance = d, selectedBg = selectedBg, state = live0, tick = tick,
-                        full = full,
+                        full = full, hot = hot, env = env,
                         onClick = when {
                             !live -> null
                             onOpen != null -> onOpen
@@ -225,6 +237,8 @@ private fun Line(
     state: State<PhonePlayer.State>,
     tick: State<Long>,
     full: Boolean,
+    hot: Color,
+    env: ByteArray?,
     onClick: (() -> Unit)?,
 ) {
     val nc = Nm.c
@@ -252,7 +266,7 @@ private fun Line(
             .padding(horizontal = 8.dp, vertical = if (full) 10.dp else 8.dp),
         contentAlignment = if (full) Alignment.CenterStart else Alignment.Center,
     ) {
-        if (on && full && words && line.words.isNotEmpty()) SungWords(line, style.copy(color = base), base, base.copy(alpha = base.alpha * 0.42f), state, tick)
+        if (on && full && words && line.words.isNotEmpty()) SungWords(line, style.copy(color = base), base, base.copy(alpha = base.alpha * 0.42f), hot, env, state, tick)
         else if (on && full) Text(line.text, style = style.copy(shadow = glowOf(base)))
         else if (on && words && line.words.isNotEmpty()) {
             // Sung words full, those to come dim; the one being sung brightens across its time.
@@ -274,18 +288,38 @@ private fun Line(
 private fun glowOf(base: Color): Shadow = Shadow(base.copy(alpha = 0.5f), Offset.Zero, with(LocalDensity.current) { 10.dp.toPx() })
 
 /**
- * The line being sung, word by word, as a word-synced lyrics app shows it: the words sung bright and
- * glowing, the one being sung wiping from bright to dim across a soft edge and rising a little as it
- * lights (the sung ones stay up until the line is over), the words to come dim.
+ * The song's colour made vivid enough to light words on the dark: its hue, at least half saturated and
+ * at full brightness. A grey cover lights them in the app's yellow instead.
+ */
+internal fun vividOf(tint: Color): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(tint.toArgb(), hsv)
+    if (hsv[1] < 0.12f) return Color(0xFFFFD60A)
+    hsv[1] = hsv[1].coerceAtLeast(0.5f)
+    hsv[2] = 1f
+    return Color(android.graphics.Color.HSVToColor(hsv))
+}
+
+/** One letter of a word being sung: its glyph, where it sits in the word, when it lights and when its syllable ends. */
+private class SungLetter(val glyph: TextLayoutResult, val x: Float, val at: Long, val end: Long, val n: Int)
+
+/**
+ * The line being sung, letter by letter, as this app sings it rather than as a music app wipes it:
+ * the letters of each syllable catch one after another in a quick run as it starts (so a syllable
+ * reads as a burst, not a slow fill), each jumping on a spring (up, a small dip under the line, then
+ * settling) and flashing white before cooling into the song's own colour while it is held; a held
+ * note keeps moving, a wave running through its letters as high as the music is loud; once sung,
+ * the letters settle to a soft white with the song's colour in it. Words to come wait a little low
+ * and dim, and crouch just before they are sung. Drawn per letter on one canvas per word, so the
+ * word keeps its kerning, and only redrawn (never laid out again) as the song plays.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SungWords(line: LyricLine, style: TextStyle, base: Color, dim: Color, state: State<PhonePlayer.State>, tick: State<Long>) {
-    val pos by remember(line) { derivedStateOf { tick.value; state.value.positionNow() } }
+private fun SungWords(line: LyricLine, style: TextStyle, base: Color, dim: Color, hot: Color, env: ByteArray?, state: State<PhonePlayer.State>, tick: State<Long>) {
     val density = LocalDensity.current
-    val rise = with(density) { style.fontSize.toPx() } * 0.09f
-    val space = with(density) { (style.fontSize.toPx() * 0.27f).toDp() }
-    val glow = glowOf(base)
+    val em = with(density) { style.fontSize.toPx() }
+    val space = with(density) { (em * 0.27f).toDp() }
+    val measurer = rememberTextMeasurer()
     // A word's syllables (pieces with no space between them) go together, so a word never breaks across lines.
     val words = remember(line) {
         val out = mutableListOf<MutableList<dev.periy.bridge.server.LyricWord>>()
@@ -295,33 +329,90 @@ private fun SungWords(line: LyricLine, style: TextStyle, base: Color, dim: Color
             out.last() += w
             open = !(w.w.isNotEmpty() && w.w.last().isWhitespace())
         }
-        out
+        out.filter { p -> p.any { it.w.isNotBlank() } }
     }
+    // Sung: white with a little of the song's colour; the flash as a letter catches: white.
+    val sung = lerp(base, hot, 0.22f)
     FlowRow {
-      words.forEach { pieces ->
-       Row {
-        pieces.forEach { w ->
-            val word = w.w.trim()
-            if (w === pieces.first() && w.w.isNotEmpty() && w.w.first().isWhitespace()) Spacer(Modifier.width(space))
-            if (word.isNotEmpty()) {
-                val p = ((pos - w.t).toFloat() / (w.e - w.t).coerceAtLeast(1)).coerceIn(0f, 1f)
-                val look = when {
-                    p <= 0f -> style.copy(color = dim)
-                    p >= 1f -> style.copy(color = base, shadow = glow)
-                    else -> {
-                        // The edge runs from 14% behind the point sung to the point itself.
-                        val a = (p * 1.14f - 0.14f).coerceIn(0f, 1f)
-                        val b = (p * 1.14f).coerceIn(a + 0.001f, 1f)
-                        style.copy(brush = Brush.horizontalGradient(0f to base, a to base, b to dim, 1f to dim), shadow = glow)
+        words.forEachIndexed { wi, pieces ->
+            if (wi > 0) Spacer(Modifier.width(space))
+            val text = pieces.joinToString("") { it.w.trim() }
+            val whole = remember(text, style) { measurer.measure(text, style, softWrap = false, maxLines = 1) }
+            val letters = remember(whole, pieces) {
+                val out = mutableListOf<SungLetter>()
+                var i = 0
+                pieces.forEach { w ->
+                    val piece = w.w.trim()
+                    // The run across a syllable's letters: quick, but never longer than the syllable.
+                    val step = ((w.e - w.t) / piece.length.coerceAtLeast(1)).coerceAtMost(RUN_MS)
+                    var j = 0
+                    while (j < piece.length) {
+                        val k = if (Character.isHighSurrogate(piece[j]) && j + 1 < piece.length) 2 else 1
+                        val g = measurer.measure(piece.substring(j, j + k), style, softWrap = false, maxLines = 1)
+                        out += SungLetter(g, whole.getHorizontalPosition(i + j, true), w.t + step * j, w.e, out.size)
+                        j += k
                     }
+                    i += piece.length
                 }
-                val lift = (p * 1.6f).coerceAtMost(1f)
-                Text(word, style = look, modifier = Modifier.graphicsLayer { translationY = -lift * rise })
+                out
             }
-            if (w.w.length > 1 && w.w.last().isWhitespace()) Spacer(Modifier.width(space))
+            Spacer(
+                Modifier.size(with(density) { whole.size.width.toDp() }, with(density) { whole.size.height.toDp() })
+                    .drawBehind {
+                        tick.value
+                        val now = state.value.positionNow()
+                        val loud = Loudness.at(env, now)
+                        letters.forEach { l -> drawLetter(l, now, loud, em, base, dim, sung, hot) }
+                    },
+            )
         }
-       }
-      }
+    }
+}
+
+/** How quickly a syllable's letters catch, one after the next. */
+private const val RUN_MS = 70L
+
+private fun DrawScope.drawLetter(l: SungLetter, now: Long, loud: Float, em: Float, base: Color, dim: Color, sung: Color, hot: Color) {
+    val a = (now - l.at).toFloat()
+    var y: Float
+    var s = 1f
+    val c: Color
+    var glow = 0f
+    if (a < 0f) {
+        // To come: a little low, crouching further just before it is sung.
+        val crouch = ((a + 160f) / 160f).coerceIn(0f, 1f)
+        y = em * (0.03f + 0.04f * crouch)
+        s = 1f - 0.04f * crouch
+        c = lerp(dim, base.copy(alpha = dim.alpha + 0.12f), crouch)
+    } else {
+        // The jump: a spring kicked upwards, overshooting under the line once, then still.
+        val damp = kotlin.math.exp(-a / 150f)
+        val swing = kotlin.math.sin(a / 40f)
+        y = -em * 0.24f * damp * swing
+        s = 1f + 0.2f * damp * swing.coerceAtLeast(0f)
+        val held = now < l.end
+        if (held) {
+            // Held: white as it catches, cooling into the song's colour; a wave runs through it with the music.
+            c = lerp(Color.White, hot, (a / 260f).coerceIn(0f, 1f))
+            val sway = ((a - 220f) / 300f).coerceIn(0f, 1f) * (0.25f + 0.75f * loud)
+            y += -em * 0.07f * sway * kotlin.math.sin(now / 1000f * 2f * PI.toFloat() * 2.1f - l.n * 0.8f)
+            s += 0.06f * sway
+            glow = 1f
+        } else {
+            // Sung: it cools from the song's colour to the soft white of the sung, its glow going.
+            val after = ((now - l.end) / 420f).coerceIn(0f, 1f)
+            c = lerp(if (a < 260f) lerp(Color.White, hot, a / 260f) else hot, sung, after)
+            glow = 1f - after
+        }
+    }
+    val g = l.glyph
+    val w = g.size.width.toFloat()
+    val pivot = Offset(l.x + w / 2f, g.size.height * 0.78f)
+    withTransform({ scale(s, s, pivot) }) {
+        drawText(
+            g, color = c, topLeft = Offset(l.x, y),
+            shadow = if (glow > 0.02f) Shadow(hot.copy(alpha = 0.75f * glow), Offset.Zero, em * 0.5f) else null,
+        )
     }
 }
 
